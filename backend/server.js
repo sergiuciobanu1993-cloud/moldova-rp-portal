@@ -441,7 +441,7 @@ app.get("/api/factions", asyncRoute(async (_req, res) => {
 
 app.get("/api/announcements", asyncRoute(async (_req, res) => {
   const { rows } = await pool.query(
-    `SELECT a.id,a.title,a.content,a.category,a.published_at,u.username author
+    `SELECT a.id,a.title,a.content,a.category,a.image_url,a.published_at,u.username author
      FROM announcements a LEFT JOIN users u ON u.id=a.author_id
      WHERE a.is_published=true ORDER BY a.published_at DESC LIMIT 30`
   );
@@ -961,6 +961,26 @@ async function notifyDiscordAnnouncement(announcement) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 6000);
   try {
+    // image_url e opțional — dacă adminul a atașat o poză/banner anunțului,
+    // apare mare, jos în embed; logo-ul site-ului rămâne mic, sus (thumbnail).
+    const embed = {
+      author: { name: "Moldova RP — Anunțuri", icon_url: `${SITE_URL}/assets/logo.png` },
+      title: announcement.title,
+      description: announcement.content.length > 800
+        ? announcement.content.slice(0, 800).trim() + "…"
+        : announcement.content,
+      color: 0xff8a1f,
+      thumbnail: { url: `${SITE_URL}/assets/logo.png` },
+      fields: [
+        { name: "Categorie", value: announcement.category || "General", inline: true },
+        { name: "Autor", value: announcement.author || "Administrație", inline: true },
+      ],
+      footer: { text: "Moldova RP Portal · vezi anunțul complet pe site" },
+      url: `${SITE_URL}/index.html#anunturi`,
+      timestamp: new Date().toISOString(),
+    };
+    if (announcement.image_url) embed.image = { url: announcement.image_url };
+
     const res = await fetch(DISCORD_ANNOUNCE_WEBHOOK, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -968,22 +988,7 @@ async function notifyDiscordAnnouncement(announcement) {
       body: JSON.stringify({
         content: "📢 **Anunț nou pe Moldova RP!** @everyone",
         allowed_mentions: { parse: ["everyone"] },
-        embeds: [{
-          author: { name: "Moldova RP — Anunțuri", icon_url: `${SITE_URL}/assets/logo.png` },
-          title: announcement.title,
-          description: announcement.content.length > 800
-            ? announcement.content.slice(0, 800).trim() + "…"
-            : announcement.content,
-          color: 0xff8a1f,
-          thumbnail: { url: `${SITE_URL}/assets/logo.png` },
-          fields: [
-            { name: "Categorie", value: announcement.category || "General", inline: true },
-            { name: "Autor", value: announcement.author || "Administrație", inline: true },
-          ],
-          footer: { text: "Moldova RP Portal · vezi anunțul complet pe site" },
-          url: `${SITE_URL}/index.html#anunturi`,
-          timestamp: new Date().toISOString(),
-        }],
+        embeds: [embed],
       }),
     });
     if (!res.ok) console.error(`Discord webhook a răspuns cu ${res.status}: ${await res.text().catch(() => "")}`);
@@ -1110,13 +1115,13 @@ app.get("/api/admin/announcements/:id", auth, requireRole(...MOD_ROLES), asyncRo
 }));
 
 app.post("/api/admin/announcements", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
-  const { title, content, category, is_published } = req.body;
+  const { title, content, category, is_published, image_url } = req.body;
   if (!title || !content)
     return res.status(400).json({ error: "Titlu și conținut sunt obligatorii." });
   const { rows } = await pool.query(
-    `INSERT INTO announcements(title, content, category, author_id, is_published)
-     VALUES($1,$2,$3,$4,$5) RETURNING *`,
-    [title.trim(), content, category?.trim() || "General", req.user.sub, is_published ?? true]
+    `INSERT INTO announcements(title, content, category, author_id, is_published, image_url)
+     VALUES($1,$2,$3,$4,$5,$6) RETURNING *`,
+    [title.trim(), content, category?.trim() || "General", req.user.sub, is_published ?? true, image_url?.trim() || null]
   );
   await logAction(req.user.sub, "announcement.create", "announcement", rows[0].id, { title }, req.ip);
   if (rows[0].is_published) notifyDiscordAnnouncement({ ...rows[0], author: req.user.username });
@@ -1125,7 +1130,7 @@ app.post("/api/admin/announcements", auth, requireRole(...ADMIN_ROLES), asyncRou
 
 app.put("/api/admin/announcements/:id", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
   const { id } = req.params;
-  const { title, content, category, is_published } = req.body;
+  const { title, content, category, is_published, image_url } = req.body;
   const before = await pool.query("SELECT is_published FROM announcements WHERE id=$1", [id]);
   if (!before.rows[0]) return res.status(404).json({ error: "Anunțul nu există." });
   const wasPublished = before.rows[0].is_published;
@@ -1135,9 +1140,10 @@ app.put("/api/admin/announcements/:id", auth, requireRole(...ADMIN_ROLES), async
        title = COALESCE($1, title),
        content = COALESCE($2, content),
        category = COALESCE($3, category),
-       is_published = COALESCE($4, is_published)
-     WHERE id = $5 RETURNING *`,
-    [title || null, content || null, category?.trim() || null, is_published ?? null, id]
+       is_published = COALESCE($4, is_published),
+       image_url = COALESCE($5, image_url)
+     WHERE id = $6 RETURNING *`,
+    [title || null, content || null, category?.trim() || null, is_published ?? null, image_url?.trim() || null, id]
   );
   if (!rows[0]) return res.status(404).json({ error: "Anunțul nu există." });
   await logAction(req.user.sub, "announcement.update", "announcement", id, req.body, req.ip);

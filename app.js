@@ -206,6 +206,7 @@ if (newsList) {
         <article class="news">
           <span class="news-date">${escapeHtml(fmtNewsDate(a.published_at))}</span>
           <div>
+            ${a.image_url ? `<img class="news-img" src="${escapeHtml(a.image_url)}" alt="" loading="lazy" onerror="this.remove()">` : ''}
             <span class="tag">${escapeHtml((a.category || 'General').toUpperCase())}</span>
             <h3>${escapeHtml(a.title)}</h3>
             <p>${escapeHtml(truncate(a.content, 160))}</p>

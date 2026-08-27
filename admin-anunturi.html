@@ -18,6 +18,7 @@
     <div class="formgrid">
       <div class="field wide"><label>Titlu</label><input id="f-title" required></div>
       <div class="field"><label>Categorie (eticheta afișată)</label><input id="f-category" placeholder="ex: OFICIAL, REGULAMENT, COMUNITATE"></div>
+      <div class="field wide"><label>Imagine (URL, opțional)</label><input id="f-image-url" placeholder="https://... — apare pe card-ul de pe site și în notificarea Discord"></div>
       <div class="field wide"><label>Conținut</label><textarea id="f-content" required placeholder="Textul anunțului..."></textarea></div>
       <div class="field checkbox wide"><input type="checkbox" id="f-published" checked><label for="f-published">Publicat (vizibil pe site)</label></div>
     </div>
@@ -45,6 +46,7 @@ function showForm(ann) {
   document.getElementById('f-id').value = ann ? ann.id : '';
   document.getElementById('f-title').value = ann ? ann.title : '';
   document.getElementById('f-category').value = ann ? ann.category : '';
+  document.getElementById('f-image-url').value = ann ? (ann.image_url || '') : '';
   document.getElementById('f-content').value = ann ? ann.content : '';
   document.getElementById('f-published').checked = ann ? ann.is_published : true;
   document.getElementById('form-box').scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -98,6 +100,7 @@ document.getElementById('ann-form').addEventListener('submit', async (e) => {
   const body = {
     title: document.getElementById('f-title').value.trim(),
     category: document.getElementById('f-category').value.trim() || 'General',
+    image_url: document.getElementById('f-image-url').value.trim() || null,
     content: document.getElementById('f-content').value,
     is_published: document.getElementById('f-published').checked
   };

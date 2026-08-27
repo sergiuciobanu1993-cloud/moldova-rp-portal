@@ -91,6 +91,11 @@ CREATE TABLE IF NOT EXISTS announcements (
 -- homepage) — safe pe baze existente.
 ALTER TABLE announcements ADD COLUMN IF NOT EXISTS category VARCHAR(40) NOT NULL DEFAULT 'General';
 
+-- image_url — o imagine opțională (link către o poză publică) atașată
+-- anunțului, afișată pe card-ul de pe homepage și în embed-ul de Discord.
+-- NULL = fără imagine, nimic nu se afișează. Safe pe baze existente.
+ALTER TABLE announcements ADD COLUMN IF NOT EXISTS image_url TEXT;
+
 CREATE TABLE IF NOT EXISTS punishments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   player_id UUID REFERENCES players(id) ON DELETE SET NULL,

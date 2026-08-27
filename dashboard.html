@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Dashboard — Moldova RP</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="dashboard.css"></head>
+<body>
+<header><a class="brand" href="index.html"><img src="assets/logo.png" alt="">MOLDOVA<span>RP</span></a><nav><a href="index.html">Acasă</a><a href="index.html#regulamente">Regulamente</a><a href="#profil">Profil</a></nav><a class="logout" href="login.html" id="logout-link">Deconectare</a></header>
+<main>
+<section class="welcome"><div><p>PORTAL JUCĂTOR</p><h1>Bun venit, <span id="welcome-name">…</span></h1><small>Acesta este centrul tău Moldova RP.</small></div><div class="status"><i></i> SERVER ONLINE</div></section>
+<section class="stats"><article><small>ID JUCĂTOR</small><strong id="stat-id">—</strong></article><article><small>ORE JUCATE</small><strong id="stat-playtime">—</strong></article><article><small>FACȚIUNE</small><strong id="stat-faction">—</strong></article><article><small>RANK</small><strong id="stat-rank">—</strong></article></section>
+<div class="grid">
+<section class="panel"><div class="head"><h2>Activitate recentă</h2><span>Ultimele evenimente</span></div>
+<div class="event"><b>26 AUG</b><div><strong>Profil sincronizat</strong><small>Datele jucătorului au fost actualizate.</small></div></div>
+<div class="event"><b>24 AUG</b><div><strong>Activitate facțiune</strong><small>Ai participat la activitatea organizației.</small></div></div>
+<div class="event"><b>20 AUG</b><div><strong>Autentificare</strong><small>Conectare reușită din portal.</small></div></div></section>
+<aside class="panel" id="profil"><div class="head"><h2>Profil</h2><span>Public</span></div><div class="profile"><div class="avatar" id="profile-avatar">--</div><div><strong id="profile-name">…</strong><small id="profile-id">—</small></div></div><a class="wide" href="index.html">Vezi comunitatea →</a></aside>
+</div>
+<section class="quick"><h2>Acces rapid</h2><div class="quickgrid"><a href="index.html#regulamente">📚 <strong>Regulamente</strong><small>Toate regulamentele oficiale</small></a><a href="index.html#factiuni">◆ <strong>Facțiuni</strong><small>Organizații și rank-uri</small></a><a href="admin.html" id="admin-link" hidden>⚙ <strong>Admin Panel</strong><small>Vizibil doar pentru moderator/admin/owner</small></a></div></section>
+</main>
+<script src="auth-client.js"></script>
+<script>
+(async () => {
+  if (!requireAuth()) return;
+  try {
+    const res = await apiFetch('/api/me');
+    if (!res.ok) throw new Error();
+    const me = await res.json();
+
+    const name = me.display_name || me.username;
+    document.getElementById('welcome-name').textContent = name;
+    document.getElementById('stat-id').textContent = me.game_id ? '#' + me.game_id : '—';
+    document.getElementById('stat-playtime').textContent = me.playtime_minutes != null
+      ? Math.round(me.playtime_minutes / 60) + 'h' : '—';
+    document.getElementById('stat-faction').textContent = me.faction_name || 'Fără facțiune';
+    document.getElementById('stat-rank').textContent = me.rank_name || '—';
+
+    document.getElementById('profile-name').textContent = name;
+    document.getElementById('profile-id').textContent = me.game_id
+      ? 'ID #' + me.game_id : 'Cont #' + me.id.slice(0, 8);
+    document.getElementById('profile-avatar').textContent = name.slice(0, 2).toUpperCase();
+
+    if (['moderator', 'admin', 'owner'].includes(me.role)) {
+      document.getElementById('admin-link').hidden = false;
+    }
+  } catch {
+    clearAuth();
+    window.location.href = 'login.html';
+  }
+})();
+wireLogout('#logout-link');
+</script>
+</body></html>

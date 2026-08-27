@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Admin Panel — Moldova RP</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="admin.css"></head>
+<body>
+<aside class="side"><a class="brand" href="index.html"><img src="assets/logo.png" alt=""><b>MOLDOVA<span>RP</span></b></a><p>ADMINISTRAȚIE</p><a class="sel">▦ Dashboard</a><a>♙ Jucători</a><a>◆ Facțiuni</a><a>⚠ Sancțiuni</a><a>▤ Reclamații</a><a>⚖ CK</a><a>📚 Regulamente</a><a>◉ Anunțuri</a><a>⌁ Audit Logs</a><a class="back" href="index.html">← Site public</a></aside>
+<main><header><div><small>PANEL ADMINISTRATIV</small><h1>Dashboard</h1></div><div class="admin"><span id="admin-name">…</span> <i></i></div></header>
+<section class="metrics"><article><small>JUCĂTORI</small><strong id="metric-players">—</strong><em>TOTAL</em></article><article><small>ONLINE</small><strong id="metric-online">—</strong><em>LIVE</em></article><article><small>RECLAMAȚII</small><strong id="metric-complaints">—</strong><em>DESCHISE</em></article><article><small>SANCȚIUNI</small><strong id="metric-punishments">—</strong><em>LUNA CURENTĂ</em></article></section>
+<section class="tablebox"><div class="title"><h2>Activitate administrativă</h2><button>+ Acțiune nouă</button></div><table><thead><tr><th>ADMIN</th><th>ACȚIUNE</th><th>ȚINTĂ</th><th>DATA</th></tr></thead><tbody id="audit-body"><tr><td colspan="4">Se încarcă…</td></tr></tbody></table></section>
+</main>
+<script src="auth-client.js"></script>
+<script>
+(async () => {
+  const me = await requireRole('admin', 'owner');
+  if (!me) return;
+  document.getElementById('admin-name').textContent = me.username;
+
+  try {
+    const [statsRes, logsRes] = await Promise.all([
+      apiFetch('/api/admin/stats'),
+      apiFetch('/api/admin/audit-logs')
+    ]);
+    if (!statsRes.ok || !logsRes.ok) throw new Error();
+
+    const stats = await statsRes.json();
+    document.getElementById('metric-players').textContent = Number(stats.players).toLocaleString('ro-RO');
+    document.getElementById('metric-online').textContent = stats.online;
+    document.getElementById('metric-complaints').textContent = stats.complaints;
+    document.getElementById('metric-punishments').textContent = stats.punishments;
+
+    const logs = await logsRes.json();
+    const tbody = document.getElementById('audit-body');
+    tbody.innerHTML = logs.length ? logs.map(l => `
+      <tr>
+        <td>${l.actor || 'Sistem'}</td>
+        <td>${l.action}</td>
+        <td>${l.entity_type ? l.entity_type + (l.entity_id ? ' #' + String(l.entity_id).slice(0, 8) : '') : '—'}</td>
+        <td>${new Date(l.created_at).toLocaleString('ro-RO')}</td>
+      </tr>`).join('') : '<tr><td colspan="4">Niciun eveniment încă.</td></tr>';
+  } catch {
+    document.getElementById('audit-body').innerHTML = '<tr><td colspan="4">Nu am putut încărca datele administrative.</td></tr>';
+  }
+})();
+</script>
+</body></html>

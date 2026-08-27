@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Autentificare — Moldova RP</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="auth.css"></head>
+<body><div class="auth"><div class="brand"><img src="assets/logo.png" alt=""><b>MOLDOVA<span>RP</span></b></div><div class="box"><p>PORTAL OFICIAL</p><h1>Autentificare</h1><form id="login-form" novalidate><label>Email / Username</label><input id="login-input" name="login" placeholder="username" autocomplete="username" required><label>Parolă</label><input id="password-input" name="password" type="password" placeholder="••••••••" autocomplete="current-password" required><p id="login-error" class="error" hidden></p><button type="submit" id="login-submit">Intră în cont</button></form><div class="or"><span>sau</span></div><button class="discord" disabled title="În curând">Conectare cu Discord</button><small>Contul se autentifică prin API-ul real (/api/auth/login).</small></div><a href="index.html">← Înapoi la site</a></div>
+<script src="auth-client.js"></script>
+<script>
+const form = document.getElementById('login-form');
+const errorBox = document.getElementById('login-error');
+const submitBtn = document.getElementById('login-submit');
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  errorBox.hidden = true;
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Se conectează…';
+  try {
+    const login = document.getElementById('login-input').value.trim();
+    const password = document.getElementById('password-input').value;
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ login, password })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Autentificare eșuată.');
+    setAuth(data.token, data.user);
+    window.location.href = 'dashboard.html';
+  } catch (err) {
+    errorBox.textContent = err.message || 'Nu ne-am putut conecta la server.';
+    errorBox.hidden = false;
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Intră în cont';
+  }
+});
+</script>
+</body></html>

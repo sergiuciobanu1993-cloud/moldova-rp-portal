@@ -890,6 +890,7 @@ app.post("/api/admin/regulations", auth, requireRole(...ADMIN_ROLES), asyncRoute
       [title.trim(), finalSlug, category.trim(), content, version || "1.0", is_published ?? true]
     );
     await logAction(req.user.sub, "regulation.create", "regulation", rows[0].id, { title, category }, req.ip);
+    if (rows[0].is_published) notifyDiscordRegulation(rows[0], "adăugat");
     res.status(201).json(rows[0]);
   } catch (e) {
     if (e.code === "23505") return res.status(409).json({ error: "Există deja un regulament cu acest slug." });
@@ -915,6 +916,7 @@ app.put("/api/admin/regulations/:id", auth, requireRole(...ADMIN_ROLES), asyncRo
     );
     if (!rows[0]) return res.status(404).json({ error: "Regulamentul nu există." });
     await logAction(req.user.sub, "regulation.update", "regulation", id, req.body, req.ip);
+    if (rows[0].is_published) notifyDiscordRegulation(rows[0], "modificat");
     res.json(rows[0]);
   } catch (e) {
     if (e.code === "23505") return res.status(409).json({ error: "Există deja un regulament cu acest slug." });
@@ -951,15 +953,21 @@ async function notifyDiscordAnnouncement(announcement) {
       headers: { "Content-Type": "application/json" },
       signal: controller.signal,
       body: JSON.stringify({
-        content: "@everyone",
+        content: "📢 **Anunț nou pe Moldova RP!** @everyone",
         allowed_mentions: { parse: ["everyone"] },
         embeds: [{
+          author: { name: "Moldova RP — Anunțuri", icon_url: `${SITE_URL}/assets/logo.png` },
           title: announcement.title,
           description: announcement.content.length > 800
             ? announcement.content.slice(0, 800).trim() + "…"
             : announcement.content,
           color: 0xff8a1f,
-          footer: { text: announcement.category || "General" },
+          thumbnail: { url: `${SITE_URL}/assets/logo.png` },
+          fields: [
+            { name: "Categorie", value: announcement.category || "General", inline: true },
+            { name: "Autor", value: announcement.author || "Administrație", inline: true },
+          ],
+          footer: { text: "Moldova RP Portal · vezi anunțul complet pe site" },
           url: `${SITE_URL}/index.html#anunturi`,
           timestamp: new Date().toISOString(),
         }],
@@ -968,6 +976,42 @@ async function notifyDiscordAnnouncement(announcement) {
     if (!res.ok) console.error(`Discord webhook a răspuns cu ${res.status}: ${await res.text().catch(() => "")}`);
   } catch (err) {
     console.error("Trimiterea anunțului pe Discord a eșuat:", err.message);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+// Aceeași logică ca la anunțuri, dar pentru regulamente — mesajul spune clar
+// dacă regulamentul a fost adăugat sau modificat, cum a cerut Sergiu. Folosește
+// același webhook (DISCORD_ANNOUNCE_WEBHOOK) — un singur canal pentru toate
+// notificările site-ului, nu unul separat per tip de conținut.
+async function notifyDiscordRegulation(regulation, action) {
+  if (!DISCORD_ANNOUNCE_WEBHOOK) return;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 6000);
+  try {
+    const res = await fetch(DISCORD_ANNOUNCE_WEBHOOK, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      signal: controller.signal,
+      body: JSON.stringify({
+        content: "@everyone",
+        allowed_mentions: { parse: ["everyone"] },
+        embeds: [{
+          title: `Regulament ${action}: ${regulation.title}`,
+          description: regulation.content.length > 800
+            ? regulation.content.slice(0, 800).trim() + "…"
+            : regulation.content,
+          color: 0x2f81f7,
+          footer: { text: `${regulation.category || "General"} · versiunea ${regulation.version || "1.0"}` },
+          url: `${SITE_URL}/regulament.html?slug=${encodeURIComponent(regulation.slug)}`,
+          timestamp: new Date().toISOString(),
+        }],
+      }),
+    });
+    if (!res.ok) console.error(`Discord webhook (regulament) a răspuns cu ${res.status}: ${await res.text().catch(() => "")}`);
+  } catch (err) {
+    console.error("Trimiterea regulamentului pe Discord a eșuat:", err.message);
   } finally {
     clearTimeout(timeout);
   }
@@ -998,7 +1042,7 @@ app.post("/api/admin/announcements", auth, requireRole(...ADMIN_ROLES), asyncRou
     [title.trim(), content, category?.trim() || "General", req.user.sub, is_published ?? true]
   );
   await logAction(req.user.sub, "announcement.create", "announcement", rows[0].id, { title }, req.ip);
-  if (rows[0].is_published) notifyDiscordAnnouncement(rows[0]);
+  if (rows[0].is_published) notifyDiscordAnnouncement({ ...rows[0], author: req.user.username });
   res.status(201).json(rows[0]);
 }));
 
@@ -1022,7 +1066,7 @@ app.put("/api/admin/announcements/:id", auth, requireRole(...ADMIN_ROLES), async
   await logAction(req.user.sub, "announcement.update", "announcement", id, req.body, req.ip);
   // Notifică pe Discord doar când anunțul TREE de la ciornă la publicat —
   // nu la fiecare editare ulterioară a unuia deja publicat, ca să nu spamăm.
-  if (!wasPublished && rows[0].is_published) notifyDiscordAnnouncement(rows[0]);
+  if (!wasPublished && rows[0].is_published) notifyDiscordAnnouncement({ ...rows[0], author: req.user.username });
   res.json(rows[0]);
 }));
 

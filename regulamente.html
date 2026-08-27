@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="ro">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ff8a1f">
+  <meta name="description" content="Moldova RP — toate regulamentele oficiale ale comunității.">
+  <title>Regulamente — Moldova RP</title>
+  <link rel="icon" href="assets/favicon.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="index.html" aria-label="Moldova RP - Acasă">
+      <img src="assets/logo.png" alt="Moldova RP">
+      <span>MOLDOVA<span class="accent">RP</span></span>
+    </a>
+    <button class="menu-toggle" aria-label="Deschide meniul" aria-expanded="false">☰</button>
+    <nav class="nav">
+      <a href="index.html">Acasă</a>
+      <a class="active" href="regulamente.html">Regulamente</a>
+      <a href="index.html#jucatori">Jucători</a>
+      <a href="index.html#factiuni">Facțiuni</a>
+      <a href="index.html#anunturi">Anunțuri</a>
+      <a href="index.html#despre">Despre</a>
+      <a class="nav-login" href="login.html">Autentificare</a>
+    </nav>
+  </header>
+
+  <main>
+    <div class="page-hero">
+      <a class="back-link" href="index.html">← Înapoi la pagina principală</a>
+      <p class="eyebrow" style="margin-top:22px">CENTRUL DE INFORMAȚII</p>
+      <h1>Toate regulamentele</h1>
+    </div>
+
+    <section class="section" style="padding-top:0">
+      <div id="reg-groups">
+        <div class="empty-state">Se încarcă regulamentele…</div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="footer-brand"><img src="assets/logo.png" alt="Moldova RP"><div><strong>MOLDOVA<span class="accent">RP</span></strong><small>Portal oficial al comunității</small></div></div>
+    <div class="footer-links"><a href="index.html#regulamente">Regulamente</a><a href="index.html#jucatori">Jucători</a><a href="index.html#factiuni">Facțiuni</a><a href="index.html#anunturi">Anunțuri</a></div>
+    <p class="copyright">© 2026 Moldova RP. Toate drepturile rezervate.</p>
+  </footer>
+
+  <script src="app.js"></script>
+  <script>
+  (async () => {
+    const container = document.getElementById('reg-groups');
+    try {
+      const res = await fetch('/api/regulations');
+      if (!res.ok) throw new Error();
+      const items = await res.json();
+      if (!items.length) {
+        container.innerHTML = '<div class="empty-state">Niciun regulament publicat încă.</div>';
+        return;
+      }
+      const groups = {};
+      items.forEach(r => {
+        (groups[r.category] ||= []).push(r);
+      });
+      container.innerHTML = Object.keys(groups).sort().map(cat => `
+        <div class="reg-group">
+          <h2>${cat}</h2>
+          <div class="reg-list">
+            ${groups[cat].map(r => `
+              <a class="reg-item" href="regulament.html?slug=${encodeURIComponent(r.slug)}">
+                <div><h3>${r.title}</h3><small>Versiune ${r.version} · actualizat ${new Date(r.updated_at).toLocaleDateString('ro-RO')}</small></div>
+                <span class="reg-arrow">→</span>
+              </a>`).join('')}
+          </div>
+        </div>`).join('');
+    } catch {
+      container.innerHTML = '<div class="empty-state">Nu am putut încărca regulamentele. Încearcă din nou mai târziu.</div>';
+    }
+  })();
+  </script>
+</body>
+</html>

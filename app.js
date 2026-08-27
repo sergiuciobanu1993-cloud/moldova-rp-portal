@@ -10,10 +10,13 @@ document.querySelectorAll('.nav a').forEach(a => a.addEventListener('click', () 
 }));
 
 // Placeholder live-counter animation until the server API is connected.
+// Guarded because app.js is shared across pages that don't all have #online.
 const online = document.getElementById('online');
-let value = Number(online.textContent);
-setInterval(() => {
-  const next = Math.max(90, Math.min(180, value + Math.floor(Math.random()*7)-3));
-  value = next;
-  online.textContent = value;
-}, 7000);
+if (online) {
+  let value = Number(online.textContent);
+  setInterval(() => {
+    const next = Math.max(90, Math.min(180, value + Math.floor(Math.random()*7)-3));
+    value = next;
+    online.textContent = value;
+  }, 7000);
+}

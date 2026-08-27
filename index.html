@@ -61,15 +61,10 @@
     <section class="section" id="regulamente">
       <div class="section-head">
         <div><p class="eyebrow">CENTRUL DE INFORMAȚII</p><h2>Regulamente</h2></div>
-        <a class="text-link" href="#toate-regulamentele">Vezi toate →</a>
+        <a class="text-link" href="regulamente.html">Vezi toate →</a>
       </div>
-      <div class="card-grid">
-        <a class="info-card" href="#regulament-politie"><span class="card-number">01</span><span class="card-icon">◈</span><h3>Poliție</h3><p>Proceduri, drepturi, obligații și sistem anti-abuz.</p></a>
-        <a class="info-card" href="#regulament-avocatura"><span class="card-number">02</span><span class="card-icon">⚖</span><h3>Avocatură</h3><p>Dreptul la apărare, proceduri și judecată RP.</p></a>
-        <a class="info-card" href="#regulament-ganguri"><span class="card-number">03</span><span class="card-icon">◆</span><h3>Ganguri</h3><p>Reguli pentru activitățile și organizațiile ilegale.</p></a>
-        <a class="info-card" href="#regulament-sindicat"><span class="card-number">04</span><span class="card-icon">⬢</span><h3>Sindicat</h3><p>Coordonarea activităților ilegale organizate.</p></a>
-        <a class="info-card" href="#regulament-factiunii"><span class="card-number">05</span><span class="card-icon">▤</span><h3>Facțiuni</h3><p>Regulamente și informații pentru organizații.</p></a>
-        <a class="info-card" href="#sanctiuni"><span class="card-number">06</span><span class="card-icon">!</span><h3>Sancțiuni</h3><p>Minute, warn-uri și măsuri disciplinare.</p></a>
+      <div class="card-grid" id="reg-cards">
+        <div class="empty-state">Se încarcă regulamentele…</div>
       </div>
     </section>
 
@@ -131,6 +126,31 @@
 
 <script>
 (async()=>{try{const r=await fetch('/api/health');if(r.ok){const d=await r.json();document.documentElement.dataset.api='online';}}catch(e){}})();
+</script>
+
+<script>
+(async () => {
+  const grid = document.getElementById('reg-cards');
+  const icons = ['◈','⚖','◆','⬢','▤','!'];
+  try {
+    const res = await fetch('/api/regulations');
+    if (!res.ok) throw new Error();
+    const items = (await res.json()).slice(0, 6);
+    if (!items.length) {
+      grid.innerHTML = '<div class="empty-state">Niciun regulament publicat încă.</div>';
+      return;
+    }
+    grid.innerHTML = items.map((r, i) => `
+      <a class="info-card" href="regulament.html?slug=${encodeURIComponent(r.slug)}">
+        <span class="card-number">${String(i + 1).padStart(2, '0')}</span>
+        <span class="card-icon">${icons[i % icons.length]}</span>
+        <h3>${r.title}</h3>
+        <p>${r.category} · versiunea ${r.version}</p>
+      </a>`).join('');
+  } catch {
+    grid.innerHTML = '<div class="empty-state">Nu am putut încărca regulamentele.</div>';
+  }
+})();
 </script>
 </body>
 </html>

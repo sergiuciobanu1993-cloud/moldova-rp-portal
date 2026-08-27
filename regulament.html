@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="ro">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ff8a1f">
+  <meta name="description" content="Moldova RP — regulament oficial al comunității.">
+  <title>Regulament — Moldova RP</title>
+  <link rel="icon" href="assets/favicon.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="index.html" aria-label="Moldova RP - Acasă">
+      <img src="assets/logo.png" alt="Moldova RP">
+      <span>MOLDOVA<span class="accent">RP</span></span>
+    </a>
+    <button class="menu-toggle" aria-label="Deschide meniul" aria-expanded="false">☰</button>
+    <nav class="nav">
+      <a href="index.html">Acasă</a>
+      <a class="active" href="regulamente.html">Regulamente</a>
+      <a href="index.html#jucatori">Jucători</a>
+      <a href="index.html#factiuni">Facțiuni</a>
+      <a href="index.html#anunturi">Anunțuri</a>
+      <a href="index.html#despre">Despre</a>
+      <a class="nav-login" href="login.html">Autentificare</a>
+    </nav>
+  </header>
+
+  <main>
+    <div class="page-hero" style="padding-bottom:0">
+      <a class="back-link" href="regulamente.html">← Toate regulamentele</a>
+    </div>
+
+    <section class="section" style="padding-top:26px">
+      <div id="reg-content">
+        <div class="empty-state">Se încarcă…</div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="footer-brand"><img src="assets/logo.png" alt="Moldova RP"><div><strong>MOLDOVA<span class="accent">RP</span></strong><small>Portal oficial al comunității</small></div></div>
+    <div class="footer-links"><a href="index.html#regulamente">Regulamente</a><a href="index.html#jucatori">Jucători</a><a href="index.html#factiuni">Facțiuni</a><a href="index.html#anunturi">Anunțuri</a></div>
+    <p class="copyright">© 2026 Moldova RP. Toate drepturile rezervate.</p>
+  </footer>
+
+  <script src="app.js"></script>
+  <script>
+  (async () => {
+    const container = document.getElementById('reg-content');
+    const slug = new URLSearchParams(window.location.search).get('slug');
+    if (!slug) {
+      container.innerHTML = '<div class="empty-state">Regulament negăsit.</div>';
+      return;
+    }
+    try {
+      const res = await fetch(`/api/regulations/${encodeURIComponent(slug)}`);
+      if (!res.ok) throw new Error();
+      const r = await res.json();
+      document.title = `${r.title} — Moldova RP`;
+      container.innerHTML = `
+        <article class="prose-box prose">
+          <div class="prose-meta"><span class="tag">${r.category}</span><span>·</span><span>Versiune ${r.version}</span><span>·</span><span>Actualizat ${new Date(r.updated_at).toLocaleDateString('ro-RO')}</span></div>
+          <h1>${r.title}</h1>
+          <div class="prose-body"></div>
+        </article>`;
+      container.querySelector('.prose-body').textContent = r.content;
+    } catch {
+      container.innerHTML = '<div class="empty-state">Acest regulament nu există sau nu a fost publicat.</div>';
+    }
+  })();
+  </script>
+</body>
+</html>

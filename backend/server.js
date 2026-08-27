@@ -80,7 +80,15 @@ async function fetchFivemStatus() {
     const res = await fetch(`http://${FIVEM_ADDRESS}/players.json`, { signal: controller.signal });
     if (!res.ok) throw new Error(`players.json HTTP ${res.status}`);
     const players = await res.json();
-    return { online: true, players: Array.isArray(players) ? players.length : 0, maxPlayers: FIVEM_MAX_PLAYERS };
+    const list = Array.isArray(players)
+      // Only the server-slot id and display name are exposed publicly — never
+      // identifiers/endpoint/ping, which could be used to target or dox a
+      // specific player.
+      ? players
+          .map(p => ({ id: p.id, name: (p.name || "Necunoscut").toString().slice(0, 64) }))
+          .sort((a, b) => a.name.localeCompare(b.name, "ro"))
+      : [];
+    return { online: true, players: list.length, maxPlayers: FIVEM_MAX_PLAYERS, list };
   } finally {
     clearTimeout(timeout);
   }
@@ -95,7 +103,23 @@ app.get("/api/server-status", asyncRoute(async (_req, res) => {
     res.json(data);
   } catch {
     if (fivemCache.data) return res.json({ ...fivemCache.data, stale: true });
-    res.json({ online: false, players: 0, maxPlayers: FIVEM_MAX_PLAYERS });
+    res.json({ online: false, players: 0, maxPlayers: FIVEM_MAX_PLAYERS, list: [] });
+  }
+}));
+
+// Same cache as /api/server-status (it's populated by the same players.json
+// read) — a separate route just for pages that only care about the roster,
+// like the homepage's "Jucători" section.
+app.get("/api/live/players", asyncRoute(async (_req, res) => {
+  const age = Date.now() - fivemCache.fetchedAt;
+  if (fivemCache.data && age < FIVEM_CACHE_MS) return res.json({ online: fivemCache.data.online, list: fivemCache.data.list || [] });
+  try {
+    const data = await fetchFivemStatus();
+    fivemCache = { data, fetchedAt: Date.now() };
+    res.json({ online: data.online, list: data.list });
+  } catch {
+    if (fivemCache.data) return res.json({ online: fivemCache.data.online, list: fivemCache.data.list || [], stale: true });
+    res.json({ online: false, list: [] });
   }
 }));
 

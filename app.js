@@ -73,6 +73,54 @@ if (online || slots) {
   setInterval(loadServerStatus, 30000);
 }
 
+// Lista reală de jucători conectați acum pe server (vezi /api/live/players,
+// care citește players.json de pe serverul FiveM). Expune doar id-ul de slot
+// și numele — nimic altceva (fără identifiers/ping/endpoint). Guarded: doar
+// homepage are #player-grid.
+const playerGrid = document.getElementById('player-grid');
+if (playerGrid) {
+  const initials = name => (name || '??').trim().slice(0, 2).toUpperCase();
+  // Player display names come straight from the game server (Rockstar/Steam
+  // profile name) — a player can set that to anything, including HTML. Never
+  // trust it into innerHTML unescaped.
+  const escapeHtml = s => (s ?? '').toString()
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  const loadPlayers = async () => {
+    try {
+      const res = await fetch('/api/live/players');
+      if (!res.ok) throw new Error();
+      const d = await res.json();
+      const sub = document.getElementById('player-grid-sub');
+      if (!d.online) {
+        playerGrid.innerHTML = '<div class="empty-state">Serverul este offline momentan.</div>';
+        if (sub) sub.textContent = 'Serverul este offline momentan.';
+        return;
+      }
+      if (!d.list || !d.list.length) {
+        playerGrid.innerHTML = '<div class="empty-state">Niciun jucător conectat momentan.</div>';
+        if (sub) sub.textContent = 'Niciun jucător conectat momentan.';
+        return;
+      }
+      const SHOWN = 24;
+      const shown = d.list.slice(0, SHOWN);
+      playerGrid.innerHTML = shown.map(p => `
+        <div class="player">
+          <div class="avatar">${escapeHtml(initials(p.name))}</div>
+          <div><strong>${escapeHtml(p.name)}</strong><small>Slot server #${escapeHtml(p.id)}</small></div>
+          <span class="online-badge">ONLINE</span>
+        </div>`).join('');
+      if (sub) sub.textContent = d.list.length > SHOWN
+        ? `${d.list.length} jucători online acum · se afișează primii ${SHOWN}`
+        : `${d.list.length} jucători online acum`;
+    } catch {
+      // Lasă lista anterioară dacă nu avem încă date live.
+    }
+  };
+  loadPlayers();
+  setInterval(loadPlayers, 30000);
+}
+
 // Live "X online" per facțiune, potrivit după eticheta jobului din FiveM
 // (vezi /api/live/factions). Banii facțiunilor rămân doar pentru admin —
 // aici arătăm doar câți membri sunt online acum. Guarded: doar homepage are

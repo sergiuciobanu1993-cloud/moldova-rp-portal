@@ -956,6 +956,19 @@ app.delete("/api/admin/regulations/:id", auth, requireRole(...ADMIN_ROLES), asyn
 const DISCORD_ANNOUNCE_WEBHOOK = process.env.DISCORD_ANNOUNCE_WEBHOOK || "";
 const SITE_URL = process.env.SITE_URL || "https://web-production-4fd88.up.railway.app";
 
+// Discord cere un URL absolut pentru imaginile din embed (nu acceptă căi
+// relative de genul "assets/poza.jpg", care merg perfect pe site-ul nostru
+// unde browserul le rezolvă față de domeniu, dar Discord le respinge cu 400).
+// Adminul poate lipi orice formă în panou — o facem absolută aici, o singură
+// dată, indiferent unde e folosită.
+function toAbsoluteUrl(url) {
+  if (!url) return null;
+  const trimmed = url.trim();
+  if (!trimmed) return null;
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return `${SITE_URL}/${trimmed.replace(/^\/+/, "")}`;
+}
+
 async function notifyDiscordAnnouncement(announcement) {
   if (!DISCORD_ANNOUNCE_WEBHOOK) return;
   const controller = new AbortController();
@@ -979,7 +992,8 @@ async function notifyDiscordAnnouncement(announcement) {
       url: `${SITE_URL}/index.html#anunturi`,
       timestamp: new Date().toISOString(),
     };
-    if (announcement.image_url) embed.image = { url: announcement.image_url };
+    const absImageUrl = toAbsoluteUrl(announcement.image_url);
+    if (absImageUrl) embed.image = { url: absImageUrl };
 
     const res = await fetch(DISCORD_ANNOUNCE_WEBHOOK, {
       method: "POST",

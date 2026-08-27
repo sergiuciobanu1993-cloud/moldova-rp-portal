@@ -42,15 +42,31 @@ async function run() {
     console.log(rowCount ? "Demo password fixed." : `No user named ${DEMO_USERNAME} found — skipped.`);
 
     // One-off admin bootstrap: set BOOTSTRAP_ADMIN on Railway to a username
-    // (matches either the login username or the Discord display name) to
+    // (matches either the login username or the Discord username) to
     // promote that account to 'owner' on next boot. Safe to leave set —
     // re-promoting an existing owner every deploy is a harmless no-op.
+    // Matching is case-insensitive and tries three forms of the value:
+    //   1. as given
+    //   2. with any trailing "#..." tag stripped (people often paste their
+    //      Discord handle with a discriminator/id suffix that isn't part of
+    //      the stored discord_username)
+    //   3. as an account-id prefix, when the value contains "#" — the
+    //      dashboard shows "Cont #<first 8 chars of id>" for accounts with
+    //      no in-game name yet, and people copy that whole label thinking
+    //      it's their handle, e.g. "santtaklaus Cont #78ef2c17".
     const bootstrapAdmin = process.env.BOOTSTRAP_ADMIN;
     if (bootstrapAdmin) {
+      const raw = bootstrapAdmin.trim();
+      const stripped = raw.split("#")[0].trim();
+      const idFragment = raw.includes("#") ? raw.split("#").pop().trim().toLowerCase() : "";
       const { rowCount: promoted } = await client.query(
         `UPDATE users SET role_id = (SELECT id FROM roles WHERE name='owner')
-         WHERE username = $1 OR discord_username = $1`,
-        [bootstrapAdmin]
+         WHERE LOWER(username) = LOWER($1)
+            OR LOWER(discord_username) = LOWER($1)
+            OR LOWER(username) = LOWER($2)
+            OR LOWER(discord_username) = LOWER($2)
+            OR ($3 <> '' AND LEFT(LOWER(id::text), LENGTH($3)) = $3)`,
+        [raw, stripped, idFragment]
       );
       console.log(promoted
         ? `Promoted "${bootstrapAdmin}" to owner.`

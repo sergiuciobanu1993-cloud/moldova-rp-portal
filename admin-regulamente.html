@@ -11,25 +11,30 @@
   <tbody id="list-body"><tr><td colspan="6">Se încarcă…</td></tr></tbody></table>
 </section>
 
-<section class="formbox" id="form-box" hidden>
-  <h2 id="form-title">Regulament nou</h2>
-  <form id="reg-form">
-    <input type="hidden" id="f-id">
-    <div class="formgrid">
-      <div class="field"><label>Titlu</label><input id="f-title" required></div>
-      <div class="field"><label>Categorie</label><input id="f-category" required placeholder="ex: Poliție"></div>
-      <div class="field"><label>Slug (URL)</label><input id="f-slug" placeholder="generat automat din titlu dacă e gol"></div>
-      <div class="field"><label>Versiune</label><input id="f-version" value="1.0"></div>
-      <div class="field wide"><label>Conținut</label><textarea id="f-content" required placeholder="Textul complet al regulamentului..."></textarea></div>
-      <div class="field checkbox wide"><input type="checkbox" id="f-published" checked><label for="f-published">Publicat (vizibil pe site)</label></div>
+<div class="modal-overlay" id="form-overlay" hidden>
+  <section class="formbox modal-box" id="form-box">
+    <div class="modal-head">
+      <h2 id="form-title">Regulament nou</h2>
+      <button type="button" class="modal-close" id="modal-close-btn" aria-label="Închide">✕</button>
     </div>
-    <p class="formmsg" id="form-msg" hidden></p>
-    <div class="formactions">
-      <button type="submit" class="btn-primary" id="save-btn">Salvează</button>
-      <button type="button" class="btn-ghost" id="cancel-btn">Anulează</button>
-    </div>
-  </form>
-</section>
+    <form id="reg-form">
+      <input type="hidden" id="f-id">
+      <div class="formgrid">
+        <div class="field"><label>Titlu</label><input id="f-title" required></div>
+        <div class="field"><label>Categorie</label><input id="f-category" required placeholder="ex: Poliție"></div>
+        <div class="field"><label>Slug (URL)</label><input id="f-slug" placeholder="generat automat din titlu dacă e gol"></div>
+        <div class="field"><label>Versiune</label><input id="f-version" value="1.0"></div>
+        <div class="field wide"><label>Conținut</label><textarea id="f-content" class="textarea-lg" required placeholder="Textul complet al regulamentului..."></textarea></div>
+        <div class="field checkbox wide"><input type="checkbox" id="f-published" checked><label for="f-published">Publicat (vizibil pe site)</label></div>
+      </div>
+      <p class="formmsg" id="form-msg" hidden></p>
+      <div class="formactions">
+        <button type="submit" class="btn-primary" id="save-btn">Salvează</button>
+        <button type="button" class="btn-ghost" id="cancel-btn">Anulează</button>
+      </div>
+    </form>
+  </section>
+</div>
 
 </main>
 <script src="auth-client.js"></script>
@@ -42,7 +47,8 @@ function slugify(text) {
 }
 
 function showForm(reg) {
-  document.getElementById('form-box').hidden = false;
+  document.getElementById('form-overlay').hidden = false;
+  document.body.classList.add('modal-open');
   document.getElementById('form-msg').hidden = true;
   editingId = reg ? reg.id : null;
   document.getElementById('form-title').textContent = reg ? 'Editează regulament' : 'Regulament nou';
@@ -53,14 +59,25 @@ function showForm(reg) {
   document.getElementById('f-version').value = reg ? reg.version : '1.0';
   document.getElementById('f-content').value = reg ? reg.content : '';
   document.getElementById('f-published').checked = reg ? reg.is_published : true;
-  document.getElementById('form-box').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  document.getElementById('f-title').focus();
 }
 
 function hideForm() {
-  document.getElementById('form-box').hidden = true;
+  document.getElementById('form-overlay').hidden = true;
+  document.body.classList.remove('modal-open');
   document.getElementById('reg-form').reset();
   editingId = null;
 }
+
+// Închidere prin click pe fundal (nu și pe click în interiorul cardului) sau
+// prin tasta Escape — comod când lucrezi cu un text lung de regulament.
+document.getElementById('form-overlay').addEventListener('click', (e) => {
+  if (e.target.id === 'form-overlay') hideForm();
+});
+document.getElementById('modal-close-btn').addEventListener('click', hideForm);
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !document.getElementById('form-overlay').hidden) hideForm();
+});
 
 async function loadList() {
   const tbody = document.getElementById('list-body');

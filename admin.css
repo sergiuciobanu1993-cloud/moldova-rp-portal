@@ -10,4 +10,19 @@
 .msg span{display:block;font-size:13px;color:var(--text);white-space:pre-wrap}
 .msg small{display:block;color:#666;font-size:10px;margin-top:6px}
 .muted{color:var(--muted);font-size:12px}.formmsg{margin:12px 0 0;padding:10px 12px;border-radius:8px;font-size:12px;font-weight:700}.formmsg.error{background:rgba(255,80,80,.1);border:1px solid rgba(255,80,80,.35);color:#ff8a8a}.formmsg.ok{background:rgba(66,223,138,.1);border:1px solid rgba(66,223,138,.35);color:var(--green)}
+
+/* Fereastră flotantă (modal) pentru formulare cu conținut lung — ex: editarea
+   regulamentelor, unde un textarea mic era incomod de folosit. Reutilizabil:
+   orice .formbox pus într-un .modal-overlay/.modal-box devine automat un
+   card mare, centrat, peste restul paginii. */
+body.modal-open{overflow:hidden}
+.modal-overlay{position:fixed;inset:0;z-index:100;background:rgba(3,4,5,.74);backdrop-filter:blur(4px);display:flex;align-items:flex-start;justify-content:center;padding:5vh 20px;overflow-y:auto}
+.modal-overlay[hidden]{display:none}
+.modal-box{width:min(1100px,96vw);margin:0 auto;box-shadow:0 30px 90px rgba(0,0,0,.6)}
+.modal-head{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:16px}
+.modal-head h2{margin:0}
+.modal-close{background:transparent;border:1px solid var(--line);border-radius:8px;width:32px;height:32px;flex-shrink:0;color:var(--muted);font-size:14px;line-height:1;cursor:pointer;display:grid;place-items:center}
+.modal-close:hover{border-color:var(--orange);color:var(--orange)}
+.field textarea.textarea-lg{min-height:54vh;line-height:1.65;font-size:13.5px}
+@media(max-width:800px){.modal-overlay{padding:0}.modal-box{width:100%;min-height:100vh;border-radius:0}.field textarea.textarea-lg{min-height:40vh}}
 @media(max-width:800px){.side{position:static;width:190px}.metrics{grid-template-columns:repeat(2,1fr)}main{margin:0;width:calc(100% - 190px);padding:25px 15px}.formgrid{grid-template-columns:1fr}}@media(max-width:600px){body{display:block}.side{display:none}main{width:100%}.metrics{grid-template-columns:1fr 1fr}table{min-width:650px}.tablebox{overflow:auto}}

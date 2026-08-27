@@ -232,6 +232,37 @@ app.get("/api/admin/live/players", auth, requireRole(...ADMIN_ROLES), asyncRoute
   }
 }));
 
+// Lista COMPLETĂ a joburilor/facțiunilor configurate pe server (tabela ESX
+// "jobs"), nu doar cele cu jucători online acum. O folosim ca să vedem toate
+// numele existente — inclusiv găști fără niciun membru online în acel moment.
+let jobsCache = { data: null, fetchedAt: 0 };
+const JOBS_CACHE_MS = 60_000;
+
+app.get("/api/admin/live/jobs", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+  const force = req.query.force === "1";
+  const age = Date.now() - jobsCache.fetchedAt;
+  if (!force && jobsCache.data && age < JOBS_CACHE_MS) return res.json(jobsCache.data);
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 6000);
+  try {
+    const r = await fetch(`http://${FIVEM_ADDRESS}/moldovarp-api/jobs`, {
+      headers: { "x-api-key": FIVEM_API_SECRET },
+      signal: controller.signal,
+    });
+    if (!r.ok) throw new Error(`moldovarp-api HTTP ${r.status}`);
+    const body = await r.json();
+    const data = { online: true, jobs: body.jobs || [] };
+    jobsCache = { data, fetchedAt: Date.now() };
+    res.json(data);
+  } catch {
+    if (jobsCache.data) return res.json({ ...jobsCache.data, stale: true });
+    res.json({ online: false, jobs: [] });
+  } finally {
+    clearTimeout(timeout);
+  }
+}));
+
 app.post("/api/auth/register", asyncRoute(async (req, res) => {
   const { username, email, password } = req.body;
   if (!username || !email || !password || password.length < 8)

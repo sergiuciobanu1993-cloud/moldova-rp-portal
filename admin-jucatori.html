@@ -34,6 +34,21 @@
   </p>
 </section>
 
+<section class="tablebox" style="margin-top:18px">
+  <div class="title">
+    <h2>Toate joburile/facțiunile configurate pe server</h2>
+    <span class="muted" id="jobs-count-note"></span>
+  </div>
+  <p class="muted" style="margin:0 22px 16px">
+    Lista completă din baza de date (nu doar cine e online acum) — inclusiv facțiuni fără niciun membru online
+    în acest moment. Coloana FACȚIUNE din tabelul de mai sus arată deja jobul fiecărui jucător (inclusiv gașca lui,
+    dacă găștile de pe server sunt joburi ESX ca oricare altul). Spune-mi care nume din listă sunt găști și le
+    marchez distinct.
+  </p>
+  <table><thead><tr><th>NUME (COD)</th><th>ETICHETĂ</th></tr></thead>
+  <tbody id="jobs-body"><tr><td colspan="2">Se încarcă…</td></tr></tbody></table>
+</section>
+
 </main>
 <script src="auth-client.js"></script>
 <script>
@@ -89,11 +104,32 @@ async function loadPlayers(force) {
 
 document.getElementById('refresh-btn').addEventListener('click', () => loadPlayers(true));
 
+async function loadJobs() {
+  const tbody = document.getElementById('jobs-body');
+  const countNote = document.getElementById('jobs-count-note');
+  try {
+    const res = await apiFetch('/api/admin/live/jobs');
+    if (!res.ok) throw new Error();
+    const d = await res.json();
+    if (!d.online || !d.jobs.length) {
+      countNote.textContent = '';
+      tbody.innerHTML = '<tr><td colspan="2">Fără date momentan.</td></tr>';
+      return;
+    }
+    countNote.textContent = `${d.jobs.length} joburi`;
+    tbody.innerHTML = d.jobs.map(j => `
+      <tr><td><code>${j.name}</code></td><td>${j.label || '<span class="muted">—</span>'}</td></tr>`).join('');
+  } catch {
+    tbody.innerHTML = '<tr><td colspan="2">Nu am putut încărca lista de joburi.</td></tr>';
+  }
+}
+
 (async () => {
   const me = await requireRole('admin', 'owner');
   if (!me) return;
   document.getElementById('admin-name').textContent = me.username;
   loadPlayers();
+  loadJobs();
   setInterval(loadPlayers, 30000);
 })();
 </script>

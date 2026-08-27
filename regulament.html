@@ -47,6 +47,52 @@
 
   <script src="app.js"></script>
   <script>
+  // Minimal, dependency-free markdown renderer for regulation content written
+  // in the admin CMS textarea. Covers headings, **bold**, *italic*, > quotes,
+  // --- rules and * / - lists — enough for the regulation documents admins
+  // write, without pulling in an external markdown library. Escapes HTML
+  // first so admin-authored content can't inject markup.
+  function escapeHtml(s) {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+  function inlineMd(s) {
+    return s
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/(^|[^*])\*([^*]+)\*(?!\*)/g, '$1<em>$2</em>');
+  }
+  function mdToHtml(md) {
+    const lines = escapeHtml(md).replace(/\r\n/g, '\n').split('\n');
+    let html = '', inList = false, inQuote = false;
+    const closeList = () => { if (inList) { html += '</ul>'; inList = false; } };
+    const closeQuote = () => { if (inQuote) { html += '</blockquote>'; inQuote = false; } };
+    for (const raw of lines) {
+      const line = raw.trimEnd();
+      if (/^\s*$/.test(line)) { closeList(); closeQuote(); continue; }
+      if (/^-{3,}$/.test(line.trim())) { closeList(); closeQuote(); html += '<hr>'; continue; }
+      const h = line.match(/^(#{1,6})\s+(.*)$/);
+      if (h) {
+        closeList(); closeQuote();
+        const level = Math.min(h[1].length + 1, 6);
+        html += `<h${level}>${inlineMd(h[2])}</h${level}>`;
+        continue;
+      }
+      if (/^&gt;\s?/.test(line)) {
+        if (!inQuote) { html += '<blockquote>'; inQuote = true; }
+        html += `<p>${inlineMd(line.replace(/^&gt;\s?/, ''))}</p>`;
+        continue;
+      }
+      if (/^[*-]\s+/.test(line)) {
+        if (!inList) { html += '<ul>'; inList = true; }
+        html += `<li>${inlineMd(line.replace(/^[*-]\s+/, ''))}</li>`;
+        continue;
+      }
+      closeList(); closeQuote();
+      html += `<p>${inlineMd(line)}</p>`;
+    }
+    closeList(); closeQuote();
+    return html;
+  }
+
   (async () => {
     const container = document.getElementById('reg-content');
     const slug = new URLSearchParams(window.location.search).get('slug');
@@ -63,9 +109,8 @@
         <article class="prose-box prose">
           <div class="prose-meta"><span class="tag">${r.category}</span><span>·</span><span>Versiune ${r.version}</span><span>·</span><span>Actualizat ${new Date(r.updated_at).toLocaleDateString('ro-RO')}</span></div>
           <h1>${r.title}</h1>
-          <div class="prose-body"></div>
+          <div class="prose-body">${mdToHtml(r.content)}</div>
         </article>`;
-      container.querySelector('.prose-body').textContent = r.content;
     } catch {
       container.innerHTML = '<div class="empty-state">Acest regulament nu există sau nu a fost publicat.</div>';
     }

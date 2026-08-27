@@ -93,6 +93,16 @@
     return html;
   }
 
+  // Some regulations were pasted directly as rich-text HTML (from a WYSIWYG
+  // editor — tables, styled headings, embedded iframes) rather than typed as
+  // Markdown in the CMS textarea. Running that through the Markdown renderer
+  // escapes every tag and shows literal "<h1>", "<table>", etc. instead of
+  // real formatting, and silently swallows embedded content like a map
+  // iframe. Detect which kind of content this is and render accordingly.
+  function looksLikeHtml(s) {
+    return /^\s*<[a-z][\s\S]*>/i.test(s.trim());
+  }
+
   (async () => {
     const container = document.getElementById('reg-content');
     const slug = new URLSearchParams(window.location.search).get('slug');
@@ -105,11 +115,12 @@
       if (!res.ok) throw new Error();
       const r = await res.json();
       document.title = `${r.title} — Moldova RP`;
+      const body = looksLikeHtml(r.content) ? r.content : mdToHtml(r.content);
       container.innerHTML = `
         <article class="prose-box prose">
           <div class="prose-meta"><span class="tag">${r.category}</span><span>·</span><span>Versiune ${r.version}</span><span>·</span><span>Actualizat ${new Date(r.updated_at).toLocaleDateString('ro-RO')}</span></div>
           <h1>${r.title}</h1>
-          <div class="prose-body">${mdToHtml(r.content)}</div>
+          <div class="prose-body">${body}</div>
         </article>`;
     } catch {
       container.innerHTML = '<div class="empty-state">Acest regulament nu există sau nu a fost publicat.</div>';

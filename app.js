@@ -178,3 +178,43 @@ if (factionGrid) {
   loadFactions();
   setInterval(loadFactions, 30000);
 }
+
+// Ultimele anunțuri, publicate de admin din panoul de administrare (vezi
+// /api/announcements — public, întoarce doar cele cu is_published=true).
+// Guarded: doar homepage are #news-list.
+const newsList = document.getElementById('news-list');
+if (newsList) {
+  const MONTHS_RO = ['IAN', 'FEB', 'MAR', 'APR', 'MAI', 'IUN', 'IUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+  const fmtNewsDate = d => {
+    const date = new Date(d);
+    return `${String(date.getDate()).padStart(2, '0')} ${MONTHS_RO[date.getMonth()]}`;
+  };
+  const escapeHtml = s => (s ?? '').toString()
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  const truncate = (s, n) => (s || '').length > n ? s.slice(0, n).trim() + '…' : (s || '');
+  const loadNews = async () => {
+    try {
+      const res = await fetch('/api/announcements');
+      if (!res.ok) throw new Error();
+      const items = await res.json();
+      if (!items.length) {
+        newsList.innerHTML = '<div class="empty-state">Niciun anunț publicat momentan.</div>';
+        return;
+      }
+      newsList.innerHTML = items.slice(0, 6).map(a => `
+        <article class="news">
+          <span class="news-date">${escapeHtml(fmtNewsDate(a.published_at))}</span>
+          <div>
+            <span class="tag">${escapeHtml((a.category || 'General').toUpperCase())}</span>
+            <h3>${escapeHtml(a.title)}</h3>
+            <p>${escapeHtml(truncate(a.content, 160))}</p>
+          </div>
+        </article>`).join('');
+    } catch {
+      // Lasă lista anterioară (sau starea "Se încarcă…") dacă nu avem date.
+    }
+  };
+  loadNews();
+  setInterval(loadNews, 60000);
+}

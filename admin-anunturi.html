@@ -17,6 +17,7 @@
     <input type="hidden" id="f-id">
     <div class="formgrid">
       <div class="field wide"><label>Titlu</label><input id="f-title" required></div>
+      <div class="field"><label>Categorie (eticheta afișată)</label><input id="f-category" placeholder="ex: OFICIAL, REGULAMENT, COMUNITATE"></div>
       <div class="field wide"><label>Conținut</label><textarea id="f-content" required placeholder="Textul anunțului..."></textarea></div>
       <div class="field checkbox wide"><input type="checkbox" id="f-published" checked><label for="f-published">Publicat (vizibil pe site)</label></div>
     </div>
@@ -32,6 +33,9 @@
 <script src="auth-client.js"></script>
 <script>
 let editingId = null;
+const escapeHtml = s => (s ?? '').toString()
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
 function showForm(ann) {
   document.getElementById('form-box').hidden = false;
@@ -40,6 +44,7 @@ function showForm(ann) {
   document.getElementById('form-title').textContent = ann ? 'Editează anunț' : 'Anunț nou';
   document.getElementById('f-id').value = ann ? ann.id : '';
   document.getElementById('f-title').value = ann ? ann.title : '';
+  document.getElementById('f-category').value = ann ? ann.category : '';
   document.getElementById('f-content').value = ann ? ann.content : '';
   document.getElementById('f-published').checked = ann ? ann.is_published : true;
   document.getElementById('form-box').scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -59,8 +64,8 @@ async function loadList() {
     const items = await res.json();
     tbody.innerHTML = items.length ? items.map(a => `
       <tr>
-        <td>${a.title}</td>
-        <td>${a.author || 'Sistem'}</td>
+        <td>${escapeHtml(a.title)}<br><small style="color:var(--muted)">${escapeHtml(a.category)}</small></td>
+        <td>${escapeHtml(a.author) || 'Sistem'}</td>
         <td><span class="pill ${a.is_published ? 'on' : 'off'}">${a.is_published ? 'PUBLICAT' : 'CIORNĂ'}</span></td>
         <td>${new Date(a.published_at).toLocaleDateString('ro-RO')}</td>
         <td class="rowactions">
@@ -92,6 +97,7 @@ document.getElementById('ann-form').addEventListener('submit', async (e) => {
   msg.hidden = true;
   const body = {
     title: document.getElementById('f-title').value.trim(),
+    category: document.getElementById('f-category').value.trim() || 'General',
     content: document.getElementById('f-content').value,
     is_published: document.getElementById('f-published').checked
   };

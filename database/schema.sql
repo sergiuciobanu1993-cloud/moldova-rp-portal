@@ -81,10 +81,15 @@ CREATE TABLE IF NOT EXISTS announcements (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   title VARCHAR(180) NOT NULL,
   content TEXT NOT NULL,
+  category VARCHAR(40) NOT NULL DEFAULT 'General',
   author_id UUID REFERENCES users(id),
   is_published BOOLEAN NOT NULL DEFAULT TRUE,
   published_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- category adăugată ulterior (etichetă tip "OFICIAL"/"REGULAMENT" afișată pe
+-- homepage) — safe pe baze existente.
+ALTER TABLE announcements ADD COLUMN IF NOT EXISTS category VARCHAR(40) NOT NULL DEFAULT 'General';
 
 CREATE TABLE IF NOT EXISTS punishments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

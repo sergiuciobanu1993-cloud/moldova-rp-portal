@@ -441,7 +441,7 @@ app.get("/api/factions", asyncRoute(async (_req, res) => {
 
 app.get("/api/announcements", asyncRoute(async (_req, res) => {
   const { rows } = await pool.query(
-    `SELECT a.id,a.title,a.content,a.published_at,u.username author
+    `SELECT a.id,a.title,a.content,a.category,a.published_at,u.username author
      FROM announcements a LEFT JOIN users u ON u.id=a.author_id
      WHERE a.is_published=true ORDER BY a.published_at DESC LIMIT 30`
   );
@@ -950,13 +950,13 @@ app.get("/api/admin/announcements/:id", auth, requireRole(...MOD_ROLES), asyncRo
 }));
 
 app.post("/api/admin/announcements", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
-  const { title, content, is_published } = req.body;
+  const { title, content, category, is_published } = req.body;
   if (!title || !content)
     return res.status(400).json({ error: "Titlu și conținut sunt obligatorii." });
   const { rows } = await pool.query(
-    `INSERT INTO announcements(title, content, author_id, is_published)
-     VALUES($1,$2,$3,$4) RETURNING *`,
-    [title.trim(), content, req.user.sub, is_published ?? true]
+    `INSERT INTO announcements(title, content, category, author_id, is_published)
+     VALUES($1,$2,$3,$4,$5) RETURNING *`,
+    [title.trim(), content, category?.trim() || "General", req.user.sub, is_published ?? true]
   );
   await logAction(req.user.sub, "announcement.create", "announcement", rows[0].id, { title }, req.ip);
   res.status(201).json(rows[0]);
@@ -964,14 +964,15 @@ app.post("/api/admin/announcements", auth, requireRole(...ADMIN_ROLES), asyncRou
 
 app.put("/api/admin/announcements/:id", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
   const { id } = req.params;
-  const { title, content, is_published } = req.body;
+  const { title, content, category, is_published } = req.body;
   const { rows } = await pool.query(
     `UPDATE announcements SET
        title = COALESCE($1, title),
        content = COALESCE($2, content),
-       is_published = COALESCE($3, is_published)
-     WHERE id = $4 RETURNING *`,
-    [title || null, content || null, is_published ?? null, id]
+       category = COALESCE($3, category),
+       is_published = COALESCE($4, is_published)
+     WHERE id = $5 RETURNING *`,
+    [title || null, content || null, category?.trim() || null, is_published ?? null, id]
   );
   if (!rows[0]) return res.status(404).json({ error: "Anunțul nu există." });
   await logAction(req.user.sub, "announcement.update", "announcement", id, req.body, req.ip);

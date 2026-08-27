@@ -25,11 +25,10 @@
   <form id="punish-form">
     <div class="formgrid">
       <div class="field wide">
-        <label>Jucător</label>
-        <input id="f-player-search" placeholder="Caută după nume de utilizator sau nume în joc..." autocomplete="off">
+        <label>Jucător (nume din joc)</label>
+        <input id="f-player-search" placeholder="Scrie numele jucătorului din joc..." autocomplete="off" required>
+        <p class="muted" style="margin:6px 0 0">Sugestii din jucătorii online chiar acum — dacă jucătorul a plecat deja, scrii numele direct.</p>
         <div id="player-results" style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px"></div>
-        <p class="muted" id="f-player-selected" style="margin:8px 0 0"></p>
-        <input type="hidden" id="f-player-id">
       </div>
       <div class="field"><label>Tip</label>
         <select id="f-type">
@@ -67,8 +66,20 @@ function fmtDuration(mins) {
   return `${Math.round(mins / 1440)} zile`;
 }
 
-let selectedPlayer = null;
-let searchTimer = null;
+let livePlayersCache = null;
+let livePlayersFetchedAt = 0;
+
+async function getLivePlayers() {
+  if (livePlayersCache && Date.now() - livePlayersFetchedAt < 15000) return livePlayersCache;
+  try {
+    const res = await apiFetch('/api/admin/live/players');
+    if (!res.ok) throw new Error();
+    const d = await res.json();
+    livePlayersCache = d.online ? d.players : [];
+    livePlayersFetchedAt = Date.now();
+  } catch { livePlayersCache = []; }
+  return livePlayersCache;
+}
 
 async function loadList() {
   const tbody = document.getElementById('list-body');
@@ -92,32 +103,23 @@ async function loadList() {
   }
 }
 
-function selectPlayer(p) {
-  selectedPlayer = p;
-  document.getElementById('f-player-id').value = p.id;
-  document.getElementById('f-player-selected').textContent = `Selectat: ${p.display_name} (${p.username})`;
+function pickName(name) {
+  document.getElementById('f-player-search').value = name;
   document.getElementById('player-results').innerHTML = '';
-  document.getElementById('f-player-search').value = '';
 }
 
-document.getElementById('f-player-search').addEventListener('input', (e) => {
-  clearTimeout(searchTimer);
-  const q = e.target.value.trim();
+document.getElementById('f-player-search').addEventListener('input', async (e) => {
+  const q = e.target.value.trim().toLowerCase();
   const results = document.getElementById('player-results');
   if (!q) { results.innerHTML = ''; return; }
-  searchTimer = setTimeout(async () => {
-    try {
-      const res = await apiFetch(`/api/admin/players?q=${encodeURIComponent(q)}&limit=8`);
-      if (!res.ok) throw new Error();
-      const players = await res.json();
-      results.innerHTML = players.length ? players.map(p => `
-        <button type="button" class="filter-select" data-pick="${escapeHtml(p.id)}" style="cursor:pointer">${escapeHtml(p.display_name)} (${escapeHtml(p.username)})</button>
-      `).join('') : '<span class="muted" style="font-size:12px">Niciun jucător găsit.</span>';
-      results.querySelectorAll('[data-pick]').forEach((btn, i) => {
-        btn.addEventListener('click', () => selectPlayer(players[i]));
-      });
-    } catch { results.innerHTML = '<span class="muted" style="font-size:12px">Eroare la căutare.</span>'; }
-  }, 300);
+  const players = await getLivePlayers();
+  const matches = players.filter(p => (p.name || '').toLowerCase().includes(q)).slice(0, 8);
+  results.innerHTML = matches.length ? matches.map(p => `
+    <button type="button" class="filter-select" data-pick="${escapeHtml(p.name)}" style="cursor:pointer">${escapeHtml(p.name)} <small class="muted">#${escapeHtml(p.id)}</small></button>
+  `).join('') : '<span class="muted" style="font-size:12px">Niciun jucător online cu acest nume — poți folosi oricum numele scris.</span>';
+  results.querySelectorAll('[data-pick]').forEach(btn => {
+    btn.addEventListener('click', () => pickName(btn.dataset.pick));
+  });
 });
 
 function showForm() {
@@ -128,10 +130,7 @@ function showForm() {
 function hideForm() {
   document.getElementById('form-box').hidden = true;
   document.getElementById('punish-form').reset();
-  document.getElementById('f-player-id').value = '';
-  document.getElementById('f-player-selected').textContent = '';
   document.getElementById('player-results').innerHTML = '';
-  selectedPlayer = null;
 }
 
 document.getElementById('new-btn').addEventListener('click', showForm);
@@ -141,15 +140,15 @@ document.getElementById('punish-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const msg = document.getElementById('form-msg');
   msg.hidden = true;
-  const player_id = document.getElementById('f-player-id').value;
-  if (!player_id) {
-    msg.textContent = 'Selectează un jucător din listă înainte de a trimite.';
+  const target_name = document.getElementById('f-player-search').value.trim();
+  if (!target_name) {
+    msg.textContent = 'Scrie numele jucătorului înainte de a trimite.';
     msg.className = 'formmsg error';
     msg.hidden = false;
     return;
   }
   const body = {
-    player_id,
+    target_name,
     type: document.getElementById('f-type').value,
     reason: document.getElementById('f-reason').value.trim(),
     duration_minutes: document.getElementById('f-duration').value || null

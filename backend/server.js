@@ -702,9 +702,11 @@ app.delete("/api/admin/players/:id/faction", auth, requireRole(...ADMIN_ROLES), 
 }));
 
 // ---------------------------------------------------------------------------
-// Sancțiuni — listă (active/toate) + emitere. Ținta e un jucător cu profil
-// pe site (players.id, legat de un cont — vezi players.user_id), nu direct
-// un identifier de joc; site-ul nu aplică singur banul pe serverul de FiveM,
+// Sancțiuni — listă (active/toate) + emitere. Ținta e numele jucătorului din
+// JOC (target_name), nu un cont de site — majoritatea jucătorilor de pe
+// server nu au și cont pe site, deci nu poate fi obligatoriu un player_id.
+// player_id rămâne opțional, doar pentru cazul în care jucătorul chiar are
+// și profil pe site. Site-ul nu aplică singur banul pe serverul de FiveM,
 // e doar un jurnal vizibil pentru staff.
 // ---------------------------------------------------------------------------
 
@@ -715,12 +717,12 @@ app.get("/api/admin/punishments", auth, requireRole(...MOD_ROLES), asyncRoute(as
   const { rows } = await pool.query(
     `SELECT pu.id, pu.type, pu.reason, pu.duration_minutes, pu.created_at,
             u.username AS issued_by,
-            p.id AS player_id, p.display_name, p.game_id,
+            p.id AS player_id, COALESCE(p.display_name, pu.target_name) AS display_name, p.game_id,
             CASE WHEN pu.duration_minutes IS NOT NULL
                  THEN pu.created_at + (pu.duration_minutes || ' minutes')::interval
                  ELSE NULL END AS expires_at
      FROM punishments pu
-     JOIN players p ON p.id = pu.player_id
+     LEFT JOIN players p ON p.id = pu.player_id
      LEFT JOIN users u ON u.id = pu.issued_by
      ${activeOnly ? "WHERE pu.duration_minutes IS NULL OR pu.created_at + (pu.duration_minutes || ' minutes')::interval > NOW()" : ""}
      ORDER BY pu.created_at DESC
@@ -730,26 +732,30 @@ app.get("/api/admin/punishments", auth, requireRole(...MOD_ROLES), asyncRoute(as
 }));
 
 app.post("/api/admin/punishments", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
-  const { player_id, type, reason, duration_minutes } = req.body;
-  if (!player_id || !type || !reason?.trim())
-    return res.status(400).json({ error: "Jucătorul, tipul și motivul sunt obligatorii." });
+  const { target_name, player_id, type, reason, duration_minutes } = req.body;
+  const name = target_name?.trim();
+  if (!name || !type || !reason?.trim())
+    return res.status(400).json({ error: "Numele jucătorului, tipul și motivul sunt obligatorii." });
   if (!PUNISHMENT_TYPES.includes(type))
     return res.status(400).json({ error: `Tip invalid. Valori acceptate: ${PUNISHMENT_TYPES.join(", ")}.` });
 
-  const player = await pool.query("SELECT id, display_name FROM players WHERE id=$1", [player_id]);
-  if (!player.rows[0]) return res.status(404).json({ error: "Jucătorul nu există." });
+  let linkedPlayerId = null;
+  if (player_id) {
+    const player = await pool.query("SELECT id FROM players WHERE id=$1", [player_id]);
+    if (player.rows[0]) linkedPlayerId = player.rows[0].id;
+  }
 
   const minutes = duration_minutes ? Math.max(1, Number(duration_minutes)) : null;
   if (duration_minutes && !Number.isFinite(minutes))
     return res.status(400).json({ error: "Durata trebuie să fie un număr de minute." });
 
   const { rows } = await pool.query(
-    `INSERT INTO punishments(player_id, type, reason, duration_minutes, issued_by)
-     VALUES($1,$2,$3,$4,$5) RETURNING id, type, reason, duration_minutes, created_at`,
-    [player_id, type, reason.trim(), minutes, req.user.sub]
+    `INSERT INTO punishments(player_id, target_name, type, reason, duration_minutes, issued_by)
+     VALUES($1,$2,$3,$4,$5,$6) RETURNING id, type, reason, duration_minutes, created_at`,
+    [linkedPlayerId, name, type, reason.trim(), minutes, req.user.sub]
   );
-  await logAction(req.user.sub, "punishment.create", "player", player_id, { type, reason: reason.trim(), duration_minutes: minutes }, req.ip);
-  res.status(201).json({ ...rows[0], display_name: player.rows[0].display_name });
+  await logAction(req.user.sub, "punishment.create", "player", linkedPlayerId, { target_name: name, type, reason: reason.trim(), duration_minutes: minutes }, req.ip);
+  res.status(201).json({ ...rows[0], display_name: name });
 }));
 
 // ---------------------------------------------------------------------------

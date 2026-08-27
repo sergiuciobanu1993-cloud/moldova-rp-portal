@@ -89,12 +89,18 @@ CREATE TABLE IF NOT EXISTS announcements (
 CREATE TABLE IF NOT EXISTS punishments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   player_id UUID REFERENCES players(id) ON DELETE SET NULL,
+  target_name VARCHAR(64),
   type VARCHAR(40) NOT NULL,
   reason TEXT NOT NULL,
   duration_minutes INTEGER,
   issued_by UUID REFERENCES users(id),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- target_name ține numele jucătorului din joc direct (nu toți jucătorii de
+-- pe server au și cont pe site) — coloană adăugată ulterior, safe pe baze
+-- existente.
+ALTER TABLE punishments ADD COLUMN IF NOT EXISTS target_name VARCHAR(64);
 
 CREATE TABLE IF NOT EXISTS complaints (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -39,12 +39,14 @@ function fmtMoney(n) {
   return '$' + Number(n || 0).toLocaleString('ro-RO');
 }
 
-async function loadFinancial() {
+async function loadFinancial(force) {
   const statusNote = document.getElementById('status-note');
   const offlineHelp = document.getElementById('offline-help');
   const factionBody = document.getElementById('faction-body');
+  const btn = document.getElementById('refresh-btn');
+  if (force) { btn.disabled = true; btn.textContent = '↻ Se actualizează…'; }
   try {
-    const res = await apiFetch('/api/admin/live/factions');
+    const res = await apiFetch(force ? '/api/admin/live/factions?force=1' : '/api/admin/live/factions');
     if (!res.ok) throw new Error();
     const d = await res.json();
 
@@ -80,10 +82,12 @@ async function loadFinancial() {
   } catch {
     statusNote.textContent = 'Nu am putut încărca datele financiare.';
     factionBody.innerHTML = '<tr><td colspan="3">Eroare la încărcare.</td></tr>';
+  } finally {
+    if (force) { btn.disabled = false; btn.textContent = '↻ Actualizează'; }
   }
 }
 
-document.getElementById('refresh-btn').addEventListener('click', loadFinancial);
+document.getElementById('refresh-btn').addEventListener('click', () => loadFinancial(true));
 
 (async () => {
   const me = await requireRole('admin', 'owner');

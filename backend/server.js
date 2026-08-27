@@ -164,9 +164,9 @@ async function fetchFactionSnapshot() {
   }
 }
 
-async function getFactionSnapshot() {
+async function getFactionSnapshot(force) {
   const age = Date.now() - factionCache.fetchedAt;
-  if (factionCache.data && age < FACTIONS_CACHE_MS) return factionCache.data;
+  if (!force && factionCache.data && age < FACTIONS_CACHE_MS) return factionCache.data;
   try {
     const data = await fetchFactionSnapshot();
     factionCache = { data, fetchedAt: Date.now() };
@@ -192,8 +192,8 @@ app.get("/api/live/factions", asyncRoute(async (_req, res) => {
   res.json(stripFactionMoney(await getFactionSnapshot()));
 }));
 
-app.get("/api/admin/live/factions", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (_req, res) => {
-  res.json(await getFactionSnapshot());
+app.get("/api/admin/live/factions", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+  res.json(await getFactionSnapshot(req.query.force === "1"));
 }));
 
 // Detaliu per-jucător (bani + vehicule), tot din moldovarp-api — vezi
@@ -218,9 +218,10 @@ async function fetchPlayersDetail() {
   }
 }
 
-app.get("/api/admin/live/players", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (_req, res) => {
+app.get("/api/admin/live/players", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+  const force = req.query.force === "1";
   const age = Date.now() - playersDetailCache.fetchedAt;
-  if (playersDetailCache.data && age < PLAYERS_CACHE_MS) return res.json(playersDetailCache.data);
+  if (!force && playersDetailCache.data && age < PLAYERS_CACHE_MS) return res.json(playersDetailCache.data);
   try {
     const data = await fetchPlayersDetail();
     playersDetailCache = { data, fetchedAt: Date.now() };

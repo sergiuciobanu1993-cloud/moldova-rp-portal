@@ -47,12 +47,14 @@ function vehiclesHtml(vehicles) {
   }).join(' ');
 }
 
-async function loadPlayers() {
+async function loadPlayers(force) {
   const statusNote = document.getElementById('status-note');
   const offlineHelp = document.getElementById('offline-help');
   const tbody = document.getElementById('list-body');
+  const btn = document.getElementById('refresh-btn');
+  if (force) { btn.disabled = true; btn.textContent = '↻ Se actualizează…'; }
   try {
-    const res = await apiFetch('/api/admin/live/players');
+    const res = await apiFetch(force ? '/api/admin/live/players?force=1' : '/api/admin/live/players');
     if (!res.ok) throw new Error();
     const d = await res.json();
 
@@ -80,10 +82,12 @@ async function loadPlayers() {
   } catch {
     statusNote.textContent = 'Nu am putut încărca datele.';
     tbody.innerHTML = '<tr><td colspan="6">Eroare la încărcare.</td></tr>';
+  } finally {
+    if (force) { btn.disabled = false; btn.textContent = '↻ Actualizează'; }
   }
 }
 
-document.getElementById('refresh-btn').addEventListener('click', loadPlayers);
+document.getElementById('refresh-btn').addEventListener('click', () => loadPlayers(true));
 
 (async () => {
   const me = await requireRole('admin', 'owner');

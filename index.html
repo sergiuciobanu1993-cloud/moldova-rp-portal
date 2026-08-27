@@ -131,7 +131,6 @@
 <script>
 (async () => {
   const grid = document.getElementById('reg-cards');
-  const icons = ['◈','⚖','◆','⬢','▤','!'];
   try {
     const res = await fetch('/api/regulations');
     if (!res.ok) throw new Error();
@@ -143,7 +142,7 @@
     grid.innerHTML = items.map((r, i) => `
       <a class="info-card" href="regulament.html?slug=${encodeURIComponent(r.slug)}">
         <span class="card-number">${String(i + 1).padStart(2, '0')}</span>
-        <span class="card-icon">${icons[i % icons.length]}</span>
+        <span class="card-icon"><img src="assets/logo.png" alt=""></span>
         <h3>${r.title}</h3>
         <p>${r.category} · versiunea ${r.version}</p>
       </a>`).join('');

@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Jucători — Admin Moldova RP</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="admin.css"></head>
+<body>
+<aside class="side"><a class="brand" href="index.html"><img src="assets/logo.png" alt=""><b>MOLDOVA<span>RP</span></b></a><p>ADMINISTRAȚIE</p><a href="admin.html">▦ Dashboard</a><a href="admin-utilizatori.html">👤 Utilizatori</a><a class="sel" href="admin-jucatori.html">♙ Jucători</a><a href="admin-financiar.html">◆ Facțiuni</a><a>⚠ Sancțiuni</a><a>▤ Reclamații</a><a>⚖ CK</a><a href="admin-regulamente.html">📚 Regulamente</a><a href="admin-anunturi.html">◉ Anunțuri</a><a href="admin-tichete.html">🎫 Tichete</a><a>⌁ Audit Logs</a><a class="back" href="index.html">← Site public</a></aside>
+<main>
+<header><div><small>PANEL ADMINISTRATIV</small><h1>Jucători online</h1></div><div class="admin"><span id="admin-name">…</span> <i></i></div></header>
+
+<p class="muted" id="status-note" style="margin:-10px 0 20px">Se încarcă…</p>
+
+<section class="tablebox">
+  <div class="title">
+    <h2>Detaliu jucători conectați acum</h2>
+    <button id="refresh-btn">↻ Actualizează</button>
+  </div>
+  <table><thead><tr><th>JUCĂTOR</th><th>FACȚIUNE</th><th>CASH</th><th>BANCĂ</th><th>BANI MURDARI</th><th>VEHICULE</th></tr></thead>
+  <tbody id="list-body"><tr><td colspan="6">Se încarcă…</td></tr></tbody></table>
+</section>
+
+<section class="formbox" id="offline-help" hidden>
+  <h2>Datele live nu sunt disponibile</h2>
+  <p class="muted" style="margin:0">
+    Resursa <b>moldovarp-api</b> nu răspunde momentan pe serverul de joc — fie nu e instalată/pornită încă,
+    fie serverul e offline. Vezi txAdmin → Resources, sau <code>ensure moldovarp-api</code> în server.cfg.
+  </p>
+</section>
+
+<section class="formbox" id="scope-note" style="margin-top:18px">
+  <h2>Ce nu e (încă) inclus aici</h2>
+  <p class="muted" style="margin:0">
+    Casele și afacerile jucătorilor nu apar aici momentan — sunt gestionate de resurse separate
+    (0r-pixelhouse / qua_0r_house pentru case) ale căror tabele din baza de date nu le-am confirmat încă.
+    Trimite-mi schema lor (fișierul <code>database.sql</code> al resursei, sau un export din phpMyAdmin/HeidiSQL)
+    și le adaug în siguranță, fără riscul de a citi greșit datele.
+  </p>
+</section>
+
+</main>
+<script src="auth-client.js"></script>
+<script>
+function fmtMoney(n) { return '$' + Number(n || 0).toLocaleString('ro-RO'); }
+
+function vehiclesHtml(vehicles) {
+  if (!vehicles || !vehicles.length) return '<span class="muted">—</span>';
+  return vehicles.map(v => {
+    const label = v.name ? `${v.name} (${v.plate})` : (v.plate || '?');
+    return `<span class="pill off" style="margin:2px">${label}</span>`;
+  }).join(' ');
+}
+
+async function loadPlayers() {
+  const statusNote = document.getElementById('status-note');
+  const offlineHelp = document.getElementById('offline-help');
+  const tbody = document.getElementById('list-body');
+  try {
+    const res = await apiFetch('/api/admin/live/players');
+    if (!res.ok) throw new Error();
+    const d = await res.json();
+
+    if (!d.online) {
+      statusNote.textContent = 'Offline — resursa moldovarp-api nu e încă activă pe server.';
+      offlineHelp.hidden = false;
+      tbody.innerHTML = '<tr><td colspan="6">Fără date live momentan.</td></tr>';
+      return;
+    }
+
+    offlineHelp.hidden = true;
+    statusNote.textContent = d.stale
+      ? `${d.players.length} jucători online — date posibil ușor întârziate.`
+      : `${d.players.length} jucători online — date live.`;
+
+    tbody.innerHTML = d.players.length ? d.players.slice().sort((a, b) => a.name.localeCompare(b.name, 'ro')).map(p => `
+      <tr>
+        <td><strong>${p.name}</strong><br><small style="color:var(--muted)">ID server #${p.id}</small></td>
+        <td>${p.jobLabel || p.job}</td>
+        <td>${fmtMoney(p.cash)}</td>
+        <td>${fmtMoney(p.bank)}</td>
+        <td>${p.blackMoney == null ? '<span class="muted">—</span>' : fmtMoney(p.blackMoney)}</td>
+        <td>${vehiclesHtml(p.vehicles)}</td>
+      </tr>`).join('') : '<tr><td colspan="6">Niciun jucător online momentan.</td></tr>';
+  } catch {
+    statusNote.textContent = 'Nu am putut încărca datele.';
+    tbody.innerHTML = '<tr><td colspan="6">Eroare la încărcare.</td></tr>';
+  }
+}
+
+document.getElementById('refresh-btn').addEventListener('click', loadPlayers);
+
+(async () => {
+  const me = await requireRole('admin', 'owner');
+  if (!me) return;
+  document.getElementById('admin-name').textContent = me.username;
+  loadPlayers();
+  setInterval(loadPlayers, 30000);
+})();
+</script>
+</body></html>

@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Financiar & Facțiuni — Admin Moldova RP</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="admin.css"></head>
+<body>
+<aside class="side"><a class="brand" href="index.html"><img src="assets/logo.png" alt=""><b>MOLDOVA<span>RP</span></b></a><p>ADMINISTRAȚIE</p><a href="admin.html">▦ Dashboard</a><a href="admin-utilizatori.html">👤 Utilizatori</a><a href="admin-jucatori.html">♙ Jucători</a><a class="sel" href="admin-financiar.html">◆ Facțiuni</a><a>⚠ Sancțiuni</a><a>▤ Reclamații</a><a>⚖ CK</a><a href="admin-regulamente.html">📚 Regulamente</a><a href="admin-anunturi.html">◉ Anunțuri</a><a href="admin-tichete.html">🎫 Tichete</a><a>⌁ Audit Logs</a><a class="back" href="index.html">← Site public</a></aside>
+<main>
+<header><div><small>PANEL ADMINISTRATIV</small><h1>Financiar & Facțiuni</h1></div><div class="admin"><span id="admin-name">…</span> <i></i></div></header>
+
+<p class="muted" id="status-note" style="margin:-10px 0 20px">Se încarcă…</p>
+
+<section class="metrics">
+  <article><small>JUCĂTORI ONLINE</small><strong id="m-online">—</strong><em id="m-online-note">LIVE</em></article>
+  <article><small>CASH TOTAL (jucători online)</small><strong id="m-cash">—</strong><em>LIVE</em></article>
+  <article><small>BANI ÎN BANCĂ (jucători online)</small><strong id="m-bank">—</strong><em>LIVE</em></article>
+  <article><small>FACȚIUNI ACTIVE</small><strong id="m-factions">—</strong><em>ACUM</em></article>
+</section>
+
+<section class="tablebox">
+  <div class="title">
+    <h2>Facțiuni — membri online și cont society</h2>
+    <button id="refresh-btn">↻ Actualizează</button>
+  </div>
+  <table><thead><tr><th>FACȚIUNE</th><th>MEMBRI ONLINE</th><th>CONT SOCIETY</th></tr></thead>
+  <tbody id="faction-body"><tr><td colspan="3">Se încarcă…</td></tr></tbody></table>
+</section>
+
+<section class="formbox" id="offline-help" hidden>
+  <h2>Datele live nu sunt disponibile</h2>
+  <p class="muted" style="margin:0">
+    Resursa <b>moldovarp-api</b> nu răspunde momentan pe serverul de joc — fie nu e instalată/pornită încă,
+    fie serverul e offline. Site-ul funcționează normal oricum; secțiunea asta se completează automat
+    de îndată ce resursa e activă (vezi txAdmin → Resources, sau <code>ensure moldovarp-api</code> în server.cfg).
+  </p>
+</section>
+
+</main>
+<script src="auth-client.js"></script>
+<script>
+function fmtMoney(n) {
+  return '$' + Number(n || 0).toLocaleString('ro-RO');
+}
+
+async function loadFinancial() {
+  const statusNote = document.getElementById('status-note');
+  const offlineHelp = document.getElementById('offline-help');
+  const factionBody = document.getElementById('faction-body');
+  try {
+    const res = await apiFetch('/api/admin/live/factions');
+    if (!res.ok) throw new Error();
+    const d = await res.json();
+
+    if (!d.online) {
+      statusNote.textContent = 'Offline — resursa moldovarp-api nu e încă activă pe server.';
+      offlineHelp.hidden = false;
+      document.getElementById('m-online').textContent = '—';
+      document.getElementById('m-cash').textContent = '—';
+      document.getElementById('m-bank').textContent = '—';
+      document.getElementById('m-factions').textContent = '—';
+      factionBody.innerHTML = '<tr><td colspan="3">Fără date live momentan.</td></tr>';
+      return;
+    }
+
+    offlineHelp.hidden = true;
+    statusNote.textContent = d.stale
+      ? 'Date live (posibil ușor întârziate — ultima citire reușită de pe server).'
+      : 'Date live, direct de pe serverul de joc.';
+
+    const totals = d.totals || {};
+    document.getElementById('m-online').textContent = totals.onlinePlayers ?? '—';
+    document.getElementById('m-cash').textContent = fmtMoney(totals.cash);
+    document.getElementById('m-bank').textContent = fmtMoney(totals.bank);
+    document.getElementById('m-factions').textContent = (d.factions || []).length;
+
+    const factions = (d.factions || []).slice().sort((a, b) => b.online - a.online);
+    factionBody.innerHTML = factions.length ? factions.map(f => `
+      <tr>
+        <td><strong>${f.label || f.name}</strong></td>
+        <td>${f.online}</td>
+        <td>${f.societyMoney == null ? '<span class="muted">fără cont society</span>' : fmtMoney(f.societyMoney)}</td>
+      </tr>`).join('') : '<tr><td colspan="3">Niciun jucător online momentan.</td></tr>';
+  } catch {
+    statusNote.textContent = 'Nu am putut încărca datele financiare.';
+    factionBody.innerHTML = '<tr><td colspan="3">Eroare la încărcare.</td></tr>';
+  }
+}
+
+document.getElementById('refresh-btn').addEventListener('click', loadFinancial);
+
+(async () => {
+  const me = await requireRole('admin', 'owner');
+  if (!me) return;
+  document.getElementById('admin-name').textContent = me.username;
+  loadFinancial();
+  setInterval(loadFinancial, 30000);
+})();
+</script>
+</body></html>

@@ -196,6 +196,41 @@ app.get("/api/admin/live/factions", auth, requireRole(...ADMIN_ROLES), asyncRout
   res.json(await getFactionSnapshot());
 }));
 
+// Detaliu per-jucător (bani + vehicule), tot din moldovarp-api — vezi
+// /players acolo. Admin-only: aici chiar apar sume individuale ale
+// jucătorilor, nu doar totaluri agregate ca la /snapshot.
+const PLAYERS_CACHE_MS = 20_000;
+let playersDetailCache = { data: null, fetchedAt: 0 };
+
+async function fetchPlayersDetail() {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 6000);
+  try {
+    const res = await fetch(`http://${FIVEM_ADDRESS}/moldovarp-api/players`, {
+      headers: { "x-api-key": FIVEM_API_SECRET },
+      signal: controller.signal,
+    });
+    if (!res.ok) throw new Error(`moldovarp-api HTTP ${res.status}`);
+    const data = await res.json();
+    return { online: true, players: data.players || [] };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+app.get("/api/admin/live/players", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (_req, res) => {
+  const age = Date.now() - playersDetailCache.fetchedAt;
+  if (playersDetailCache.data && age < PLAYERS_CACHE_MS) return res.json(playersDetailCache.data);
+  try {
+    const data = await fetchPlayersDetail();
+    playersDetailCache = { data, fetchedAt: Date.now() };
+    res.json(data);
+  } catch {
+    if (playersDetailCache.data) return res.json({ ...playersDetailCache.data, stale: true });
+    res.json({ online: false, players: [] });
+  }
+}));
+
 app.post("/api/auth/register", asyncRoute(async (req, res) => {
   const { username, email, password } = req.body;
   if (!username || !email || !password || password.length < 8)

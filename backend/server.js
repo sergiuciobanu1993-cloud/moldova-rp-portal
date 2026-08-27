@@ -467,6 +467,45 @@ app.get("/api/admin/audit-logs", auth, requireRole("admin", "owner"), asyncRoute
 }));
 
 // ---------------------------------------------------------------------------
+// Utilizatori — listă + schimbare rang (player/moderator/admin/owner).
+// Vizibilă pentru admin/owner; schimbarea rangului e restricționată la owner,
+// ca să nu poată un admin să se auto-promoveze sau să promoveze pe altcineva
+// la owner/admin fără acordul proprietarului contului.
+// ---------------------------------------------------------------------------
+
+const VALID_ROLES = ["player", "moderator", "admin", "owner"];
+
+app.get("/api/admin/users", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (_req, res) => {
+  const { rows } = await pool.query(
+    `SELECT u.id, u.username, u.email, u.discord_id, u.discord_username, u.discord_avatar,
+            u.is_active, u.created_at, r.name AS role
+     FROM users u
+     JOIN roles r ON r.id = u.role_id
+     ORDER BY u.created_at DESC`
+  );
+  res.json(rows);
+}));
+
+app.put("/api/admin/users/:id/role", auth, requireRole("owner"), asyncRoute(async (req, res) => {
+  const { role } = req.body;
+  if (!VALID_ROLES.includes(role))
+    return res.status(400).json({ error: "Rang invalid." });
+
+  const roleRow = await pool.query("SELECT id FROM roles WHERE name=$1", [role]);
+  if (!roleRow.rows[0]) return res.status(400).json({ error: "Rang invalid." });
+
+  const { rows } = await pool.query(
+    `UPDATE users SET role_id=$1, updated_at=NOW() WHERE id=$2
+     RETURNING id, username, discord_username`,
+    [roleRow.rows[0].id, req.params.id]
+  );
+  if (!rows[0]) return res.status(404).json({ error: "Utilizatorul nu există." });
+
+  await logAction(req.user.sub, "user.role_change", "user", req.params.id, { role }, req.ip);
+  res.json({ ...rows[0], role });
+}));
+
+// ---------------------------------------------------------------------------
 // Players (v0.4)
 // ---------------------------------------------------------------------------
 

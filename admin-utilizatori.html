@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Utilizatori — Admin Moldova RP</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="admin.css"></head>
+<body>
+<aside class="side"><a class="brand" href="index.html"><img src="assets/logo.png" alt=""><b>MOLDOVA<span>RP</span></b></a><p>ADMINISTRAȚIE</p><a href="admin.html">▦ Dashboard</a><a class="sel" href="admin-utilizatori.html">👤 Utilizatori</a><a>♙ Jucători</a><a>◆ Facțiuni</a><a>⚠ Sancțiuni</a><a>▤ Reclamații</a><a>⚖ CK</a><a href="admin-regulamente.html">📚 Regulamente</a><a href="admin-anunturi.html">◉ Anunțuri</a><a href="admin-tichete.html">🎫 Tichete</a><a>⌁ Audit Logs</a><a class="back" href="index.html">← Site public</a></aside>
+<main>
+<header><div><small>PANEL ADMINISTRATIV</small><h1>Utilizatori</h1></div><div class="admin"><span id="admin-name">…</span> <i></i></div></header>
+
+<p class="muted" id="perm-note" style="margin:-10px 0 20px"></p>
+
+<section class="tablebox">
+  <div class="title">
+    <h2>Toți utilizatorii înregistrați</h2>
+    <span class="muted" id="count-note"></span>
+  </div>
+  <table><thead><tr><th>UTILIZATOR</th><th>DISCORD</th><th>RANG</th><th>ÎNREGISTRAT</th><th>SCHIMBĂ RANG</th></tr></thead>
+  <tbody id="list-body"><tr><td colspan="5">Se încarcă…</td></tr></tbody></table>
+</section>
+
+</main>
+<script src="auth-client.js"></script>
+<script>
+const ROLE_LABEL = { player: 'Jucător', moderator: 'Moderator', admin: 'Administrator', owner: 'Fondator' };
+const ROLE_PILL = { player: 'off', moderator: 'info', admin: 'warn', owner: 'on' };
+const ROLES_ORDER = ['player', 'moderator', 'admin', 'owner'];
+
+function fmtDate(d) { return new Date(d).toLocaleDateString('ro-RO'); }
+
+function roleSelectHtml(userId, currentRole) {
+  return `<select class="filter-select" data-role-for="${userId}">
+    ${ROLES_ORDER.map(r => `<option value="${r}" ${r === currentRole ? 'selected' : ''}>${ROLE_LABEL[r]}</option>`).join('')}
+  </select>`;
+}
+
+async function loadUsers(canEdit) {
+  const tbody = document.getElementById('list-body');
+  const countNote = document.getElementById('count-note');
+  try {
+    const res = await apiFetch('/api/admin/users');
+    if (!res.ok) throw new Error();
+    const users = await res.json();
+    countNote.textContent = `${users.length} utilizatori`;
+    tbody.innerHTML = users.length ? users.map(u => `
+      <tr>
+        <td>
+          <strong>${u.discord_username || u.username}</strong>
+          ${u.discord_username && u.discord_username !== u.username ? `<br><small style="color:var(--muted)">${u.username}</small>` : ''}
+          ${u.email ? `<br><small style="color:var(--muted)">${u.email}</small>` : ''}
+        </td>
+        <td>${u.discord_username ? `<span class="pill info">CONECTAT</span>` : `<span class="pill off">FĂRĂ DISCORD</span>`}</td>
+        <td><span class="pill ${ROLE_PILL[u.role] || 'off'}">${(ROLE_LABEL[u.role] || u.role).toUpperCase()}</span></td>
+        <td>${fmtDate(u.created_at)}</td>
+        <td>${canEdit ? roleSelectHtml(u.id, u.role) : '<span class="muted">doar fondatorul poate schimba</span>'}</td>
+      </tr>`).join('') : '<tr><td colspan="5">Niciun utilizator încă.</td></tr>';
+
+    if (canEdit) {
+      tbody.querySelectorAll('[data-role-for]').forEach(sel => {
+        sel.addEventListener('change', async () => {
+          const userId = sel.dataset.roleFor;
+          const newRole = sel.value;
+          sel.disabled = true;
+          try {
+            const res = await apiFetch(`/api/admin/users/${userId}/role`, {
+              method: 'PUT', body: JSON.stringify({ role: newRole })
+            });
+            if (!res.ok) throw new Error();
+          } catch {
+            alert('Nu am putut schimba rangul. Încearcă din nou.');
+          } finally {
+            sel.disabled = false;
+            loadUsers(canEdit);
+          }
+        });
+      });
+    }
+  } catch {
+    tbody.innerHTML = '<tr><td colspan="5">Nu am putut încărca lista de utilizatori.</td></tr>';
+  }
+}
+
+(async () => {
+  const me = await requireRole('admin', 'owner');
+  if (!me) return;
+  document.getElementById('admin-name').textContent = me.username;
+  const canEdit = me.role === 'owner';
+  document.getElementById('perm-note').textContent = canEdit
+    ? 'Poți schimba rangul oricărui utilizator (Jucător / Moderator / Administrator / Fondator).'
+    : 'Poți vedea lista, dar doar fondatorul poate schimba rangul unui utilizator.';
+  loadUsers(canEdit);
+})();
+</script>
+</body></html>

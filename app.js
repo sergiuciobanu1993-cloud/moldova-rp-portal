@@ -142,12 +142,19 @@ if (factionGrid) {
       if (!res.ok) throw new Error();
       const d = await res.json();
       if (!d.online || !Array.isArray(d.factions)) return;
+      // Doar joburi cu etichetă reală pot fi potrivite — un job fără etichetă
+      // (ex: "unemployed"/fără facțiune, label: "") altfel s-ar potrivi cu
+      // ORICE card prin includes(""), arătând un număr greșit de jucători
+      // online pentru facțiuni care nu au deloc corespondent live.
+      const withLabel = d.factions.filter(f => normalize(f.label));
       factionGrid.querySelectorAll('.faction').forEach(card => {
         const name = normalize(card.querySelector('strong')?.textContent);
-        const match = d.factions.find(f => {
-          const label = normalize(f.label);
-          return label === name || label.includes(name) || name.includes(label);
-        });
+        if (!name) return;
+        const match = withLabel.find(f => normalize(f.label) === name)
+          || withLabel.find(f => {
+            const label = normalize(f.label);
+            return label.includes(name) || name.includes(label);
+          });
         const badge = card.querySelector('.faction-live');
         if (badge) badge.textContent = match ? `· ${match.online} online` : '';
       });

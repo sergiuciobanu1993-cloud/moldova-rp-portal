@@ -125,17 +125,36 @@ async function fetchFactionSnapshot() {
   }
 }
 
-app.get("/api/live/factions", asyncRoute(async (_req, res) => {
+async function getFactionSnapshot() {
   const age = Date.now() - factionCache.fetchedAt;
-  if (factionCache.data && age < FACTIONS_CACHE_MS) return res.json(factionCache.data);
+  if (factionCache.data && age < FACTIONS_CACHE_MS) return factionCache.data;
   try {
     const data = await fetchFactionSnapshot();
     factionCache = { data, fetchedAt: Date.now() };
-    res.json(data);
+    return data;
   } catch {
-    if (factionCache.data) return res.json({ ...factionCache.data, stale: true });
-    res.json({ online: false, factions: [], totals: null });
+    if (factionCache.data) return { ...factionCache.data, stale: true };
+    return { online: false, factions: [], totals: null };
   }
+}
+
+// Banii (societyMoney, totals.cash/bank) rămân doar pentru admin — pe site-ul
+// public arătăm doar câți membri sunt online per facțiune.
+function stripFactionMoney(data) {
+  return {
+    online: data.online,
+    factions: (data.factions || []).map(f => ({ name: f.name, label: f.label, online: f.online })),
+    totals: data.totals ? { onlinePlayers: data.totals.onlinePlayers } : null,
+    ...(data.stale ? { stale: true } : {}),
+  };
+}
+
+app.get("/api/live/factions", asyncRoute(async (_req, res) => {
+  res.json(stripFactionMoney(await getFactionSnapshot()));
+}));
+
+app.get("/api/admin/live/factions", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (_req, res) => {
+  res.json(await getFactionSnapshot());
 }));
 
 app.post("/api/auth/register", asyncRoute(async (req, res) => {

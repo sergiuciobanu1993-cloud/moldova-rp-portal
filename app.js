@@ -29,3 +29,33 @@ if (online || slots) {
   loadServerStatus();
   setInterval(loadServerStatus, 30000);
 }
+
+// Live "X online" per facțiune, potrivit după eticheta jobului din FiveM
+// (vezi /api/live/factions). Banii facțiunilor rămân doar pentru admin —
+// aici arătăm doar câți membri sunt online acum. Guarded: doar homepage are
+// #faction-grid.
+const factionGrid = document.getElementById('faction-grid');
+if (factionGrid) {
+  const normalize = s => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+  const loadFactions = async () => {
+    try {
+      const res = await fetch('/api/live/factions');
+      if (!res.ok) throw new Error();
+      const d = await res.json();
+      if (!d.online || !Array.isArray(d.factions)) return;
+      factionGrid.querySelectorAll('.faction').forEach(card => {
+        const name = normalize(card.querySelector('strong')?.textContent);
+        const match = d.factions.find(f => {
+          const label = normalize(f.label);
+          return label === name || label.includes(name) || name.includes(label);
+        });
+        const badge = card.querySelector('.faction-live');
+        if (badge) badge.textContent = match ? `· ${match.online} online` : '';
+      });
+    } catch {
+      // Lasă badge-urile goale dacă nu avem încă date live.
+    }
+  };
+  loadFactions();
+  setInterval(loadFactions, 30000);
+}

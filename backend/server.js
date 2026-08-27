@@ -934,6 +934,45 @@ app.delete("/api/admin/regulations/:id", auth, requireRole(...ADMIN_ROLES), asyn
 // Announcements content management (v0.5)
 // ---------------------------------------------------------------------------
 
+// Trimite anunțul pe Discord printr-un Webhook (Server Settings > Integrations
+// > Webhooks — nu necesită bot). "Fire and forget": dacă Discord e jos sau
+// webhook-ul nu e configurat, publicarea anunțului tot reușește — doar
+// notificarea eșuează silențios (logată în consolă, nu blocată/afișată userului).
+const DISCORD_ANNOUNCE_WEBHOOK = process.env.DISCORD_ANNOUNCE_WEBHOOK || "";
+const SITE_URL = process.env.SITE_URL || "https://web-production-4fd88.up.railway.app";
+
+async function notifyDiscordAnnouncement(announcement) {
+  if (!DISCORD_ANNOUNCE_WEBHOOK) return;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 6000);
+  try {
+    const res = await fetch(DISCORD_ANNOUNCE_WEBHOOK, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      signal: controller.signal,
+      body: JSON.stringify({
+        content: "@everyone",
+        allowed_mentions: { parse: ["everyone"] },
+        embeds: [{
+          title: announcement.title,
+          description: announcement.content.length > 800
+            ? announcement.content.slice(0, 800).trim() + "…"
+            : announcement.content,
+          color: 0xff8a1f,
+          footer: { text: announcement.category || "General" },
+          url: `${SITE_URL}/index.html#anunturi`,
+          timestamp: new Date().toISOString(),
+        }],
+      }),
+    });
+    if (!res.ok) console.error(`Discord webhook a răspuns cu ${res.status}: ${await res.text().catch(() => "")}`);
+  } catch (err) {
+    console.error("Trimiterea anunțului pe Discord a eșuat:", err.message);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 app.get("/api/admin/announcements", auth, requireRole(...MOD_ROLES), asyncRoute(async (_req, res) => {
   const { rows } = await pool.query(
     `SELECT a.*, u.username author FROM announcements a
@@ -959,12 +998,17 @@ app.post("/api/admin/announcements", auth, requireRole(...ADMIN_ROLES), asyncRou
     [title.trim(), content, category?.trim() || "General", req.user.sub, is_published ?? true]
   );
   await logAction(req.user.sub, "announcement.create", "announcement", rows[0].id, { title }, req.ip);
+  if (rows[0].is_published) notifyDiscordAnnouncement(rows[0]);
   res.status(201).json(rows[0]);
 }));
 
 app.put("/api/admin/announcements/:id", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
   const { id } = req.params;
   const { title, content, category, is_published } = req.body;
+  const before = await pool.query("SELECT is_published FROM announcements WHERE id=$1", [id]);
+  if (!before.rows[0]) return res.status(404).json({ error: "Anunțul nu există." });
+  const wasPublished = before.rows[0].is_published;
+
   const { rows } = await pool.query(
     `UPDATE announcements SET
        title = COALESCE($1, title),
@@ -976,6 +1020,9 @@ app.put("/api/admin/announcements/:id", auth, requireRole(...ADMIN_ROLES), async
   );
   if (!rows[0]) return res.status(404).json({ error: "Anunțul nu există." });
   await logAction(req.user.sub, "announcement.update", "announcement", id, req.body, req.ip);
+  // Notifică pe Discord doar când anunțul TREE de la ciornă la publicat —
+  // nu la fiecare editare ulterioară a unuia deja publicat, ca să nu spamăm.
+  if (!wasPublished && rows[0].is_published) notifyDiscordAnnouncement(rows[0]);
   res.json(rows[0]);
 }));
 

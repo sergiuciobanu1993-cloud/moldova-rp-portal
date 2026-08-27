@@ -23,7 +23,7 @@
       <a href="#factiuni">Facțiuni</a>
       <a href="#anunturi">Anunțuri</a>
       <a href="#despre">Despre</a>
-      <a class="nav-login" href="login.html">Autentificare</a>
+      <a class="nav-login" href="login.html" id="nav-auth-link">Autentificare</a>
     </nav>
   </header>
 
@@ -122,10 +122,25 @@
     <p class="copyright">© 2026 Moldova RP. Toate drepturile rezervate.</p>
   </footer>
 
+  <script src="auth-client.js"></script>
   <script src="app.js"></script>
 
 <script>
 (async()=>{try{const r=await fetch('/api/health');if(r.ok){const d=await r.json();document.documentElement.dataset.api='online';}}catch(e){}})();
+</script>
+
+<script>
+// Homepage nav doesn't force-verify the session (no redirect if the token
+// turns out to be stale) — it just reflects, locally, whether a token is
+// present, so a logged-in player sees "Contul meu" instead of "Autentificare".
+(() => {
+  const auth = typeof getAuth === 'function' ? getAuth() : null;
+  if (!auth?.token) return;
+  const link = document.getElementById('nav-auth-link');
+  if (!link) return;
+  link.textContent = auth.user?.username ? `Contul meu (${auth.user.username})` : 'Contul meu';
+  link.href = 'dashboard.html';
+})();
 </script>
 
 <script>

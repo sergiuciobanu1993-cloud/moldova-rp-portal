@@ -99,6 +99,45 @@ app.get("/api/server-status", asyncRoute(async (_req, res) => {
   }
 }));
 
+// Live facțiuni + bani, citite din resursa custom "moldovarp-api" instalată
+// pe serverul de joc (vezi fivem-resource/moldovarp-api în README-ul livrat
+// separat). Nu ne conectăm niciodată direct la baza de date MySQL a
+// serverului — doar la acest rezumat securizat cu o cheie. Dacă resursa nu e
+// încă instalată/pornită, endpoint-ul răspunde degradat (online:false) în loc
+// să crape, ca site-ul să funcționeze normal oricum.
+const FIVEM_API_SECRET = process.env.FIVEM_API_SECRET || "";
+const FACTIONS_CACHE_MS = 20_000;
+let factionCache = { data: null, fetchedAt: 0 };
+
+async function fetchFactionSnapshot() {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 4000);
+  try {
+    const res = await fetch(`http://${FIVEM_ADDRESS}/moldovarp-api/snapshot`, {
+      headers: { "x-api-key": FIVEM_API_SECRET },
+      signal: controller.signal,
+    });
+    if (!res.ok) throw new Error(`moldovarp-api HTTP ${res.status}`);
+    const snapshot = await res.json();
+    return { online: true, ...snapshot };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+app.get("/api/live/factions", asyncRoute(async (_req, res) => {
+  const age = Date.now() - factionCache.fetchedAt;
+  if (factionCache.data && age < FACTIONS_CACHE_MS) return res.json(factionCache.data);
+  try {
+    const data = await fetchFactionSnapshot();
+    factionCache = { data, fetchedAt: Date.now() };
+    res.json(data);
+  } catch {
+    if (factionCache.data) return res.json({ ...factionCache.data, stale: true });
+    res.json({ online: false, factions: [], totals: null });
+  }
+}));
+
 app.post("/api/auth/register", asyncRoute(async (req, res) => {
   const { username, email, password } = req.body;
   if (!username || !email || !password || password.length < 8)

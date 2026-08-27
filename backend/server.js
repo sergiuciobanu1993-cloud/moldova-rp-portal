@@ -890,7 +890,7 @@ app.post("/api/admin/regulations", auth, requireRole(...ADMIN_ROLES), asyncRoute
       [title.trim(), finalSlug, category.trim(), content, version || "1.0", is_published ?? true]
     );
     await logAction(req.user.sub, "regulation.create", "regulation", rows[0].id, { title, category }, req.ip);
-    if (rows[0].is_published) notifyDiscordRegulation(rows[0], "adăugat");
+    if (rows[0].is_published) notifyDiscordRegulation(rows[0], "adăugat", { editedBy: req.user.username });
     res.status(201).json(rows[0]);
   } catch (e) {
     if (e.code === "23505") return res.status(409).json({ error: "Există deja un regulament cu acest slug." });
@@ -902,6 +902,9 @@ app.put("/api/admin/regulations/:id", auth, requireRole(...ADMIN_ROLES), asyncRo
   const { id } = req.params;
   const { title, category, content, version, is_published, slug } = req.body;
   try {
+    // Citim starea dinainte de update, ca să putem trimite pe Discord exact
+    // ce s-a schimbat (titlu + diff de conținut), nu tot textul din nou.
+    const before = await pool.query("SELECT title, content FROM regulations WHERE id=$1", [id]);
     const { rows } = await pool.query(
       `UPDATE regulations SET
          title = COALESCE($1, title),
@@ -916,7 +919,17 @@ app.put("/api/admin/regulations/:id", auth, requireRole(...ADMIN_ROLES), asyncRo
     );
     if (!rows[0]) return res.status(404).json({ error: "Regulamentul nu există." });
     await logAction(req.user.sub, "regulation.update", "regulation", id, req.body, req.ip);
-    if (rows[0].is_published) notifyDiscordRegulation(rows[0], "modificat");
+    if (rows[0].is_published) {
+      const prev = before.rows[0];
+      const { added, removed } = prev ? diffLines(prev.content, rows[0].content) : { added: [], removed: [] };
+      notifyDiscordRegulation(rows[0], "modificat", {
+        editedBy: req.user.username,
+        addedLines: added,
+        removedLines: removed,
+        titleChanged: !!(prev && prev.title !== rows[0].title),
+        oldTitle: prev?.title,
+      });
+    }
     res.json(rows[0]);
   } catch (e) {
     if (e.code === "23505") return res.status(409).json({ error: "Există deja un regulament cu acest slug." });
@@ -981,29 +994,93 @@ async function notifyDiscordAnnouncement(announcement) {
   }
 }
 
+// Diff simplu, linie cu linie (LCS), între conținutul vechi și cel nou al unui
+// regulament — ca notificarea de pe Discord la o modificare să arate exact ce
+// s-a adăugat/eliminat, nu tot textul din nou. Plafonat: pentru texte foarte
+// lungi (rar cazul unui regulament) sărim diff-ul in loc să riscăm un calcul
+// O(n*m) prea mare — funcția apelantă cade atunci pe un preview simplu.
+function diffLines(oldText, newText) {
+  const a = (oldText || "").split(/\r?\n/);
+  const b = (newText || "").split(/\r?\n/);
+  if (a.join("\n") === b.join("\n")) return { added: [], removed: [] };
+  if (a.length * b.length > 250000) return { added: [], removed: [], skipped: true };
+  const n = a.length, m = b.length;
+  const dp = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    }
+  }
+  const removed = [], added = [];
+  let i = 0, j = 0;
+  while (i < n && j < m) {
+    if (a[i] === b[j]) { i++; j++; }
+    else if (dp[i + 1][j] >= dp[i][j + 1]) { removed.push(a[i]); i++; }
+    else { added.push(b[j]); j++; }
+  }
+  while (i < n) { removed.push(a[i]); i++; }
+  while (j < m) { added.push(b[j]); j++; }
+  return { added: added.filter(l => l.trim()), removed: removed.filter(l => l.trim()) };
+}
+
+// Randează o listă de linii ca text pentru un field Discord (max 1024 caractere
+// per field), plafonat și ca număr de linii afișate.
+function formatDiffLines(lines, maxLines = 10, maxChars = 1000) {
+  if (!lines || !lines.length) return null;
+  const shown = lines.slice(0, maxLines).map(l => `• ${l.length > 200 ? l.slice(0, 200).trim() + "…" : l}`);
+  let text = shown.join("\n");
+  if (text.length > maxChars) text = text.slice(0, maxChars).trim() + "…";
+  if (lines.length > maxLines) text += `\n… și încă ${lines.length - maxLines} linii`;
+  return text;
+}
+
 // Aceeași logică ca la anunțuri, dar pentru regulamente — mesajul spune clar
-// dacă regulamentul a fost adăugat sau modificat, cum a cerut Sergiu. Folosește
-// același webhook (DISCORD_ANNOUNCE_WEBHOOK) — un singur canal pentru toate
-// notificările site-ului, nu unul separat per tip de conținut.
-async function notifyDiscordRegulation(regulation, action) {
+// dacă regulamentul a fost adăugat sau modificat, cum a cerut Sergiu, iar la
+// modificare arată exact ce s-a adăugat/eliminat din text (nu tot conținutul
+// din nou). Folosește același webhook (DISCORD_ANNOUNCE_WEBHOOK) — un singur
+// canal pentru toate notificările site-ului, nu unul separat per tip de conținut.
+async function notifyDiscordRegulation(regulation, action, extra = {}) {
   if (!DISCORD_ANNOUNCE_WEBHOOK) return;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 6000);
   try {
+    const { editedBy, addedLines = [], removedLines = [], titleChanged, oldTitle, skipped } = extra;
+    const hasDiff = addedLines.length > 0 || removedLines.length > 0;
+
+    const fields = [
+      { name: "Categorie", value: regulation.category || "General", inline: true },
+      { name: "Versiune", value: regulation.version || "1.0", inline: true },
+    ];
+    if (editedBy) fields.push({ name: action === "adăugat" ? "Adăugat de" : "Modificat de", value: editedBy, inline: true });
+    if (titleChanged) fields.push({ name: "Titlu schimbat", value: `${oldTitle} → ${regulation.title}`, inline: false });
+    const removedText = formatDiffLines(removedLines);
+    const addedText = formatDiffLines(addedLines);
+    if (removedText) fields.push({ name: "➖ Eliminat din text", value: removedText, inline: false });
+    if (addedText) fields.push({ name: "➕ Adăugat în text", value: addedText, inline: false });
+    if (action === "modificat" && !hasDiff && skipped) {
+      fields.push({ name: "Modificare", value: "Textul a fost rescris integral — prea mare pentru un rezumat linie-cu-linie.", inline: false });
+    }
+
+    // La adăugare, sau la o modificare fără diff de text (doar categorie/versiune
+    // schimbate), arătăm un preview din conținut — altfel embed-ul ar rămâne gol.
+    const description = (action === "adăugat" || (!hasDiff && !titleChanged))
+      ? (regulation.content.length > 800 ? regulation.content.slice(0, 800).trim() + "…" : regulation.content)
+      : undefined;
+
     const res = await fetch(DISCORD_ANNOUNCE_WEBHOOK, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       signal: controller.signal,
       body: JSON.stringify({
-        content: "@everyone",
+        content: `📘 **Regulament ${action} pe Moldova RP!** @everyone`,
         allowed_mentions: { parse: ["everyone"] },
         embeds: [{
-          title: `Regulament ${action}: ${regulation.title}`,
-          description: regulation.content.length > 800
-            ? regulation.content.slice(0, 800).trim() + "…"
-            : regulation.content,
-          color: 0x2f81f7,
-          footer: { text: `${regulation.category || "General"} · versiunea ${regulation.version || "1.0"}` },
+          author: { name: "Moldova RP — Regulamente", icon_url: `${SITE_URL}/assets/logo.png` },
+          title: regulation.title,
+          description,
+          color: action === "adăugat" ? 0x2f81f7 : 0xf7b32f,
+          fields,
+          footer: { text: "Moldova RP Portal · vezi regulamentul complet pe site" },
           url: `${SITE_URL}/regulament.html?slug=${encodeURIComponent(regulation.slug)}`,
           timestamp: new Date().toISOString(),
         }],

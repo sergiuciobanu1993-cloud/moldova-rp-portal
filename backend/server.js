@@ -360,7 +360,9 @@ app.post("/api/tickets", auth, asyncRoute(async (req, res) => {
   if (!subject?.trim() || !description?.trim())
     return res.status(400).json({ error: "Subiectul și descrierea sunt obligatorii." });
   const link = evidence_url?.trim() || null;
-  if (link && !/^https?:\/\/\S+$/i.test(link))
+  if (!link)
+    return res.status(400).json({ error: "Linkul dovezii este obligatoriu." });
+  if (!/^https?:\/\/\S+$/i.test(link))
     return res.status(400).json({ error: "Linkul trebuie să înceapă cu http:// sau https://." });
   const { rows } = await pool.query(
     `INSERT INTO tickets(user_id, subject, category, description, evidence_url)

@@ -23,9 +23,9 @@
     </div>
     <div class="field"><label>Descriere</label><textarea id="f-description" required placeholder="Descrie situația cât mai detaliat: cine, ce, când, unde..."></textarea></div>
     <div class="field">
-      <label>Link dovadă (opțional)</label>
-      <input id="f-evidence" type="url" placeholder="https://streamable.com/... sau link Discord/YouTube">
-      <small class="hint">Încarcă filmarea/poza pe Streamable, YouTube (nelistat) sau Discord, apoi lipește linkul aici.</small>
+      <label>Link dovadă (obligatoriu)</label>
+      <input id="f-evidence" type="url" required placeholder="https://streamable.com/... sau link Discord/YouTube">
+      <small class="hint">Încarcă filmarea/poza pe Streamable, YouTube (nelistat) sau Discord, apoi lipește linkul aici. Tichetul nu poate fi trimis fără o dovadă.</small>
     </div>
     <p class="formmsg" id="form-msg" hidden></p>
     <div style="display:flex;gap:10px">
@@ -78,11 +78,18 @@ document.getElementById('ticket-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const msg = document.getElementById('form-msg');
   msg.hidden = true;
+  const evidence = document.getElementById('f-evidence').value.trim();
+  if (!evidence) {
+    msg.textContent = 'Linkul dovezii este obligatoriu — atașează o filmare/poză pentru a trimite tichetul.';
+    msg.className = 'formmsg error';
+    msg.hidden = false;
+    return;
+  }
   const body = {
     subject: document.getElementById('f-subject').value.trim(),
     category: document.getElementById('f-category').value,
     description: document.getElementById('f-description').value.trim(),
-    evidence_url: document.getElementById('f-evidence').value.trim() || null
+    evidence_url: evidence
   };
   try {
     const res = await apiFetch('/api/tickets', { method: 'POST', body: JSON.stringify(body) });

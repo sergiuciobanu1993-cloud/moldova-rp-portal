@@ -342,6 +342,70 @@ app.get("/api/announcements", asyncRoute(async (_req, res) => {
   res.json(rows);
 }));
 
+// Tichete — orice utilizator autentificat își poate deschide și vedea
+// propriile tichete. Dovezile (poze/filmări) se atașează ca LINK (Streamable,
+// YouTube, Discord etc.), nu ca fișier încărcat direct — evită complet
+// problema stocării persistente de fișiere mari pe Railway.
+app.get("/api/tickets", auth, asyncRoute(async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT id,subject,category,status,evidence_url,created_at,updated_at
+     FROM tickets WHERE user_id=$1 ORDER BY created_at DESC`,
+    [req.user.sub]
+  );
+  res.json(rows);
+}));
+
+app.post("/api/tickets", auth, asyncRoute(async (req, res) => {
+  const { subject, category, description, evidence_url } = req.body;
+  if (!subject?.trim() || !description?.trim())
+    return res.status(400).json({ error: "Subiectul și descrierea sunt obligatorii." });
+  const link = evidence_url?.trim() || null;
+  if (link && !/^https?:\/\/\S+$/i.test(link))
+    return res.status(400).json({ error: "Linkul trebuie să înceapă cu http:// sau https://." });
+  const { rows } = await pool.query(
+    `INSERT INTO tickets(user_id, subject, category, description, evidence_url)
+     VALUES($1,$2,$3,$4,$5) RETURNING *`,
+    [req.user.sub, subject.trim(), (category || "general").trim(), description.trim(), link]
+  );
+  await logAction(req.user.sub, "ticket.create", "ticket", rows[0].id, { subject: subject.trim() }, req.ip);
+  res.status(201).json(rows[0]);
+}));
+
+app.get("/api/tickets/:id", auth, asyncRoute(async (req, res) => {
+  const { rows } = await pool.query(
+    "SELECT * FROM tickets WHERE id=$1 AND user_id=$2 LIMIT 1",
+    [req.params.id, req.user.sub]
+  );
+  if (!rows[0]) return res.status(404).json({ error: "Tichetul nu există." });
+  const replies = await pool.query(
+    `SELECT tr.id, tr.message, tr.created_at, u.username author, r.name author_role
+     FROM ticket_replies tr
+     JOIN users u ON u.id = tr.author_id
+     JOIN roles r ON r.id = u.role_id
+     WHERE tr.ticket_id = $1 ORDER BY tr.created_at ASC`,
+    [req.params.id]
+  );
+  res.json({ ...rows[0], replies: replies.rows });
+}));
+
+app.post("/api/tickets/:id/replies", auth, asyncRoute(async (req, res) => {
+  const { message } = req.body;
+  if (!message?.trim()) return res.status(400).json({ error: "Mesajul nu poate fi gol." });
+  const ticket = await pool.query(
+    "SELECT status FROM tickets WHERE id=$1 AND user_id=$2 LIMIT 1",
+    [req.params.id, req.user.sub]
+  );
+  if (!ticket.rows[0]) return res.status(404).json({ error: "Tichetul nu există." });
+  if (["resolved", "closed"].includes(ticket.rows[0].status))
+    return res.status(400).json({ error: "Acest tichet este închis — nu mai poți adăuga răspunsuri." });
+  const { rows } = await pool.query(
+    "INSERT INTO ticket_replies(ticket_id, author_id, message) VALUES($1,$2,$3) RETURNING *",
+    [req.params.id, req.user.sub, message.trim()]
+  );
+  await pool.query("UPDATE tickets SET updated_at=NOW() WHERE id=$1", [req.params.id]);
+  res.status(201).json(rows[0]);
+}));
+
 app.get("/api/admin/stats", auth, requireRole("admin", "owner"), asyncRoute(async (_req, res) => {
   const q = async sql => (await pool.query(sql)).rows[0].count;
   res.json({
@@ -716,6 +780,77 @@ app.delete("/api/admin/announcements/:id", auth, requireRole(...ADMIN_ROLES), as
   if (!rowCount) return res.status(404).json({ error: "Anunțul nu există." });
   await logAction(req.user.sub, "announcement.delete", "announcement", id, null, req.ip);
   res.status(204).end();
+}));
+
+app.get("/api/admin/tickets", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
+  const status = req.query.status;
+  const { rows } = await pool.query(
+    `SELECT t.*, u.username submitted_by, a.username assigned_username
+     FROM tickets t
+     JOIN users u ON u.id = t.user_id
+     LEFT JOIN users a ON a.id = t.assigned_to
+     ${status ? "WHERE t.status = $1" : ""}
+     ORDER BY t.created_at DESC`,
+    status ? [status] : []
+  );
+  res.json(rows);
+}));
+
+app.get("/api/admin/tickets/:id", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT t.*, u.username submitted_by, a.username assigned_username
+     FROM tickets t
+     JOIN users u ON u.id = t.user_id
+     LEFT JOIN users a ON a.id = t.assigned_to
+     WHERE t.id = $1`,
+    [req.params.id]
+  );
+  if (!rows[0]) return res.status(404).json({ error: "Tichetul nu există." });
+  const replies = await pool.query(
+    `SELECT tr.id, tr.message, tr.created_at, u.username author, r.name author_role
+     FROM ticket_replies tr
+     JOIN users u ON u.id = tr.author_id
+     JOIN roles r ON r.id = u.role_id
+     WHERE tr.ticket_id = $1 ORDER BY tr.created_at ASC`,
+    [req.params.id]
+  );
+  res.json({ ...rows[0], replies: replies.rows });
+}));
+
+app.put("/api/admin/tickets/:id", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
+  const { id } = req.params;
+  const { status, assigned_to } = req.body;
+  const allowedStatuses = ["open", "in_progress", "resolved", "closed"];
+  if (status && !allowedStatuses.includes(status))
+    return res.status(400).json({ error: "Status invalid." });
+  const { rows } = await pool.query(
+    `UPDATE tickets SET
+       status = COALESCE($1, status),
+       assigned_to = COALESCE($2, assigned_to),
+       updated_at = NOW()
+     WHERE id = $3 RETURNING *`,
+    [status || null, assigned_to || null, id]
+  );
+  if (!rows[0]) return res.status(404).json({ error: "Tichetul nu există." });
+  await logAction(req.user.sub, "ticket.update", "ticket", id, req.body, req.ip);
+  res.json(rows[0]);
+}));
+
+app.post("/api/admin/tickets/:id/replies", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
+  const { message } = req.body;
+  if (!message?.trim()) return res.status(400).json({ error: "Mesajul nu poate fi gol." });
+  const ticket = await pool.query("SELECT id FROM tickets WHERE id=$1", [req.params.id]);
+  if (!ticket.rows[0]) return res.status(404).json({ error: "Tichetul nu există." });
+  const { rows } = await pool.query(
+    "INSERT INTO ticket_replies(ticket_id, author_id, message) VALUES($1,$2,$3) RETURNING *",
+    [req.params.id, req.user.sub, message.trim()]
+  );
+  await pool.query(
+    "UPDATE tickets SET updated_at=NOW(), status = CASE WHEN status='open' THEN 'in_progress' ELSE status END WHERE id=$1",
+    [req.params.id]
+  );
+  await logAction(req.user.sub, "ticket.reply", "ticket", req.params.id, null, req.ip);
+  res.status(201).json(rows[0]);
 }));
 
 app.use((err, _req, res, _next) => {

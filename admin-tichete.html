@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Tichete — Admin Moldova RP</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="admin.css"></head>
+<body>
+<aside class="side"><a class="brand" href="index.html"><img src="assets/logo.png" alt=""><b>MOLDOVA<span>RP</span></b></a><p>ADMINISTRAȚIE</p><a href="admin.html">▦ Dashboard</a><a>♙ Jucători</a><a>◆ Facțiuni</a><a>⚠ Sancțiuni</a><a>▤ Reclamații</a><a>⚖ CK</a><a href="admin-regulamente.html">📚 Regulamente</a><a href="admin-anunturi.html">◉ Anunțuri</a><a class="sel" href="admin-tichete.html">🎫 Tichete</a><a>⌁ Audit Logs</a><a class="back" href="index.html">← Site public</a></aside>
+<main>
+<header><div><small>PANEL ADMINISTRATIV</small><h1>Tichete</h1></div><div class="admin"><span id="admin-name">…</span> <i></i></div></header>
+
+<section class="tablebox">
+  <div class="title">
+    <h2>Toate tichetele</h2>
+    <select id="status-filter" class="filter-select">
+      <option value="">Toate statusurile</option>
+      <option value="open">Deschise</option>
+      <option value="in_progress">În lucru</option>
+      <option value="resolved">Rezolvate</option>
+      <option value="closed">Închise</option>
+    </select>
+  </div>
+  <table><thead><tr><th>SUBIECT</th><th>JUCĂTOR</th><th>CATEGORIE</th><th>STATUS</th><th>ASIGNAT</th><th>ACTUALIZAT</th><th></th></tr></thead>
+  <tbody id="list-body"><tr><td colspan="7">Se încarcă…</td></tr></tbody></table>
+</section>
+
+<section class="formbox" id="detail-box" hidden>
+  <h2 id="detail-title">Tichet</h2>
+  <div class="ticket-meta">
+    <span class="pill" id="detail-status"></span>
+    <span id="detail-category"></span>
+    <span>·</span>
+    <span id="detail-submitted"></span>
+    <span>·</span>
+    <span id="detail-date"></span>
+  </div>
+  <p id="detail-description" class="ticket-desc"></p>
+  <p id="detail-evidence"></p>
+
+  <div class="field" style="margin:16px 0">
+    <label>Schimbă status</label>
+    <select id="detail-status-select">
+      <option value="open">Deschis</option>
+      <option value="in_progress">În lucru</option>
+      <option value="resolved">Rezolvat</option>
+      <option value="closed">Închis</option>
+    </select>
+  </div>
+
+  <div class="thread" id="detail-replies"></div>
+
+  <form id="reply-form">
+    <div class="field wide"><label>Răspuns</label><textarea id="reply-message" required placeholder="Scrie un răspuns către jucător..."></textarea></div>
+    <p class="formmsg" id="detail-msg" hidden></p>
+    <div class="formactions">
+      <button type="submit" class="btn-primary">Trimite răspuns</button>
+      <button type="button" class="btn-ghost" id="detail-close-btn">Închide</button>
+    </div>
+  </form>
+</section>
+
+</main>
+<script src="auth-client.js"></script>
+<script>
+let currentTicketId = null;
+
+const STATUS_LABEL = { open: 'DESCHIS', in_progress: 'ÎN LUCRU', resolved: 'REZOLVAT', closed: 'ÎNCHIS' };
+const STATUS_PILL = { open: 'warn', in_progress: 'info', resolved: 'on', closed: 'off' };
+const CATEGORY_LABEL = { general: 'General', bug: 'Bug / problemă tehnică', reclamatie: 'Reclamație jucător', ban_appeal: 'Contestație sancțiune' };
+
+function fmtDate(d) { return new Date(d).toLocaleString('ro-RO'); }
+
+async function loadList() {
+  const tbody = document.getElementById('list-body');
+  const status = document.getElementById('status-filter').value;
+  try {
+    const res = await apiFetch(`/api/admin/tickets${status ? '?status=' + status : ''}`);
+    if (!res.ok) throw new Error();
+    const items = await res.json();
+    tbody.innerHTML = items.length ? items.map(t => `
+      <tr>
+        <td>${t.subject}</td>
+        <td>${t.submitted_by}</td>
+        <td>${CATEGORY_LABEL[t.category] || t.category}</td>
+        <td><span class="pill ${STATUS_PILL[t.status] || 'off'}">${STATUS_LABEL[t.status] || t.status}</span></td>
+        <td>${t.assigned_username || '—'}</td>
+        <td>${fmtDate(t.updated_at)}</td>
+        <td class="rowactions"><button data-open="${t.id}">Deschide</button></td>
+      </tr>`).join('') : '<tr><td colspan="7">Niciun tichet încă.</td></tr>';
+
+    tbody.querySelectorAll('[data-open]').forEach(btn => btn.addEventListener('click', () => openTicket(btn.dataset.open)));
+  } catch {
+    tbody.innerHTML = '<tr><td colspan="7">Nu am putut încărca tichetele.</td></tr>';
+  }
+}
+
+async function openTicket(id) {
+  const res = await apiFetch(`/api/admin/tickets/${id}`);
+  if (!res.ok) return;
+  const t = await res.json();
+  currentTicketId = t.id;
+
+  document.getElementById('detail-title').textContent = t.subject;
+  document.getElementById('detail-status').textContent = STATUS_LABEL[t.status] || t.status;
+  document.getElementById('detail-status').className = `pill ${STATUS_PILL[t.status] || 'off'}`;
+  document.getElementById('detail-category').textContent = CATEGORY_LABEL[t.category] || t.category;
+  document.getElementById('detail-submitted').textContent = `deschis de ${t.submitted_by}`;
+  document.getElementById('detail-date').textContent = fmtDate(t.created_at);
+  document.getElementById('detail-description').textContent = t.description;
+  document.getElementById('detail-evidence').innerHTML = t.evidence_url
+    ? `<a href="${t.evidence_url}" target="_blank" rel="noopener noreferrer">🔗 Vezi dovada atașată</a>`
+    : '';
+  document.getElementById('detail-status-select').value = t.status;
+
+  document.getElementById('detail-replies').innerHTML = t.replies.length
+    ? t.replies.map(r => `
+        <div class="msg ${['moderator','admin','owner'].includes(r.author_role) ? 'staff' : ''}">
+          <b>${r.author}${['moderator','admin','owner'].includes(r.author_role) ? ' (staff)' : ''}</b>
+          <span>${r.message}</span>
+          <small>${fmtDate(r.created_at)}</small>
+        </div>`).join('')
+    : '<p class="muted">Niciun răspuns încă.</p>';
+
+  document.getElementById('detail-box').hidden = false;
+  document.getElementById('detail-box').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+document.getElementById('status-filter').addEventListener('change', loadList);
+document.getElementById('detail-close-btn').addEventListener('click', () => {
+  document.getElementById('detail-box').hidden = true;
+  currentTicketId = null;
+});
+
+document.getElementById('detail-status-select').addEventListener('change', async (e) => {
+  if (!currentTicketId) return;
+  await apiFetch(`/api/admin/tickets/${currentTicketId}`, {
+    method: 'PUT', body: JSON.stringify({ status: e.target.value })
+  });
+  loadList();
+});
+
+document.getElementById('reply-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!currentTicketId) return;
+  const msg = document.getElementById('detail-msg');
+  msg.hidden = true;
+  const message = document.getElementById('reply-message').value.trim();
+  if (!message) return;
+  try {
+    const res = await apiFetch(`/api/admin/tickets/${currentTicketId}/replies`, {
+      method: 'POST', body: JSON.stringify({ message })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Trimiterea a eșuat.');
+    document.getElementById('reply-message').value = '';
+    await openTicket(currentTicketId);
+    loadList();
+  } catch (err) {
+    msg.textContent = err.message;
+    msg.className = 'formmsg error';
+    msg.hidden = false;
+  }
+});
+
+(async () => {
+  const me = await requireRole('moderator', 'admin', 'owner');
+  if (!me) return;
+  document.getElementById('admin-name').textContent = me.username;
+  loadList();
+})();
+</script>
+</body></html>

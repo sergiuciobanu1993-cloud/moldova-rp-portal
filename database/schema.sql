@@ -130,6 +130,30 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Tichete de suport deschise de jucători din portal. Dovezile (poze/filmări)
+-- se atașează ca link extern (Streamable/YouTube/Discord etc.), nu ca fișier
+-- încărcat direct — evită complet nevoia de stocare persistentă pe Railway.
+CREATE TABLE IF NOT EXISTS tickets (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  subject VARCHAR(180) NOT NULL,
+  category VARCHAR(40) NOT NULL DEFAULT 'general',
+  description TEXT NOT NULL,
+  evidence_url TEXT,
+  status VARCHAR(30) NOT NULL DEFAULT 'open',
+  assigned_to UUID REFERENCES users(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS ticket_replies (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  ticket_id UUID NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+  author_id UUID NOT NULL REFERENCES users(id),
+  message TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 INSERT INTO roles(name, description) VALUES
 ('player', 'Jucator standard'),
 ('moderator', 'Moderator'),

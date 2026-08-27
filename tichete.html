@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Tichetele mele — Moldova RP</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="dashboard.css"></head>
+<body>
+<header><a class="brand" href="index.html"><img src="assets/logo.png" alt="">MOLDOVA<span>RP</span></a><nav><a href="index.html">Acasă</a><a href="dashboard.html">Dashboard</a><a href="index.html#regulamente">Regulamente</a></nav><a class="logout" href="login.html" id="logout-link">Deconectare</a></header>
+<main>
+<section class="welcome">
+  <div><p>SUPORT</p><h1>Tichetele mele</h1><small>Raportează probleme, reclamații sau cereri către staff.</small></div>
+  <button class="btn-primary" id="new-btn">+ Tichet nou</button>
+</section>
+
+<section class="panel" id="form-box" hidden style="margin-top:24px">
+  <div class="head"><h2>Tichet nou</h2></div>
+  <form id="ticket-form">
+    <div class="field"><label>Subiect</label><input id="f-subject" required maxlength="180" placeholder="ex: Jucător folosește cheat-uri"></div>
+    <div class="field">
+      <label>Categorie</label>
+      <select id="f-category">
+        <option value="general">General</option>
+        <option value="bug">Bug / problemă tehnică</option>
+        <option value="reclamatie">Reclamație jucător</option>
+        <option value="ban_appeal">Contestație sancțiune</option>
+      </select>
+    </div>
+    <div class="field"><label>Descriere</label><textarea id="f-description" required placeholder="Descrie situația cât mai detaliat: cine, ce, când, unde..."></textarea></div>
+    <div class="field">
+      <label>Link dovadă (opțional)</label>
+      <input id="f-evidence" type="url" placeholder="https://streamable.com/... sau link Discord/YouTube">
+      <small class="hint">Încarcă filmarea/poza pe Streamable, YouTube (nelistat) sau Discord, apoi lipește linkul aici.</small>
+    </div>
+    <p class="formmsg" id="form-msg" hidden></p>
+    <div style="display:flex;gap:10px">
+      <button type="submit" class="btn-primary">Trimite tichetul</button>
+      <button type="button" class="btn-ghost" id="cancel-btn">Anulează</button>
+    </div>
+  </form>
+</section>
+
+<section class="panel" style="margin-top:24px">
+  <div class="head"><h2>Istoric tichete</h2></div>
+  <div class="ticket-list" id="ticket-list"><p class="muted">Se încarcă…</p></div>
+</section>
+</main>
+<script src="auth-client.js"></script>
+<script>
+const STATUS_LABEL = { open: 'DESCHIS', in_progress: 'ÎN LUCRU', resolved: 'REZOLVAT', closed: 'ÎNCHIS' };
+const STATUS_PILL = { open: 'warn', in_progress: 'info', resolved: 'on', closed: 'off' };
+const CATEGORY_LABEL = { general: 'General', bug: 'Bug / problemă tehnică', reclamatie: 'Reclamație jucător', ban_appeal: 'Contestație sancțiune' };
+
+function showForm() {
+  document.getElementById('form-box').hidden = false;
+  document.getElementById('form-box').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+function hideForm() {
+  document.getElementById('form-box').hidden = true;
+  document.getElementById('ticket-form').reset();
+}
+
+async function loadTickets() {
+  const list = document.getElementById('ticket-list');
+  try {
+    const res = await apiFetch('/api/tickets');
+    if (!res.ok) throw new Error();
+    const items = await res.json();
+    list.innerHTML = items.length ? items.map(t => `
+      <a class="ticket-row" href="tichet.html?id=${t.id}">
+        <div><strong>${t.subject}</strong><small>${CATEGORY_LABEL[t.category] || t.category} · deschis ${new Date(t.created_at).toLocaleDateString('ro-RO')}</small></div>
+        <span class="pill ${STATUS_PILL[t.status] || 'off'}">${STATUS_LABEL[t.status] || t.status}</span>
+      </a>`).join('') : '<p class="muted">Nu ai deschis niciun tichet încă.</p>';
+  } catch {
+    list.innerHTML = '<p class="muted">Nu am putut încărca tichetele.</p>';
+  }
+}
+
+document.getElementById('new-btn').addEventListener('click', showForm);
+document.getElementById('cancel-btn').addEventListener('click', hideForm);
+
+document.getElementById('ticket-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const msg = document.getElementById('form-msg');
+  msg.hidden = true;
+  const body = {
+    subject: document.getElementById('f-subject').value.trim(),
+    category: document.getElementById('f-category').value,
+    description: document.getElementById('f-description').value.trim(),
+    evidence_url: document.getElementById('f-evidence').value.trim() || null
+  };
+  try {
+    const res = await apiFetch('/api/tickets', { method: 'POST', body: JSON.stringify(body) });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Trimiterea a eșuat.');
+    hideForm();
+    loadTickets();
+  } catch (err) {
+    msg.textContent = err.message;
+    msg.className = 'formmsg error';
+    msg.hidden = false;
+  }
+});
+
+(async () => {
+  if (!requireAuth()) return;
+  loadTickets();
+})();
+wireLogout('#logout-link');
+</script>
+</body></html>

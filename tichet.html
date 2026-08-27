@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Tichet — Moldova RP</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="dashboard.css"></head>
+<body>
+<header><a class="brand" href="index.html"><img src="assets/logo.png" alt="">MOLDOVA<span>RP</span></a><nav><a href="index.html">Acasă</a><a href="dashboard.html">Dashboard</a><a href="tichete.html">Tichete</a></nav><a class="logout" href="login.html" id="logout-link">Deconectare</a></header>
+<main>
+<p><a href="tichete.html" style="color:var(--muted);font-weight:700;font-size:13px">← Toate tichetele</a></p>
+
+<section class="panel" id="ticket-box" style="margin-top:16px">
+  <p class="muted">Se încarcă…</p>
+</section>
+</main>
+<script src="auth-client.js"></script>
+<script>
+const STATUS_LABEL = { open: 'DESCHIS', in_progress: 'ÎN LUCRU', resolved: 'REZOLVAT', closed: 'ÎNCHIS' };
+const STATUS_PILL = { open: 'warn', in_progress: 'info', resolved: 'on', closed: 'off' };
+const CATEGORY_LABEL = { general: 'General', bug: 'Bug / problemă tehnică', reclamatie: 'Reclamație jucător', ban_appeal: 'Contestație sancțiune' };
+
+function render(t) {
+  const box = document.getElementById('ticket-box');
+  const closed = ['resolved', 'closed'].includes(t.status);
+  box.innerHTML = `
+    <div class="head"><h2>${t.subject}</h2></div>
+    <div class="ticket-meta">
+      <span class="pill ${STATUS_PILL[t.status] || 'off'}">${STATUS_LABEL[t.status] || t.status}</span>
+      <span>${CATEGORY_LABEL[t.category] || t.category}</span>
+      <span>·</span>
+      <span>deschis ${new Date(t.created_at).toLocaleString('ro-RO')}</span>
+    </div>
+    <p class="ticket-desc">${t.description}</p>
+    ${t.evidence_url ? `<p><a href="${t.evidence_url}" target="_blank" rel="noopener noreferrer" style="color:var(--orange);font-weight:800;font-size:13px">🔗 Dovadă atașată</a></p>` : ''}
+    <div class="thread" id="thread"></div>
+    ${closed
+      ? '<p class="muted">Acest tichet este închis — nu mai poți adăuga răspunsuri.</p>'
+      : `<form id="reply-form">
+          <div class="field wide"><label>Răspuns</label><textarea id="reply-message" required placeholder="Scrie un mesaj..."></textarea></div>
+          <p class="formmsg" id="reply-msg" hidden></p>
+          <button type="submit" class="btn-primary">Trimite</button>
+        </form>`}
+  `;
+
+  document.getElementById('thread').innerHTML = t.replies.length
+    ? t.replies.map(r => `
+        <div class="msg ${['moderator','admin','owner'].includes(r.author_role) ? 'staff' : ''}">
+          <b>${r.author}${['moderator','admin','owner'].includes(r.author_role) ? ' (staff)' : ''}</b>
+          <span>${r.message}</span>
+          <small>${new Date(r.created_at).toLocaleString('ro-RO')}</small>
+        </div>`).join('')
+    : '<p class="muted">Niciun răspuns încă. Staff-ul va răspunde în curând.</p>';
+
+  const form = document.getElementById('reply-form');
+  if (form) form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const msg = document.getElementById('reply-msg');
+    msg.hidden = true;
+    const message = document.getElementById('reply-message').value.trim();
+    if (!message) return;
+    try {
+      const res = await apiFetch(`/api/tickets/${t.id}/replies`, { method: 'POST', body: JSON.stringify({ message }) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Trimiterea a eșuat.');
+      await load();
+    } catch (err) {
+      msg.textContent = err.message;
+      msg.className = 'formmsg error';
+      msg.hidden = false;
+    }
+  });
+}
+
+async function load() {
+  const id = new URLSearchParams(window.location.search).get('id');
+  if (!id) { document.getElementById('ticket-box').innerHTML = '<p class="muted">Tichet negăsit.</p>'; return; }
+  try {
+    const res = await apiFetch(`/api/tickets/${id}`);
+    if (!res.ok) throw new Error();
+    render(await res.json());
+  } catch {
+    document.getElementById('ticket-box').innerHTML = '<p class="muted">Acest tichet nu există sau nu îți aparține.</p>';
+  }
+}
+
+(async () => {
+  if (!requireAuth()) return;
+  load();
+})();
+wireLogout('#logout-link');
+</script>
+</body></html>

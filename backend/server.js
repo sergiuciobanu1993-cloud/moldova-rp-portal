@@ -1022,23 +1022,40 @@ function diffLines(oldText, newText) {
   const a = (oldText || "").split(/\r?\n/);
   const b = (newText || "").split(/\r?\n/);
   if (a.join("\n") === b.join("\n")) return { added: [], removed: [] };
-  if (a.length * b.length > 250000) return { added: [], removed: [], skipped: true };
-  const n = a.length, m = b.length;
+
+  // Tăiem întâi prefixul și sufixul comune, în O(n) — pentru un regulament
+  // lung unde s-a adăugat/modificat o singură secțiune (cazul obișnuit),
+  // asta reduce diff-ul costisitor (LCS) doar la porțiunea care chiar
+  // diferă, indiferent cât de mare e restul documentului neschimbat. Fără
+  // asta, un regulament de mii de linii lovea mereu plafonul de siguranță
+  // de mai jos și notificarea cădea pe un preview generic de la început,
+  // nu pe textul chiar adăugat.
+  let start = 0;
+  const maxStart = Math.min(a.length, b.length);
+  while (start < maxStart && a[start] === b[start]) start++;
+  let endA = a.length, endB = b.length;
+  while (endA > start && endB > start && a[endA - 1] === b[endB - 1]) { endA--; endB--; }
+
+  const midA = a.slice(start, endA);
+  const midB = b.slice(start, endB);
+  if (midA.length * midB.length > 250000) return { added: [], removed: [], skipped: true };
+
+  const n = midA.length, m = midB.length;
   const dp = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
   for (let i = n - 1; i >= 0; i--) {
     for (let j = m - 1; j >= 0; j--) {
-      dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+      dp[i][j] = midA[i] === midB[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
     }
   }
   const removed = [], added = [];
   let i = 0, j = 0;
   while (i < n && j < m) {
-    if (a[i] === b[j]) { i++; j++; }
-    else if (dp[i + 1][j] >= dp[i][j + 1]) { removed.push(a[i]); i++; }
-    else { added.push(b[j]); j++; }
+    if (midA[i] === midB[j]) { i++; j++; }
+    else if (dp[i + 1][j] >= dp[i][j + 1]) { removed.push(midA[i]); i++; }
+    else { added.push(midB[j]); j++; }
   }
-  while (i < n) { removed.push(a[i]); i++; }
-  while (j < m) { added.push(b[j]); j++; }
+  while (i < n) { removed.push(midA[i]); i++; }
+  while (j < m) { added.push(midB[j]); j++; }
   return { added: added.filter(l => l.trim()), removed: removed.filter(l => l.trim()) };
 }
 

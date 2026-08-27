@@ -129,37 +129,50 @@ if (playerGrid) {
   setInterval(loadPlayers, 30000);
 }
 
-// Live "X online" per facțiune, potrivit după eticheta jobului din FiveM
-// (vezi /api/live/factions). Banii facțiunilor rămân doar pentru admin —
-// aici arătăm doar câți membri sunt online acum. Guarded: doar homepage are
-// #faction-grid.
+// Lista COMPLETĂ, dinamică, a facțiunilor care au chiar acum jucători online
+// (vezi /api/live/factions) — nu mai e o listă fixă de 4 carduri, ca să nu
+// rămână "invizibile" facțiuni reale de pe server (ex: Cruisin, Los Customs)
+// doar pentru că nu erau ghicite dinainte. Banii facțiunilor rămân doar
+// pentru admin — aici arătăm doar câți membri sunt online acum. Guarded:
+// doar homepage are #faction-grid.
 const factionGrid = document.getElementById('faction-grid');
 if (factionGrid) {
-  const normalize = s => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+  const initials = name => (name || '??').trim().slice(0, 2).toUpperCase();
+  // Etichetele de job vin din baza de date a serverului de joc (editabile de
+  // oricine administrează joburile ESX) — escapăm la fel ca numele jucătorilor,
+  // niciodată nu băgăm text netratat în innerHTML.
+  const escapeHtml = s => (s ?? '').toString()
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   const loadFactions = async () => {
+    const sub = document.getElementById('faction-grid-sub');
     try {
       const res = await fetch('/api/live/factions');
       if (!res.ok) throw new Error();
       const d = await res.json();
-      if (!d.online || !Array.isArray(d.factions)) return;
-      // Doar joburi cu etichetă reală pot fi potrivite — un job fără etichetă
-      // (ex: "unemployed"/fără facțiune, label: "") altfel s-ar potrivi cu
-      // ORICE card prin includes(""), arătând un număr greșit de jucători
-      // online pentru facțiuni care nu au deloc corespondent live.
-      const withLabel = d.factions.filter(f => normalize(f.label));
-      factionGrid.querySelectorAll('.faction').forEach(card => {
-        const name = normalize(card.querySelector('strong')?.textContent);
-        if (!name) return;
-        const match = withLabel.find(f => normalize(f.label) === name)
-          || withLabel.find(f => {
-            const label = normalize(f.label);
-            return label.includes(name) || name.includes(label);
-          });
-        const badge = card.querySelector('.faction-live');
-        if (badge) badge.textContent = match ? `· ${match.online} online` : '';
-      });
+      if (!d.online || !Array.isArray(d.factions)) {
+        factionGrid.innerHTML = '<div class="empty-state">Datele despre facțiuni nu sunt disponibile momentan.</div>';
+        if (sub) sub.textContent = 'Datele despre facțiuni nu sunt disponibile momentan.';
+        return;
+      }
+      // Doar facțiuni cu etichetă reală și cu cel puțin un membru online acum
+      // (ex: excludem "unemployed"/fără facțiune, care are eticheta goală).
+      const active = d.factions
+        .filter(f => f.label && f.online > 0)
+        .sort((a, b) => b.online - a.online);
+      if (!active.length) {
+        factionGrid.innerHTML = '<div class="empty-state">Nicio facțiune nu are membri online momentan.</div>';
+        if (sub) sub.textContent = 'Nicio facțiune nu are membri online momentan.';
+        return;
+      }
+      factionGrid.innerHTML = active.map(f => `
+        <div class="faction">
+          <span>${escapeHtml(initials(f.label))}</span>
+          <div><strong>${escapeHtml(f.label)}</strong><small>${f.online} online</small></div>
+        </div>`).join('');
+      if (sub) sub.textContent = `${active.length} facțiuni cu jucători online acum`;
     } catch {
-      // Lasă badge-urile goale dacă nu avem încă date live.
+      // Lasă lista anterioară dacă nu avem încă date live.
     }
   };
   loadFactions();

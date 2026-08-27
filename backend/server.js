@@ -61,6 +61,44 @@ app.get("/api/health", asyncRoute(async (_req, res) => {
   res.json({ ok: true, service: "moldova-rp-api", database: "online", time: rows[0].time });
 }));
 
+// Live FiveM server status. The game server only serves its info/players
+// endpoints over plain HTTP, so the browser can't call it directly from our
+// HTTPS site (mixed-content is blocked) — this backend fetches it server-side
+// instead and exposes the numbers over our own HTTPS API. Cached briefly so a
+// burst of homepage visits doesn't hammer the game server on every load, and
+// falls back to the last known-good reading (marked stale) if the server is
+// temporarily unreachable, so the homepage doesn't flash to zero.
+const FIVEM_ADDRESS = process.env.FIVEM_SERVER_ADDRESS || "104.167.24.67:30120";
+const FIVEM_MAX_PLAYERS = Number(process.env.FIVEM_MAX_PLAYERS || 2048);
+const FIVEM_CACHE_MS = 20_000;
+let fivemCache = { data: null, fetchedAt: 0 };
+
+async function fetchFivemStatus() {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 4000);
+  try {
+    const res = await fetch(`http://${FIVEM_ADDRESS}/players.json`, { signal: controller.signal });
+    if (!res.ok) throw new Error(`players.json HTTP ${res.status}`);
+    const players = await res.json();
+    return { online: true, players: Array.isArray(players) ? players.length : 0, maxPlayers: FIVEM_MAX_PLAYERS };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+app.get("/api/server-status", asyncRoute(async (_req, res) => {
+  const age = Date.now() - fivemCache.fetchedAt;
+  if (fivemCache.data && age < FIVEM_CACHE_MS) return res.json(fivemCache.data);
+  try {
+    const data = await fetchFivemStatus();
+    fivemCache = { data, fetchedAt: Date.now() };
+    res.json(data);
+  } catch {
+    if (fivemCache.data) return res.json({ ...fivemCache.data, stale: true });
+    res.json({ online: false, players: 0, maxPlayers: FIVEM_MAX_PLAYERS });
+  }
+}));
+
 app.post("/api/auth/register", asyncRoute(async (req, res) => {
   const { username, email, password } = req.body;
   if (!username || !email || !password || password.length < 8)

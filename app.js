@@ -9,14 +9,23 @@ document.querySelectorAll('.nav a').forEach(a => a.addEventListener('click', () 
   menu?.setAttribute('aria-expanded','false');
 }));
 
-// Placeholder live-counter animation until the server API is connected.
-// Guarded because app.js is shared across pages that don't all have #online.
+// Live jucători-online / sloturi, citite din backend-ul nostru (care la rândul
+// lui întreabă serverul de joc FiveM — vezi /api/server-status). Guarded
+// because app.js is shared across pages that don't all have these elements.
 const online = document.getElementById('online');
-if (online) {
-  let value = Number(online.textContent);
-  setInterval(() => {
-    const next = Math.max(90, Math.min(180, value + Math.floor(Math.random()*7)-3));
-    value = next;
-    online.textContent = value;
-  }, 7000);
+const slots = document.getElementById('slots');
+if (online || slots) {
+  const loadServerStatus = async () => {
+    try {
+      const res = await fetch('/api/server-status');
+      if (!res.ok) throw new Error();
+      const d = await res.json();
+      if (online) online.textContent = d.online ? d.players : '—';
+      if (slots) slots.textContent = d.maxPlayers || '—';
+    } catch {
+      // Leave the last known value in place rather than showing an error.
+    }
+  };
+  loadServerStatus();
+  setInterval(loadServerStatus, 30000);
 }

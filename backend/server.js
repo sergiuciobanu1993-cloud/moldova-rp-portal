@@ -70,6 +70,13 @@ app.get("/api/health", asyncRoute(async (_req, res) => {
 // temporarily unreachable, so the homepage doesn't flash to zero.
 const FIVEM_ADDRESS = process.env.FIVEM_SERVER_ADDRESS || "104.167.24.67:30120";
 const FIVEM_MAX_PLAYERS = Number(process.env.FIVEM_MAX_PLAYERS || 2048);
+// FXServer redacts players.json by default (every entry comes back as
+// name:"Player", id:0) unless the request is authenticated with the token
+// set via the server's own `sv_playersToken` convar — a Cfx.re privacy
+// change so random visitors can't scrape the full player list. Set the same
+// secret in server.cfg (`set sv_playersToken "..."`) and here
+// (FIVEM_PLAYERS_TOKEN) to get real names/ids back.
+const FIVEM_PLAYERS_TOKEN = process.env.FIVEM_PLAYERS_TOKEN || "";
 const FIVEM_CACHE_MS = 20_000;
 let fivemCache = { data: null, fetchedAt: 0 };
 
@@ -77,18 +84,25 @@ async function fetchFivemStatus() {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 4000);
   try {
-    const res = await fetch(`http://${FIVEM_ADDRESS}/players.json`, { signal: controller.signal });
+    const url = `http://${FIVEM_ADDRESS}/players.json`;
+    const res = await fetch(FIVEM_PLAYERS_TOKEN ? `${url}?token=${encodeURIComponent(FIVEM_PLAYERS_TOKEN)}` : url, {
+      headers: FIVEM_PLAYERS_TOKEN ? { "X-Players-Token": FIVEM_PLAYERS_TOKEN } : undefined,
+      signal: controller.signal,
+    });
     if (!res.ok) throw new Error(`players.json HTTP ${res.status}`);
     const players = await res.json();
-    const list = Array.isArray(players)
+    const rawList = Array.isArray(players)
       // Only the server-slot id and display name are exposed publicly — never
       // identifiers/endpoint/ping, which could be used to target or dox a
       // specific player.
-      ? players
-          .map(p => ({ id: p.id, name: (p.name || "Necunoscut").toString().slice(0, 64) }))
-          .sort((a, b) => a.name.localeCompare(b.name, "ro"))
+      ? players.map(p => ({ id: p.id, name: (p.name || "Necunoscut").toString().slice(0, 64) }))
       : [];
-    return { online: true, players: list.length, maxPlayers: FIVEM_MAX_PLAYERS, list };
+    // Without a valid sv_playersToken, FXServer sends every entry back as
+    // {id:0,name:"Player"} — detect that and don't pass off fake-looking
+    // duplicate names as real data.
+    const namesRedacted = rawList.length > 0 && rawList.every(p => p.id === 0 && p.name === "Player");
+    const list = namesRedacted ? [] : rawList.sort((a, b) => a.name.localeCompare(b.name, "ro"));
+    return { online: true, players: rawList.length, maxPlayers: FIVEM_MAX_PLAYERS, list, namesRedacted };
   } finally {
     clearTimeout(timeout);
   }
@@ -111,15 +125,16 @@ app.get("/api/server-status", asyncRoute(async (_req, res) => {
 // read) — a separate route just for pages that only care about the roster,
 // like the homepage's "Jucători" section.
 app.get("/api/live/players", asyncRoute(async (_req, res) => {
+  const shape = d => ({ online: d.online, players: d.players ?? 0, list: d.list || [], namesRedacted: !!d.namesRedacted });
   const age = Date.now() - fivemCache.fetchedAt;
-  if (fivemCache.data && age < FIVEM_CACHE_MS) return res.json({ online: fivemCache.data.online, list: fivemCache.data.list || [] });
+  if (fivemCache.data && age < FIVEM_CACHE_MS) return res.json(shape(fivemCache.data));
   try {
     const data = await fetchFivemStatus();
     fivemCache = { data, fetchedAt: Date.now() };
-    res.json({ online: data.online, list: data.list });
+    res.json(shape(data));
   } catch {
-    if (fivemCache.data) return res.json({ online: fivemCache.data.online, list: fivemCache.data.list || [], stale: true });
-    res.json({ online: false, list: [] });
+    if (fivemCache.data) return res.json({ ...shape(fivemCache.data), stale: true });
+    res.json({ online: false, players: 0, list: [], namesRedacted: false });
   }
 }));
 

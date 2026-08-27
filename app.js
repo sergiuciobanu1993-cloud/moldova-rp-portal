@@ -97,6 +97,14 @@ if (playerGrid) {
         if (sub) sub.textContent = 'Serverul este offline momentan.';
         return;
       }
+      if (d.namesRedacted) {
+        // Server-side privacy setting (sv_playersToken not configured yet) —
+        // FXServer only gives us the count, not real names. Say so instead
+        // of rendering a wall of duplicate "Player" cards.
+        playerGrid.innerHTML = `<div class="empty-state">${d.players} jucători online acum — lista cu nume va fi disponibilă în curând.</div>`;
+        if (sub) sub.textContent = `${d.players} jucători online acum`;
+        return;
+      }
       if (!d.list || !d.list.length) {
         playerGrid.innerHTML = '<div class="empty-state">Niciun jucător conectat momentan.</div>';
         if (sub) sub.textContent = 'Niciun jucător conectat momentan.';

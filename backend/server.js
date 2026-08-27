@@ -88,7 +88,7 @@ app.post("/api/auth/login", asyncRoute(async (req, res) => {
      WHERE u.username=$1 OR u.email=$1 LIMIT 1`, [login?.trim()]
   );
   const user = rows[0];
-  if (!user || !user.is_active || !(await bcrypt.compare(password || "", user.password_hash)))
+  if (!user || !user.is_active || !user.password_hash || !(await bcrypt.compare(password || "", user.password_hash)))
     return res.status(401).json({ error: "Date de autentificare incorecte." });
 
   const token = signUser(user);
@@ -99,9 +99,108 @@ app.post("/api/auth/login", asyncRoute(async (req, res) => {
   });
 }));
 
+// ---------------------------------------------------------------------------
+// Discord OAuth login (v0.5)
+// ---------------------------------------------------------------------------
+
+function discordConfigured() {
+  return Boolean(process.env.DISCORD_CLIENT_ID && process.env.DISCORD_CLIENT_SECRET && process.env.DISCORD_REDIRECT_URI);
+}
+
+app.get("/api/auth/discord", (req, res) => {
+  if (!discordConfigured()) return res.status(503).send("Conectarea cu Discord nu este configurată.");
+  const params = new URLSearchParams({
+    client_id: process.env.DISCORD_CLIENT_ID,
+    redirect_uri: process.env.DISCORD_REDIRECT_URI,
+    response_type: "code",
+    scope: "identify"
+  });
+  res.redirect(`https://discord.com/api/oauth2/authorize?${params.toString()}`);
+});
+
+app.get("/api/auth/discord/callback", asyncRoute(async (req, res) => {
+  if (!discordConfigured()) return res.status(503).send("Conectarea cu Discord nu este configurată.");
+  const { code, error: discordError } = req.query;
+  if (discordError || !code) return res.redirect("/auth-callback.html?error=discord_denied");
+
+  try {
+    const tokenRes = await fetch("https://discord.com/api/oauth2/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: process.env.DISCORD_CLIENT_ID,
+        client_secret: process.env.DISCORD_CLIENT_SECRET,
+        grant_type: "authorization_code",
+        code,
+        redirect_uri: process.env.DISCORD_REDIRECT_URI
+      })
+    });
+    if (!tokenRes.ok) throw new Error(`Discord token exchange failed: ${tokenRes.status}`);
+    const { access_token } = await tokenRes.json();
+
+    const profileRes = await fetch("https://discord.com/api/users/@me", {
+      headers: { Authorization: `Bearer ${access_token}` }
+    });
+    if (!profileRes.ok) throw new Error(`Discord profile fetch failed: ${profileRes.status}`);
+    const profile = await profileRes.json();
+
+    const roleRes = await pool.query("SELECT id FROM roles WHERE name='player'");
+    const baseUsername = (profile.username || `player_${profile.id}`).replace(/[^a-zA-Z0-9_]/g, "").slice(0, 28) || "player";
+
+    let user;
+    const existing = await pool.query("SELECT * FROM users WHERE discord_id=$1", [profile.id]);
+    if (existing.rows[0]) {
+      const updated = await pool.query(
+        `UPDATE users SET discord_username=$1, discord_avatar=$2, updated_at=NOW()
+         WHERE id=$3 RETURNING *`,
+        [profile.username, profile.avatar, existing.rows[0].id]
+      );
+      user = updated.rows[0];
+    } else {
+      let attemptUsername = baseUsername;
+      for (let attempt = 0; attempt < 5; attempt++) {
+        try {
+          const inserted = await pool.query(
+            `INSERT INTO users(username, role_id, discord_id, discord_username, discord_avatar)
+             VALUES($1,$2,$3,$4,$5) RETURNING *`,
+            [attemptUsername, roleRes.rows[0].id, profile.id, profile.username, profile.avatar]
+          );
+          user = inserted.rows[0];
+          break;
+        } catch (e) {
+          if (e.code === "23505" && attempt < 4) {
+            attemptUsername = `${baseUsername}_${profile.id.slice(-4)}`;
+            continue;
+          }
+          throw e;
+        }
+      }
+      await pool.query(
+        `INSERT INTO players(user_id, display_name) VALUES($1,$2)
+         ON CONFLICT (user_id) DO NOTHING`,
+        [user.id, profile.username || attemptUsername]
+      );
+      await logAction(user.id, "auth.discord_signup", "user", user.id, { discordId: profile.id }, req.ip);
+    }
+
+    const roleRow = await pool.query(
+      "SELECT r.name AS role_name FROM users u JOIN roles r ON r.id = u.role_id WHERE u.id = $1",
+      [user.id]
+    );
+    const token = signUser({ id: user.id, username: user.username, role_name: roleRow.rows[0].role_name });
+    await logAction(user.id, "auth.discord_login", "user", user.id, null, req.ip);
+
+    res.redirect(`/auth-callback.html#token=${encodeURIComponent(token)}`);
+  } catch (e) {
+    console.error("Discord OAuth error:", e);
+    res.redirect("/auth-callback.html?error=discord_failed");
+  }
+}));
+
 app.get("/api/me", auth, asyncRoute(async (req, res) => {
   const { rows } = await pool.query(
     `SELECT u.id,u.username,u.email,r.name role,
+            u.discord_id, u.discord_username, u.discord_avatar,
             p.id player_id,p.game_id,p.display_name,p.playtime_minutes,p.status,
             f.id faction_id, f.name faction_name, fr.id rank_id, fr.name rank_name
      FROM users u JOIN roles r ON r.id=u.role_id

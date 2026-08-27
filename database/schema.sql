@@ -9,13 +9,25 @@ CREATE TABLE IF NOT EXISTS roles (
 CREATE TABLE IF NOT EXISTS users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   username VARCHAR(32) UNIQUE NOT NULL,
-  email VARCHAR(160) UNIQUE NOT NULL,
-  password_hash TEXT NOT NULL,
+  email VARCHAR(160) UNIQUE,
+  password_hash TEXT,
   role_id UUID REFERENCES roles(id),
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  discord_id VARCHAR(32) UNIQUE,
+  discord_username VARCHAR(100),
+  discord_avatar TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Migration guards for databases created before Discord login existed:
+-- safe to re-run (IF NOT EXISTS / dropping a constraint that's already gone
+-- is a no-op in Postgres), so this runs on every deploy via scripts/init-db.js.
+ALTER TABLE users ALTER COLUMN email DROP NOT NULL;
+ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS discord_id VARCHAR(32) UNIQUE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS discord_username VARCHAR(100);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS discord_avatar TEXT;
 
 CREATE TABLE IF NOT EXISTS players (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

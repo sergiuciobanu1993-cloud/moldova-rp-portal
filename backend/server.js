@@ -487,6 +487,141 @@ app.delete("/api/admin/factions/ranks/:rankId", auth, requireRole(...ADMIN_ROLES
   res.status(204).end();
 }));
 
+// ---------------------------------------------------------------------------
+// Regulations content management (v0.5)
+// ---------------------------------------------------------------------------
+
+function slugify(text) {
+  return text
+    .toString()
+    .normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+app.get("/api/admin/regulations", auth, requireRole(...MOD_ROLES), asyncRoute(async (_req, res) => {
+  const { rows } = await pool.query(
+    "SELECT * FROM regulations ORDER BY category, title"
+  );
+  res.json(rows);
+}));
+
+app.get("/api/admin/regulations/:id", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
+  const { rows } = await pool.query("SELECT * FROM regulations WHERE id=$1", [req.params.id]);
+  if (!rows[0]) return res.status(404).json({ error: "Regulamentul nu există." });
+  res.json(rows[0]);
+}));
+
+app.post("/api/admin/regulations", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+  const { title, category, content, version, is_published, slug } = req.body;
+  if (!title || !category || !content)
+    return res.status(400).json({ error: "Titlu, categorie și conținut sunt obligatorii." });
+  const finalSlug = (slug && slug.trim()) || slugify(title);
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO regulations(title, slug, category, content, version, is_published)
+       VALUES($1,$2,$3,$4,$5,$6) RETURNING *`,
+      [title.trim(), finalSlug, category.trim(), content, version || "1.0", is_published ?? true]
+    );
+    await logAction(req.user.sub, "regulation.create", "regulation", rows[0].id, { title, category }, req.ip);
+    res.status(201).json(rows[0]);
+  } catch (e) {
+    if (e.code === "23505") return res.status(409).json({ error: "Există deja un regulament cu acest slug." });
+    throw e;
+  }
+}));
+
+app.put("/api/admin/regulations/:id", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+  const { id } = req.params;
+  const { title, category, content, version, is_published, slug } = req.body;
+  try {
+    const { rows } = await pool.query(
+      `UPDATE regulations SET
+         title = COALESCE($1, title),
+         slug = COALESCE($2, slug),
+         category = COALESCE($3, category),
+         content = COALESCE($4, content),
+         version = COALESCE($5, version),
+         is_published = COALESCE($6, is_published),
+         updated_at = NOW()
+       WHERE id = $7 RETURNING *`,
+      [title || null, slug || null, category || null, content || null, version || null, is_published ?? null, id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: "Regulamentul nu există." });
+    await logAction(req.user.sub, "regulation.update", "regulation", id, req.body, req.ip);
+    res.json(rows[0]);
+  } catch (e) {
+    if (e.code === "23505") return res.status(409).json({ error: "Există deja un regulament cu acest slug." });
+    throw e;
+  }
+}));
+
+app.delete("/api/admin/regulations/:id", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+  const { id } = req.params;
+  const { rowCount } = await pool.query("DELETE FROM regulations WHERE id = $1", [id]);
+  if (!rowCount) return res.status(404).json({ error: "Regulamentul nu există." });
+  await logAction(req.user.sub, "regulation.delete", "regulation", id, null, req.ip);
+  res.status(204).end();
+}));
+
+// ---------------------------------------------------------------------------
+// Announcements content management (v0.5)
+// ---------------------------------------------------------------------------
+
+app.get("/api/admin/announcements", auth, requireRole(...MOD_ROLES), asyncRoute(async (_req, res) => {
+  const { rows } = await pool.query(
+    `SELECT a.*, u.username author FROM announcements a
+     LEFT JOIN users u ON u.id = a.author_id
+     ORDER BY a.published_at DESC`
+  );
+  res.json(rows);
+}));
+
+app.get("/api/admin/announcements/:id", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
+  const { rows } = await pool.query("SELECT * FROM announcements WHERE id=$1", [req.params.id]);
+  if (!rows[0]) return res.status(404).json({ error: "Anunțul nu există." });
+  res.json(rows[0]);
+}));
+
+app.post("/api/admin/announcements", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+  const { title, content, is_published } = req.body;
+  if (!title || !content)
+    return res.status(400).json({ error: "Titlu și conținut sunt obligatorii." });
+  const { rows } = await pool.query(
+    `INSERT INTO announcements(title, content, author_id, is_published)
+     VALUES($1,$2,$3,$4) RETURNING *`,
+    [title.trim(), content, req.user.sub, is_published ?? true]
+  );
+  await logAction(req.user.sub, "announcement.create", "announcement", rows[0].id, { title }, req.ip);
+  res.status(201).json(rows[0]);
+}));
+
+app.put("/api/admin/announcements/:id", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+  const { id } = req.params;
+  const { title, content, is_published } = req.body;
+  const { rows } = await pool.query(
+    `UPDATE announcements SET
+       title = COALESCE($1, title),
+       content = COALESCE($2, content),
+       is_published = COALESCE($3, is_published)
+     WHERE id = $4 RETURNING *`,
+    [title || null, content || null, is_published ?? null, id]
+  );
+  if (!rows[0]) return res.status(404).json({ error: "Anunțul nu există." });
+  await logAction(req.user.sub, "announcement.update", "announcement", id, req.body, req.ip);
+  res.json(rows[0]);
+}));
+
+app.delete("/api/admin/announcements/:id", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+  const { id } = req.params;
+  const { rowCount } = await pool.query("DELETE FROM announcements WHERE id = $1", [id]);
+  if (!rowCount) return res.status(404).json({ error: "Anunțul nu există." });
+  await logAction(req.user.sub, "announcement.delete", "announcement", id, null, req.ip);
+  res.status(204).end();
+}));
+
 app.use((err, _req, res, _next) => {
   console.error(err);
   res.status(500).json({ error: "Eroare internă a serverului." });

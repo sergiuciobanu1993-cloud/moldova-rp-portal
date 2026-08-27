@@ -41,6 +41,22 @@ async function run() {
     );
     console.log(rowCount ? "Demo password fixed." : `No user named ${DEMO_USERNAME} found — skipped.`);
 
+    // One-off admin bootstrap: set BOOTSTRAP_ADMIN on Railway to a username
+    // (matches either the login username or the Discord display name) to
+    // promote that account to 'owner' on next boot. Safe to leave set —
+    // re-promoting an existing owner every deploy is a harmless no-op.
+    const bootstrapAdmin = process.env.BOOTSTRAP_ADMIN;
+    if (bootstrapAdmin) {
+      const { rowCount: promoted } = await client.query(
+        `UPDATE users SET role_id = (SELECT id FROM roles WHERE name='owner')
+         WHERE username = $1 OR discord_username = $1`,
+        [bootstrapAdmin]
+      );
+      console.log(promoted
+        ? `Promoted "${bootstrapAdmin}" to owner.`
+        : `BOOTSTRAP_ADMIN is set to "${bootstrapAdmin}" but no matching user was found yet.`);
+    }
+
     console.log("Database init complete.");
   } finally {
     await client.end();

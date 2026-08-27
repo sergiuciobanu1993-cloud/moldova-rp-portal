@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Anunțuri — Admin Moldova RP</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="admin.css"></head>
+<body>
+<aside class="side"><a class="brand" href="index.html"><img src="assets/logo.png" alt=""><b>MOLDOVA<span>RP</span></b></a><p>ADMINISTRAȚIE</p><a href="admin.html">▦ Dashboard</a><a>♙ Jucători</a><a>◆ Facțiuni</a><a>⚠ Sancțiuni</a><a>▤ Reclamații</a><a>⚖ CK</a><a href="admin-regulamente.html">📚 Regulamente</a><a class="sel" href="admin-anunturi.html">◉ Anunțuri</a><a>⌁ Audit Logs</a><a class="back" href="index.html">← Site public</a></aside>
+<main>
+<header><div><small>PANEL ADMINISTRATIV</small><h1>Anunțuri</h1></div><div class="admin"><span id="admin-name">…</span> <i></i></div></header>
+
+<section class="tablebox">
+  <div class="title"><h2>Toate anunțurile</h2><button id="new-btn">+ Anunț nou</button></div>
+  <table><thead><tr><th>TITLU</th><th>AUTOR</th><th>STATUS</th><th>PUBLICAT</th><th></th></tr></thead>
+  <tbody id="list-body"><tr><td colspan="5">Se încarcă…</td></tr></tbody></table>
+</section>
+
+<section class="formbox" id="form-box" hidden>
+  <h2 id="form-title">Anunț nou</h2>
+  <form id="ann-form">
+    <input type="hidden" id="f-id">
+    <div class="formgrid">
+      <div class="field wide"><label>Titlu</label><input id="f-title" required></div>
+      <div class="field wide"><label>Conținut</label><textarea id="f-content" required placeholder="Textul anunțului..."></textarea></div>
+      <div class="field checkbox wide"><input type="checkbox" id="f-published" checked><label for="f-published">Publicat (vizibil pe site)</label></div>
+    </div>
+    <p class="formmsg" id="form-msg" hidden></p>
+    <div class="formactions">
+      <button type="submit" class="btn-primary" id="save-btn">Salvează</button>
+      <button type="button" class="btn-ghost" id="cancel-btn">Anulează</button>
+    </div>
+  </form>
+</section>
+
+</main>
+<script src="auth-client.js"></script>
+<script>
+let editingId = null;
+
+function showForm(ann) {
+  document.getElementById('form-box').hidden = false;
+  document.getElementById('form-msg').hidden = true;
+  editingId = ann ? ann.id : null;
+  document.getElementById('form-title').textContent = ann ? 'Editează anunț' : 'Anunț nou';
+  document.getElementById('f-id').value = ann ? ann.id : '';
+  document.getElementById('f-title').value = ann ? ann.title : '';
+  document.getElementById('f-content').value = ann ? ann.content : '';
+  document.getElementById('f-published').checked = ann ? ann.is_published : true;
+  document.getElementById('form-box').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function hideForm() {
+  document.getElementById('form-box').hidden = true;
+  document.getElementById('ann-form').reset();
+  editingId = null;
+}
+
+async function loadList() {
+  const tbody = document.getElementById('list-body');
+  try {
+    const res = await apiFetch('/api/admin/announcements');
+    if (!res.ok) throw new Error();
+    const items = await res.json();
+    tbody.innerHTML = items.length ? items.map(a => `
+      <tr>
+        <td>${a.title}</td>
+        <td>${a.author || 'Sistem'}</td>
+        <td><span class="pill ${a.is_published ? 'on' : 'off'}">${a.is_published ? 'PUBLICAT' : 'CIORNĂ'}</span></td>
+        <td>${new Date(a.published_at).toLocaleDateString('ro-RO')}</td>
+        <td class="rowactions">
+          <button data-edit="${a.id}">Editează</button>
+          <button data-del="${a.id}" class="danger">Șterge</button>
+        </td>
+      </tr>`).join('') : '<tr><td colspan="5">Niciun anunț încă.</td></tr>';
+
+    tbody.querySelectorAll('[data-edit]').forEach(btn => btn.addEventListener('click', async () => {
+      const res = await apiFetch(`/api/admin/announcements/${btn.dataset.edit}`);
+      if (res.ok) showForm(await res.json());
+    }));
+    tbody.querySelectorAll('[data-del]').forEach(btn => btn.addEventListener('click', async () => {
+      if (!confirm('Ștergi definitiv acest anunț?')) return;
+      const res = await apiFetch(`/api/admin/announcements/${btn.dataset.del}`, { method: 'DELETE' });
+      if (res.ok || res.status === 204) loadList();
+    }));
+  } catch {
+    tbody.innerHTML = '<tr><td colspan="5">Nu am putut încărca anunțurile.</td></tr>';
+  }
+}
+
+document.getElementById('new-btn').addEventListener('click', () => showForm(null));
+document.getElementById('cancel-btn').addEventListener('click', hideForm);
+
+document.getElementById('ann-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const msg = document.getElementById('form-msg');
+  msg.hidden = true;
+  const body = {
+    title: document.getElementById('f-title').value.trim(),
+    content: document.getElementById('f-content').value,
+    is_published: document.getElementById('f-published').checked
+  };
+  try {
+    const res = await apiFetch(
+      editingId ? `/api/admin/announcements/${editingId}` : '/api/admin/announcements',
+      { method: editingId ? 'PUT' : 'POST', body: JSON.stringify(body) }
+    );
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Salvarea a eșuat.');
+    hideForm();
+    loadList();
+  } catch (err) {
+    msg.textContent = err.message;
+    msg.className = 'formmsg error';
+    msg.hidden = false;
+  }
+});
+
+(async () => {
+  const me = await requireRole('admin', 'owner');
+  if (!me) return;
+  document.getElementById('admin-name').textContent = me.username;
+  loadList();
+})();
+</script>
+</body></html>

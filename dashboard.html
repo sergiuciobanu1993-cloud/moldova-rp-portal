@@ -20,7 +20,12 @@
   if (!requireAuth()) return;
   try {
     const res = await apiFetch('/api/me');
-    if (!res.ok) throw new Error();
+    if (!res.ok) {
+      // Non-401 failure (500/502/503, cold start, etc.) — most likely
+      // transient. Keep the session, just skip rendering this pass.
+      console.error('Nu am putut încărca profilul (status ' + res.status + ').');
+      return;
+    }
     const me = await res.json();
 
     const name = me.display_name || me.username;
@@ -39,9 +44,11 @@
     if (['moderator', 'admin', 'owner'].includes(me.role)) {
       document.getElementById('admin-link').hidden = false;
     }
-  } catch {
-    clearAuth();
-    window.location.href = 'login.html';
+  } catch (err) {
+    // apiFetch already clears the session and redirects on a genuine 401.
+    // Anything else that lands here (network hiccup) should NOT log the
+    // user out — just leave the page as-is and log it for debugging.
+    console.error('Eroare la încărcarea profilului:', err);
   }
 })();
 wireLogout('#logout-link');

@@ -49,10 +49,20 @@ function requireAuth() {
 // redirecting non-members back to the dashboard instead of the admin page.
 async function requireRole(...roles) {
   if (!requireAuth()) return null;
-  const res = await apiFetch("/api/me");
+  let res;
+  try {
+    res = await apiFetch("/api/me");
+  } catch {
+    // A genuine 401 is already handled inside apiFetch (it clears the
+    // session and redirects to login before throwing). Anything else that
+    // lands here is a network hiccup, not an invalid session — don't wipe
+    // the user's login over a transient failure.
+    return null;
+  }
   if (!res.ok) {
-    clearAuth();
-    window.location.href = "login.html";
+    // Non-401 failure (500/502/503, cold start, etc.). Most likely
+    // transient — leave the session intact and just report "no access"
+    // for this render instead of forcing a logout.
     return null;
   }
   const me = await res.json();

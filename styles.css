@@ -5,13 +5,12 @@
 }
 /* Site-wide animated logo watermark — a looping GIF with a slow orange glow
    pulse behind the logo. Frames are pre-blended against the exact --bg color
-   (#070809) so the GIF has no transparency and its edges are seamless.
-   Anchored toward the right edge (not centered) so it stays visible in the
-   page margin instead of disappearing behind centered content boxes like
-   .prose-box, .stats, .reg-list etc. */
-*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;color:var(--text);font:15px/1.6 Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif;background-color:var(--bg);background-image:url("assets/logo-watermark.gif");background-repeat:no-repeat;background-position:calc(100% - 40px) 44vh;background-size:min(56vw,620px);background-attachment:fixed}
-@media(max-width:900px){body{background-position:calc(100% + 60px) 40vh}}
-@media(max-width:700px){body{background-attachment:scroll;background-size:min(70vw,340px);background-position:calc(100% + 80px) 260px}}
+   (#070809) so the GIF has no transparency and tiles seamlessly. Repeated
+   across the whole page (not a single instance) so pages with wide content
+   grids — like the regulations list — don't show large bare-black gaps. */
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;color:var(--text);font:15px/1.6 Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif;background-color:var(--bg);background-image:url("assets/logo-watermark.gif");background-repeat:repeat;background-position:0 0;background-size:400px;background-attachment:fixed}
+@media(max-width:900px){body{background-size:320px}}
+@media(max-width:700px){body{background-attachment:scroll;background-size:260px}}
 a{color:inherit;text-decoration:none}.site-header{height:78px;position:fixed;z-index:20;top:0;left:0;right:0;display:flex;align-items:center;justify-content:space-between;padding:0 5vw;background:rgba(7,8,9,.78);backdrop-filter:blur(18px);border-bottom:1px solid var(--line)}
 .brand{display:flex;align-items:center;gap:11px;font-weight:900;letter-spacing:.04em;font-size:19px}.brand img{width:39px;height:39px;object-fit:contain}.accent{color:var(--orange)}
 .nav{display:flex;align-items:center;gap:7px}.nav a{padding:10px 13px;color:#bfc3c8;font-weight:700;font-size:13px}.nav a:hover,.nav a.active{color:#fff}.nav-login{border:1px solid rgba(255,138,31,.5);border-radius:9px;color:#fff!important;margin-left:8px}.menu-toggle{display:none;background:none;border:0;color:#fff;font-size:25px}

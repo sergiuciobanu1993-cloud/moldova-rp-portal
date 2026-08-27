@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sancțiuni — Admin Moldova RP</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="admin.css"></head>
+<body>
+<aside class="side"><a class="brand" href="index.html"><img src="assets/logo.png" alt=""><b>MOLDOVA<span>RP</span></b></a><p>ADMINISTRAȚIE</p><a href="admin.html">▦ Dashboard</a><a href="admin-utilizatori.html">👤 Utilizatori</a><a href="admin-jucatori.html">♙ Jucători</a><a href="admin-financiar.html">◆ Facțiuni</a><a class="sel" href="admin-sanctiuni.html">⚠ Sancțiuni</a><a>▤ Reclamații</a><a>⚖ CK</a><a href="admin-regulamente.html">📚 Regulamente</a><a href="admin-anunturi.html">◉ Anunțuri</a><a href="admin-tichete.html">🎫 Tichete</a><a>⌁ Audit Logs</a><a class="back" href="index.html">← Site public</a></aside>
+<main>
+<header><div><small>PANEL ADMINISTRATIV</small><h1>Sancțiuni</h1></div><div class="admin"><span id="admin-name">…</span> <i></i></div></header>
+
+<section class="tablebox">
+  <div class="title">
+    <h2>Sancțiuni</h2>
+    <div style="display:flex;gap:10px;align-items:center">
+      <select id="status-filter" class="filter-select">
+        <option value="active">Doar active acum</option>
+        <option value="all">Tot istoricul</option>
+      </select>
+      <button id="new-btn">+ Sancțiune nouă</button>
+    </div>
+  </div>
+  <table><thead><tr><th>JUCĂTOR</th><th>TIP</th><th>MOTIV</th><th>DURATĂ</th><th>EXPIRĂ</th><th>EMIS DE</th><th>DATA</th></tr></thead>
+  <tbody id="list-body"><tr><td colspan="7">Se încarcă…</td></tr></tbody></table>
+</section>
+
+<section class="formbox" id="form-box" hidden>
+  <h2>Sancțiune nouă</h2>
+  <form id="punish-form">
+    <div class="formgrid">
+      <div class="field wide">
+        <label>Jucător</label>
+        <input id="f-player-search" placeholder="Caută după nume de utilizator sau nume în joc..." autocomplete="off">
+        <div id="player-results" style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px"></div>
+        <p class="muted" id="f-player-selected" style="margin:8px 0 0"></p>
+        <input type="hidden" id="f-player-id">
+      </div>
+      <div class="field"><label>Tip</label>
+        <select id="f-type">
+          <option value="warn">Avertisment</option>
+          <option value="mute">Mute</option>
+          <option value="kick">Kick</option>
+          <option value="ban">Ban</option>
+        </select>
+      </div>
+      <div class="field"><label>Durată (minute — gol = permanent)</label><input id="f-duration" type="number" min="1" placeholder="ex: 1440 pentru 24h"></div>
+      <div class="field wide"><label>Motiv</label><textarea id="f-reason" required placeholder="Motivul sancțiunii..."></textarea></div>
+    </div>
+    <p class="formmsg" id="form-msg" hidden></p>
+    <div class="formactions">
+      <button type="submit" class="btn-primary" id="save-btn">Emite sancțiunea</button>
+      <button type="button" class="btn-ghost" id="cancel-btn">Anulează</button>
+    </div>
+  </form>
+</section>
+
+</main>
+<script src="auth-client.js"></script>
+<script>
+const TYPE_LABEL = { ban: 'Ban', mute: 'Mute', kick: 'Kick', warn: 'Avertisment' };
+const TYPE_PILL = { ban: 'warn', mute: 'info', kick: 'off', warn: 'off' };
+
+function fmtDate(d) { return new Date(d).toLocaleString('ro-RO'); }
+const escapeHtml = s => (s ?? '').toString()
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+function fmtDuration(mins) {
+  if (!mins) return 'Permanent';
+  if (mins < 60) return `${mins} min`;
+  if (mins < 1440) return `${Math.round(mins / 60)} ore`;
+  return `${Math.round(mins / 1440)} zile`;
+}
+
+let selectedPlayer = null;
+let searchTimer = null;
+
+async function loadList() {
+  const tbody = document.getElementById('list-body');
+  const status = document.getElementById('status-filter').value;
+  try {
+    const res = await apiFetch(`/api/admin/punishments?status=${status}`);
+    if (!res.ok) throw new Error();
+    const items = await res.json();
+    tbody.innerHTML = items.length ? items.map(p => `
+      <tr>
+        <td><strong>${escapeHtml(p.display_name)}</strong>${p.game_id ? `<br><small style="color:var(--muted)">ID joc #${escapeHtml(p.game_id)}</small>` : ''}</td>
+        <td><span class="pill ${TYPE_PILL[p.type] || 'off'}">${escapeHtml((TYPE_LABEL[p.type] || p.type).toUpperCase())}</span></td>
+        <td>${escapeHtml(p.reason)}</td>
+        <td>${fmtDuration(p.duration_minutes)}</td>
+        <td>${p.expires_at ? fmtDate(p.expires_at) : '<span class="muted">—</span>'}</td>
+        <td>${p.issued_by ? escapeHtml(p.issued_by) : '<span class="muted">necunoscut</span>'}</td>
+        <td>${fmtDate(p.created_at)}</td>
+      </tr>`).join('') : '<tr><td colspan="7">Nicio sancțiune înregistrată.</td></tr>';
+  } catch {
+    tbody.innerHTML = '<tr><td colspan="7">Nu am putut încărca sancțiunile.</td></tr>';
+  }
+}
+
+function selectPlayer(p) {
+  selectedPlayer = p;
+  document.getElementById('f-player-id').value = p.id;
+  document.getElementById('f-player-selected').textContent = `Selectat: ${p.display_name} (${p.username})`;
+  document.getElementById('player-results').innerHTML = '';
+  document.getElementById('f-player-search').value = '';
+}
+
+document.getElementById('f-player-search').addEventListener('input', (e) => {
+  clearTimeout(searchTimer);
+  const q = e.target.value.trim();
+  const results = document.getElementById('player-results');
+  if (!q) { results.innerHTML = ''; return; }
+  searchTimer = setTimeout(async () => {
+    try {
+      const res = await apiFetch(`/api/admin/players?q=${encodeURIComponent(q)}&limit=8`);
+      if (!res.ok) throw new Error();
+      const players = await res.json();
+      results.innerHTML = players.length ? players.map(p => `
+        <button type="button" class="filter-select" data-pick="${escapeHtml(p.id)}" style="cursor:pointer">${escapeHtml(p.display_name)} (${escapeHtml(p.username)})</button>
+      `).join('') : '<span class="muted" style="font-size:12px">Niciun jucător găsit.</span>';
+      results.querySelectorAll('[data-pick]').forEach((btn, i) => {
+        btn.addEventListener('click', () => selectPlayer(players[i]));
+      });
+    } catch { results.innerHTML = '<span class="muted" style="font-size:12px">Eroare la căutare.</span>'; }
+  }, 300);
+});
+
+function showForm() {
+  document.getElementById('form-box').hidden = false;
+  document.getElementById('form-msg').hidden = true;
+  document.getElementById('form-box').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+function hideForm() {
+  document.getElementById('form-box').hidden = true;
+  document.getElementById('punish-form').reset();
+  document.getElementById('f-player-id').value = '';
+  document.getElementById('f-player-selected').textContent = '';
+  document.getElementById('player-results').innerHTML = '';
+  selectedPlayer = null;
+}
+
+document.getElementById('new-btn').addEventListener('click', showForm);
+document.getElementById('cancel-btn').addEventListener('click', hideForm);
+
+document.getElementById('punish-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const msg = document.getElementById('form-msg');
+  msg.hidden = true;
+  const player_id = document.getElementById('f-player-id').value;
+  if (!player_id) {
+    msg.textContent = 'Selectează un jucător din listă înainte de a trimite.';
+    msg.className = 'formmsg error';
+    msg.hidden = false;
+    return;
+  }
+  const body = {
+    player_id,
+    type: document.getElementById('f-type').value,
+    reason: document.getElementById('f-reason').value.trim(),
+    duration_minutes: document.getElementById('f-duration').value || null
+  };
+  try {
+    const res = await apiFetch('/api/admin/punishments', { method: 'POST', body: JSON.stringify(body) });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Trimiterea a eșuat.');
+    hideForm();
+    loadList();
+  } catch (err) {
+    msg.textContent = err.message;
+    msg.className = 'formmsg error';
+    msg.hidden = false;
+  }
+});
+
+document.getElementById('status-filter').addEventListener('change', loadList);
+
+(async () => {
+  const me = await requireRole('moderator', 'admin', 'owner');
+  if (!me) return;
+  document.getElementById('admin-name').textContent = me.username;
+  loadList();
+})();
+</script>
+</body></html>

@@ -702,6 +702,57 @@ app.delete("/api/admin/players/:id/faction", auth, requireRole(...ADMIN_ROLES), 
 }));
 
 // ---------------------------------------------------------------------------
+// Sancțiuni — listă (active/toate) + emitere. Ținta e un jucător cu profil
+// pe site (players.id, legat de un cont — vezi players.user_id), nu direct
+// un identifier de joc; site-ul nu aplică singur banul pe serverul de FiveM,
+// e doar un jurnal vizibil pentru staff.
+// ---------------------------------------------------------------------------
+
+const PUNISHMENT_TYPES = ["ban", "mute", "kick", "warn"];
+
+app.get("/api/admin/punishments", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
+  const activeOnly = req.query.status !== "all";
+  const { rows } = await pool.query(
+    `SELECT pu.id, pu.type, pu.reason, pu.duration_minutes, pu.created_at,
+            u.username AS issued_by,
+            p.id AS player_id, p.display_name, p.game_id,
+            CASE WHEN pu.duration_minutes IS NOT NULL
+                 THEN pu.created_at + (pu.duration_minutes || ' minutes')::interval
+                 ELSE NULL END AS expires_at
+     FROM punishments pu
+     JOIN players p ON p.id = pu.player_id
+     LEFT JOIN users u ON u.id = pu.issued_by
+     ${activeOnly ? "WHERE pu.duration_minutes IS NULL OR pu.created_at + (pu.duration_minutes || ' minutes')::interval > NOW()" : ""}
+     ORDER BY pu.created_at DESC
+     LIMIT 200`
+  );
+  res.json(rows);
+}));
+
+app.post("/api/admin/punishments", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
+  const { player_id, type, reason, duration_minutes } = req.body;
+  if (!player_id || !type || !reason?.trim())
+    return res.status(400).json({ error: "Jucătorul, tipul și motivul sunt obligatorii." });
+  if (!PUNISHMENT_TYPES.includes(type))
+    return res.status(400).json({ error: `Tip invalid. Valori acceptate: ${PUNISHMENT_TYPES.join(", ")}.` });
+
+  const player = await pool.query("SELECT id, display_name FROM players WHERE id=$1", [player_id]);
+  if (!player.rows[0]) return res.status(404).json({ error: "Jucătorul nu există." });
+
+  const minutes = duration_minutes ? Math.max(1, Number(duration_minutes)) : null;
+  if (duration_minutes && !Number.isFinite(minutes))
+    return res.status(400).json({ error: "Durata trebuie să fie un număr de minute." });
+
+  const { rows } = await pool.query(
+    `INSERT INTO punishments(player_id, type, reason, duration_minutes, issued_by)
+     VALUES($1,$2,$3,$4,$5) RETURNING id, type, reason, duration_minutes, created_at`,
+    [player_id, type, reason.trim(), minutes, req.user.sub]
+  );
+  await logAction(req.user.sub, "punishment.create", "player", player_id, { type, reason: reason.trim(), duration_minutes: minutes }, req.ip);
+  res.status(201).json({ ...rows[0], display_name: player.rows[0].display_name });
+}));
+
+// ---------------------------------------------------------------------------
 // Factions & ranks (v0.4)
 // ---------------------------------------------------------------------------
 

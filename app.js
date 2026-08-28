@@ -115,7 +115,7 @@ if (playerGrid) {
       playerGrid.innerHTML = shown.map(p => `
         <div class="player">
           <div class="avatar">${escapeHtml(initials(p.name))}</div>
-          <div><strong>${escapeHtml(p.name)}</strong><small>Slot server #${escapeHtml(p.id)}</small></div>
+          <div><strong>${escapeHtml(p.name)}${p.group ? ` <span class="staff-badge">${escapeHtml(p.group)}</span>` : ''}</strong><small>Slot server #${escapeHtml(p.id)}</small></div>
           <span class="online-badge">ONLINE</span>
         </div>`).join('');
       if (sub) sub.textContent = d.list.length > SHOWN

@@ -138,8 +138,17 @@ app.get("/api/live/players", asyncRoute(async (_req, res) => {
   if (FIVEM_API_SECRET) {
     const detail = await getPlayersDetail();
     if (detail.online) {
+      // Staff badge: moldovarp-api reports each player's ESX group
+      // (xPlayer.getGroup()) — anything other than the default "user" group
+      // is surfaced here as a rank label. Only the group NAME is public
+      // (no money/vehicles), same data-minimization rule as the rest of
+      // this endpoint.
       const list = (detail.players || [])
-        .map(p => ({ id: p.id, name: (p.name || "Necunoscut").toString().slice(0, 64) }))
+        .map(p => ({
+          id: p.id,
+          name: (p.name || "Necunoscut").toString().slice(0, 64),
+          ...(p.group && p.group.toLowerCase() !== "user" ? { group: p.group.toString().slice(0, 24) } : {}),
+        }))
         .sort((a, b) => a.name.localeCompare(b.name, "ro"));
       return res.json({
         online: true,

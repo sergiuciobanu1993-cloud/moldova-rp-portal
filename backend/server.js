@@ -127,10 +127,30 @@ app.get("/api/server-status", asyncRoute(async (_req, res) => {
   }
 }));
 
-// Same cache as /api/server-status (it's populated by the same players.json
-// read) — a separate route just for pages that only care about the roster,
-// like the homepage's "Jucători" section.
+// Public roster for the homepage's "Jucători" section. Preferred source is
+// our own moldovarp-api resource (getPlayersDetail, defined further below,
+// same cache the admin panel uses) — it reads real ESX display names
+// directly off the game server and doesn't need FXServer's sv_playersToken
+// at all. Only falls back to the plain players.json reading (which FXServer
+// redacts to generic "Player" entries without that token — see
+// fetchFivemStatus above) when moldovarp-api isn't configured or offline.
 app.get("/api/live/players", asyncRoute(async (_req, res) => {
+  if (FIVEM_API_SECRET) {
+    const detail = await getPlayersDetail();
+    if (detail.online) {
+      const list = (detail.players || [])
+        .map(p => ({ id: p.id, name: (p.name || "Necunoscut").toString().slice(0, 64) }))
+        .sort((a, b) => a.name.localeCompare(b.name, "ro"));
+      return res.json({
+        online: true,
+        players: list.length,
+        list,
+        namesRedacted: false,
+        ...(detail.stale ? { stale: true } : {}),
+      });
+    }
+  }
+
   const shape = d => ({ online: d.online, players: d.players ?? 0, list: d.list || [], namesRedacted: !!d.namesRedacted });
   const age = Date.now() - fivemCache.fetchedAt;
   if (fivemCache.data && age < FIVEM_CACHE_MS) return res.json(shape(fivemCache.data));
@@ -224,18 +244,23 @@ async function fetchPlayersDetail() {
   }
 }
 
-app.get("/api/admin/live/players", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
-  const force = req.query.force === "1";
+// Shared by the admin route below and by the public /api/live/players route
+// above (which strips this down to just id+name — no money/vehicles/job).
+async function getPlayersDetail(force) {
   const age = Date.now() - playersDetailCache.fetchedAt;
-  if (!force && playersDetailCache.data && age < PLAYERS_CACHE_MS) return res.json(playersDetailCache.data);
+  if (!force && playersDetailCache.data && age < PLAYERS_CACHE_MS) return playersDetailCache.data;
   try {
     const data = await fetchPlayersDetail();
     playersDetailCache = { data, fetchedAt: Date.now() };
-    res.json(data);
+    return data;
   } catch {
-    if (playersDetailCache.data) return res.json({ ...playersDetailCache.data, stale: true });
-    res.json({ online: false, players: [] });
+    if (playersDetailCache.data) return { ...playersDetailCache.data, stale: true };
+    return { online: false, players: [] };
   }
+}
+
+app.get("/api/admin/live/players", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+  res.json(await getPlayersDetail(req.query.force === "1"));
 }));
 
 // Lista COMPLETĂ a joburilor/facțiunilor configurate pe server (tabela ESX

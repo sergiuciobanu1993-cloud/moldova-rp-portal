@@ -70,6 +70,17 @@ async function requireRole(...roles) {
     window.location.href = "dashboard.html";
     return null;
   }
+
+  // Linkul din sidebar către txAdmin (control total pe serverul de joc) nu
+  // trebuie doar blocat la click — nu trebuie nici măcar VĂZUT de cineva
+  // fără gradul necesar. Verificarea de mai jos rulează pe orice pagină de
+  // admin (toate apelează requireRole la încărcare), deci acoperă tot
+  // panoul dintr-un singur loc, fără să repetăm logica în fiecare pagină.
+  const txadminLink = document.getElementById("nav-txadmin");
+  if (txadminLink && !["co-fondator", "owner"].includes(me.role)) {
+    txadminLink.remove();
+  }
+
   return me;
 }
 

@@ -46,19 +46,30 @@ a{color:inherit;text-decoration:none}.site-header{height:78px;position:fixed;z-i
    hover so a curious visitor can actually read/click a pill, and disabled
    under prefers-reduced-motion. The mask fades both edges into the section
    background instead of hard-cutting the pills. */
-.jobs-marquee{position:relative;margin-top:64px;padding:38px 0 42px;border-top:1px solid var(--line);border-bottom:1px solid var(--line);background:#0b0c0d;overflow:hidden}
-.jobs-marquee-head{max-width:1180px;margin:0 auto 24px;padding:0 24px;display:flex;align-items:end;justify-content:space-between;gap:20px;flex-wrap:wrap}
-.jobs-marquee-head h2{margin:4px 0 0;font-size:27px}
-.jobs-marquee-viewport{overflow:hidden;-webkit-mask-image:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent);mask-image:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent)}
-.jobs-marquee-track{display:flex;width:max-content;gap:14px;animation:jobs-marquee-scroll 42s linear infinite}
-.jobs-marquee:hover .jobs-marquee-track{animation-play-state:paused}
-.job-pill{display:flex;align-items:center;gap:10px;padding:13px 22px;background:var(--panel);border:1px solid var(--line);border-radius:100px;white-space:nowrap;transition:.2s ease}
-.job-pill:hover{border-color:rgba(255,138,31,.5);background:#17191b;transform:translateY(-2px)}
-.job-pill-icon{font-size:18px;line-height:1}
-.job-pill span:last-child{font-weight:800;font-size:13px}
-@keyframes jobs-marquee-scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
-@media(prefers-reduced-motion:reduce){.jobs-marquee-track{animation:none;flex-wrap:wrap;width:auto}}
-@media(max-width:600px){.jobs-marquee{margin-top:44px;padding:30px 0 34px}.jobs-marquee-head{padding:0 20px}.jobs-marquee-head h2{font-size:23px}}
+.highlights-marquee{position:relative;margin-top:64px;padding:38px 0 42px;border-top:1px solid var(--line);border-bottom:1px solid var(--line);background:#0b0c0d;overflow:hidden}
+.highlights-marquee-head{max-width:1180px;margin:0 auto 24px;padding:0 24px;display:flex;align-items:end;justify-content:space-between;gap:20px;flex-wrap:wrap}
+.highlights-marquee-head h2{margin:4px 0 0;font-size:27px}
+.highlights-marquee-viewport{overflow:hidden;-webkit-mask-image:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent);mask-image:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent)}
+.highlights-marquee-track{display:flex;width:max-content;gap:14px;animation:highlights-marquee-scroll 46s linear infinite}
+.highlights-marquee:hover .highlights-marquee-track{animation-play-state:paused}
+.highlight-pill{display:flex;align-items:center;gap:10px;padding:13px 22px;background:var(--panel);border:1px solid var(--line);border-radius:100px;white-space:nowrap;transition:.2s ease}
+.highlight-pill:hover{border-color:rgba(255,138,31,.5);background:#17191b;transform:translateY(-2px)}
+.highlight-pill-icon{font-size:18px;line-height:1}
+.highlight-pill span:last-child{font-weight:800;font-size:13px}
+@keyframes highlights-marquee-scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+@media(prefers-reduced-motion:reduce){.highlights-marquee-track{animation:none;flex-wrap:wrap;width:auto}}
+@media(max-width:600px){.highlights-marquee{margin-top:44px;padding:30px 0 34px}.highlights-marquee-head{padding:0 20px}.highlights-marquee-head h2{font-size:23px}}
+
+/* Joburi page — card grid (icon, title, 1-sentence description), grouped
+   under the same .reg-group category headers used elsewhere on the site. */
+.job-card-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.job-card{padding:26px 24px;background:linear-gradient(145deg,#151719,#0d0f10);border:1px solid var(--line);border-radius:14px;transition:.25s ease}
+.job-card:hover{transform:translateY(-4px);border-color:rgba(255,138,31,.45)}
+.job-card-icon{display:grid;place-items:center;width:46px;height:46px;border-radius:12px;background:rgba(255,138,31,.1);font-size:22px;margin-bottom:18px}
+.job-card h3{margin:0 0 8px;font-size:18px}
+.job-card p{margin:0;color:var(--muted);font-size:13px;line-height:1.55}
+@media(max-width:900px){.job-card-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:600px){.job-card-grid{grid-template-columns:1fr}}
 
 .faction-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.faction span{width:38px;height:38px;border-radius:9px;background:#1b1d20;display:grid;place-items:center;color:var(--orange);font-size:10px;font-weight:900}.about-box{display:grid;grid-template-columns:300px 1fr;gap:60px;align-items:center;padding:55px;background:#0f1112;border:1px solid var(--line);border-radius:20px}.wordmark{max-width:260px;width:100%;height:auto}.about h2{font-size:39px;line-height:1.05;margin:0 0 15px}.about p:not(.eyebrow){color:var(--muted)}
 footer{border-top:1px solid var(--line);padding:38px 8vw;display:grid;grid-template-columns:1fr auto;gap:20px;align-items:center;background:#050607}.footer-brand{display:flex;align-items:center;gap:12px}.footer-brand img{width:40px}.footer-brand strong,.footer-brand small{display:block}.footer-brand small{color:var(--muted);font-size:10px}.footer-links{display:flex;flex-wrap:wrap;row-gap:8px;gap:20px;color:#aeb3b8;font-size:12px;font-weight:700}.footer-links a{transition:.15s ease}.footer-links a:hover{color:#fff}.copyright{grid-column:1/-1;color:#666;font-size:10px;margin:10px 0 0}

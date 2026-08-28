@@ -21,6 +21,7 @@
       <a href="regulamente.html">Regulamente</a>
       <a href="index.html#jucatori">Jucători</a>
       <a class="active" href="index.html#factiuni">Facțiuni</a>
+      <a href="legislatie-rutiera.html">Legislație Rutieră</a>
       <a href="index.html#anunturi">Anunțuri</a>
       <a href="index.html#despre">Despre</a>
       <a class="nav-login" href="login.html">Autentificare</a>
@@ -29,7 +30,7 @@
 
   <main>
     <div class="page-hero" style="padding-bottom:0">
-      <a class="back-link" href="ghid-factiuni.html">← Toate facțiunile</a>
+      <a class="back-link" href="ghid-factiuni.html" id="back-link">← Toate facțiunile</a>
     </div>
 
     <section class="section" style="padding-top:26px">
@@ -41,7 +42,7 @@
 
   <footer>
     <div class="footer-brand"><img src="assets/logo.png" alt="Moldova RP"><div><strong>MOLDOVA<span class="accent">RP</span></strong><small>Portal oficial al comunității</small></div></div>
-    <div class="footer-links"><a href="index.html#regulamente">Regulamente</a><a href="index.html#jucatori">Jucători</a><a href="index.html#factiuni">Facțiuni</a><a href="ghid-factiuni.html">Ghid facțiuni</a><a href="index.html#anunturi">Anunțuri</a></div>
+    <div class="footer-links"><a href="index.html#regulamente">Regulamente</a><a href="index.html#jucatori">Jucători</a><a href="index.html#factiuni">Facțiuni</a><a href="ghid-factiuni.html">Ghid facțiuni</a><a href="legislatie-rutiera.html">Legislație rutieră</a><a href="index.html#anunturi">Anunțuri</a></div>
     <p class="copyright">© 2026 Moldova RP. Toate drepturile rezervate.</p>
   </footer>
 
@@ -415,7 +416,7 @@
       apply: 'Aplică pentru Armată prin Discord'
     },
     moto: {
-      icon: '🏍️', tag: 'LEGISLAȚIE RUTIERĂ', title: 'Categoria A — Moto', tagline: 'Permis pentru motociclete și vehicule ușoare.',
+      icon: '🏍️', tag: 'LEGISLAȚIE RUTIERĂ', group: 'legislatie', title: 'Categoria A — Moto', tagline: 'Permis pentru motociclete și vehicule ușoare.',
       sections: [
         {
           h: 'Obligații generale',
@@ -465,7 +466,7 @@
       ]
     },
     auto: {
-      icon: '🚗', tag: 'LEGISLAȚIE RUTIERĂ', title: 'Categoria B — Auto', tagline: 'Permis pentru autoturisme și vehicule uzuale.',
+      icon: '🚗', tag: 'LEGISLAȚIE RUTIERĂ', group: 'legislatie', title: 'Categoria B — Auto', tagline: 'Permis pentru autoturisme și vehicule uzuale.',
       sections: [
         {
           h: 'I. Semne și indicatoare de circulație',
@@ -556,7 +557,7 @@
       ]
     },
     camion: {
-      icon: '🚛', tag: 'LEGISLAȚIE RUTIERĂ', title: 'Categoria C — Camion', tagline: 'Permis pentru camioane și transport greu.',
+      icon: '🚛', tag: 'LEGISLAȚIE RUTIERĂ', group: 'legislatie', title: 'Categoria C — Camion', tagline: 'Permis pentru camioane și transport greu.',
       sections: [
         {
           h: 'Responsabilitatea conducătorului',
@@ -616,7 +617,7 @@
       ]
     },
     barca: {
-      icon: '🚤', tag: 'LEGISLAȚIE RUTIERĂ', title: 'Categoria N — Barcă', tagline: 'Permis pentru bărci și vehicule nautice.',
+      icon: '🚤', tag: 'LEGISLAȚIE RUTIERĂ', group: 'legislatie', title: 'Categoria N — Barcă', tagline: 'Permis pentru bărci și vehicule nautice.',
       sections: [
         {
           h: 'Obligațiile conducătorului',
@@ -674,7 +675,7 @@
       ]
     },
     pilot: {
-      icon: '✈️', tag: 'LEGISLAȚIE RUTIERĂ', title: 'Licență PPL — Pilot', tagline: 'Licență pentru avioane și pilotaj.',
+      icon: '✈️', tag: 'LEGISLAȚIE RUTIERĂ', group: 'legislatie', title: 'Licență PPL — Pilot', tagline: 'Licență pentru avioane și pilotaj.',
       sections: [
         {
           h: 'Obligații generale',
@@ -767,7 +768,13 @@
       container.innerHTML = '<div class="empty-state">Această facțiune nu există în ghid.</div>';
       return;
     }
-    document.title = `${g.title} — Ghid Facțiuni — Moldova RP`;
+    document.title = g.group === 'legislatie' ? `${g.title} — Legislație Rutieră — Moldova RP` : `${g.title} — Ghid Facțiuni — Moldova RP`;
+
+    const backLink = document.getElementById('back-link');
+    if (g.group === 'legislatie') {
+      backLink.href = 'legislatie-rutiera.html';
+      backLink.textContent = '← Toate categoriile';
+    }
 
     const toc = g.sections.map(s => `<li><a class="text-link" href="#${slugify(s.h)}">${escapeHtml(s.h)}</a></li>`).join('');
 

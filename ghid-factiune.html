@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="ro">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ff8a1f">
+  <meta name="description" content="Moldova RP — ghidul oficial al facțiunilor.">
+  <title>Ghid Facțiuni — Moldova RP</title>
+  <link rel="icon" href="assets/favicon.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="index.html" aria-label="Moldova RP - Acasă">
+      <img src="assets/logo.png" alt="Moldova RP">
+      <span>MOLDOVA<span class="accent">RP</span></span>
+    </a>
+    <button class="menu-toggle" aria-label="Deschide meniul" aria-expanded="false">☰</button>
+    <nav class="nav">
+      <a href="index.html">Acasă</a>
+      <a href="regulamente.html">Regulamente</a>
+      <a href="index.html#jucatori">Jucători</a>
+      <a class="active" href="index.html#factiuni">Facțiuni</a>
+      <a href="index.html#anunturi">Anunțuri</a>
+      <a href="index.html#despre">Despre</a>
+      <a class="nav-login" href="login.html">Autentificare</a>
+    </nav>
+  </header>
+
+  <main>
+    <div class="page-hero" style="padding-bottom:0">
+      <a class="back-link" href="ghid-factiuni.html">← Toate facțiunile</a>
+    </div>
+
+    <section class="section" style="padding-top:26px">
+      <div id="guide-content">
+        <div class="empty-state">Se încarcă…</div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="footer-brand"><img src="assets/logo.png" alt="Moldova RP"><div><strong>MOLDOVA<span class="accent">RP</span></strong><small>Portal oficial al comunității</small></div></div>
+    <div class="footer-links"><a href="index.html#regulamente">Regulamente</a><a href="index.html#jucatori">Jucători</a><a href="index.html#factiuni">Facțiuni</a><a href="ghid-factiuni.html">Ghid facțiuni</a><a href="index.html#anunturi">Anunțuri</a></div>
+    <p class="copyright">© 2026 Moldova RP. Toate drepturile rezervate.</p>
+  </footer>
+
+  <script src="app.js"></script>
+  <script>
+  // Conținut static, scris/rezumat de noi pentru portal — NU e o copie a
+  // wiki-ului comunității (wiki.moldova-rp.md). Fiecare secțiune trimite mai
+  // departe către documentul oficial complet de pe wiki pentru varianta
+  // integrală/legală. Ține aici doar textul (fără cod HTML brut) — randarea
+  // se face mai jos, la fel ca la regulamente.
+  const DISCORD_APPLY = 'https://discord.com/channels/1423438217469759490/1474778076226519070';
+
+  const GUIDES = {
+    politie: {
+      icon: '👮', title: 'Poliție', tagline: 'Menține ordinea, aplică legea și protejează cetățenii.',
+      sections: [
+        {
+          h: 'Proceduri',
+          p: [
+            'Departamentul de Poliție operează după un set de proceduri judiciare stricte. Citirea drepturilor este obligatorie înainte de audierea unui suspect de infracțiune.',
+            'Reabilitarea unui cazier (ștergerea sancțiunilor vechi) se face doar dacă sunt îndeplinite cumulativ mai multe condiții — printre care un minimum de 10 zile trecute de la ultima condamnare.'
+          ],
+          link: { label: 'Vezi procedurile complete pe wiki →', url: 'https://wiki.moldova-rp.md/ro/regulament-politie' }
+        },
+        {
+          h: 'Infracțiuni și Contravenții',
+          p: [
+            'Codul penal aplicat de Poliție este organizat pe secțiuni: contravenții rutiere (articolele 101–115), infracțiuni la ordinea publică (articolele 201–205), plus infracțiuni contra persoanei, contra proprietății, de corupție și legate de droguri/arme.',
+            'Fiecare articol are o pedeapsă asociată — folosește linkul de mai jos pentru lista completă cu toate articolele și sancțiunile exacte.'
+          ],
+          link: { label: 'Vezi codul penal complet pe wiki →', url: 'https://wiki.moldova-rp.md/ro/cod-penal-politie' }
+        },
+        {
+          h: 'Regimul Armelor',
+          p: [
+            'Deținerea legală de armament este împărțită pe 4 categorii, fiecare cu propriile condiții de eligibilitate pentru permis.',
+            'Procesul de solicitare a unui permis port-armă (acte necesare, pași, verificări) este descris integral în documentul oficial.'
+          ],
+          link: { label: 'Vezi regimul armelor complet pe wiki →', url: 'https://wiki.moldova-rp.md/ro/regimul-armelor' }
+        },
+        {
+          h: 'Omologări Auto',
+          p: [
+            'Modificările aduse vehiculelor sunt împărțite pe 3 categorii, fiecare cu taxă și proces de inspecție propriu — de exemplu, geamurile fumurii sunt admise doar până la o opacitate maximă de 30%.',
+            'Legislația completă privind omologările auto e valabilă pentru toate vehiculele înmatriculate pe server.'
+          ],
+          link: { label: 'Vezi legislația completă pe wiki →', url: 'https://wiki.moldova-rp.md/ro/omologari-auto' }
+        }
+      ],
+      apply: 'Aplică pentru Poliție prin Discord'
+    },
+    smurd: {
+      icon: '🚑', title: 'SMURD', tagline: 'Intervine rapid în situații de urgență și salvează vieți.',
+      sections: [
+        {
+          h: 'Regulament',
+          p: [
+            'Regulamentul SMURD are 14 reguli principale. Este interzis: resuscitarea victimelor împușcate în cap, vânzarea materialelor sanitare, apartenența la găști/mafii, jignirea pacienților sau colegilor, sau refuzul apelurilor (cu excepția cazului în care ești deja ocupat cu altă intervenție).',
+            'Membrii trebuie să poarte uniforma din dotare, să folosească vehiculul personal doar în urgențe reale, să rămână conectați la comunicațiile stației și să respecte ordinele superiorilor.',
+            'Sunt interzise mita și consumul/oferirea de favoruri; elicopterul e rezervat rangului de Asistent Inspector în sus; accesul pe Cayo Island în timpul serviciului nu e permis; sirena se folosește doar la intervenții efective. Prezența la ședințele de vineri, sâmbătă și duminică (~ora 20:00) e obligatorie, cu posibilitate de scuză motivată.'
+          ],
+          link: { label: 'Vezi regulamentul complet pe wiki →', url: 'https://wiki.moldova-rp.md/ro/regulament-smurd' }
+        },
+        {
+          h: 'Prețuri',
+          p: [
+            'Bandaj — 250$ · Trusă de prim ajutor (Verde) — 2000$ (–50% cu asigurare medicală) · Trusă Mare Avansată (Roșie) — 500$ · Antibiotic — 300$ · Cutie Sanitară — 5000$ (–50% cu asigurare medicală) · Calmante — 200$ · Set de tablete — 400$.',
+            'Epinefrina costă 2000$/bucată și este disponibilă doar celor cu certificat de prim ajutor, plus șefului de poliție, conducerii găștilor/mafiilor sau generalilor armatei. Fără o asigurare medicală validă, nu se vinde niciun produs.',
+            'Cursul de prim ajutor nu mai este oferit cetățenilor obișnuiți — este rezervat exclusiv rangurilor de conducere menționate mai sus.'
+          ],
+          link: { label: 'Vezi lista completă de prețuri pe wiki →', url: 'https://wiki.moldova-rp.md/ro/preturi-smurd' }
+        }
+      ],
+      apply: 'Aplică pentru SMURD prin Discord'
+    },
+    armata: {
+      icon: '🪖', title: 'Armată', tagline: 'Asigură securitatea și participă la misiuni speciale.',
+      sections: [
+        {
+          h: 'Regulament',
+          p: [
+            'Necunoașterea regulilor nu scutește de pedeapsă. Se cere disciplină, respect și seriozitate — comportamentul toxic (jigniri, amenințări, trolling, abuz) este interzis, iar ordinul superiorilor se execută fără discuții. Prezența la instruiri și ședințe este obligatorie.',
+            'Respectarea regulilor de RP e obligatorie — fără FailRP, PowerGaming sau MetaGaming. Intervențiile necesită identificare corectă (nume, rang, situația raportată), iar ordinele de teren se execută imediat.',
+            'Echipamentul primit de la armată nu se împrumută și nu se vinde. Armele se folosesc doar la ordin sau cu justificare RP clară; pierderea echipamentului din neglijență se sancționează.',
+            'Se cere respect total față de colegi și superiori. Sunt interzise consumul de droguri, colaborarea cu găști și orice activitate ilegală. Absențele repetate nejustificate duc la retrogradare sau Faction Warn.',
+            'Plecarea din facțiune fără motiv întemeiat riscă blacklist; revenirea necesită o cerere nouă și aprobarea staff-ului. Sancțiunile sunt progresive: avertisment verbal → Faction Warn → retrogradare → suspendare → concediere cu blacklist, în funcție de gravitatea abaterii.'
+          ],
+          link: { label: 'Vezi regulamentul complet pe wiki →', url: 'https://wiki.moldova-rp.md/ro/regulament-armata' }
+        }
+      ],
+      apply: 'Aplică pentru Armată prin Discord'
+    }
+  };
+
+  function escapeHtml(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  (() => {
+    const container = document.getElementById('guide-content');
+    const slug = new URLSearchParams(window.location.search).get('slug');
+    const g = GUIDES[slug];
+    if (!g) {
+      container.innerHTML = '<div class="empty-state">Această facțiune nu există în ghid.</div>';
+      return;
+    }
+    document.title = `${g.title} — Ghid Facțiuni — Moldova RP`;
+    const sectionsHtml = g.sections.map(s => `
+      <h2>${escapeHtml(s.h)}</h2>
+      ${s.p.map(par => `<p>${escapeHtml(par)}</p>`).join('')}
+      ${s.link ? `<p><a class="text-link" href="${escapeHtml(s.link.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(s.link.label)}</a></p>` : ''}
+    `).join('');
+    container.innerHTML = `
+      <article class="prose-box prose">
+        <div class="prose-meta"><span class="tag">GHID FACȚIUNI</span><span>·</span><span>Rezumat oficial Moldova RP</span></div>
+        <h1>${g.icon} ${escapeHtml(g.title)}</h1>
+        <p class="muted" style="margin:-10px 0 22px">${escapeHtml(g.tagline)}</p>
+        <div class="prose-body">${sectionsHtml}</div>
+        <a class="btn btn-primary" href="${DISCORD_APPLY}" target="_blank" rel="noopener noreferrer" style="margin-top:10px">${escapeHtml(g.apply)} →</a>
+      </article>`;
+  })();
+  </script>
+</body>
+</html>

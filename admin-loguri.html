@@ -27,6 +27,8 @@
         <option value="item_craft">Crafting</option>
         <option value="item_transfer">Transfer iteme</option>
         <option value="item_obtained">Alte iteme obținute</option>
+        <option value="item_drop">Aruncat pe jos</option>
+        <option value="vehicle_acquired">Vehicul nou</option>
         <option value="admin">Acțiuni staff (Luxu)</option>
       </select>
       <button id="refresh-btn" class="btn-ghost" type="button">Reîmprospătează</button>
@@ -42,14 +44,43 @@
 <script>
 const CATEGORY_LABEL = {
   chat: 'Chat', command: 'Comandă', connect: 'Conectare', disconnect: 'Deconectare', death: 'Moarte / Kill', money: 'Bani',
-  item_buy: 'Cumpărare', item_craft: 'Crafting', item_transfer: 'Transfer item', item_obtained: 'Item obținut',
+  item_buy: 'Cumpărare', item_craft: 'Crafting', item_transfer: 'Transfer item', item_obtained: 'Item obținut', item_drop: 'Aruncat pe jos',
+  vehicle_acquired: 'Vehicul nou',
   admin: 'Acțiune staff',
 };
 const CATEGORY_PILL = {
   chat: 'info', command: 'info', connect: 'on', disconnect: 'off', death: 'warn', money: 'warn',
-  item_buy: 'info', item_craft: 'info', item_transfer: 'info', item_obtained: 'info',
+  item_buy: 'info', item_craft: 'info', item_transfer: 'info', item_obtained: 'info', item_drop: 'warn',
+  vehicle_acquired: 'info',
   admin: 'warn',
 };
+
+// Traducem cele mai comune actiuni de staff din Luxu Admin (kill, revive,
+// ban, kick etc.) intr-un text usor de citit in romana. Potrivirea e dupa
+// cuvinte-cheie in stringul de actiune trimis de Luxu (schema lor exacta nu
+// e documentata public) — daca actiunea nu se potriveste cu niciun tipar de
+// mai jos, arătăm textul brut trimis de Luxu, ca sa nu pierdem informatie.
+const ADMIN_ACTION_PATTERNS = [
+  [/revive|reviv/i, 'a reînviat'],
+  [/kill/i, 'a ucis'],
+  [/\bban\b/i, 'a interzis (ban)'],
+  [/kick/i, 'a dat kick'],
+  [/mute/i, 'a dat mute'],
+  [/teleport/i, 'a teleportat'],
+  [/heal|vindec/i, 'a vindecat'],
+  [/give.*item|item.*give|da.*item|item.*dat/i, 'a dat un item'],
+  [/take.*item|item.*take|ia.*item|item.*luat/i, 'a luat un item'],
+  [/give.*vehic|vehic.*give|da.*masin|masin.*dat/i, 'a dat un vehicul'],
+  [/freeze|inghet/i, 'a înghețat'],
+  [/noclip/i, 'a activat noclip'],
+];
+function humanizeAdminAction(action) {
+  if (!action) return null;
+  for (const [re, label] of ADMIN_ACTION_PATTERNS) {
+    if (re.test(action)) return label;
+  }
+  return null;
+}
 
 const escapeHtml = s => (s ?? '').toString()
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -72,8 +103,18 @@ function formatDetails(log) {
       return d.reason ? `s-a deconectat <span class="muted">(${escapeHtml(d.reason)})</span>` : '<span class="muted">s-a deconectat</span>';
     case 'death': {
       const parts = [];
-      if (d.killer) parts.push(`ucis de <strong>${escapeHtml(d.killer)}</strong>`);
-      else parts.push('a murit');
+      // Daca in fereastra scurta de dinaintea mortii a existat o actiune de
+      // staff Luxu de tip "kill" pe acelasi jucator, aratam clar ca a fost
+      // un kill de admin (comanda din panou, nu o luptă reală) — vezi
+      // corelarea din backend/server.js.
+      if (d.adminKill) {
+        parts.push(`ucis de <strong>admin ${escapeHtml(d.adminKill.staff || 'necunoscut')}</strong>`);
+        parts.push('<span class="muted">(comandă din panoul de admin)</span>');
+      } else if (d.killer) {
+        parts.push(`ucis de <strong>${escapeHtml(d.killer)}</strong>`);
+      } else {
+        parts.push('a murit');
+      }
       if (d.cause) parts.push(`<span class="muted">(${escapeHtml(String(d.cause))})</span>`);
       return parts.join(' ');
     }
@@ -85,7 +126,11 @@ function formatDetails(log) {
       const total = (typeof d.cash === 'number' && typeof d.bank === 'number')
         ? `<span class="muted"> · total: ${d.cash.toLocaleString('ro-RO')}$ cash, ${d.bank.toLocaleString('ro-RO')}$ bancă</span>`
         : '';
-      return change + total;
+      // Cea mai recentă cumpărare/craftare a aceluiași jucător, în fereastra
+      // scurtă de dinainte de această verificare — o presupunere ("posibil"),
+      // nu o certitudine (vezi server.lua).
+      const source = d.possibleSource ? `<span class="muted"> · posibil: ${escapeHtml(d.possibleSource)}</span>` : '';
+      return change + total + source;
     }
     case 'item_buy': {
       const parts = [`a cumpărat`];
@@ -107,15 +152,54 @@ function formatDetails(log) {
       return parts.join(' ');
     }
     case 'item_obtained': {
+      // Dat de un admin din panou (corelat pe server cu o acțiune de staff
+      // foarte apropiată în timp — vezi backend/server.js) — arătăm asta în
+      // loc de "obținut" generic, ca să nu pară că jucătorul l-a găsit/l-a
+      // primit organic din joc.
+      if (d.adminGrant) {
+        const parts = ['a primit'];
+        parts.push(`<strong>${escapeHtml((d.count ? d.count + 'x ' : '') + (d.item || 'un item'))}</strong>`);
+        parts.push(`de la <strong>admin ${escapeHtml(d.adminGrant.staff || 'necunoscut')}</strong>`);
+        return parts.join(' ');
+      }
       const parts = ['a obținut'];
       parts.push(`<strong>${escapeHtml((d.count ? d.count + 'x ' : '') + (d.item || 'un item'))}</strong>`);
+      if (d.metadata && typeof d.metadata === 'object' && Object.keys(d.metadata).length) {
+        parts.push(`<span class="muted">(${escapeHtml(JSON.stringify(d.metadata))})</span>`);
+      }
+      return parts.join(' ');
+    }
+    case 'item_drop': {
+      const parts = ['a aruncat pe jos'];
+      parts.push(`<strong>${escapeHtml((d.count ? d.count + 'x ' : '') + (d.item || 'un item'))}</strong>`);
+      return parts.join(' ');
+    }
+    case 'vehicle_acquired': {
+      // La fel ca la item_obtained: daca a fost corelat cu o actiune de
+      // staff Luxu de tip "da vehicul" foarte apropiata in timp, aratam ca a
+      // fost primit de la admin, nu cumparat organic — vezi server.js.
+      const label = d.vehicle || 'un vehicul';
+      if (d.adminGrant) {
+        const parts = ['a primit vehiculul'];
+        parts.push(`<strong>${escapeHtml(label)}</strong>`);
+        parts.push(`de la <strong>admin ${escapeHtml(d.adminGrant.staff || 'necunoscut')}</strong>`);
+        if (d.plate) parts.push(`<span class="muted">(${escapeHtml(d.plate)})</span>`);
+        return parts.join(' ');
+      }
+      const parts = ['a intrat în posesia vehiculului'];
+      parts.push(`<strong>${escapeHtml(label)}</strong>`);
+      if (d.plate) parts.push(`<span class="muted">(${escapeHtml(d.plate)})</span>`);
+      parts.push('<span class="muted">· nu știm sigur dacă a fost cumpărat, primit sau transferat</span>');
       return parts.join(' ');
     }
     case 'admin': {
       const parts = [];
-      if (d.action) parts.push(`<strong>${escapeHtml(d.action)}</strong>`);
+      const nice = humanizeAdminAction(d.action);
+      if (nice) parts.push(`<strong>${escapeHtml(nice)}</strong>`);
+      else if (d.action) parts.push(`<strong>${escapeHtml(d.action)}</strong>`);
       if (d.target) parts.push(`→ <strong>${escapeHtml(d.target)}</strong>`);
       if (d.reason) parts.push(`<span class="muted">(${escapeHtml(d.reason)})</span>`);
+      if (nice && d.action) parts.push(`<span class="muted">· acțiune brută: ${escapeHtml(d.action)}</span>`);
       return parts.length ? parts.join(' ') : `<span class="muted">${escapeHtml(JSON.stringify(d.raw || {}))}</span>`;
     }
     default:

@@ -314,7 +314,7 @@ app.get("/api/admin/live/jobs", auth, requireRole(...ADMIN_ROLES), asyncRoute(as
 // Filtrele (player/category/limit) sunt pasate mai departe. Gated la fel ca
 // Sancțiunile (moderator+) — e un instrument de investigație pentru staff,
 // nu date publice.
-const GAME_LOG_CATEGORIES = ["chat", "command", "connect", "disconnect", "death", "money", "item_buy", "item_craft", "item_transfer", "item_obtained"];
+const GAME_LOG_CATEGORIES = ["chat", "command", "connect", "disconnect", "death", "money", "item_buy", "item_craft", "item_transfer", "item_obtained", "item_drop", "vehicle_acquired"];
 const LOG_CATEGORIES = [...GAME_LOG_CATEGORIES, "admin"];
 
 app.get("/api/admin/logs", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
@@ -368,6 +368,39 @@ app.get("/api/admin/logs", auth, requireRole(...MOD_ROLES), asyncRoute(async (re
       at: r.created_at,
     }));
   }
+
+  // Corelare best-effort: cand un log de joc (item obtinut generic, moarte,
+  // vehicul nou aparut) se intampla FOARTE aproape in timp de o actiune de
+  // staff din Luxu care pare potrivita (dupa un cuvant-cheie in actiune/motiv)
+  // si vizeaza acelasi jucator, marcam intrarea ca fiind rezultatul acelei
+  // actiuni de admin — ca sa nu para ceva organic din joc (item "gasit",
+  // moarte "de la un jucator necunoscut", vehicul "cumparat"). Schema exactă
+  // a payload-ului Luxu nu e documentată public (vezi comentariul de la
+  // /api/webhooks/luxu mai jos), deci potrivirea e doar dupa cuvinte-cheie —
+  // dacă observați intrări nepotrivite sau cazuri reale ratate, spuneți-mi
+  // exact ce ați văzut (categoria + ce ar fi trebuit să scrie) și ajustez.
+  function correlateStaffAction(gameCategory, keywordRegex, detailsField) {
+    if (!gameLogs.length || !staffLogs.length) return;
+    const matches = staffLogs.filter(s =>
+      keywordRegex.test(s.details.action || "") || keywordRegex.test(s.details.reason || "")
+    );
+    if (!matches.length) return;
+    for (const log of gameLogs) {
+      if (log.category !== gameCategory || !log.player) continue;
+      const logTime = new Date(log.at).getTime();
+      const match = matches.find(s => {
+        const target = (s.details.target || "").toLowerCase().trim();
+        if (!target || target !== log.player.toLowerCase().trim()) return false;
+        return Math.abs(new Date(s.at).getTime() - logTime) <= 8000;
+      });
+      if (match) {
+        log.details = { ...log.details, [detailsField]: { staff: match.details.staff || "admin" } };
+      }
+    }
+  }
+  correlateStaffAction("item_obtained", /item/i, "adminGrant");
+  correlateStaffAction("death", /kill/i, "adminKill");
+  correlateStaffAction("vehicle_acquired", /vehic|masin/i, "adminGrant");
 
   const merged = [...gameLogs, ...staffLogs]
     .sort((a, b) => new Date(b.at) - new Date(a.at))

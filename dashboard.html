@@ -41,7 +41,7 @@
       ? 'ID #' + me.game_id : 'Cont #' + me.id.slice(0, 8);
     document.getElementById('profile-avatar').textContent = name.slice(0, 2).toUpperCase();
 
-    if (['moderator', 'admin', 'owner'].includes(me.role)) {
+    if (['moderator', 'admin', 'co-fondator', 'owner'].includes(me.role)) {
       document.getElementById('admin-link').hidden = false;
     }
   } catch (err) {

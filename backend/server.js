@@ -46,8 +46,14 @@ function requireRole(...roles) {
   };
 }
 
-const MOD_ROLES = ["moderator", "admin", "owner"];
-const ADMIN_ROLES = ["admin", "owner"];
+const MOD_ROLES = ["moderator", "admin", "co-fondator", "owner"];
+const ADMIN_ROLES = ["admin", "co-fondator", "owner"];
+// Rang nou, aproape de owner — acces la tot ce are admin, plus secțiunea
+// txAdmin (foarte sensibilă: control total pe serverul de joc). Schimbarea
+// rangurilor rămâne totuși restricționată strict la owner (vezi mai jos),
+// ca un co-fondator să nu poată promova pe altcineva la owner/co-fondator
+// fără acordul proprietarului contului.
+const FOUNDER_ROLES = ["co-fondator", "owner"];
 
 async function logAction(actorId, action, entityType, entityId, metadata, ip) {
   await pool.query(
@@ -378,6 +384,17 @@ setInterval(() => {
     .catch(err => console.error("Curățarea admin_action_logs a eșuat:", err.message));
 }, 6 * 60 * 60 * 1000);
 
+// URL-ul panoului txAdmin al serverului de joc — NU e hardcodat în fișierele
+// statice (oricine ar putea deschide admin-txadmin.html și vedea sursa),
+// vine dintr-o variabilă de mediu și e servit doar către co-fondator/owner,
+// autentificați. txAdmin are oricum propriul login separat — asta doar evită
+// să afișăm public adresa panoului către vizitatori neautentificați.
+const TXADMIN_URL = process.env.TXADMIN_URL || "";
+
+app.get("/api/admin/txadmin-url", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (_req, res) => {
+  res.json({ url: TXADMIN_URL || null });
+}));
+
 app.post("/api/auth/register", asyncRoute(async (req, res) => {
   const { username, email, password } = req.body;
   if (!username || !email || !password || password.length < 8)
@@ -629,7 +646,7 @@ app.post("/api/tickets/:id/replies", auth, asyncRoute(async (req, res) => {
   res.status(201).json(rows[0]);
 }));
 
-app.get("/api/admin/stats", auth, requireRole("admin", "owner"), asyncRoute(async (_req, res) => {
+app.get("/api/admin/stats", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (_req, res) => {
   const q = async sql => (await pool.query(sql)).rows[0].count;
   res.json({
     players: await q("SELECT COUNT(*) FROM players"),
@@ -639,7 +656,7 @@ app.get("/api/admin/stats", auth, requireRole("admin", "owner"), asyncRoute(asyn
   });
 }));
 
-app.get("/api/admin/audit-logs", auth, requireRole("admin", "owner"), asyncRoute(async (_req, res) => {
+app.get("/api/admin/audit-logs", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (_req, res) => {
   const { rows } = await pool.query(
     `SELECT l.*,u.username actor FROM audit_logs l
      LEFT JOIN users u ON u.id=l.actor_id
@@ -655,7 +672,7 @@ app.get("/api/admin/audit-logs", auth, requireRole("admin", "owner"), asyncRoute
 // la owner/admin fără acordul proprietarului contului.
 // ---------------------------------------------------------------------------
 
-const VALID_ROLES = ["player", "moderator", "admin", "owner"];
+const VALID_ROLES = ["player", "moderator", "admin", "co-fondator", "owner"];
 
 app.get("/api/admin/users", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (_req, res) => {
   const { rows } = await pool.query(

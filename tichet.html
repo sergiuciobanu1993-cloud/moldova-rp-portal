@@ -40,8 +40,8 @@ function render(t) {
 
   document.getElementById('thread').innerHTML = t.replies.length
     ? t.replies.map(r => `
-        <div class="msg ${['moderator','admin','owner'].includes(r.author_role) ? 'staff' : ''}">
-          <b>${r.author}${['moderator','admin','owner'].includes(r.author_role) ? ' (staff)' : ''}</b>
+        <div class="msg ${['moderator','admin','co-fondator','owner'].includes(r.author_role) ? 'staff' : ''}">
+          <b>${r.author}${['moderator','admin','co-fondator','owner'].includes(r.author_role) ? ' (staff)' : ''}</b>
           <span>${r.message}</span>
           <small>${new Date(r.created_at).toLocaleString('ro-RO')}</small>
         </div>`).join('')

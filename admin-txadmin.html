@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>txAdmin — Admin Moldova RP</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="admin.css"></head>
+<body>
+<aside class="side"><a class="brand" href="index.html"><img src="assets/logo.png" alt=""><b>MOLDOVA<span>RP</span></b></a><p>ADMINISTRAȚIE</p><a href="admin.html">▦ Dashboard</a><a href="admin-utilizatori.html">👤 Utilizatori</a><a href="admin-jucatori.html">♙ Jucători</a><a href="admin-financiar.html">◆ Facțiuni</a><a href="admin-sanctiuni.html">⚠ Sancțiuni</a><a>▤ Reclamații</a><a>⚖ CK</a><a href="admin-regulamente.html">📚 Regulamente</a><a href="admin-anunturi.html">◉ Anunțuri</a><a href="admin-tichete.html">🎫 Tichete</a><a href="admin-loguri.html">🗂 Loguri</a><a>⌁ Audit Logs</a><a class="sel" href="admin-txadmin.html">🖥 txAdmin</a><a class="back" href="index.html">← Site public</a></aside>
+<main>
+<header><div><small>PANEL ADMINISTRATIV</small><h1>txAdmin</h1></div><div class="admin"><span id="admin-name">…</span> <i></i></div></header>
+
+<p class="muted" style="margin:-10px 0 18px">
+  Acces direct la panoul txAdmin al serverului de joc — resurse pornite, consum, jucători, console. Secțiune vizibilă doar pentru Co-fondator și Fondator.
+</p>
+
+<section class="tablebox" id="url-missing" hidden>
+  <div class="title"><h2>Nu e configurat încă un link</h2></div>
+  <p class="muted" style="margin:0 22px 20px">
+    Nu am adresa panoului txAdmin. Trimite-mi link-ul exact pe care îl folosești tu (din bara de adrese a browserului, cu tot cu port) și îl configurez ca variabilă de mediu — nu se salvează niciodată direct în codul site-ului, ca să nu fie vizibil public.
+  </p>
+</section>
+
+<section class="tablebox" id="url-box" hidden>
+  <div class="title">
+    <h2>Panou txAdmin</h2>
+    <a id="open-link" href="#" target="_blank" rel="noopener noreferrer"><button type="button">↗ Deschide în tab nou</button></a>
+  </div>
+  <p class="muted" style="margin:0 22px 16px">
+    Autentificarea pentru txAdmin e complet separată de contul de pe acest site — ți se va cere login-ul obișnuit de txAdmin.
+    Dacă fereastra de mai jos rămâne goală, e aproape sigur din cauza securității proprii a txAdmin (nu permite afișare în alt site) — folosește butonul de mai sus, care merge garantat.
+  </p>
+  <div style="padding:0 22px 22px">
+    <iframe id="txadmin-frame" style="width:100%;height:70vh;border:1px solid var(--line);border-radius:10px;background:#0b0d10" title="txAdmin"></iframe>
+  </div>
+</section>
+
+<section class="tablebox" id="error-box" hidden>
+  <div class="title"><h2>Nu am putut încărca</h2></div>
+  <p class="muted" style="margin:0 22px 20px">A apărut o eroare la verificarea accesului. Reîncearcă mai târziu.</p>
+</section>
+
+</main>
+<script src="auth-client.js"></script>
+<script>
+(async () => {
+  const me = await requireRole('co-fondator', 'owner');
+  if (!me) return;
+  document.getElementById('admin-name').textContent = me.username;
+
+  try {
+    const res = await apiFetch('/api/admin/txadmin-url');
+    if (!res.ok) throw new Error();
+    const d = await res.json();
+    if (!d.url) {
+      document.getElementById('url-missing').hidden = false;
+      return;
+    }
+    document.getElementById('url-box').hidden = false;
+    document.getElementById('open-link').href = d.url;
+    document.getElementById('txadmin-frame').src = d.url;
+  } catch {
+    document.getElementById('error-box').hidden = false;
+  }
+})();
+</script>
+</body></html>

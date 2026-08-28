@@ -194,6 +194,7 @@ INSERT INTO roles(name, description) VALUES
 ('player', 'Jucator standard'),
 ('moderator', 'Moderator'),
 ('admin', 'Administrator'),
+('co-fondator', 'Co-fondator'),
 ('owner', 'Proprietar')
 ON CONFLICT (name) DO NOTHING;
 

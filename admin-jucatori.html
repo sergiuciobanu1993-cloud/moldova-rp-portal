@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Jucători — Admin Moldova RP</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="admin.css"></head>
 <body>
-<aside class="side"><a class="brand" href="index.html"><img src="assets/logo.png" alt=""><b>MOLDOVA<span>RP</span></b></a><p>ADMINISTRAȚIE</p><a href="admin.html">▦ Dashboard</a><a href="admin-utilizatori.html">👤 Utilizatori</a><a class="sel" href="admin-jucatori.html">♙ Jucători</a><a href="admin-financiar.html">◆ Facțiuni</a><a href="admin-sanctiuni.html">⚠ Sancțiuni</a><a>▤ Reclamații</a><a>⚖ CK</a><a href="admin-regulamente.html">📚 Regulamente</a><a href="admin-anunturi.html">◉ Anunțuri</a><a href="admin-tichete.html">🎫 Tichete</a><a href="admin-loguri.html">🗂 Loguri</a><a>⌁ Audit Logs</a><a class="back" href="index.html">← Site public</a></aside>
+<aside class="side"><a class="brand" href="index.html"><img src="assets/logo.png" alt=""><b>MOLDOVA<span>RP</span></b></a><p>ADMINISTRAȚIE</p><a href="admin.html">▦ Dashboard</a><a href="admin-utilizatori.html">👤 Utilizatori</a><a class="sel" href="admin-jucatori.html">♙ Jucători</a><a href="admin-financiar.html">◆ Facțiuni</a><a href="admin-sanctiuni.html">⚠ Sancțiuni</a><a>▤ Reclamații</a><a>⚖ CK</a><a href="admin-regulamente.html">📚 Regulamente</a><a href="admin-anunturi.html">◉ Anunțuri</a><a href="admin-tichete.html">🎫 Tichete</a><a href="admin-loguri.html">🗂 Loguri</a><a>⌁ Audit Logs</a><a href="admin-txadmin.html">🖥 txAdmin</a><a class="back" href="index.html">← Site public</a></aside>
 <main>
 <header><div><small>PANEL ADMINISTRATIV</small><h1>Jucători online</h1></div><div class="admin"><span id="admin-name">…</span> <i></i></div></header>
 
@@ -20,7 +20,7 @@
   <h2>Datele live nu sunt disponibile</h2>
   <p class="muted" style="margin:0">
     Resursa <b>moldovarp-api</b> nu răspunde momentan pe serverul de joc — fie nu e instalată/pornită încă,
-    fie serverul e offline. Vezi txAdmin → Resources, sau <code>ensure moldovarp-api</code> în server.cfg.
+    fie serverul e offline. Verifică panoul de administrare al serverului → Resources, sau <code>ensure moldovarp-api</code> în server.cfg.
   </p>
 </section>
 
@@ -125,7 +125,7 @@ async function loadJobs() {
 }
 
 (async () => {
-  const me = await requireRole('admin', 'owner');
+  const me = await requireRole('admin', 'co-fondator', 'owner');
   if (!me) return;
   document.getElementById('admin-name').textContent = me.username;
   loadPlayers();

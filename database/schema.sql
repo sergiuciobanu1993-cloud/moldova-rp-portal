@@ -170,6 +170,26 @@ CREATE TABLE IF NOT EXISTS ticket_replies (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Acțiuni de staff trimise direct de panoul cloud Luxu Admin (kill, revive,
+-- give/take item, ban etc.), via webhook-ul propriu al lor (tab "Webhooks"),
+-- NU prin resursa moldovarp-api de pe serverul de joc — de-asta e tabelă
+-- separată, în baza noastră Postgres, nu în MySQL-ul jocului. Structura
+-- exactă a payload-ului Luxu nu e documentată public, deci păstrăm mereu
+-- răspunsul brut (raw) ca să nu pierdem nimic dacă extragerea câmpurilor
+-- (staff_name/target_name/action/reason) nu reușește pentru un anumit tip
+-- de eveniment.
+CREATE TABLE IF NOT EXISTS admin_action_logs (
+  id SERIAL PRIMARY KEY,
+  source VARCHAR(30) NOT NULL DEFAULT 'luxu',
+  staff_name VARCHAR(120),
+  target_name VARCHAR(120),
+  action VARCHAR(120),
+  reason TEXT,
+  raw JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_admin_action_logs_created_at ON admin_action_logs(created_at DESC);
+
 INSERT INTO roles(name, description) VALUES
 ('player', 'Jucator standard'),
 ('moderator', 'Moderator'),

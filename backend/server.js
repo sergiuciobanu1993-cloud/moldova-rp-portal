@@ -263,6 +263,121 @@ app.get("/api/admin/live/jobs", auth, requireRole(...ADMIN_ROLES), asyncRoute(as
   }
 }));
 
+// Jurnalul de activitate combină DOUĂ surse:
+// 1. moldovarp-api de pe serverul de joc (chat/comenzi, conectări/deconectări,
+//    morți/kill-uri, mișcări de bani, cumpărături/crafting/transferuri de
+//    iteme din ox_inventory) — categoriile "game" de mai jos.
+// 2. Acțiunile de staff trimise direct de panoul cloud Luxu Admin (kill,
+//    revive, give/take item, ban etc.) prin webhook-ul lor propriu — vezi
+//    POST /api/webhooks/luxu mai jos și tabela admin_action_logs (a noastră,
+//    Postgres, nu depinde de serverul de joc fiind online).
+// Filtrele (player/category/limit) sunt pasate mai departe. Gated la fel ca
+// Sancțiunile (moderator+) — e un instrument de investigație pentru staff,
+// nu date publice.
+const GAME_LOG_CATEGORIES = ["chat", "command", "connect", "disconnect", "death", "money", "item_buy", "item_craft", "item_transfer", "item_obtained"];
+const LOG_CATEGORIES = [...GAME_LOG_CATEGORIES, "admin"];
+
+app.get("/api/admin/logs", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
+  const player = req.query.player ? String(req.query.player).slice(0, 64) : "";
+  const category = LOG_CATEGORIES.includes(req.query.category) ? req.query.category : "";
+  const limit = Math.min(500, Math.max(1, Number(req.query.limit) || 100));
+
+  let gameOnline = true;
+  let gameLogs = [];
+  if (category !== "admin") {
+    const qs = new URLSearchParams();
+    if (player) qs.set("player", player);
+    if (category) qs.set("category", category);
+    qs.set("limit", String(limit));
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    try {
+      const r = await fetch(`http://${FIVEM_ADDRESS}/moldovarp-api/logs?${qs.toString()}`, {
+        headers: { "x-api-key": FIVEM_API_SECRET },
+        signal: controller.signal,
+      });
+      if (!r.ok) throw new Error(`moldovarp-api HTTP ${r.status}`);
+      const body = await r.json();
+      gameLogs = body.logs || [];
+    } catch {
+      gameOnline = false;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  let staffLogs = [];
+  if (!category || category === "admin") {
+    const conditions = [];
+    const params = [];
+    if (player) {
+      params.push(`%${player}%`);
+      conditions.push(`(staff_name ILIKE $${params.length} OR target_name ILIKE $${params.length})`);
+    }
+    params.push(limit);
+    const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+    const { rows } = await pool.query(
+      `SELECT staff_name, target_name, action, reason, raw, created_at
+       FROM admin_action_logs ${where} ORDER BY created_at DESC LIMIT $${params.length}`,
+      params
+    );
+    staffLogs = rows.map(r => ({
+      category: "admin",
+      player: r.staff_name || r.target_name || "necunoscut",
+      details: { staff: r.staff_name, target: r.target_name, action: r.action, reason: r.reason, raw: r.raw },
+      at: r.created_at,
+    }));
+  }
+
+  const merged = [...gameLogs, ...staffLogs]
+    .sort((a, b) => new Date(b.at) - new Date(a.at))
+    .slice(0, limit);
+
+  res.json({ online: gameOnline, logs: merged });
+}));
+
+// Webhook primit direct de la Luxu Admin (panoul lor cloud, tab "Webhooks"),
+// de fiecare dată când un membru staff face o acțiune (kill, revive, dă/ia
+// item, ban etc.). Fără autentificare per-user (nu e un admin logat pe site,
+// e Luxu care ne cheamă) — protejat printr-un secret în query string, pentru
+// că Luxu nu oferă header-e custom / semnătură configurabile.
+// Structura exactă a payload-ului Luxu nu e documentată public, deci
+// încercăm mai multe nume de câmp posibile și, indiferent de rezultat,
+// păstrăm payload-ul brut (raw) ca să nu pierdem nimic dacă extragerea unui
+// câmp anume eșuează pentru un tip de eveniment pe care nu l-am prevăzut.
+const LUXU_WEBHOOK_SECRET = process.env.LUXU_WEBHOOK_SECRET || "";
+
+function pickField(obj, keys) {
+  for (const k of keys) {
+    const v = obj?.[k];
+    if (v !== undefined && v !== null && String(v).trim() !== "") return String(v).trim().slice(0, 500);
+  }
+  return null;
+}
+
+app.post("/api/webhooks/luxu", asyncRoute(async (req, res) => {
+  if (!LUXU_WEBHOOK_SECRET || req.query.key !== LUXU_WEBHOOK_SECRET) {
+    return res.status(401).json({ error: "unauthorized" });
+  }
+  const body = (req.body && typeof req.body === "object") ? req.body : {};
+  const staff = pickField(body, ["admin", "staff", "moderator", "executor", "by", "source_name", "adminName", "staffName", "username", "author"]);
+  const target = pickField(body, ["target", "player", "target_name", "targetName", "victim", "targetPlayer"]);
+  const action = pickField(body, ["action", "type", "event", "command", "title"]);
+  const reason = pickField(body, ["reason", "note", "notes", "details", "description"]);
+  await pool.query(
+    "INSERT INTO admin_action_logs(source, staff_name, target_name, action, reason, raw) VALUES ($1,$2,$3,$4,$5,$6)",
+    ["luxu", staff, target, action, reason, JSON.stringify(body)]
+  );
+  res.json({ ok: true });
+}));
+
+// Curățare periodică a acțiunilor de staff (Luxu) — păstrăm doar ultimele 30
+// de zile, la fel ca tabela moldovarp_logs de pe serverul de joc.
+setInterval(() => {
+  pool.query("DELETE FROM admin_action_logs WHERE created_at < NOW() - INTERVAL '30 days'")
+    .catch(err => console.error("Curățarea admin_action_logs a eșuat:", err.message));
+}, 6 * 60 * 60 * 1000);
+
 app.post("/api/auth/register", asyncRoute(async (req, res) => {
   const { username, email, password } = req.body;
   if (!username || !email || !password || password.length < 8)

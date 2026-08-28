@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Loguri — Admin Moldova RP</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="admin.css"></head>
+<body>
+<aside class="side"><a class="brand" href="index.html"><img src="assets/logo.png" alt=""><b>MOLDOVA<span>RP</span></b></a><p>ADMINISTRAȚIE</p><a href="admin.html">▦ Dashboard</a><a href="admin-utilizatori.html">👤 Utilizatori</a><a href="admin-jucatori.html">♙ Jucători</a><a href="admin-financiar.html">◆ Facțiuni</a><a href="admin-sanctiuni.html">⚠ Sancțiuni</a><a>▤ Reclamații</a><a>⚖ CK</a><a href="admin-regulamente.html">📚 Regulamente</a><a href="admin-anunturi.html">◉ Anunțuri</a><a href="admin-tichete.html">🎫 Tichete</a><a class="sel" href="admin-loguri.html">🗂 Loguri</a><a>⌁ Audit Logs</a><a class="back" href="index.html">← Site public</a></aside>
+<main>
+<header><div><small>PANEL ADMINISTRATIV</small><h1>Loguri</h1></div><div class="admin"><span id="admin-name">…</span> <i></i></div></header>
+
+<p class="muted" style="margin:-10px 0 18px">
+  Jurnal de activitate, din două surse: serverul de joc (chat/comenzi, conectări/deconectări, morți/kill-uri, bani, cumpărături/crafting/transfer de iteme din inventar) și panoul Luxu Admin (acțiuni de staff — kill, revive, dă/ia item etc.), trimise direct pe site prin webhook.
+  Banii arată doar <strong>diferența</strong> observată (cumpărare/vânzare/salariu etc.), nu neapărat exact ce anume s-a întâmplat.
+</p>
+
+<section class="tablebox">
+  <div class="title">
+    <h2>Activitate recentă</h2>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <input id="f-player" class="filter-select" placeholder="Filtrează după jucător..." autocomplete="off" style="min-width:180px">
+      <select id="f-category" class="filter-select">
+        <option value="">Toate categoriile</option>
+        <option value="chat">Chat</option>
+        <option value="command">Comenzi</option>
+        <option value="connect">Conectări</option>
+        <option value="disconnect">Deconectări</option>
+        <option value="death">Morți / Kill-uri</option>
+        <option value="money">Bani</option>
+        <option value="item_buy">Cumpărături</option>
+        <option value="item_craft">Crafting</option>
+        <option value="item_transfer">Transfer iteme</option>
+        <option value="item_obtained">Alte iteme obținute</option>
+        <option value="admin">Acțiuni staff (Luxu)</option>
+      </select>
+      <button id="refresh-btn" class="btn-ghost" type="button">Reîmprospătează</button>
+    </div>
+  </div>
+  <p class="muted" id="offline-note" style="margin:0 22px 16px" hidden>Serverul de joc nu răspunde momentan — se văd doar acțiunile de staff (Luxu), dacă există.</p>
+  <table><thead><tr><th>CATEGORIE</th><th>JUCĂTOR</th><th>DETALII</th><th>DATA</th></tr></thead>
+  <tbody id="list-body"><tr><td colspan="4">Se încarcă…</td></tr></tbody></table>
+</section>
+
+</main>
+<script src="auth-client.js"></script>
+<script>
+const CATEGORY_LABEL = {
+  chat: 'Chat', command: 'Comandă', connect: 'Conectare', disconnect: 'Deconectare', death: 'Moarte / Kill', money: 'Bani',
+  item_buy: 'Cumpărare', item_craft: 'Crafting', item_transfer: 'Transfer item', item_obtained: 'Item obținut',
+  admin: 'Acțiune staff',
+};
+const CATEGORY_PILL = {
+  chat: 'info', command: 'info', connect: 'on', disconnect: 'off', death: 'warn', money: 'warn',
+  item_buy: 'info', item_craft: 'info', item_transfer: 'info', item_obtained: 'info',
+  admin: 'warn',
+};
+
+const escapeHtml = s => (s ?? '').toString()
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
+function fmtDate(d) { return new Date(d).toLocaleString('ro-RO'); }
+function fmtMoney(n) { return (n > 0 ? '+' : '') + n.toLocaleString('ro-RO') + '$'; }
+
+// Fiecare categorie de log are un format diferit de "details" — transformăm
+// obiectul JSON venit din joc într-o linie de text ușor de citit.
+function formatDetails(log) {
+  const d = log.details || {};
+  switch (log.category) {
+    case 'chat':
+    case 'command':
+      return d.message ? escapeHtml(d.message) : '<span class="muted">—</span>';
+    case 'connect':
+      return '<span class="muted">s-a conectat</span>';
+    case 'disconnect':
+      return d.reason ? `s-a deconectat <span class="muted">(${escapeHtml(d.reason)})</span>` : '<span class="muted">s-a deconectat</span>';
+    case 'death': {
+      const parts = [];
+      if (d.killer) parts.push(`ucis de <strong>${escapeHtml(d.killer)}</strong>`);
+      else parts.push('a murit');
+      if (d.cause) parts.push(`<span class="muted">(${escapeHtml(String(d.cause))})</span>`);
+      return parts.join(' ');
+    }
+    case 'money': {
+      const parts = [];
+      if (typeof d.cashDelta === 'number' && d.cashDelta !== 0) parts.push(`cash ${fmtMoney(d.cashDelta)}`);
+      if (typeof d.bankDelta === 'number' && d.bankDelta !== 0) parts.push(`bancă ${fmtMoney(d.bankDelta)}`);
+      const change = parts.join(', ') || 'schimbare bani';
+      const total = (typeof d.cash === 'number' && typeof d.bank === 'number')
+        ? `<span class="muted"> · total: ${d.cash.toLocaleString('ro-RO')}$ cash, ${d.bank.toLocaleString('ro-RO')}$ bancă</span>`
+        : '';
+      return change + total;
+    }
+    case 'item_buy': {
+      const parts = [`a cumpărat`];
+      parts.push(`<strong>${escapeHtml((d.count ? d.count + 'x ' : '') + (d.item || 'un item'))}</strong>`);
+      if (typeof d.totalPrice === 'number') parts.push(`pentru <strong>${fmtMoney(d.totalPrice).replace('+', '')}</strong>`);
+      if (d.shop) parts.push(`<span class="muted">(${escapeHtml(String(d.shop))})</span>`);
+      return parts.join(' ');
+    }
+    case 'item_craft': {
+      const parts = ['a craftat'];
+      parts.push(`<strong>${escapeHtml(d.recipe || 'un item')}</strong>`);
+      if (d.bench) parts.push(`<span class="muted">(bench: ${escapeHtml(String(d.bench))})</span>`);
+      return parts.join(' ');
+    }
+    case 'item_transfer': {
+      const parts = ['a dat'];
+      parts.push(`<strong>${escapeHtml((d.count ? d.count + 'x ' : '') + (d.item || 'un item'))}</strong>`);
+      parts.push(`lui <strong>${escapeHtml(d.to || 'necunoscut')}</strong>`);
+      return parts.join(' ');
+    }
+    case 'item_obtained': {
+      const parts = ['a obținut'];
+      parts.push(`<strong>${escapeHtml((d.count ? d.count + 'x ' : '') + (d.item || 'un item'))}</strong>`);
+      return parts.join(' ');
+    }
+    case 'admin': {
+      const parts = [];
+      if (d.action) parts.push(`<strong>${escapeHtml(d.action)}</strong>`);
+      if (d.target) parts.push(`→ <strong>${escapeHtml(d.target)}</strong>`);
+      if (d.reason) parts.push(`<span class="muted">(${escapeHtml(d.reason)})</span>`);
+      return parts.length ? parts.join(' ') : `<span class="muted">${escapeHtml(JSON.stringify(d.raw || {}))}</span>`;
+    }
+    default:
+      return `<span class="muted">${escapeHtml(JSON.stringify(d))}</span>`;
+  }
+}
+
+let debounceTimer = null;
+function scheduleReload() {
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(loadLogs, 300);
+}
+
+async function loadLogs() {
+  const tbody = document.getElementById('list-body');
+  const offlineNote = document.getElementById('offline-note');
+  const player = document.getElementById('f-player').value.trim();
+  const category = document.getElementById('f-category').value;
+  const qs = new URLSearchParams();
+  if (player) qs.set('player', player);
+  if (category) qs.set('category', category);
+  qs.set('limit', '150');
+  try {
+    const res = await apiFetch(`/api/admin/logs?${qs.toString()}`);
+    if (!res.ok) throw new Error();
+    const d = await res.json();
+    offlineNote.hidden = d.online !== false;
+    if (!d.logs || !d.logs.length) {
+      tbody.innerHTML = '<tr><td colspan="4">Nicio înregistrare găsită.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = d.logs.map(log => `
+      <tr>
+        <td><span class="pill ${CATEGORY_PILL[log.category] || 'off'}">${escapeHtml((CATEGORY_LABEL[log.category] || log.category).toUpperCase())}</span></td>
+        <td><strong>${escapeHtml(log.player || 'necunoscut')}</strong></td>
+        <td>${formatDetails(log)}</td>
+        <td>${fmtDate(log.at)}</td>
+      </tr>`).join('');
+  } catch {
+    tbody.innerHTML = '<tr><td colspan="4">Nu am putut încărca logurile.</td></tr>';
+  }
+}
+
+document.getElementById('f-player').addEventListener('input', scheduleReload);
+document.getElementById('f-category').addEventListener('change', loadLogs);
+document.getElementById('refresh-btn').addEventListener('click', loadLogs);
+
+(async () => {
+  const me = await requireRole('moderator', 'admin', 'owner');
+  if (!me) return;
+  document.getElementById('admin-name').textContent = me.username;
+  loadLogs();
+  setInterval(loadLogs, 60000);
+})();
+</script>
+</body></html>

@@ -7,6 +7,7 @@ const fs = require("fs");
 const path = require("path");
 const bcrypt = require("bcryptjs");
 const { Client } = require("pg");
+const { PAGE_BLOCKS } = require("./seed-content");
 
 // The password hash originally shipped in database/seed.sql was a placeholder
 // that never actually matched the documented demo password. Re-hashing it
@@ -32,6 +33,23 @@ async function run() {
     const seed = fs.readFileSync(path.join(__dirname, "..", "database", "seed.sql"), "utf8");
     console.log("Applying database/seed.sql...");
     await client.query(seed);
+
+    // Conținutul editabil al paginilor publice (Admin → Conținut pagini).
+    // ON CONFLICT DO NOTHING pe fiecare rând: prima aplicare a acestui
+    // deploy seedează exact ce e azi pe site; orice bloc editat ulterior
+    // din admin nu mai e niciodată atins de un redeploy ulterior.
+    console.log(`Seeding ${PAGE_BLOCKS.length} page_blocks rows (skipping any already customized)...`);
+    let seededBlocks = 0;
+    for (const b of PAGE_BLOCKS) {
+      const { rowCount } = await client.query(
+        `INSERT INTO page_blocks(page, block_key, label, type, content, sort_order)
+         VALUES($1,$2,$3,$4,$5,$6)
+         ON CONFLICT (page, block_key) DO NOTHING`,
+        [b.page, b.block_key, b.label, b.type, b.content, b.sort_order]
+      );
+      seededBlocks += rowCount;
+    }
+    console.log(`page_blocks: ${seededBlocks} new row(s) inserted, ${PAGE_BLOCKS.length - seededBlocks} already existed.`);
 
     console.log(`Fixing up ${DEMO_USERNAME}'s demo password hash...`);
     const hash = await bcrypt.hash(DEMO_PASSWORD, 12);

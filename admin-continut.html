@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Conținut pagini — Admin Moldova RP</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="admin.css"></head>
+<body>
+<aside class="side"><a class="brand" href="index.html"><img src="assets/logo.png" alt=""><b>MOLDOVA<span>RP</span></b></a><p>ADMINISTRAȚIE</p><a href="admin.html">▦ Dashboard</a><a href="admin-utilizatori.html">👤 Utilizatori</a><a href="admin-jucatori.html">♙ Jucători</a><a href="admin-financiar.html">◆ Facțiuni</a><a href="admin-sanctiuni.html">⚠ Sancțiuni</a><a>▤ Reclamații</a><a>⚖ CK</a><a href="admin-regulamente.html">📚 Regulamente</a><a class="sel" href="admin-continut.html">📝 Conținut pagini</a><a href="admin-anunturi.html">◉ Anunțuri</a><a href="admin-tichete.html">🎫 Tichete</a><a href="admin-loguri.html">🗂 Loguri</a><a>⌁ Audit Logs</a><a href="admin-txadmin.html" id="nav-txadmin">🖥 txAdmin</a><a class="back" href="index.html">← Site public</a></aside>
+<main>
+<header><div><small>PANEL ADMINISTRATIV</small><h1>Conținut pagini</h1></div><div class="admin"><span id="admin-name">…</span> <i></i></div></header>
+
+<section class="tablebox">
+  <div class="title"><h2>Alege pagina</h2></div>
+  <div class="page-tabs" id="page-tabs"></div>
+  <select id="slug-picker" class="filter-select" hidden></select>
+</section>
+
+<section class="tablebox" id="blocks-wrap">
+  <div class="title"><h2>Blocuri de conținut</h2><small class="muted">Fiecare bloc corespunde unei bucăți din pagina publică — titlu, text, listă sau HTML.</small></div>
+  <div id="blocks-list"><p class="muted">Se încarcă…</p></div>
+</section>
+
+</main>
+<script src="auth-client.js"></script>
+<script>
+const PAGES = [
+  { key: 'index', label: 'Acasă' },
+  { key: 'joburi', label: 'Joburi' },
+  { key: 'ghid-factiuni', label: 'Ghid facțiuni' },
+  { key: 'legislatie-rutiera', label: 'Legislație rutieră' },
+  { key: 'ghid-factiune', label: 'Ghid facțiune — detaliu' }
+];
+const GUIDE_SLUGS = [
+  { slug: 'politie', label: 'Poliție' },
+  { slug: 'smurd', label: 'SMURD' },
+  { slug: 'armata', label: 'Armată' },
+  { slug: 'moto', label: 'Categoria A — Moto' },
+  { slug: 'auto', label: 'Categoria B — Auto' },
+  { slug: 'camion', label: 'Categoria C — Camion' },
+  { slug: 'barca', label: 'Categoria N — Barcă' },
+  { slug: 'pilot', label: 'Licență PPL — Pilot' }
+];
+
+let currentPage = 'index';
+let currentSlug = 'politie';
+let allBlocks = [];
+const editState = new Map();
+
+const escapeHtml = s => (s ?? '').toString()
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
+// -----------------------------------------------------------------------
+// Selectorul de pagină (+ sub-selector de facțiune/categorie pentru
+// "Ghid facțiune — detaliu", care are 8 seturi de blocuri, unul per slug).
+// -----------------------------------------------------------------------
+
+function renderPageTabs() {
+  const tabs = document.getElementById('page-tabs');
+  tabs.innerHTML = PAGES.map(p =>
+    `<button type="button" class="page-tab${p.key === currentPage ? ' active' : ''}" data-page="${p.key}">${escapeHtml(p.label)}</button>`
+  ).join('');
+  tabs.querySelectorAll('button').forEach(btn => btn.addEventListener('click', () => {
+    if (btn.dataset.page === currentPage) return;
+    currentPage = btn.dataset.page;
+    renderPageTabs();
+    document.getElementById('slug-picker').hidden = currentPage !== 'ghid-factiune';
+    loadBlocks();
+  }));
+}
+
+function renderSlugPicker() {
+  const sel = document.getElementById('slug-picker');
+  sel.innerHTML = GUIDE_SLUGS.map(g => `<option value="${g.slug}">${escapeHtml(g.label)}</option>`).join('');
+  sel.value = currentSlug;
+  sel.addEventListener('change', () => {
+    currentSlug = sel.value;
+    renderBlocks();
+  });
+}
+
+// -----------------------------------------------------------------------
+// Încărcare + randare blocuri pentru pagina curentă.
+// -----------------------------------------------------------------------
+
+async function loadBlocks() {
+  const list = document.getElementById('blocks-list');
+  list.innerHTML = '<p class="muted">Se încarcă…</p>';
+  editState.clear();
+  try {
+    const res = await apiFetch(`/api/admin/content/${currentPage}`);
+    if (!res.ok) throw new Error();
+    allBlocks = await res.json();
+    renderBlocks();
+  } catch {
+    list.innerHTML = '<p class="muted">Nu am putut încărca conținutul acestei pagini.</p>';
+  }
+}
+
+function renderBlocks() {
+  const list = document.getElementById('blocks-list');
+  const blocks = currentPage === 'ghid-factiune'
+    ? allBlocks.filter(b => b.block_key.startsWith(currentSlug + '_'))
+    : allBlocks;
+  if (!blocks.length) {
+    list.innerHTML = '<p class="muted">Niciun bloc de conținut pentru această pagină.</p>';
+    return;
+  }
+  list.innerHTML = blocks.map(blockCardHtml).join('');
+  blocks.forEach(wireBlockCard);
+}
+
+function blockCardHtml(b) {
+  const typeSelect = b.type !== 'list'
+    ? `<select class="type-select" data-id="${b.id}">
+         <option value="text"${b.type === 'text' ? ' selected' : ''}>Text simplu</option>
+         <option value="richtext"${b.type === 'richtext' ? ' selected' : ''}>Text formatat</option>
+         <option value="html"${b.type === 'html' ? ' selected' : ''}>HTML brut</option>
+       </select>`
+    : `<span class="pill info">LISTĂ</span>`;
+  return `<article class="content-block" id="block-${b.id}">
+    <div class="content-block-head">
+      <div><strong>${escapeHtml(b.label)}</strong><small>${escapeHtml(b.block_key)}</small></div>
+      ${typeSelect}
+    </div>
+    <div class="content-block-body" data-editor-for="${b.id}"></div>
+    <p class="formmsg" id="msg-${b.id}" hidden></p>
+    <div class="content-block-actions">
+      <button type="button" class="btn-primary" data-save="${b.id}">Salvează</button>
+      ${b.type === 'list' ? `<button type="button" class="btn-ghost" data-add-item="${b.id}">+ Element nou</button>` : ''}
+      ${b.type === 'html' ? `<button type="button" class="btn-ghost" data-preview="${b.id}">Previzualizare</button>` : ''}
+    </div>
+  </article>`;
+}
+
+function wireBlockCard(b) {
+  editState.set(b.id, { type: b.type, content: b.content });
+  renderEditor(b.id);
+
+  const sel = document.querySelector(`select.type-select[data-id="${b.id}"]`);
+  if (sel) sel.addEventListener('change', () => {
+    editState.get(b.id).content = getEditedContent(b.id, editState.get(b.id).type);
+    editState.get(b.id).type = sel.value;
+    renderEditor(b.id);
+  });
+
+  document.querySelector(`[data-save="${b.id}"]`).addEventListener('click', () => saveBlock(b.id));
+
+  const addBtn = document.querySelector(`[data-add-item="${b.id}"]`);
+  if (addBtn) addBtn.addEventListener('click', () => {
+    const state = editState.get(b.id);
+    state._items = state._items || [];
+    state._items.push({ icon: '', title: '', text: '', url: '' });
+    renderEditor(b.id);
+  });
+
+  const prevBtn = document.querySelector(`[data-preview="${b.id}"]`);
+  if (prevBtn) prevBtn.addEventListener('click', () => togglePreview(b.id));
+}
+
+// -----------------------------------------------------------------------
+// Editor per bloc — widget-ul depinde de tipul curent (text/richtext/html),
+// switch-uibil oricând din select fără să pierzi ce ai scris (păstrat în
+// editState). Blocurile "list" au propriul editor de elemente repetate.
+// -----------------------------------------------------------------------
+
+function renderEditor(id) {
+  const state = editState.get(id);
+  const host = document.querySelector(`[data-editor-for="${id}"]`);
+  if (!host) return;
+
+  if (state.type === 'list') {
+    if (!state._items) {
+      try {
+        state._items = JSON.parse(state.content);
+        if (!Array.isArray(state._items)) state._items = [];
+      } catch {
+        state._items = [];
+      }
+    }
+    host.innerHTML = renderListEditor(state._items);
+    wireListEditor(id);
+    return;
+  }
+
+  if (state.type === 'text') {
+    host.innerHTML = `<textarea class="block-input" rows="3" data-field="${id}">${escapeHtml(state.content)}</textarea>`;
+    return;
+  }
+
+  if (state.type === 'richtext') {
+    host.innerHTML = `
+      <div class="rt-toolbar">
+        <button type="button" data-cmd="bold"><b>B</b></button>
+        <button type="button" data-cmd="italic"><i>I</i></button>
+        <button type="button" data-cmd="underline"><u>U</u></button>
+        <button type="button" data-cmd="insertUnorderedList">• Listă</button>
+        <button type="button" data-cmd="createLink">🔗 Link</button>
+        <button type="button" data-cmd="removeFormat">✕ Curăță</button>
+      </div>
+      <div class="rt-editor" contenteditable="true" data-rt="${id}">${state.content}</div>`;
+    const editor = host.querySelector('.rt-editor');
+    host.querySelectorAll('.rt-toolbar button').forEach(btn => btn.addEventListener('click', () => {
+      editor.focus();
+      if (btn.dataset.cmd === 'createLink') {
+        const url = prompt('Adresa linkului (https://...)');
+        if (url) document.execCommand('createLink', false, url);
+      } else {
+        document.execCommand(btn.dataset.cmd, false, null);
+      }
+    }));
+    return;
+  }
+
+  // html
+  host.innerHTML = `
+    <textarea class="block-input code" rows="10" data-field="${id}">${escapeHtml(state.content)}</textarea>
+    <div class="html-preview" data-preview-box="${id}" hidden></div>`;
+}
+
+function renderListEditor(items) {
+  if (!items.length) return '<p class="muted">Nicio intrare încă — adaugă un element nou.</p>' + '<div class="list-editor"></div>';
+  return `<div class="list-editor">${items.map((it, i) => `
+    <div class="list-item-row" data-idx="${i}">
+      <input placeholder="Iconiță" class="li-icon" value="${escapeHtml(it.icon || '')}">
+      <input placeholder="Titlu" class="li-title" value="${escapeHtml(it.title || '')}">
+      <input placeholder="Text (opțional)" class="li-text" value="${escapeHtml(it.text || '')}">
+      <input placeholder="Link (opțional)" class="li-url" value="${escapeHtml(it.url || '')}">
+      <button type="button" class="danger li-remove" data-remove="${i}">Șterge</button>
+    </div>`).join('')}</div>`;
+}
+
+function wireListEditor(id) {
+  const state = editState.get(id);
+  const host = document.querySelector(`[data-editor-for="${id}"] .list-editor`);
+  if (!host) return;
+  host.querySelectorAll('.list-item-row').forEach(row => {
+    const idx = Number(row.dataset.idx);
+    row.querySelector('.li-icon').addEventListener('input', e => { state._items[idx].icon = e.target.value; });
+    row.querySelector('.li-title').addEventListener('input', e => { state._items[idx].title = e.target.value; });
+    row.querySelector('.li-text').addEventListener('input', e => { state._items[idx].text = e.target.value; });
+    row.querySelector('.li-url').addEventListener('input', e => { state._items[idx].url = e.target.value; });
+    row.querySelector('.li-remove').addEventListener('click', () => {
+      state._items.splice(idx, 1);
+      renderEditor(id);
+    });
+  });
+}
+
+function togglePreview(id) {
+  const box = document.querySelector(`[data-preview-box="${id}"]`);
+  if (!box) return;
+  const textarea = document.querySelector(`textarea[data-field="${id}"]`);
+  if (box.hidden) {
+    box.innerHTML = textarea.value;
+    box.hidden = false;
+  } else {
+    box.hidden = true;
+  }
+}
+
+function getEditedContent(id, type) {
+  const t = type || editState.get(id).type;
+  if (t === 'list') {
+    return JSON.stringify(editState.get(id)._items || []);
+  }
+  if (t === 'richtext') {
+    const el = document.querySelector(`[data-rt="${id}"]`);
+    return el ? el.innerHTML : editState.get(id).content;
+  }
+  const el = document.querySelector(`textarea[data-field="${id}"]`);
+  return el ? el.value : editState.get(id).content;
+}
+
+async function saveBlock(id) {
+  const state = editState.get(id);
+  const msg = document.getElementById(`msg-${id}`);
+  msg.hidden = true;
+  const content = getEditedContent(id);
+  try {
+    const res = await apiFetch(`/api/admin/content/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ type: state.type, content })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Salvarea a eșuat.');
+    state.content = content;
+    const idx = allBlocks.findIndex(b => b.id === id);
+    if (idx !== -1) { allBlocks[idx].type = state.type; allBlocks[idx].content = content; }
+    msg.textContent = 'Salvat.';
+    msg.className = 'formmsg ok';
+    msg.hidden = false;
+    setTimeout(() => { msg.hidden = true; }, 2500);
+  } catch (err) {
+    msg.textContent = err.message;
+    msg.className = 'formmsg error';
+    msg.hidden = false;
+  }
+}
+
+(async () => {
+  const me = await requireRole('admin', 'co-fondator', 'owner');
+  if (!me) return;
+  document.getElementById('admin-name').textContent = me.username;
+  renderPageTabs();
+  renderSlugPicker();
+  loadBlocks();
+})();
+</script>
+</body></html>

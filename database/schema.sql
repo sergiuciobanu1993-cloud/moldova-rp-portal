@@ -190,6 +190,28 @@ CREATE TABLE IF NOT EXISTS admin_action_logs (
 );
 CREATE INDEX IF NOT EXISTS idx_admin_action_logs_created_at ON admin_action_logs(created_at DESC);
 
+-- Conținut editabil din Admin → Conținut pagini. Fiecare "bloc" e o bucată
+-- numită de conținut a unei pagini publice (titlu, paragraf, listă de
+-- elemente sau bucată de HTML), identificată unic prin (page, block_key).
+-- type controlează cum se editează/randează: 'text' (simplu), 'richtext'
+-- (text formatat, salvat ca HTML simplu), 'html' (HTML brut, editat direct),
+-- 'list' (elemente repetate — content e un JSON array de {icon,title,text,url}).
+-- Rândurile inițiale sunt populate de scripts/seed-content.js cu ON CONFLICT
+-- DO NOTHING, deci editările din admin nu sunt niciodată suprascrise la
+-- redeploy.
+CREATE TABLE IF NOT EXISTS page_blocks (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  page VARCHAR(60) NOT NULL,
+  block_key VARCHAR(80) NOT NULL,
+  label VARCHAR(160) NOT NULL,
+  type VARCHAR(20) NOT NULL DEFAULT 'text',
+  content TEXT NOT NULL DEFAULT '',
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(page, block_key)
+);
+CREATE INDEX IF NOT EXISTS idx_page_blocks_page ON page_blocks(page, sort_order);
+
 INSERT INTO roles(name, description) VALUES
 ('player', 'Jucator standard'),
 ('moderator', 'Moderator'),

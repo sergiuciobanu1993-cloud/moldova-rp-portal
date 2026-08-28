@@ -9,7 +9,7 @@
   <link rel="icon" href="assets/favicon.png">
   <link rel="stylesheet" href="styles.css">
 </head>
-<body>
+<body data-content-page="joburi">
   <header class="site-header">
     <a class="brand" href="index.html" aria-label="Moldova RP - Acasă">
       <img src="assets/logo.png" alt="Moldova RP">
@@ -32,18 +32,18 @@
   <main>
     <div class="page-hero">
       <a class="back-link" href="index.html">← Înapoi la pagina principală</a>
-      <p class="eyebrow" style="margin-top:22px">ECONOMIE</p>
-      <h1>Joburi</h1>
-      <p class="muted" style="max-width:640px;margin-top:14px">
+      <p class="eyebrow" style="margin-top:22px" data-block="page_eyebrow">ECONOMIE</p>
+      <h1 data-block="page_title">Joburi</h1>
+      <p class="muted" style="max-width:640px;margin-top:14px" data-block="page_intro">
         Peste 20 de meserii legale te așteaptă pe server — de la industrie și transport, până la construcții, servicii publice și afaceri proprii.
       </p>
     </div>
 
     <section class="section" style="padding-top:0;padding-bottom:20px">
       <div class="section-head">
-        <div><p class="eyebrow">PREZENTARE VIDEO</p><h2>Cum arată pe server</h2></div>
+        <div><p class="eyebrow" data-block="videos_eyebrow">PREZENTARE VIDEO</p><h2 data-block="videos_title">Cum arată pe server</h2></div>
       </div>
-      <div class="video-job-grid">
+      <div class="video-job-grid" data-block="videos">
         <div class="video-job-card">
           <div class="video-job-embed"><iframe src="https://www.youtube.com/embed/-k1xXa8Lm_4" title="Job Taxi" loading="lazy" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>
           <div class="video-job-body"><h3>🚕 Taxi</h3><p>Preiei curse din peste 80 de locații de pe hartă, cu mai multe tipuri de misiuni și un sistem de rating al clienților. Există și variante de curse cu risc mai mare, pentru cei care vor mai multă acțiune.</p></div>
@@ -71,7 +71,7 @@
       </div>
     </section>
 
-    <section class="section" style="padding-top:20px">
+    <section class="section" style="padding-top:20px" data-block="jobs_grid">
       <div class="reg-group">
         <h2>Industrie &amp; Resurse Naturale</h2>
         <div class="job-card-grid">

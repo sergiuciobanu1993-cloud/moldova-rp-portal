@@ -614,6 +614,20 @@ app.get("/api/announcements", asyncRoute(async (_req, res) => {
   res.json(rows);
 }));
 
+// Conținut editabil al paginilor publice (Admin → Conținut pagini — vezi
+// scripts/seed-content.js pentru valorile inițiale). Public: doar
+// block_key/type/content dintr-o singură pagină, ca hartă { block_key:
+// {type,content} } — cel mai simplu de consumat direct din scriptul fiecărei
+// pagini publice (index.html, joburi.html etc.), fără alt procesare.
+app.get("/api/content/:page", asyncRoute(async (req, res) => {
+  const { rows } = await pool.query(
+    "SELECT block_key, type, content FROM page_blocks WHERE page=$1 ORDER BY sort_order", [req.params.page]
+  );
+  const map = {};
+  for (const r of rows) map[r.block_key] = { type: r.type, content: r.content };
+  res.json(map);
+}));
+
 // Tichete — orice utilizator autentificat își poate deschide și vedea
 // propriile tichete. Dovezile (poze/filmări) se atașează ca LINK (Streamable,
 // YouTube, Discord etc.), nu ca fișier încărcat direct — evită complet
@@ -1356,6 +1370,44 @@ app.delete("/api/admin/announcements/:id", auth, requireRole(...ADMIN_ROLES), as
   if (!rowCount) return res.status(404).json({ error: "Anunțul nu există." });
   await logAction(req.user.sub, "announcement.delete", "announcement", id, null, req.ip);
   res.status(204).end();
+}));
+
+// ---------------------------------------------------------------------------
+// Conținut pagini (Admin → Conținut pagini) — editare "câmpuri" pentru
+// paginile publice. Blocurile sunt pre-definite la seed (scripts/seed-content.js)
+// pentru fiecare pagină — aici doar se listează/editează, nu se creează sau
+// șterg (structura paginilor rămâne stabilă; doar conținutul e editabil).
+// ---------------------------------------------------------------------------
+
+const CONTENT_TYPES = ["text", "richtext", "html", "list"];
+
+app.get("/api/admin/content/:page", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
+  const { rows } = await pool.query(
+    "SELECT * FROM page_blocks WHERE page=$1 ORDER BY sort_order", [req.params.page]
+  );
+  res.json(rows);
+}));
+
+app.put("/api/admin/content/:id", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+  const { id } = req.params;
+  const { type, content } = req.body;
+  if (!CONTENT_TYPES.includes(type))
+    return res.status(400).json({ error: "Tip de conținut invalid." });
+  if (type === "list") {
+    try {
+      const parsed = JSON.parse(content);
+      if (!Array.isArray(parsed)) throw new Error();
+    } catch {
+      return res.status(400).json({ error: "Conținutul unei liste trebuie să fie un JSON valid (array)." });
+    }
+  }
+  const { rows } = await pool.query(
+    `UPDATE page_blocks SET type=$1, content=$2, updated_at=NOW() WHERE id=$3 RETURNING *`,
+    [type, content ?? "", id]
+  );
+  if (!rows[0]) return res.status(404).json({ error: "Blocul de conținut nu există." });
+  await logAction(req.user.sub, "content.update", "page_block", id, { page: rows[0].page, block_key: rows[0].block_key }, req.ip);
+  res.json(rows[0]);
 }));
 
 app.get("/api/admin/tickets", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {

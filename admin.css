@@ -26,3 +26,43 @@ body.modal-open{overflow:hidden}
 .field textarea.textarea-lg{min-height:54vh;line-height:1.65;font-size:13.5px}
 @media(max-width:800px){.modal-overlay{padding:0}.modal-box{width:100%;min-height:100vh;border-radius:0}.field textarea.textarea-lg{min-height:40vh}}
 @media(max-width:800px){.side{position:static;width:190px}.metrics{grid-template-columns:repeat(2,1fr)}main{margin:0;width:calc(100% - 190px);padding:25px 15px}.formgrid{grid-template-columns:1fr}}@media(max-width:600px){body{display:block}.side{display:none}main{width:100%}.metrics{grid-template-columns:1fr 1fr}table{min-width:650px}.tablebox{overflow:auto}}
+
+/* Admin → Conținut pagini — selector de pagină/categorie și editor de
+   blocuri de conținut (text simplu / text formatat / HTML brut / listă). */
+.page-tabs{display:flex;flex-wrap:wrap;gap:8px;padding:0 22px 18px}
+.page-tab{background:transparent;border:1px solid var(--line);border-radius:999px;padding:9px 16px;font:inherit;font-weight:800;font-size:12px;color:var(--muted);cursor:pointer;transition:.15s ease}
+.page-tab:hover{border-color:rgba(255,138,31,.4);color:var(--text)}
+.page-tab.active{background:var(--orange);border-color:var(--orange);color:#0b0b0b}
+#slug-picker{margin:0 22px 20px;max-width:320px}
+
+#blocks-list{padding:0 22px 22px;display:flex;flex-direction:column;gap:14px}
+.content-block{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+.content-block-head{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;margin-bottom:12px}
+.content-block-head strong{display:block;font-size:13px}
+.content-block-head small{display:block;color:#666;font-size:10px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;margin-top:3px}
+.content-block-head select.type-select{background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:7px 10px;font:inherit;font-size:11px;flex-shrink:0}
+.content-block-body{margin-bottom:4px}
+.block-input{width:100%;padding:10px 12px;border:1px solid var(--line);background:var(--bg);color:var(--text);border-radius:9px;font:inherit;outline:0;resize:vertical;box-sizing:border-box;transition:.15s ease}
+.block-input:focus{border-color:var(--orange);box-shadow:0 0 0 3px rgba(255,138,31,.12)}
+.block-input.code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;line-height:1.6;min-height:220px}
+
+.rt-toolbar{display:flex;gap:6px;margin-bottom:8px}
+.rt-toolbar button{background:var(--bg);border:1px solid var(--line);border-radius:7px;width:32px;height:30px;color:var(--text);cursor:pointer;font:inherit;font-size:12px;transition:.15s ease}
+.rt-toolbar button:hover{border-color:var(--orange);color:var(--orange)}
+.rt-editor{min-height:80px;padding:10px 12px;border:1px solid var(--line);background:var(--bg);border-radius:9px;line-height:1.6;outline:0}
+.rt-editor:focus{border-color:var(--orange);box-shadow:0 0 0 3px rgba(255,138,31,.12)}
+
+.html-preview{margin-top:10px;padding:14px 16px;border:1px solid var(--line);border-radius:9px;background:var(--bg);line-height:1.7;color:#d5d8db}
+.html-preview h2{font-size:16px;margin:16px 0 8px;color:var(--text)}
+.html-preview h2:first-child{margin-top:0}
+.html-preview p{margin:0 0 10px}
+.html-preview ul{margin:0 0 12px;padding-left:20px}
+.html-preview li{margin:4px 0}
+
+.list-editor{display:flex;flex-direction:column;gap:8px}
+.list-item-row{display:grid;grid-template-columns:70px 1fr 1.4fr 1.2fr auto;gap:8px;align-items:center}
+.list-item-row input{padding:8px 10px;border:1px solid var(--line);background:var(--bg);color:var(--text);border-radius:8px;font:inherit;font-size:12px;outline:0;transition:.15s ease}
+.list-item-row input:focus{border-color:var(--orange);box-shadow:0 0 0 3px rgba(255,138,31,.12)}
+
+.content-block-actions{display:flex;gap:10px;margin-top:12px}
+@media(max-width:700px){.list-item-row{grid-template-columns:1fr 1fr;grid-template-areas:"icon title" "text text" "url url" "remove remove"}.list-item-row .li-icon{grid-area:icon}.list-item-row .li-title{grid-area:title}.list-item-row .li-text{grid-area:text}.list-item-row .li-url{grid-area:url}.list-item-row .li-remove{grid-area:remove}}

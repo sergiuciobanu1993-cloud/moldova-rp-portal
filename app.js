@@ -179,6 +179,88 @@ if (factionGrid) {
   setInterval(loadFactions, 30000);
 }
 
+// Conținut editabil din Admin → Conținut pagini (vezi backend/server.js
+// /api/content/:page și scripts/seed-content.js pentru valorile inițiale).
+// Orice element din pagină cu atributul data-block="<cheie>" e populat cu
+// valoarea salvată în DB pentru pagina curentă (identificată prin
+// data-content-page pe <body>). Progressive enhancement: dacă fetch-ul
+// eșuează, sau un bloc anume lipsește din răspuns, elementul rămâne exact
+// cu textul static deja scris în HTML — nimic nu se strică. Paginile fără
+// data-content-page pe <body> (admin, dashboard etc.) ies imediat, fără
+// niciun request. ghid-factiune.html are propria logică (conținut per
+// facțiune/categorie, selectat după ?slug=) și nu folosește acest loader.
+(() => {
+  const page = document.body.dataset.contentPage;
+  if (!page) return;
+  const nodes = document.querySelectorAll('[data-block]');
+  if (!nodes.length) return;
+
+  const escapeHtml = s => (s ?? '').toString()
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
+  // Randare specializată pentru blocurile de tip "list" — cheia identifică
+  // exact ce card se construiește pentru fiecare element din listă. Blocurile
+  // de tip "html" (ex: grila de joburi) nu au nevoie de randare specială —
+  // merg direct pe ramura generică innerHTML de mai jos.
+  const LIST_RENDERERS = {
+    highlights_items: (container, items) => {
+      const pill = (it, hidden) => `<span class="highlight-pill"${hidden ? ' aria-hidden="true"' : ''}><span class="highlight-pill-icon">${escapeHtml(it.icon)}</span><span>${escapeHtml(it.title)}</span></span>`;
+      container.innerHTML = items.map(it => pill(it, false)).join('') + items.map(it => pill(it, true)).join('');
+    },
+    guide_list: (container, items) => {
+      container.innerHTML = items.map(it => `
+        <a class="reg-item" href="${escapeHtml(it.url)}">
+          <div><h3>${escapeHtml(it.icon)} ${escapeHtml(it.title)}</h3><small>${escapeHtml(it.text)}</small></div>
+          <span class="reg-arrow">→</span>
+        </a>`).join('');
+    },
+    license_list: (container, items) => {
+      container.innerHTML = items.map(it => `
+        <a class="reg-item" href="${escapeHtml(it.url)}">
+          <div><h3>${escapeHtml(it.icon)} ${escapeHtml(it.title)}</h3><small>${escapeHtml(it.text)}</small></div>
+          <span class="reg-arrow">→</span>
+        </a>`).join('');
+    },
+    videos: (container, items) => {
+      container.innerHTML = items.map(it => `
+        <div class="video-job-card">
+          <div class="video-job-embed"><iframe src="${escapeHtml(it.url)}" title="${escapeHtml(it.title)}" loading="lazy" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>
+          <div class="video-job-body"><h3>${escapeHtml(it.title)}</h3><p>${escapeHtml(it.text)}</p></div>
+        </div>`).join('');
+    }
+  };
+
+  (async () => {
+    try {
+      const res = await fetch(`/api/content/${encodeURIComponent(page)}`);
+      if (!res.ok) throw new Error();
+      const blocks = await res.json();
+      nodes.forEach(el => {
+        const b = blocks[el.dataset.block];
+        if (!b) return;
+        if (b.type === 'list') {
+          const renderer = LIST_RENDERERS[el.dataset.block];
+          if (!renderer) return;
+          try {
+            const items = JSON.parse(b.content);
+            if (Array.isArray(items)) renderer(el, items);
+          } catch {
+            // Listă coruptă în DB — păstrează conținutul static din HTML.
+          }
+          return;
+        }
+        if (b.type === 'text') el.textContent = b.content;
+        // richtext/html — scrise doar de staff (ADMIN_ROLES), la fel de
+        // privilegiate ca restul conținutului editat din admin.
+        else el.innerHTML = b.content;
+      });
+    } catch {
+      // API indisponibil — pagina rămâne cu conținutul static din HTML.
+    }
+  })();
+})();
+
 // Ultimele anunțuri, publicate de admin din panoul de administrare (vezi
 // /api/announcements — public, întoarce doar cele cu is_published=true).
 // Guarded: doar homepage are #news-list.

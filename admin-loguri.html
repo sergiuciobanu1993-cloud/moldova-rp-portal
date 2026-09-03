@@ -89,6 +89,17 @@ const escapeHtml = s => (s ?? '').toString()
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
+// Unele campuri libere (metadata de item, motivul unei actiuni de staff,
+// payload-ul brut Luxu) pot contine, in practica, orice — inclusiv text
+// urias (ex: date de item incapsulate, imagini in base64 la iteme cu poza
+// custom). Fara o limita, un singur rand din tabel poate deveni cat un ecran
+// intreg de text. Taiem cu "…" ce trece de o lungime rezonabila — informatia
+// completa tot exista in baza de date, doar afisarea e limitata.
+function truncate(value, max) {
+  const s = (value ?? '').toString();
+  return s.length > max ? s.slice(0, max) + '…' : s;
+}
+
 function fmtDate(d) { return new Date(d).toLocaleString('ro-RO'); }
 function fmtMoney(n) { return (n > 0 ? '+' : '') + n.toLocaleString('ro-RO') + '$'; }
 
@@ -106,11 +117,11 @@ function formatDetailsBody(log, d) {
   switch (log.category) {
     case 'chat':
     case 'command':
-      return d.message ? escapeHtml(d.message) : '<span class="muted">—</span>';
+      return d.message ? escapeHtml(truncate(d.message, 400)) : '<span class="muted">—</span>';
     case 'connect':
       return '<span class="muted">s-a conectat</span>';
     case 'disconnect':
-      return d.reason ? `s-a deconectat <span class="muted">(${escapeHtml(d.reason)})</span>` : '<span class="muted">s-a deconectat</span>';
+      return d.reason ? `s-a deconectat <span class="muted">(${escapeHtml(truncate(d.reason, 200))})</span>` : '<span class="muted">s-a deconectat</span>';
     case 'death': {
       const parts = [];
       // Daca in fereastra scurta de dinaintea mortii a existat o actiune de
@@ -175,7 +186,11 @@ function formatDetailsBody(log, d) {
       const parts = ['a obținut'];
       parts.push(`<strong>${escapeHtml((d.count ? d.count + 'x ' : '') + (d.item || 'un item'))}</strong>`);
       if (d.metadata && typeof d.metadata === 'object' && Object.keys(d.metadata).length) {
-        parts.push(`<span class="muted">(${escapeHtml(JSON.stringify(d.metadata))})</span>`);
+        // Metadata unui item poate contine, in practica, orice — inclusiv
+        // date incapsulate uriase (ex: poza custom in base64) — de-aia
+        // trunchiem aici, ca un singur rand din tabel sa nu devina un ecran
+        // intreg de text (asa cum s-a intamplat pentru un item real).
+        parts.push(`<span class="muted">(${escapeHtml(truncate(JSON.stringify(d.metadata), 200))})</span>`);
       }
       return parts.join(' ');
     }
@@ -208,12 +223,12 @@ function formatDetailsBody(log, d) {
       if (nice) parts.push(`<strong>${escapeHtml(nice)}</strong>`);
       else if (d.action) parts.push(`<strong>${escapeHtml(d.action)}</strong>`);
       if (d.target) parts.push(`→ <strong>${escapeHtml(d.target)}</strong>`);
-      if (d.reason) parts.push(`<span class="muted">(${escapeHtml(d.reason)})</span>`);
-      if (nice && d.action) parts.push(`<span class="muted">· acțiune brută: ${escapeHtml(d.action)}</span>`);
-      return parts.length ? parts.join(' ') : `<span class="muted">${escapeHtml(JSON.stringify(d.raw || {}))}</span>`;
+      if (d.reason) parts.push(`<span class="muted">(${escapeHtml(truncate(d.reason, 300))})</span>`);
+      if (nice && d.action) parts.push(`<span class="muted">· acțiune brută: ${escapeHtml(truncate(d.action, 200))}</span>`);
+      return parts.length ? parts.join(' ') : `<span class="muted">${escapeHtml(truncate(JSON.stringify(d.raw || {}), 300))}</span>`;
     }
     default:
-      return `<span class="muted">${escapeHtml(JSON.stringify(d))}</span>`;
+      return `<span class="muted">${escapeHtml(truncate(JSON.stringify(d), 300))}</span>`;
   }
 }
 

@@ -321,6 +321,14 @@ app.get("/api/admin/logs", auth, requireRole(...MOD_ROLES), asyncRoute(async (re
   const player = req.query.player ? String(req.query.player).slice(0, 64) : "";
   const category = LOG_CATEGORIES.includes(req.query.category) ? req.query.category : "";
   const limit = Math.min(500, Math.max(1, Number(req.query.limit) || 100));
+  // Paginare: "before" = data (ISO) celei mai vechi intrari deja afisate pe
+  // ecran. Trimis, luam DOAR intrari strict mai vechi decat atat, din ambele
+  // surse (joc + acțiuni de staff), ca staff-ul sa poata merge inapoi in
+  // istoric oricat de mult (pana la limita de pastrare de 30 de zile), nu
+  // doar sa vada ultimele N randuri — inainte, pe un server activ, intrari
+  // vechi de doar cateva ore erau deja "impinse" din vizor de trafic nou.
+  const beforeDate = req.query.before ? new Date(String(req.query.before)) : null;
+  const before = beforeDate && !Number.isNaN(beforeDate.getTime()) ? beforeDate : null;
 
   let gameOnline = true;
   let gameLogs = [];
@@ -329,6 +337,7 @@ app.get("/api/admin/logs", auth, requireRole(...MOD_ROLES), asyncRoute(async (re
     if (player) qs.set("player", player);
     if (category) qs.set("category", category);
     qs.set("limit", String(limit));
+    if (before) qs.set("beforeAt", before.toISOString());
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);
     try {
@@ -353,6 +362,10 @@ app.get("/api/admin/logs", auth, requireRole(...MOD_ROLES), asyncRoute(async (re
     if (player) {
       params.push(`%${player}%`);
       conditions.push(`(staff_name ILIKE $${params.length} OR target_name ILIKE $${params.length})`);
+    }
+    if (before) {
+      params.push(before.toISOString());
+      conditions.push(`created_at < $${params.length}`);
     }
     params.push(limit);
     const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
@@ -406,7 +419,13 @@ app.get("/api/admin/logs", auth, requireRole(...MOD_ROLES), asyncRoute(async (re
     .sort((a, b) => new Date(b.at) - new Date(a.at))
     .slice(0, limit);
 
-  res.json({ online: gameOnline, logs: merged });
+  // Cursorul pentru "mai vechi" — data ultimei (celei mai vechi) intrari din
+  // pagina curenta. Frontend-ul il trimite inapoi ca "before" la urmatoarea
+  // cerere. Nu garanteaza ca mai exista ceva (poate fi chiar sfarsitul
+  // istoricului) — frontend-ul se oprește singur cand o pagina vine goala.
+  const nextCursor = merged.length ? merged[merged.length - 1].at : null;
+
+  res.json({ online: gameOnline, logs: merged, nextCursor });
 }));
 
 // Webhook primit direct de la Luxu Admin (panoul lor cloud, tab "Webhooks"),

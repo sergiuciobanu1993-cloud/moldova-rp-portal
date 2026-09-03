@@ -76,3 +76,11 @@ body.modal-open{overflow:hidden}
 #logs-table th:nth-child(2),#logs-table td:nth-child(2){width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #logs-table th:nth-child(3),#logs-table td:nth-child(3){width:auto;word-break:break-word}
 #logs-table th:nth-child(4),#logs-table td:nth-child(4){width:150px;white-space:nowrap}
+/* Aceeasi problema, acelasi fix, pentru tabelul de Kill Logs — coloanele
+   UCIGAȘ/CAUZĂ/JAF pot avea text lung, DATA trebuie sa ramana vizibila. */
+#kills-table{table-layout:fixed}
+#kills-table th:nth-child(1),#kills-table td:nth-child(1){width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#kills-table th:nth-child(2),#kills-table td:nth-child(2){width:170px;word-break:break-word}
+#kills-table th:nth-child(3),#kills-table td:nth-child(3){width:110px;word-break:break-word}
+#kills-table th:nth-child(4),#kills-table td:nth-child(4){width:auto;word-break:break-word}
+#kills-table th:nth-child(5),#kills-table td:nth-child(5){width:150px;white-space:nowrap}

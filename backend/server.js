@@ -317,6 +317,93 @@ app.get("/api/admin/live/jobs", auth, requireRole(...ADMIN_ROLES), asyncRoute(as
 const GAME_LOG_CATEGORIES = ["chat", "command", "connect", "disconnect", "death", "money", "item_buy", "item_craft", "item_transfer", "item_obtained", "item_drop", "vehicle_acquired"];
 const LOG_CATEGORIES = [...GAME_LOG_CATEGORIES, "admin"];
 
+// Cere loguri de joc de la moldovarp-api. `category` poate fi o singura
+// categorie sau mai multe separate prin virgula (resursa stie sa le
+// interogheze pe toate deodata — vezi Kill Logs mai jos, care are nevoie
+// simultan de "death" si "item_transfer" ca sa coreleze o moarte cu ce s-a
+// luat din inventarul victimei imediat dupa).
+async function fetchGameLogs({ player, category, limit, before }) {
+  const qs = new URLSearchParams();
+  if (player) qs.set("player", player);
+  if (category) qs.set("category", category);
+  qs.set("limit", String(limit));
+  if (before) qs.set("beforeAt", before.toISOString());
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const r = await fetch(`http://${FIVEM_ADDRESS}/moldovarp-api/logs?${qs.toString()}`, {
+      headers: { "x-api-key": FIVEM_API_SECRET },
+      signal: controller.signal,
+    });
+    if (!r.ok) throw new Error(`moldovarp-api HTTP ${r.status}`);
+    const body = await r.json();
+    return { online: true, logs: body.logs || [] };
+  } catch {
+    return { online: false, logs: [] };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+// Acțiunile de staff (Luxu), sursa separata (Postgres) folosita atat pentru
+// categoria "admin" din Loguri cat si pentru corelarile best-effort de mai
+// jos (kill/revive/item de admin etc.) si pentru Kill Logs.
+async function fetchStaffLogs({ player, before, limit }) {
+  const conditions = [];
+  const params = [];
+  if (player) {
+    params.push(`%${player}%`);
+    conditions.push(`(staff_name ILIKE $${params.length} OR target_name ILIKE $${params.length})`);
+  }
+  if (before) {
+    params.push(before.toISOString());
+    conditions.push(`created_at < $${params.length}`);
+  }
+  params.push(limit);
+  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+  const { rows } = await pool.query(
+    `SELECT staff_name, target_name, action, reason, raw, created_at
+     FROM admin_action_logs ${where} ORDER BY created_at DESC LIMIT $${params.length}`,
+    params
+  );
+  return rows.map(r => ({
+    category: "admin",
+    player: r.staff_name || r.target_name || "necunoscut",
+    details: { staff: r.staff_name, target: r.target_name, action: r.action, reason: r.reason, raw: r.raw },
+    at: r.created_at,
+  }));
+}
+
+// Corelare best-effort: cand un log de joc (item obtinut generic, moarte,
+// vehicul nou aparut) se intampla FOARTE aproape in timp de o actiune de
+// staff din Luxu care pare potrivita (dupa un cuvant-cheie in actiune/motiv)
+// si vizeaza acelasi jucator, marcam intrarea ca fiind rezultatul acelei
+// actiuni de admin — ca sa nu para ceva organic din joc (item "gasit",
+// moarte "de la un jucator necunoscut", vehicul "cumparat"). Schema exactă
+// a payload-ului Luxu nu e documentată public (vezi comentariul de la
+// /api/webhooks/luxu mai jos), deci potrivirea e doar dupa cuvinte-cheie —
+// dacă observați intrări nepotrivite sau cazuri reale ratate, spuneți-mi
+// exact ce ați văzut (categoria + ce ar fi trebuit să scrie) și ajustez.
+function correlateStaffAction(gameLogs, staffLogs, gameCategory, keywordRegex, detailsField) {
+  if (!gameLogs.length || !staffLogs.length) return;
+  const matches = staffLogs.filter(s =>
+    keywordRegex.test(s.details.action || "") || keywordRegex.test(s.details.reason || "")
+  );
+  if (!matches.length) return;
+  for (const log of gameLogs) {
+    if (log.category !== gameCategory || !log.player) continue;
+    const logTime = new Date(log.at).getTime();
+    const match = matches.find(s => {
+      const target = (s.details.target || "").toLowerCase().trim();
+      if (!target || target !== log.player.toLowerCase().trim()) return false;
+      return Math.abs(new Date(s.at).getTime() - logTime) <= 8000;
+    });
+    if (match) {
+      log.details = { ...log.details, [detailsField]: { staff: match.details.staff || "admin" } };
+    }
+  }
+}
+
 app.get("/api/admin/logs", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
   const player = req.query.player ? String(req.query.player).slice(0, 64) : "";
   const category = LOG_CATEGORIES.includes(req.query.category) ? req.query.category : "";
@@ -333,87 +420,19 @@ app.get("/api/admin/logs", auth, requireRole(...MOD_ROLES), asyncRoute(async (re
   let gameOnline = true;
   let gameLogs = [];
   if (category !== "admin") {
-    const qs = new URLSearchParams();
-    if (player) qs.set("player", player);
-    if (category) qs.set("category", category);
-    qs.set("limit", String(limit));
-    if (before) qs.set("beforeAt", before.toISOString());
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
-    try {
-      const r = await fetch(`http://${FIVEM_ADDRESS}/moldovarp-api/logs?${qs.toString()}`, {
-        headers: { "x-api-key": FIVEM_API_SECRET },
-        signal: controller.signal,
-      });
-      if (!r.ok) throw new Error(`moldovarp-api HTTP ${r.status}`);
-      const body = await r.json();
-      gameLogs = body.logs || [];
-    } catch {
-      gameOnline = false;
-    } finally {
-      clearTimeout(timeout);
-    }
+    const result = await fetchGameLogs({ player, category, limit, before });
+    gameOnline = result.online;
+    gameLogs = result.logs;
   }
 
   let staffLogs = [];
   if (!category || category === "admin") {
-    const conditions = [];
-    const params = [];
-    if (player) {
-      params.push(`%${player}%`);
-      conditions.push(`(staff_name ILIKE $${params.length} OR target_name ILIKE $${params.length})`);
-    }
-    if (before) {
-      params.push(before.toISOString());
-      conditions.push(`created_at < $${params.length}`);
-    }
-    params.push(limit);
-    const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
-    const { rows } = await pool.query(
-      `SELECT staff_name, target_name, action, reason, raw, created_at
-       FROM admin_action_logs ${where} ORDER BY created_at DESC LIMIT $${params.length}`,
-      params
-    );
-    staffLogs = rows.map(r => ({
-      category: "admin",
-      player: r.staff_name || r.target_name || "necunoscut",
-      details: { staff: r.staff_name, target: r.target_name, action: r.action, reason: r.reason, raw: r.raw },
-      at: r.created_at,
-    }));
+    staffLogs = await fetchStaffLogs({ player, before, limit });
   }
 
-  // Corelare best-effort: cand un log de joc (item obtinut generic, moarte,
-  // vehicul nou aparut) se intampla FOARTE aproape in timp de o actiune de
-  // staff din Luxu care pare potrivita (dupa un cuvant-cheie in actiune/motiv)
-  // si vizeaza acelasi jucator, marcam intrarea ca fiind rezultatul acelei
-  // actiuni de admin — ca sa nu para ceva organic din joc (item "gasit",
-  // moarte "de la un jucator necunoscut", vehicul "cumparat"). Schema exactă
-  // a payload-ului Luxu nu e documentată public (vezi comentariul de la
-  // /api/webhooks/luxu mai jos), deci potrivirea e doar dupa cuvinte-cheie —
-  // dacă observați intrări nepotrivite sau cazuri reale ratate, spuneți-mi
-  // exact ce ați văzut (categoria + ce ar fi trebuit să scrie) și ajustez.
-  function correlateStaffAction(gameCategory, keywordRegex, detailsField) {
-    if (!gameLogs.length || !staffLogs.length) return;
-    const matches = staffLogs.filter(s =>
-      keywordRegex.test(s.details.action || "") || keywordRegex.test(s.details.reason || "")
-    );
-    if (!matches.length) return;
-    for (const log of gameLogs) {
-      if (log.category !== gameCategory || !log.player) continue;
-      const logTime = new Date(log.at).getTime();
-      const match = matches.find(s => {
-        const target = (s.details.target || "").toLowerCase().trim();
-        if (!target || target !== log.player.toLowerCase().trim()) return false;
-        return Math.abs(new Date(s.at).getTime() - logTime) <= 8000;
-      });
-      if (match) {
-        log.details = { ...log.details, [detailsField]: { staff: match.details.staff || "admin" } };
-      }
-    }
-  }
-  correlateStaffAction("item_obtained", /item/i, "adminGrant");
-  correlateStaffAction("death", /kill/i, "adminKill");
-  correlateStaffAction("vehicle_acquired", /vehic|masin/i, "adminGrant");
+  correlateStaffAction(gameLogs, staffLogs, "item_obtained", /item/i, "adminGrant");
+  correlateStaffAction(gameLogs, staffLogs, "death", /kill/i, "adminKill");
+  correlateStaffAction(gameLogs, staffLogs, "vehicle_acquired", /vehic|masin/i, "adminGrant");
 
   const merged = [...gameLogs, ...staffLogs]
     .sort((a, b) => new Date(b.at) - new Date(a.at))
@@ -426,6 +445,70 @@ app.get("/api/admin/logs", auth, requireRole(...MOD_ROLES), asyncRoute(async (re
   const nextCursor = merged.length ? merged[merged.length - 1].at : null;
 
   res.json({ online: gameOnline, logs: merged, nextCursor });
+}));
+
+// Pagina separata "Kill Logs" — cerută explicit: cine pe cine a ucis, și ce
+// s-a luat din inventarul victimei imediat după (jaf de cadavru). Combină
+// mortile (category "death", care includ deja corelarea cu un kill de admin
+// — vezi mai sus) cu transferurile de iteme (category "item_transfer") de
+// la ACELEAȘI moldovarp_logs, apoi asociem local orice transfer care pleacă
+// de la victimă în scurt timp după ce a murit.
+//
+// Aproximare, nu certitudine: nu știm dacă cel care a luat itemele chiar e
+// ucigașul (poate fi oricine ajunge primul la cadavru) — de-aia arătăm
+// explicit cine a luat, nu presupunem că e ucigașul. Fereastra e de 3 minute
+// după moarte. Cum mortile și transferurile sunt cerute cu aceeași limită/
+// cursor, o moarte foarte aproape de marginea paginii ar putea rata un jaf
+// care a picat pe pagina următoare — acceptabil, nu am vrut să complicăm
+// paginarea pentru un caz marginal.
+app.get("/api/admin/kill-logs", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
+  const player = req.query.player ? String(req.query.player).slice(0, 64) : "";
+  const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 50));
+  const beforeDate = req.query.before ? new Date(String(req.query.before)) : null;
+  const before = beforeDate && !Number.isNaN(beforeDate.getTime()) ? beforeDate : null;
+
+  // Filtrul de jucator caută după numele VICTIMEI (asta stochează
+  // moldovarp_logs pentru o moarte) — filtrează implicit și transferurile
+  // relevante, pentru că un jaf de cadavru pleacă tot de la numele victimei.
+  const { online, logs } = await fetchGameLogs({
+    player,
+    category: "death,item_transfer",
+    limit: Math.min(500, limit * 4), // spatiu in plus pentru transferurile de corelat, nu doar morti
+    before,
+  });
+  const deaths = logs.filter(l => l.category === "death");
+  const transfers = logs.filter(l => l.category === "item_transfer");
+
+  const staffLogs = await fetchStaffLogs({ before, limit: 500 });
+  correlateStaffAction(deaths, staffLogs, "death", /kill/i, "adminKill");
+
+  function lootedAfterDeath(victim, deathAt) {
+    const deathTime = new Date(deathAt).getTime();
+    return transfers
+      .filter(t => (t.player || "").toLowerCase().trim() === (victim || "").toLowerCase().trim())
+      .filter(t => {
+        const dt = new Date(t.at).getTime() - deathTime;
+        return dt >= 0 && dt <= 3 * 60 * 1000;
+      })
+      .map(t => ({ item: t.details.item, count: t.details.count, to: t.details.to, at: t.at }));
+  }
+
+  const kills = deaths
+    .map(d => ({
+      victim: d.player,
+      killer: d.details.killer || null,
+      adminKill: d.details.adminKill || null,
+      cause: d.details.cause || null,
+      job: d.details.job || null,
+      detectedBy: d.details.detectedBy || "event",
+      at: d.at,
+      looted: lootedAfterDeath(d.player, d.at),
+    }))
+    .sort((a, b) => new Date(b.at) - new Date(a.at))
+    .slice(0, limit);
+
+  const nextCursor = kills.length ? kills[kills.length - 1].at : null;
+  res.json({ online, kills, nextCursor });
 }));
 
 // Webhook primit direct de la Luxu Admin (panoul lor cloud, tab "Webhooks"),

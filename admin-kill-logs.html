@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Kill Logs — Admin Moldova RP</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="admin.css"></head>
+<body>
+<aside class="side"><a class="brand" href="index.html"><img src="assets/logo.png" alt=""><b>MOLDOVA<span>RP</span></b></a><p>ADMINISTRAȚIE</p><a href="admin.html">▦ Dashboard</a><a href="admin-utilizatori.html">👤 Utilizatori</a><a href="admin-jucatori.html">♙ Jucători</a><a href="admin-financiar.html">◆ Facțiuni</a><a href="admin-sanctiuni.html">⚠ Sancțiuni</a><a>▤ Reclamații</a><a>⚖ CK</a><a href="admin-regulamente.html">📚 Regulamente</a><a href="admin-continut.html">📝 Conținut pagini</a><a href="admin-anunturi.html">◉ Anunțuri</a><a href="admin-tichete.html">🎫 Tichete</a><a href="admin-loguri.html">🗂 Loguri</a><a class="sel" href="admin-kill-logs.html">🔪 Kill Logs</a><a>⌁ Audit Logs</a><a href="admin-txadmin.html" id="nav-txadmin">🖥 txAdmin</a><a class="back" href="index.html">← Site public</a></aside>
+<main>
+<header><div><small>PANEL ADMINISTRATIV</small><h1>Kill Logs</h1></div><div class="admin"><span id="admin-name">…</span> <i></i></div></header>
+
+<p class="muted" style="margin:-10px 0 18px">
+  Cine pe cine a ucis, și ce s-a luat din inventarul victimei imediat după (jaf de cadavru, în primele 3 minute de la moarte).
+  Cine a luat itemele nu e neapărat ucigașul — poate fi oricine ajunge primul la cadavru, de-aia arătăm explicit numele lui.
+  Mortile fără eveniment de joc cunoscut (server care nu trimite ucigașul) sunt detectate automat prin verificarea periodică a vieții jucătorilor — marcate „detectat automat”, fără ucigaș cunoscut.
+</p>
+
+<section class="tablebox">
+  <div class="title">
+    <h2>Kill-uri recente</h2>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <input id="f-player" class="filter-select" placeholder="Filtrează după victimă..." autocomplete="off" style="min-width:180px">
+      <button id="refresh-btn" class="btn-ghost" type="button">Reîmprospătează</button>
+    </div>
+  </div>
+  <p class="muted" id="offline-note" style="margin:0 22px 16px" hidden>Serverul de joc nu răspunde momentan — lista poate fi incompletă.</p>
+  <table id="kills-table"><thead><tr><th>VICTIMĂ</th><th>UCIGAȘ</th><th>CAUZĂ</th><th>JAF DUPĂ MOARTE</th><th>DATA</th></tr></thead>
+  <tbody id="list-body"><tr><td colspan="5">Se încarcă…</td></tr></tbody></table>
+  <div style="padding:16px 22px;text-align:center">
+    <button id="load-more-btn" class="btn-ghost" type="button" hidden>Încarcă mai vechi</button>
+  </div>
+</section>
+
+</main>
+<script src="auth-client.js"></script>
+<script>
+const escapeHtml = s => (s ?? '').toString()
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
+function truncate(value, max) {
+  const s = (value ?? '').toString();
+  return s.length > max ? s.slice(0, max) + '…' : s;
+}
+
+function fmtDate(d) { return new Date(d).toLocaleString('ro-RO'); }
+
+function formatKiller(k) {
+  if (k.adminKill) {
+    return `<strong>admin ${escapeHtml(k.adminKill.staff || 'necunoscut')}</strong> <span class="muted">(comandă din panoul de admin)</span>`;
+  }
+  if (k.killer) return `<strong>${escapeHtml(k.killer)}</strong>`;
+  if (k.detectedBy === 'health') {
+    return '<span class="muted">necunoscut — detectat automat (fără ucigaș cunoscut)</span>';
+  }
+  return '<span class="muted">necunoscut</span>';
+}
+
+function formatLoot(looted) {
+  if (!looted || !looted.length) return '<span class="muted">—</span>';
+  const items = looted.map(l =>
+    `<strong>${escapeHtml((l.count ? l.count + 'x ' : '') + (l.item || 'un item'))}</strong> → ${escapeHtml(l.to || 'necunoscut')}`
+  );
+  return truncate(items.join(', '), 260);
+}
+
+function rowsHtml(kills) {
+  return kills.map(k => `
+      <tr>
+        <td><strong>${escapeHtml(k.victim || 'necunoscut')}</strong>${k.job ? ` <span class="muted">· job: ${escapeHtml(k.job)}</span>` : ''}</td>
+        <td>${formatKiller(k)}</td>
+        <td>${k.cause ? escapeHtml(truncate(String(k.cause), 100)) : '<span class="muted">—</span>'}</td>
+        <td>${formatLoot(k.looted)}</td>
+        <td>${fmtDate(k.at)}</td>
+      </tr>`).join('');
+}
+
+let debounceTimer = null;
+function scheduleReload() {
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(() => loadKills(), 300);
+}
+
+// Aceeasi paginare pe cursor ca la Loguri (vezi admin-loguri.html) — "Încarcă
+// mai vechi" cere strict ce e mai vechi decat ultima intrare afisata, ca sa
+// nu fim limitati la ultimele ~cateva ore pe un server activ.
+let currentCursor = null;
+
+async function loadKills(opts) {
+  const reset = !opts || opts.reset !== false;
+  const tbody = document.getElementById('list-body');
+  const offlineNote = document.getElementById('offline-note');
+  const loadMoreBtn = document.getElementById('load-more-btn');
+  const player = document.getElementById('f-player').value.trim();
+  const qs = new URLSearchParams();
+  if (player) qs.set('player', player);
+  qs.set('limit', '50');
+  if (reset) currentCursor = null;
+  else if (currentCursor) qs.set('before', currentCursor);
+  try {
+    const res = await apiFetch(`/api/admin/kill-logs?${qs.toString()}`);
+    if (!res.ok) throw new Error();
+    const d = await res.json();
+    offlineNote.hidden = d.online !== false;
+    if (reset && (!d.kills || !d.kills.length)) {
+      tbody.innerHTML = '<tr><td colspan="5">Nicio moarte găsită.</td></tr>';
+      loadMoreBtn.hidden = true;
+      return;
+    }
+    const html = rowsHtml(d.kills || []);
+    if (reset) tbody.innerHTML = html; else tbody.insertAdjacentHTML('beforeend', html);
+    currentCursor = d.nextCursor || null;
+    loadMoreBtn.hidden = !currentCursor || !(d.kills && d.kills.length);
+  } catch {
+    if (reset) tbody.innerHTML = '<tr><td colspan="5">Nu am putut încărca kill logs.</td></tr>';
+  }
+}
+
+document.getElementById('f-player').addEventListener('input', scheduleReload);
+document.getElementById('refresh-btn').addEventListener('click', () => loadKills());
+document.getElementById('load-more-btn').addEventListener('click', () => loadKills({ reset: false }));
+
+(async () => {
+  const me = await requireRole('moderator', 'admin', 'co-fondator', 'owner');
+  if (!me) return;
+  document.getElementById('admin-name').textContent = me.username;
+  loadKills();
+  setInterval(loadKills, 60000);
+})();
+</script>
+</body></html>

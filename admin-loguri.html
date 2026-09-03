@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Loguri — Admin Moldova RP</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="admin.css"></head>
 <body>
-<aside class="side"><a class="brand" href="index.html"><img src="assets/logo.png" alt=""><b>MOLDOVA<span>RP</span></b></a><p>ADMINISTRAȚIE</p><a href="admin.html">▦ Dashboard</a><a href="admin-utilizatori.html">👤 Utilizatori</a><a href="admin-jucatori.html">♙ Jucători</a><a href="admin-financiar.html">◆ Facțiuni</a><a href="admin-sanctiuni.html">⚠ Sancțiuni</a><a>▤ Reclamații</a><a>⚖ CK</a><a href="admin-regulamente.html">📚 Regulamente</a><a href="admin-continut.html">📝 Conținut pagini</a><a href="admin-anunturi.html">◉ Anunțuri</a><a href="admin-tichete.html">🎫 Tichete</a><a class="sel" href="admin-loguri.html">🗂 Loguri</a><a>⌁ Audit Logs</a><a href="admin-txadmin.html" id="nav-txadmin">🖥 txAdmin</a><a class="back" href="index.html">← Site public</a></aside>
+<aside class="side"><a class="brand" href="index.html"><img src="assets/logo.png" alt=""><b>MOLDOVA<span>RP</span></b></a><p>ADMINISTRAȚIE</p><a href="admin.html">▦ Dashboard</a><a href="admin-utilizatori.html">👤 Utilizatori</a><a href="admin-jucatori.html">♙ Jucători</a><a href="admin-financiar.html">◆ Facțiuni</a><a href="admin-sanctiuni.html">⚠ Sancțiuni</a><a>▤ Reclamații</a><a>⚖ CK</a><a href="admin-regulamente.html">📚 Regulamente</a><a href="admin-continut.html">📝 Conținut pagini</a><a href="admin-anunturi.html">◉ Anunțuri</a><a href="admin-tichete.html">🎫 Tichete</a><a class="sel" href="admin-loguri.html">🗂 Loguri</a><a href="admin-kill-logs.html">🔪 Kill Logs</a><a>⌁ Audit Logs</a><a href="admin-txadmin.html" id="nav-txadmin">🖥 txAdmin</a><a class="back" href="index.html">← Site public</a></aside>
 <main>
 <header><div><small>PANEL ADMINISTRATIV</small><h1>Loguri</h1></div><div class="admin"><span id="admin-name">…</span> <i></i></div></header>
 
@@ -103,6 +103,16 @@ function truncate(value, max) {
 function fmtDate(d) { return new Date(d).toLocaleString('ro-RO'); }
 function fmtMoney(n) { return (n > 0 ? '+' : '') + n.toLocaleString('ro-RO') + '$'; }
 
+// Pe acest server, banii cash sunt și un item fizic în inventar (numit
+// "money"/"cash"/"bani" — vezi server.lua, isMoneyItem). Când un item_buy/
+// item_transfer/item_obtained/item_drop se întâmplă să fie chiar acest item,
+// arătăm clar suma ca bani (ex: "i-a dat $500 lui X"), nu generic "a dat
+// 500x money lui X" — mult mai ușor de citit pentru staff.
+const MONEY_ITEM_NAMES = new Set(['money', 'cash', 'bani']);
+function isMoneyItemName(name) {
+  return MONEY_ITEM_NAMES.has(String(name || '').trim().toLowerCase());
+}
+
 // Fiecare categorie de log are un format diferit de "details" — transformăm
 // obiectul JSON venit din joc într-o linie de text ușor de citit. Jobul
 // jucătorului (cand e disponibil din joc) se adaugă la final, la fel pentru
@@ -167,6 +177,9 @@ function formatDetailsBody(log, d) {
       return parts.join(' ');
     }
     case 'item_transfer': {
+      if (isMoneyItemName(d.item) && typeof d.count === 'number') {
+        return `i-a dat <strong>${fmtMoney(d.count).replace('+', '')}</strong> lui <strong>${escapeHtml(d.to || 'necunoscut')}</strong> <span class="muted">(bani ca item fizic)</span>`;
+      }
       const parts = ['a dat'];
       parts.push(`<strong>${escapeHtml((d.count ? d.count + 'x ' : '') + (d.item || 'un item'))}</strong>`);
       parts.push(`lui <strong>${escapeHtml(d.to || 'necunoscut')}</strong>`);
@@ -179,9 +192,16 @@ function formatDetailsBody(log, d) {
       // primit organic din joc.
       if (d.adminGrant) {
         const parts = ['a primit'];
-        parts.push(`<strong>${escapeHtml((d.count ? d.count + 'x ' : '') + (d.item || 'un item'))}</strong>`);
+        if (isMoneyItemName(d.item) && typeof d.count === 'number') {
+          parts.push(`<strong>${fmtMoney(d.count).replace('+', '')}</strong>`);
+        } else {
+          parts.push(`<strong>${escapeHtml((d.count ? d.count + 'x ' : '') + (d.item || 'un item'))}</strong>`);
+        }
         parts.push(`de la <strong>admin ${escapeHtml(d.adminGrant.staff || 'necunoscut')}</strong>`);
         return parts.join(' ');
+      }
+      if (isMoneyItemName(d.item) && typeof d.count === 'number') {
+        return `a obținut <strong>${fmtMoney(d.count).replace('+', '')}</strong> <span class="muted">(bani ca item fizic)</span>`;
       }
       const parts = ['a obținut'];
       parts.push(`<strong>${escapeHtml((d.count ? d.count + 'x ' : '') + (d.item || 'un item'))}</strong>`);
@@ -195,6 +215,9 @@ function formatDetailsBody(log, d) {
       return parts.join(' ');
     }
     case 'item_drop': {
+      if (isMoneyItemName(d.item) && typeof d.count === 'number') {
+        return `a aruncat pe jos <strong>${fmtMoney(d.count).replace('+', '')}</strong> <span class="muted">(bani ca item fizic)</span>`;
+      }
       const parts = ['a aruncat pe jos'];
       parts.push(`<strong>${escapeHtml((d.count ? d.count + 'x ' : '') + (d.item || 'un item'))}</strong>`);
       return parts.join(' ');

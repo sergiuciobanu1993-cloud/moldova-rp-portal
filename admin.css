@@ -25,7 +25,26 @@ body.modal-open{overflow:hidden}
 .modal-close:hover{border-color:var(--orange);color:var(--orange)}
 .field textarea.textarea-lg{min-height:54vh;line-height:1.65;font-size:13.5px}
 @media(max-width:800px){.modal-overlay{padding:0}.modal-box{width:100%;min-height:100vh;border-radius:0}.field textarea.textarea-lg{min-height:40vh}}
-@media(max-width:800px){.side{position:static;width:190px}.metrics{grid-template-columns:repeat(2,1fr)}main{margin:0;width:calc(100% - 190px);padding:25px 15px}.formgrid{grid-template-columns:1fr}}@media(max-width:600px){body{display:block}.side{display:none}main{width:100%}.metrics{grid-template-columns:1fr 1fr}table{min-width:650px}.tablebox{overflow:auto}}
+@media(max-width:800px){.side{position:static;width:190px}.metrics{grid-template-columns:repeat(2,1fr)}main{margin:0;width:calc(100% - 190px);padding:25px 15px}.formgrid{grid-template-columns:1fr}}
+
+/* Buton de meniu + fundal întunecat pentru sidebar-ul mobil (vezi auth-client.js,
+   care le creează dinamic pe orice pagină cu .side — adică toate paginile de
+   admin). Ascunse implicit; devin vizibile doar sub 600px, unde sidebar-ul fix
+   nu mai încape pe ecran și trece în regim de "sertar" (vezi mai jos). */
+.side-toggle{display:none;position:fixed;top:14px;left:14px;z-index:45;width:42px;height:42px;align-items:center;justify-content:center;background:var(--panel);border:1px solid var(--line);border-radius:10px;color:#fff;font-size:19px;cursor:pointer;box-shadow:var(--shadow)}
+.side-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:35}
+.side-backdrop.open{display:block}
+
+@media(max-width:600px){
+  body{display:block}
+  .side{display:block;position:fixed;top:0;left:0;bottom:0;width:245px;transform:translateX(-100%);transition:transform .2s ease;z-index:40;box-shadow:0 0 40px rgba(0,0,0,.5);overflow-y:auto}
+  .side.open{transform:translateX(0)}
+  .side-toggle{display:flex}
+  main{width:100%;padding-top:78px}
+  .metrics{grid-template-columns:1fr 1fr}
+  table{min-width:650px}
+  .tablebox{overflow:auto}
+}
 
 /* Admin → Conținut pagini — selector de pagină/categorie și editor de
    blocuri de conținut (text simplu / text formatat / HTML brut / listă). */

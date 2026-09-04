@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Dashboard — Moldova RP</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="dashboard.css"></head>
 <body>
-<header><a class="brand" href="index.html"><img src="assets/logo.png" alt="">MOLDOVA<span>RP</span></a><nav><a href="index.html">Acasă</a><a href="index.html#regulamente">Regulamente</a><a href="tichete.html">Tichete</a><a href="#profil">Profil</a></nav><a class="logout" href="login.html" id="logout-link">Deconectare</a></header>
+<header><a class="brand" href="index.html"><img src="assets/logo.png" alt="">MOLDOVA<span>RP</span></a><nav id="dash-nav"><a href="index.html">Acasă</a><a href="index.html#regulamente">Regulamente</a><a href="tichete.html">Tichete</a><a href="#profil">Profil</a></nav><button class="menu-toggle" id="dash-menu-toggle" type="button" aria-label="Deschide meniul" aria-expanded="false">☰</button><a class="logout" href="login.html" id="logout-link">Deconectare</a></header>
 <main>
 <section class="welcome"><div><p>PORTAL JUCĂTOR</p><h1>Bun venit, <span id="welcome-name">…</span></h1><small>Acesta este centrul tău Moldova RP.</small></div><div class="status"><i></i> SERVER ONLINE</div></section>
 <section class="stats"><article><small>ID JUCĂTOR</small><strong id="stat-id">—</strong></article><article><small>ORE JUCATE</small><strong id="stat-playtime">—</strong></article><article><small>FACȚIUNE</small><strong id="stat-faction">—</strong></article><article><small>RANK</small><strong id="stat-rank">—</strong></article></section>
@@ -52,5 +52,23 @@
   }
 })();
 wireLogout('#logout-link');
+
+// Meniu mobil: nav-ul de sus (Acasă/Regulamente/Tichete/Profil) e complet
+// ascuns sub 700px lățime (vezi dashboard.css) — fără buton de meniu, nu
+// exista NICIO cale sa ajungi la ele de pe telefon. Acelasi pattern simplu
+// ca pe index.html (vezi app.js).
+(function () {
+  const toggle = document.getElementById('dash-menu-toggle');
+  const nav = document.getElementById('dash-nav');
+  if (!toggle || !nav) return;
+  toggle.addEventListener('click', () => {
+    const open = nav.classList.toggle('open');
+    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+  nav.querySelectorAll('a').forEach(a => a.addEventListener('click', () => {
+    nav.classList.remove('open');
+    toggle.setAttribute('aria-expanded', 'false');
+  }));
+})();
 </script>
 </body></html>

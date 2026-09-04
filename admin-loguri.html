@@ -113,6 +113,40 @@ function isMoneyItemName(name) {
   return MONEY_ITEM_NAMES.has(String(name || '').trim().toLowerCase());
 }
 
+// Metadata unui item (armele au aproape mereu asta — serie, pe cine e
+// înregistrată, durabilitate, muniție rămasă) venea afișată ca JSON brut,
+// trunchiat — util pentru un dezvoltator, inutil la un control rapid. Scoatem
+// explicit câmpurile cunoscute și utile pentru staff (mai ales seria și
+// numele pe care e înregistrată arma — exact ce ajută la un control: dacă
+// numele înregistrat NU se potrivește cu cine o poartă acum, e un semnal
+// clar de urmărit). Orice câmp NECUNOSCUT rămas tot apare, ca JSON scurt, ca
+// să nu pierdem nicio informație doar pentru că nu am prevăzut acel câmp.
+const ITEM_META_KNOWN_KEYS = new Set(['label', 'serial', 'serie', 'registered', 'durability', 'ammo', 'components']);
+function describeItemMetadata(metadata) {
+  if (!metadata || typeof metadata !== 'object') return '';
+  const bits = [];
+  const serial = metadata.serial ?? metadata.serie;
+  if (serial) bits.push(`serie: <code>${escapeHtml(String(serial))}</code>`);
+  if (metadata.registered) bits.push(`înregistrată pe: <strong>${escapeHtml(String(metadata.registered))}</strong>`);
+  if (typeof metadata.durability === 'number') bits.push(`durabilitate: ${Math.round(metadata.durability)}%`);
+  if (typeof metadata.ammo === 'number') bits.push(`muniție: ${metadata.ammo}`);
+  if (Array.isArray(metadata.components) && metadata.components.length) {
+    bits.push(`atașamente: ${metadata.components.map(c => escapeHtml(String(c))).join(', ')}`);
+  }
+
+  const extraKeys = Object.keys(metadata).filter(k => !ITEM_META_KNOWN_KEYS.has(k));
+  let extra = '';
+  if (extraKeys.length) {
+    const extraObj = {};
+    extraKeys.forEach(k => { extraObj[k] = metadata[k]; });
+    extra = escapeHtml(truncate(JSON.stringify(extraObj), 150));
+  }
+
+  const summary = bits.join(' · ');
+  if (!summary && !extra) return '';
+  return `<span class="muted">(${summary}${summary && extra ? ' · ' : ''}${extra})</span>`;
+}
+
 // Fiecare categorie de log are un format diferit de "details" — transformăm
 // obiectul JSON venit din joc într-o linie de text ușor de citit. Jobul
 // jucătorului (cand e disponibil din joc) se adaugă la final, la fel pentru
@@ -205,13 +239,8 @@ function formatDetailsBody(log, d) {
       }
       const parts = ['a obținut'];
       parts.push(`<strong>${escapeHtml((d.count ? d.count + 'x ' : '') + (d.item || 'un item'))}</strong>`);
-      if (d.metadata && typeof d.metadata === 'object' && Object.keys(d.metadata).length) {
-        // Metadata unui item poate contine, in practica, orice — inclusiv
-        // date incapsulate uriase (ex: poza custom in base64) — de-aia
-        // trunchiem aici, ca un singur rand din tabel sa nu devina un ecran
-        // intreg de text (asa cum s-a intamplat pentru un item real).
-        parts.push(`<span class="muted">(${escapeHtml(truncate(JSON.stringify(d.metadata), 200))})</span>`);
-      }
+      const metaDesc = describeItemMetadata(d.metadata);
+      if (metaDesc) parts.push(metaDesc);
       return parts.join(' ');
     }
     case 'item_drop': {

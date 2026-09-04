@@ -255,7 +255,15 @@ function formatDetailsBody(log, d) {
       // scurtă de dinainte de această verificare — o presupunere ("posibil"),
       // nu o certitudine (vezi server.lua).
       const source = d.possibleSource ? `<span class="muted"> · posibil: ${escapeHtml(d.possibleSource)}</span>` : '';
-      return change + total + source;
+      // Identificare sigura a jucatorului — cerut explicit de staff, pentru
+      // ca numele din joc se pot schimba sau suprapune intre jucatori diferiti.
+      // Licenta vine din coloana "identifier" a jurnalului (nu din "details"),
+      // Discord-ul (daca jucatorul avea Discord deschis) vine din details.discord.
+      const idBits = [];
+      if (log.identifier) idBits.push(`licență: <code>${escapeHtml(log.identifier)}</code>`);
+      if (d.discord) idBits.push(`Discord: <code>${escapeHtml(d.discord)}</code>`);
+      const idInfo = idBits.length ? `<span class="muted"> · ${idBits.join(' · ')}</span>` : '';
+      return change + total + source + idInfo;
     }
     case 'item_buy': {
       const parts = [`a cumpărat`];

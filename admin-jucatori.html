@@ -158,13 +158,41 @@ function killCauseLabel(k) {
   return '<span class="muted">necunoscut — detectat automat</span>';
 }
 
+function fmtDelta(n) { return (n > 0 ? '+' : '') + Number(n).toLocaleString('ro-RO') + '$'; }
+
+// Fiecare categorie de log are un format diferit de "details" (vine direct
+// din moldovarp-api) — la fel ca la pagina Loguri. Aici arătăm doar un rezumat
+// scurt (profilul nu e locul pentru tot detaliul), dar tot trebuie să
+// acoperim categoriile frecvente, altfel rămâne gol ("—") fără niciun motiv
+// vizibil pentru staff — exact ce s-a întâmplat cu "money" până acum.
 function activityLine(log) {
   const cat = escapeHtml(log.category || '?');
   const who = escapeHtml(log.player || '');
+  const d = log.details || {};
   let extra = '';
-  if (log.category === 'death') extra = killCauseLabel({ killer: log.details?.killer, adminKill: log.details?.adminKill, cause: log.details?.cause });
-  else if (log.category === 'admin') extra = `<span class="muted">${escapeHtml(log.details?.action || '')} ${log.details?.target ? '→ ' + escapeHtml(log.details.target) : ''}</span>`;
-  else if (log.details?.item) extra = `<strong>${escapeHtml((log.details.count ? log.details.count + 'x ' : '') + log.details.item)}</strong>`;
+  if (log.category === 'death') {
+    extra = killCauseLabel({ killer: d.killer, adminKill: d.adminKill, cause: d.cause });
+  } else if (log.category === 'admin') {
+    extra = `<span class="muted">${escapeHtml(d.action || '')}${d.target ? ' → ' + escapeHtml(d.target) : ''}</span>`;
+  } else if (log.category === 'money') {
+    const parts = [];
+    if (typeof d.cashDelta === 'number' && d.cashDelta !== 0) parts.push(`cash ${fmtDelta(d.cashDelta)}`);
+    if (typeof d.bankDelta === 'number' && d.bankDelta !== 0) parts.push(`bancă ${fmtDelta(d.bankDelta)}`);
+    extra = parts.join(', ') || 'schimbare bani';
+    if (d.possibleSource) extra += ` <span class="muted">· posibil: ${escapeHtml(d.possibleSource)}</span>`;
+  } else if (log.category === 'connect' || log.category === 'disconnect') {
+    extra = log.category === 'connect' ? 's-a conectat' : `s-a deconectat${d.reason ? ` <span class="muted">(${escapeHtml(String(d.reason))})</span>` : ''}`;
+  } else if (log.category === 'chat') {
+    extra = d.message ? escapeHtml(String(d.message)) : '<span class="muted">—</span>';
+  } else if (log.category === 'command') {
+    extra = d.command ? `<code>${escapeHtml('/' + String(d.command).replace(/^\//, ''))}</code>` : '<span class="muted">—</span>';
+  } else if (log.category === 'vehicle_acquired') {
+    extra = `<strong>${escapeHtml(d.vehicle || 'un vehicul')}</strong> <span class="muted">(${escapeHtml(d.plate || '?')})</span>`;
+  } else if (d.item) {
+    extra = `<strong>${escapeHtml((d.count ? d.count + 'x ' : '') + d.item)}</strong>${d.to ? ` → ${escapeHtml(d.to)}` : ''}${typeof d.totalPrice === 'number' ? ` <span class="muted">(${fmtDelta(d.totalPrice).replace('+', '')})</span>` : ''}`;
+  } else if (d.recipe) {
+    extra = `a craftat <strong>${escapeHtml(d.recipe)}</strong>`;
+  }
   return `<div class="msg"><b>${cat}${who ? ' · ' + who : ''}</b><span>${extra || '<span class="muted">—</span>'}</span><small>${fmtDate(log.at)}</small></div>`;
 }
 

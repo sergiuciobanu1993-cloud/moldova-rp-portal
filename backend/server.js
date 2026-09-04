@@ -787,6 +787,25 @@ app.post("/api/auth/login", asyncRoute(async (req, res) => {
   });
 }));
 
+// Auto-service: contul își pune singur o parolă, indiferent cu ce metodă e
+// autentificat acum (chiar și cu un token de Discord "plafonat" la rolul de
+// jucător, de mai sus) — atâta timp cât ești logat CA TINE, poți să-ți pui o
+// parolă. Cerut explicit: adminii creați inițial doar prin Discord (fără
+// parolă în baza de date) trebuie să poată trece la email+parolă fără să
+// depindă de un fondator care să le-o seteze manual. După ce își pun parola,
+// tot trebuie să iasă din cont și să intre din nou prin login.html cu
+// email/username+parolă, ca să primească un token cu rolul lor REAL — sesiunea
+// curentă (dacă a venit prin Discord) rămâne plafonată la "player" până atunci.
+app.post("/api/auth/set-password", auth, asyncRoute(async (req, res) => {
+  const { password } = req.body;
+  if (!password || password.length < 8)
+    return res.status(400).json({ error: "Parola trebuie să aibă minimum 8 caractere." });
+  const hash = await bcrypt.hash(password, 12);
+  await pool.query("UPDATE users SET password_hash=$1, updated_at=NOW() WHERE id=$2", [hash, req.user.sub]);
+  await logAction(req.user.sub, "auth.set_password", "user", req.user.sub, null, req.ip);
+  res.json({ ok: true });
+}));
+
 // ---------------------------------------------------------------------------
 // Discord OAuth login (v0.5)
 // ---------------------------------------------------------------------------
@@ -871,11 +890,20 @@ app.get("/api/auth/discord/callback", asyncRoute(async (req, res) => {
       await logAction(user.id, "auth.discord_signup", "user", user.id, { discordId: profile.id }, req.ip);
     }
 
-    const roleRow = await pool.query(
-      "SELECT r.name AS role_name FROM users u JOIN roles r ON r.id = u.role_id WHERE u.id = $1",
-      [user.id]
-    );
-    const token = signUser({ id: user.id, username: user.username, role_name: roleRow.rows[0].role_name });
+    // SECURITATE (cerut explicit): un login prin Discord acordă în acest
+    // token MEREU doar rolul de jucător obișnuit, INDIFERENT ce rol are
+    // contul cu adevărat în baza de date. Motivul: dacă cineva fură contul
+    // de Discord al unui admin, autentificarea prin OAuth de mai sus tot ar
+    // reuși (Discord confirmă identitatea corect) — dar tokenul rezultat nu
+    // va avea niciodată voie să treacă de requireRole(...) pe rutele de
+    // admin, pentru că verificarea aia se uită STRICT la rolul din acest
+    // token (vezi funcția requireRole), nu la rolul din baza de date. Adminii
+    // trebuie să folosească întotdeauna email+parolă (/api/auth/login) ca
+    // să primească tokenul cu rolul lor real. Vezi și /api/me, care separă
+    // explicit rolul EFECTIV al sesiunii (din token) de rolul contului din
+    // baza de date, ca dashboard-ul să poată totuși recunoaște un admin fără
+    // parolă încă și să-i ceară să-și seteze una.
+    const token = signUser({ id: user.id, username: user.username, role_name: 'player' });
     await logAction(user.id, "auth.discord_login", "user", user.id, null, req.ip);
 
     res.redirect(`/auth-callback.html#token=${encodeURIComponent(token)}`);
@@ -887,7 +915,7 @@ app.get("/api/auth/discord/callback", asyncRoute(async (req, res) => {
 
 app.get("/api/me", auth, asyncRoute(async (req, res) => {
   const { rows } = await pool.query(
-    `SELECT u.id,u.username,u.email,r.name role,
+    `SELECT u.id,u.username,u.email,r.name db_role,(u.password_hash IS NOT NULL) has_password,
             u.discord_id, u.discord_username, u.discord_avatar,
             p.id player_id,p.game_id,p.display_name,p.playtime_minutes,p.status,
             f.id faction_id, f.name faction_name, fr.id rank_id, fr.name rank_name
@@ -900,7 +928,15 @@ app.get("/api/me", auth, asyncRoute(async (req, res) => {
      LIMIT 1`, [req.user.sub]
   );
   if (!rows[0]) return res.status(404).json({ error: "Cont inexistent." });
-  res.json(rows[0]);
+  const row = rows[0];
+  // "role" e rolul EFECTIV al sesiunii curente (vine din token — pentru un
+  // login prin Discord e mereu "player", vezi /api/auth/discord/callback),
+  // NU neapărat rolul contului din baza de date — acesta din urmă rămâne
+  // disponibil separat ca "dbRole", exact ca dashboard-ul să poată recunoaște
+  // "acest cont e de admin, dar sesiunea asta (prin Discord) nu are voie să
+  // acționeze ca admin" și să arate un buton de "Setează parolă" în loc să
+  // pretindă pur și simplu că userul n-are rang.
+  res.json({ ...row, role: req.user.role, dbRole: row.db_role, hasPassword: row.has_password });
 }));
 
 app.get("/api/regulations", asyncRoute(async (_req, res) => {
@@ -1045,7 +1081,7 @@ const VALID_ROLES = ["player", "moderator", "admin", "co-fondator", "owner"];
 app.get("/api/admin/users", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (_req, res) => {
   const { rows } = await pool.query(
     `SELECT u.id, u.username, u.email, u.discord_id, u.discord_username, u.discord_avatar,
-            u.is_active, u.created_at, r.name AS role
+            u.is_active, u.created_at, r.name AS role, (u.password_hash IS NOT NULL) AS has_password
      FROM users u
      JOIN roles r ON r.id = u.role_id
      ORDER BY u.created_at DESC`

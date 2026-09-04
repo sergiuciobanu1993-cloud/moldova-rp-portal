@@ -12,8 +12,8 @@
     <h2>Toți utilizatorii înregistrați</h2>
     <span class="muted" id="count-note"></span>
   </div>
-  <table><thead><tr><th>UTILIZATOR</th><th>DISCORD</th><th>RANG</th><th>ÎNREGISTRAT</th><th>SCHIMBĂ RANG</th></tr></thead>
-  <tbody id="list-body"><tr><td colspan="5">Se încarcă…</td></tr></tbody></table>
+  <table><thead><tr><th>UTILIZATOR</th><th>DISCORD</th><th>PAROLĂ</th><th>RANG</th><th>ÎNREGISTRAT</th><th>SCHIMBĂ RANG</th></tr></thead>
+  <tbody id="list-body"><tr><td colspan="6">Se încarcă…</td></tr></tbody></table>
 </section>
 
 </main>
@@ -29,6 +29,19 @@ function roleSelectHtml(userId, currentRole) {
   return `<select class="filter-select" data-role-for="${userId}">
     ${ROLES_ORDER.map(r => `<option value="${r}" ${r === currentRole ? 'selected' : ''}>${ROLE_LABEL[r]}</option>`).join('')}
   </select>`;
+}
+
+// Un cont de STAFF (orice rang peste jucător) fără parolă setată încă poate
+// intra doar prin Discord — iar acel login, de securitate, dă mereu doar
+// rolul de jucător (vezi backend), deci acel admin practic NU își poate
+// folosi rangul până nu-și pune o parolă (o face singur, din dashboard).
+// Aici arătăm clar cui îi lipsește, ca fondatorul să știe cine mai are de
+// făcut asta — pentru un jucător normal, lipsa parolei e starea obișnuită,
+// nu un risc, deci nu o marcăm ca avertisment.
+function passwordPillHtml(u) {
+  if (u.has_password) return `<span class="pill on">PAROLĂ OK</span>`;
+  if (u.role === 'player') return `<span class="pill off">fără parolă</span>`;
+  return `<span class="pill warn">FĂRĂ PAROLĂ ⚠</span>`;
 }
 
 async function loadUsers(canEdit) {
@@ -47,10 +60,11 @@ async function loadUsers(canEdit) {
           ${u.email ? `<br><small style="color:var(--muted)">${u.email}</small>` : ''}
         </td>
         <td>${u.discord_username ? `<span class="pill info">CONECTAT</span>` : `<span class="pill off">FĂRĂ DISCORD</span>`}</td>
+        <td>${passwordPillHtml(u)}</td>
         <td><span class="pill ${ROLE_PILL[u.role] || 'off'}">${(ROLE_LABEL[u.role] || u.role).toUpperCase()}</span></td>
         <td>${fmtDate(u.created_at)}</td>
         <td>${canEdit ? roleSelectHtml(u.id, u.role) : '<span class="muted">doar fondatorul poate schimba</span>'}</td>
-      </tr>`).join('') : '<tr><td colspan="5">Niciun utilizator încă.</td></tr>';
+      </tr>`).join('') : '<tr><td colspan="6">Niciun utilizator încă.</td></tr>';
 
     if (canEdit) {
       tbody.querySelectorAll('[data-role-for]').forEach(sel => {

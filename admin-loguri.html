@@ -113,28 +113,56 @@ function isMoneyItemName(name) {
   return MONEY_ITEM_NAMES.has(String(name || '').trim().toLowerCase());
 }
 
-// Metadata unui item (armele au aproape mereu asta — serie, pe cine e
-// înregistrată, durabilitate, muniție rămasă) venea afișată ca JSON brut,
-// trunchiat — util pentru un dezvoltator, inutil la un control rapid. Scoatem
-// explicit câmpurile cunoscute și utile pentru staff (mai ales seria și
-// numele pe care e înregistrată arma — exact ce ajută la un control: dacă
-// numele înregistrat NU se potrivește cu cine o poartă acum, e un semnal
-// clar de urmărit). Orice câmp NECUNOSCUT rămas tot apare, ca JSON scurt, ca
-// să nu pierdem nicio informație doar pentru că nu am prevăzut acel câmp.
-const ITEM_META_KNOWN_KEYS = new Set(['label', 'serial', 'serie', 'registered', 'durability', 'ammo', 'components']);
+// Metadata unui item venea afișată ca JSON brut, trunchiat — util pentru un
+// dezvoltator, inutil (și, cum ați semnalat, urât/greu de citit) la un
+// control rapid. Se întâmplă la MULTE tipuri de iteme, nu doar arme — actele
+// (buletin/permis) au propriul lor set de câmpuri, la fel orice alt item cu
+// metadata custom. Scoatem explicit câmpurile cunoscute și utile pentru
+// staff (cine e proprietarul/pe cine e înregistrat itemul, serie, etc.) —
+// exact ce ajută la un control: dacă numele de pe act/armă NU se potrivește
+// cu cine îl poartă acum, e un semnal clar de urmărit.
+//
+// Unele câmpuri sunt ascunse INTENȚIONAT, nu uitate: `license` e un
+// identificator tehnic intern (hash-ul contului, nu ceva citibil), `jobName`
+// dublează coloana de job deja afișată separat la finalul rândului, iar
+// `label`/`card_type` dublează practic numele itemului (ex: "driver_license").
+const ITEM_META_HIDDEN_KEYS = new Set(['label', 'license', 'jobName', 'card_type']);
+// { cheie_în_metadata: eticheta_afișată } — ordinea de aici e și ordinea de afișare.
+const ITEM_META_FRIENDLY_FIELDS = [
+  ['card_name', 'nume'],
+  ['registered', 'înregistrată pe'],
+  ['card_category', 'categorii'],
+  ['card_sex', 'sex'],
+  ['card_birthdate', 'născut'],
+];
+
 function describeItemMetadata(metadata) {
   if (!metadata || typeof metadata !== 'object') return '';
   const bits = [];
+  const seenKeys = new Set(ITEM_META_HIDDEN_KEYS);
+
   const serial = metadata.serial ?? metadata.serie;
-  if (serial) bits.push(`serie: <code>${escapeHtml(String(serial))}</code>`);
-  if (metadata.registered) bits.push(`înregistrată pe: <strong>${escapeHtml(String(metadata.registered))}</strong>`);
-  if (typeof metadata.durability === 'number') bits.push(`durabilitate: ${Math.round(metadata.durability)}%`);
-  if (typeof metadata.ammo === 'number') bits.push(`muniție: ${metadata.ammo}`);
-  if (Array.isArray(metadata.components) && metadata.components.length) {
-    bits.push(`atașamente: ${metadata.components.map(c => escapeHtml(String(c))).join(', ')}`);
+  if (serial) { bits.push(`serie: <code>${escapeHtml(String(serial))}</code>`); seenKeys.add('serial'); seenKeys.add('serie'); }
+
+  for (const [key, label] of ITEM_META_FRIENDLY_FIELDS) {
+    seenKeys.add(key);
+    const value = metadata[key];
+    if (value === undefined || value === null || value === '') continue;
+    const strong = key === 'card_name' || key === 'registered';
+    const text = escapeHtml(String(value));
+    bits.push(`${label}: ${strong ? `<strong>${text}</strong>` : text}`);
   }
 
-  const extraKeys = Object.keys(metadata).filter(k => !ITEM_META_KNOWN_KEYS.has(k));
+  if (typeof metadata.durability === 'number') { bits.push(`durabilitate: ${Math.round(metadata.durability)}%`); seenKeys.add('durability'); }
+  if (typeof metadata.ammo === 'number') { bits.push(`muniție: ${metadata.ammo}`); seenKeys.add('ammo'); }
+  if (Array.isArray(metadata.components) && metadata.components.length) {
+    bits.push(`atașamente: ${metadata.components.map(c => escapeHtml(String(c))).join(', ')}`);
+    seenKeys.add('components');
+  }
+
+  // Orice câmp NECUNOSCUT rămas tot apare, ca JSON scurt — ca să nu pierdem
+  // nicio informație doar pentru că nu am prevăzut acel câmp anume.
+  const extraKeys = Object.keys(metadata).filter(k => !seenKeys.has(k));
   let extra = '';
   if (extraKeys.length) {
     const extraObj = {};

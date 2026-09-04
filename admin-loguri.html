@@ -125,8 +125,19 @@ function isMoneyItemName(name) {
 // Unele câmpuri sunt ascunse INTENȚIONAT, nu uitate: `license` e un
 // identificator tehnic intern (hash-ul contului, nu ceva citibil), `jobName`
 // dublează coloana de job deja afișată separat la finalul rândului, iar
-// `label`/`card_type` dublează practic numele itemului (ex: "driver_license").
-const ITEM_META_HIDDEN_KEYS = new Set(['label', 'license', 'jobName', 'card_type']);
+// `label`/`card_type`/`mainName`/`clothType` dublează practic numele itemului
+// (ex: "driver_license", "Shoes"). `clothingNum`/`clothingTexture` sunt indici
+// tehnici de model, ilizibili fără să te uiți direct în joc.
+const ITEM_META_HIDDEN_KEYS = new Set([
+  'label', 'license', 'jobName', 'card_type',
+  'mainName', 'clothType', 'clothingNum', 'clothingTexture',
+]);
+// Orice cheie care conține unul din aceste cuvinte e o poză/imagine (ex:
+// "card_photo": {"base64": "data:image/png;base64,..."}) — poate fi uriașă
+// (o poză reală în base64) și nu are niciun sens ca text într-un jurnal, deci
+// o ascundem complet, nu doar o trunchiem.
+const ITEM_META_PHOTO_KEY_PATTERN = /photo|poza|poză|image|picture|avatar/i;
+
 // { cheie_în_metadata: eticheta_afișată } — ordinea de aici e și ordinea de afișare.
 const ITEM_META_FRIENDLY_FIELDS = [
   ['card_name', 'nume'],
@@ -134,12 +145,32 @@ const ITEM_META_FRIENDLY_FIELDS = [
   ['card_category', 'categorii'],
   ['card_sex', 'sex'],
   ['card_birthdate', 'născut'],
+  ['variationNumber', 'variantă'],
 ];
+
+// Plasă de siguranță pentru câmpurile NEprevăzute (cele care ajung în "extra"
+// mai jos): dacă un script nou, pe care nu l-am văzut încă, bagă în metadata
+// un text foarte lung (poză, fișier, orice blob) sub un nume de câmp pe care
+// nu-l recunoaștem după nume, tot îl ascundem — nu doar îl trunchiem la un
+// număr de caractere, ca să nu mai apară niciodată o mizerie de tip base64 în
+// Loguri, oricât de neprevăzut ar fi câmpul.
+function redactLongBlobs(value, depth) {
+  if (depth > 2) return '[…omis…]';
+  if (typeof value === 'string') return value.length > 60 ? '[text lung omis]' : value;
+  if (Array.isArray(value)) return value.map(v => redactLongBlobs(v, depth + 1));
+  if (value && typeof value === 'object') {
+    const out = {};
+    for (const k of Object.keys(value)) out[k] = redactLongBlobs(value[k], depth + 1);
+    return out;
+  }
+  return value;
+}
 
 function describeItemMetadata(metadata) {
   if (!metadata || typeof metadata !== 'object') return '';
   const bits = [];
   const seenKeys = new Set(ITEM_META_HIDDEN_KEYS);
+  Object.keys(metadata).filter(k => ITEM_META_PHOTO_KEY_PATTERN.test(k)).forEach(k => seenKeys.add(k));
 
   const serial = metadata.serial ?? metadata.serie;
   if (serial) { bits.push(`serie: <code>${escapeHtml(String(serial))}</code>`); seenKeys.add('serial'); seenKeys.add('serie'); }
@@ -161,12 +192,13 @@ function describeItemMetadata(metadata) {
   }
 
   // Orice câmp NECUNOSCUT rămas tot apare, ca JSON scurt — ca să nu pierdem
-  // nicio informație doar pentru că nu am prevăzut acel câmp anume.
+  // nicio informație doar pentru că nu am prevăzut acel câmp anume. Trecut
+  // prin redactLongBlobs, ca să nu strecurăm din greșeală vreun text uriaș.
   const extraKeys = Object.keys(metadata).filter(k => !seenKeys.has(k));
   let extra = '';
   if (extraKeys.length) {
     const extraObj = {};
-    extraKeys.forEach(k => { extraObj[k] = metadata[k]; });
+    extraKeys.forEach(k => { extraObj[k] = redactLongBlobs(metadata[k], 0); });
     extra = escapeHtml(truncate(JSON.stringify(extraObj), 150));
   }
 

@@ -28,6 +28,7 @@
         <option value="item_transfer">Transfer iteme</option>
         <option value="item_obtained">Alte iteme obținute</option>
         <option value="item_drop">Aruncat pe jos</option>
+        <option value="item_pickup">Ridicat de jos</option>
         <option value="vehicle_acquired">Vehicul nou</option>
         <option value="admin">Acțiuni staff (Luxu)</option>
       </select>
@@ -48,12 +49,14 @@
 const CATEGORY_LABEL = {
   chat: 'Chat', command: 'Comandă', connect: 'Conectare', disconnect: 'Deconectare', death: 'Moarte / Kill', money: 'Bani',
   item_buy: 'Cumpărare', item_craft: 'Crafting', item_transfer: 'Transfer item', item_obtained: 'Item obținut', item_drop: 'Aruncat pe jos',
+  item_pickup: 'Ridicat de jos',
   vehicle_acquired: 'Vehicul nou',
   admin: 'Acțiune staff',
 };
 const CATEGORY_PILL = {
   chat: 'info', command: 'info', connect: 'on', disconnect: 'off', death: 'warn', money: 'warn',
   item_buy: 'info', item_craft: 'info', item_transfer: 'info', item_obtained: 'info', item_drop: 'warn',
+  item_pickup: 'info',
   vehicle_acquired: 'info',
   admin: 'warn',
 };
@@ -316,6 +319,14 @@ function formatDetailsBody(log, d) {
         return `a aruncat pe jos <strong>${fmtMoney(d.count).replace('+', '')}</strong> <span class="muted">(bani ca item fizic)</span>`;
       }
       const parts = ['a aruncat pe jos'];
+      parts.push(`<strong>${escapeHtml((d.count ? d.count + 'x ' : '') + (d.item || 'un item'))}</strong>`);
+      return parts.join(' ');
+    }
+    case 'item_pickup': {
+      if (isMoneyItemName(d.item) && typeof d.count === 'number') {
+        return `a ridicat de jos <strong>${fmtMoney(d.count).replace('+', '')}</strong> <span class="muted">(bani ca item fizic)</span>`;
+      }
+      const parts = ['a ridicat de jos'];
       parts.push(`<strong>${escapeHtml((d.count ? d.count + 'x ' : '') + (d.item || 'un item'))}</strong>`);
       return parts.join(' ');
     }

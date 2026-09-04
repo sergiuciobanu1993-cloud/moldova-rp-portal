@@ -360,7 +360,7 @@ app.get("/api/admin/live/jobs", auth, requireRole(...ADMIN_ROLES), asyncRoute(as
 // Filtrele (player/category/limit) sunt pasate mai departe. Gated la fel ca
 // Sancțiunile (moderator+) — e un instrument de investigație pentru staff,
 // nu date publice.
-const GAME_LOG_CATEGORIES = ["chat", "command", "connect", "disconnect", "death", "money", "item_buy", "item_craft", "item_transfer", "item_obtained", "item_drop", "vehicle_acquired"];
+const GAME_LOG_CATEGORIES = ["chat", "command", "connect", "disconnect", "death", "money", "item_buy", "item_craft", "item_transfer", "item_obtained", "item_drop", "item_pickup", "vehicle_acquired"];
 const LOG_CATEGORIES = [...GAME_LOG_CATEGORIES, "admin"];
 
 // Cere loguri de joc de la moldovarp-api. `category` poate fi o singura

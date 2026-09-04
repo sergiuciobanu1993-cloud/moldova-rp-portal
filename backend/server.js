@@ -5,6 +5,7 @@ const helmet = require("helmet");
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
+const nodemailer = require("nodemailer");
 const path = require("path");
 const { Pool } = require("pg");
 
@@ -787,21 +788,117 @@ app.post("/api/auth/login", asyncRoute(async (req, res) => {
   });
 }));
 
-// Auto-service: contul își pune singur o parolă, indiferent cu ce metodă e
-// autentificat acum (chiar și cu un token de Discord "plafonat" la rolul de
-// jucător, de mai sus) — atâta timp cât ești logat CA TINE, poți să-ți pui o
-// parolă. Cerut explicit: adminii creați inițial doar prin Discord (fără
-// parolă în baza de date) trebuie să poată trece la email+parolă fără să
-// depindă de un fondator care să le-o seteze manual. După ce își pun parola,
-// tot trebuie să iasă din cont și să intre din nou prin login.html cu
-// email/username+parolă, ca să primească un token cu rolul lor REAL — sesiunea
-// curentă (dacă a venit prin Discord) rămâne plafonată la "player" până atunci.
+// ---------------------------------------------------------------------------
+// Email de confirmare (cod de 6 cifre) — folosit la "Setează parola"
+// ---------------------------------------------------------------------------
+// Configurare prin variabile de mediu (SMTP_HOST/PORT/USER/PASS/FROM), la fel
+// ca la Discord mai jos — dacă nu sunt setate, endpoint-urile răspund clar cu
+// "nu e configurat" în loc să pretindă că au trimis un email care nu a plecat
+// niciodată. Cel mai simplu de configurat: un cont Gmail cu "App Password"
+// (Cont Google → Securitate → Verificare în 2 pași → Parole pentru aplicații),
+// SMTP_HOST=smtp.gmail.com, SMTP_PORT=465, SMTP_USER=adresa@gmail.com,
+// SMTP_PASS=parola de aplicație (16 caractere), SMTP_FROM opțional.
+function smtpConfigured() {
+  return Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
+}
+
+let cachedTransporter = null;
+function getMailTransporter() {
+  if (!cachedTransporter) {
+    cachedTransporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: Number(process.env.SMTP_PORT || 465),
+      secure: Number(process.env.SMTP_PORT || 465) === 465,
+      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+    });
+  }
+  return cachedTransporter;
+}
+
+async function sendVerificationEmail(to, code) {
+  await getMailTransporter().sendMail({
+    from: process.env.SMTP_FROM || `Moldova RP <${process.env.SMTP_USER}>`,
+    to,
+    subject: `Codul tău de confirmare: ${code}`,
+    text: `Codul tău de confirmare pentru contul de pe moldovarp.md este: ${code}\n\nCodul expiră în 15 minute. Dacă nu ai cerut tu asta, ignoră acest email.`,
+    html: `<p>Codul tău de confirmare pentru contul de pe <b>moldovarp.md</b> este:</p>
+           <p style="font-size:28px;font-weight:bold;letter-spacing:4px">${code}</p>
+           <p>Codul expiră în 15 minute. Dacă nu ai cerut tu asta, ignoră acest email.</p>`,
+  });
+}
+
+function generateVerifyCode() {
+  return String(Math.floor(100000 + Math.random() * 900000)); // 6 cifre, 100000-999999
+}
+
+// Auto-service, în DOI PAȘI — cerut explicit, ca simpla deținere a unui cont
+// (chiar și prin Discord plafonat la "player", mai sus) să nu fie de-ajuns
+// ca să-ți pui o parolă pe un email pe care nu-l deții cu adevărat:
+//
+// Pasul 1 (acest endpoint): primește email+parolă, dar NU le salvează încă
+// pe cont — le ține "în așteptare" (pending_email/pending_password_hash) și
+// trimite un cod de 6 cifre pe emailul dat. Dacă emailul e deja folosit de
+// ALT cont, refuzăm aici (altfel am da acces la parola altcuiva, aparent).
+// Apelat a doua oară (ex: codul a expirat), pur și simplu suprascrie cererea
+// în așteptare și retrimite un cod nou — funcționează și ca "retrimite codul".
+//
+// Pasul 2 (endpoint-ul de mai jos, /confirm): abia după codul corect, emailul
+// și parola devin reale pe cont. Până atunci, contul rămâne exact cum era
+// (fără parolă utilizabilă), deci accesul de admin tot nu se poate obține
+// decât prin login.html cu email+parolă, DUPĂ confirmare.
 app.post("/api/auth/set-password", auth, asyncRoute(async (req, res) => {
-  const { password } = req.body;
+  const { email, password } = req.body;
+  const cleanEmail = (email || "").trim().toLowerCase();
+  if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail))
+    return res.status(400).json({ error: "Email invalid." });
   if (!password || password.length < 8)
     return res.status(400).json({ error: "Parola trebuie să aibă minimum 8 caractere." });
+  if (!smtpConfigured())
+    return res.status(503).json({ error: "Trimiterea de email-uri nu este configurată încă pe server." });
+
+  const existing = await pool.query("SELECT id FROM users WHERE email=$1 AND id<>$2", [cleanEmail, req.user.sub]);
+  if (existing.rows[0]) return res.status(409).json({ error: "Acest email este deja folosit de alt cont." });
+
   const hash = await bcrypt.hash(password, 12);
-  await pool.query("UPDATE users SET password_hash=$1, updated_at=NOW() WHERE id=$2", [hash, req.user.sub]);
+  const code = generateVerifyCode();
+  await pool.query(
+    `UPDATE users SET pending_email=$1, pending_password_hash=$2,
+            email_verify_code=$3, email_verify_expires=NOW() + INTERVAL '15 minutes', updated_at=NOW()
+     WHERE id=$4`,
+    [cleanEmail, hash, code, req.user.sub]
+  );
+
+  try {
+    await sendVerificationEmail(cleanEmail, code);
+  } catch (e) {
+    console.error("Trimiterea emailului de confirmare a eșuat:", e.message);
+    return res.status(502).json({ error: "Nu am putut trimite emailul de confirmare. Încearcă din nou." });
+  }
+
+  res.json({ ok: true, message: "Cod trimis pe email." });
+}));
+
+app.post("/api/auth/set-password/confirm", auth, asyncRoute(async (req, res) => {
+  const { code } = req.body;
+  const { rows } = await pool.query(
+    `SELECT pending_email, pending_password_hash, email_verify_code, email_verify_expires
+     FROM users WHERE id=$1`, [req.user.sub]
+  );
+  const row = rows[0];
+  if (!row || !row.pending_email || !row.email_verify_code)
+    return res.status(400).json({ error: "Nu există nicio confirmare în așteptare — cere din nou codul." });
+  if (new Date(row.email_verify_expires) < new Date())
+    return res.status(400).json({ error: "Codul a expirat. Cere unul nou." });
+  if (String(code || "").trim() !== row.email_verify_code)
+    return res.status(400).json({ error: "Cod incorect." });
+
+  await pool.query(
+    `UPDATE users SET email=$1, password_hash=$2,
+            pending_email=NULL, pending_password_hash=NULL, email_verify_code=NULL, email_verify_expires=NULL,
+            updated_at=NOW()
+     WHERE id=$3`,
+    [row.pending_email, row.pending_password_hash, req.user.sub]
+  );
   await logAction(req.user.sub, "auth.set_password", "user", req.user.sub, null, req.ip);
   res.json({ ok: true });
 }));

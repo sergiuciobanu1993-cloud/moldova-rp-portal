@@ -19,16 +19,27 @@
       Contul tău are rangul <strong id="set-password-role">—</strong>, dar te-ai autentificat doar prin Discord.
       Din motive de securitate, un login prin Discord acordă acum DOAR accesul de jucător obișnuit — chiar dacă
       cineva ți-ar sparge contul de Discord, tot n-ar putea intra ca admin pe site. Ca să-ți poți folosi rangul,
-      pune-ți o parolă acum; de-atunci încolo te loghezi cu username/email + parola asta (nu prin Discord).
+      pune-ți un email real și o parolă — îți trimitem un cod de confirmare pe acel email, ca să fim siguri că
+      e chiar al tău, și abia după ce introduci codul devin valabile.
     </p>
     <form id="set-password-form" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+      <div><label style="display:block;font-size:11px;color:var(--muted);margin-bottom:4px">Email</label>
+        <input id="set-password-email" type="email" required autocomplete="email" class="filter-select"></div>
       <div><label style="display:block;font-size:11px;color:var(--muted);margin-bottom:4px">Parolă nouă (minim 8 caractere)</label>
         <input id="set-password-input" type="password" required minlength="8" autocomplete="new-password" class="filter-select"></div>
       <div><label style="display:block;font-size:11px;color:var(--muted);margin-bottom:4px">Confirmă parola</label>
         <input id="set-password-confirm" type="password" required minlength="8" autocomplete="new-password" class="filter-select"></div>
-      <button type="submit">Setează parola</button>
+      <button type="submit">Trimite codul de confirmare</button>
     </form>
     <p id="set-password-msg" class="muted" style="margin:10px 0 0" hidden></p>
+
+    <form id="confirm-code-form" hidden style="gap:10px;flex-wrap:wrap;align-items:flex-end;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)">
+      <div><label style="display:block;font-size:11px;color:var(--muted);margin-bottom:4px">Codul din email (6 cifre)</label>
+        <input id="confirm-code-input" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code" class="filter-select" style="letter-spacing:4px;font-size:18px;width:120px"></div>
+      <button type="submit">Confirmă codul</button>
+      <button type="button" id="resend-code-btn" class="btn-ghost">Retrimite codul</button>
+    </form>
+    <p id="confirm-code-msg" class="muted" style="margin:10px 0 0" hidden></p>
   </div>
 </section>
 <section class="panel" id="profile-extra" style="margin-top:20px">
@@ -151,24 +162,76 @@ async function loadProfileExtra() {
 })();
 wireLogout('#logout-link');
 
+// Fluxul e în doi pași — cerut explicit, ca simpla deținere a sesiunii să nu
+// fie de-ajuns ca să pui orice email pe cont: (1) trimiți email+parolă, ni se
+// trimite un cod pe emailul ăla; (2) introduci codul, abia atunci contul
+// chiar primește emailul și parola alea. Ținem email+parola în memorie (nu în
+// DOM) cât timp aștepți codul, ca butonul "Retrimite codul" să poată cere din
+// nou fără să te pună să le retastezi.
+let pendingSetPassword = null;
+
 document.getElementById('set-password-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const msgEl = document.getElementById('set-password-msg');
+  const email = document.getElementById('set-password-email').value.trim();
   const pw = document.getElementById('set-password-input').value;
   const pw2 = document.getElementById('set-password-confirm').value;
   msgEl.hidden = false;
   if (pw !== pw2) { msgEl.textContent = 'Parolele nu coincid.'; return; }
   if (pw.length < 8) { msgEl.textContent = 'Parola trebuie să aibă minimum 8 caractere.'; return; }
-  msgEl.textContent = 'Se salvează…';
+  msgEl.textContent = 'Se trimite codul pe email…';
   try {
     const res = await apiFetch('/api/auth/set-password', {
       method: 'POST',
-      body: JSON.stringify({ password: pw })
+      body: JSON.stringify({ email, password: pw })
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Nu am putut salva parola.');
-    msgEl.textContent = 'Parolă salvată! Ieși din cont și intră din nou cu username/email + parola nouă, ca să-ți primești rangul.';
+    if (!res.ok) throw new Error(data.error || 'Nu am putut trimite codul.');
+    pendingSetPassword = { email, password: pw };
+    msgEl.textContent = `Am trimis un cod de 6 cifre pe ${email}. Introdu-l mai jos.`;
     document.getElementById('set-password-form').querySelectorAll('input,button').forEach(el => el.disabled = true);
+    const confirmForm = document.getElementById('confirm-code-form');
+    confirmForm.hidden = false;
+    confirmForm.style.display = 'flex';
+    document.getElementById('confirm-code-input').focus();
+  } catch (err) {
+    msgEl.textContent = err.message || 'Eroare necunoscută.';
+  }
+});
+
+document.getElementById('confirm-code-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const msgEl = document.getElementById('confirm-code-msg');
+  const code = document.getElementById('confirm-code-input').value.trim();
+  msgEl.hidden = false;
+  msgEl.textContent = 'Se confirmă…';
+  try {
+    const res = await apiFetch('/api/auth/set-password/confirm', {
+      method: 'POST',
+      body: JSON.stringify({ code })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Cod incorect.');
+    msgEl.textContent = 'Confirmat! Ieși din cont și intră din nou cu email/username + parola nouă, ca să-ți primești rangul.';
+    document.getElementById('confirm-code-form').querySelectorAll('input,button').forEach(el => el.disabled = true);
+  } catch (err) {
+    msgEl.textContent = err.message || 'Eroare necunoscută.';
+  }
+});
+
+document.getElementById('resend-code-btn').addEventListener('click', async () => {
+  const msgEl = document.getElementById('confirm-code-msg');
+  if (!pendingSetPassword) return;
+  msgEl.hidden = false;
+  msgEl.textContent = 'Se retrimite codul…';
+  try {
+    const res = await apiFetch('/api/auth/set-password', {
+      method: 'POST',
+      body: JSON.stringify(pendingSetPassword)
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Nu am putut retrimite codul.');
+    msgEl.textContent = `Cod nou trimis pe ${pendingSetPassword.email}.`;
   } catch (err) {
     msgEl.textContent = err.message || 'Eroare necunoscută.';
   }

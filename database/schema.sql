@@ -29,6 +29,15 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS discord_id VARCHAR(32) UNIQUE;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS discord_username VARCHAR(100);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS discord_avatar TEXT;
 
+-- Confirmare prin email la "Setează parola" (contul de staff creat inițial
+-- doar prin Discord) — cerut explicit: emailul și parola nu se salvează
+-- direct pe cont, stau "în așteptare" până jucătorul introduce codul de 6
+-- cifre primit pe email; abia atunci trec în email/password_hash de mai sus.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_email VARCHAR(160);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_password_hash TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verify_code VARCHAR(10);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verify_expires TIMESTAMPTZ;
+
 CREATE TABLE IF NOT EXISTS players (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID UNIQUE REFERENCES users(id) ON DELETE CASCADE,

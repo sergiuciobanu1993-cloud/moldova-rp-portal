@@ -12,10 +12,76 @@
 <div class="event"><b>20 AUG</b><div><strong>Autentificare</strong><small>Conectare reușită din portal.</small></div></div></section>
 <aside class="panel" id="profil"><div class="head"><h2>Profil</h2><span>Public</span></div><div class="profile"><div class="avatar" id="profile-avatar">--</div><div><strong id="profile-name">…</strong><small id="profile-id">—</small></div></div><a class="wide" href="index.html">Vezi comunitatea →</a></aside>
 </div>
+<section class="panel" id="profile-extra" style="margin-top:20px">
+  <div class="head"><h2>Profilul meu</h2><span id="profile-extra-status" class="muted"></span></div>
+  <div id="profile-extra-body"><p class="muted" style="margin:0">Se încarcă…</p></div>
+</section>
+
 <section class="quick"><h2>Acces rapid</h2><div class="quickgrid"><a href="index.html#regulamente">📚 <strong>Regulamente</strong><small>Toate regulamentele oficiale</small></a><a href="index.html#factiuni">◆ <strong>Facțiuni</strong><small>Organizații și rank-uri</small></a><a href="tichete.html">🎫 <strong>Tichete</strong><small>Raportează probleme sau reclamații</small></a><a href="admin.html" id="admin-link" hidden>⚙ <strong>Admin Panel</strong><small>Vizibil doar pentru moderator/admin/owner</small></a></div></section>
 </main>
 <script src="auth-client.js"></script>
 <script>
+function fmtMoney(n) { return '$' + Number(n || 0).toLocaleString('ro-RO'); }
+const escapeHtml = s => (s ?? '').toString()
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+function fmtDate(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+// „Profilul meu" — bani/vehicule live (dacă ești conectat la server chiar
+// acum) + sancțiunile proprii, din /api/me/profile (vezi backend/server.js).
+async function loadProfileExtra() {
+  const statusEl = document.getElementById('profile-extra-status');
+  const bodyEl = document.getElementById('profile-extra-body');
+  try {
+    const res = await apiFetch('/api/me/profile');
+    if (!res.ok) throw new Error();
+    const p = await res.json();
+
+    if (!p.hasGameProfile) {
+      statusEl.textContent = '';
+      bodyEl.innerHTML = '<p class="muted" style="margin:0">Profilul tău de joc nu e încă sincronizat cu site-ul — conectează-te pe server ca să apară aici.</p>';
+      return;
+    }
+
+    statusEl.textContent = p.online ? 'online acum' : 'offline';
+
+    // Live (online chiar acum) SAU, dacă nu ești online, ultima poză
+    // salvată automat de pe server (vezi syncPlayerSnapshots în backend) —
+    // etichetată clar cu data, ca să fie evident că nu e live. Doar dacă nu
+    // avem nici una, nici alta (cont nou, niciodată prins online încă de
+    // când există acest sync) arătăm mesajul "nu ești conectat".
+    const src = p.online && p.live ? p.live : p.lastKnown;
+    const moneyBlock = src ? `
+      <div class="stats" style="margin:0 0 18px">
+        <article><small>CASH</small><strong>${fmtMoney(src.cash)}</strong></article>
+        <article><small>BANCĂ</small><strong>${fmtMoney(src.bank)}</strong></article>
+        <article><small>BANI MURDARI</small><strong>${src.blackMoney == null ? '—' : fmtMoney(src.blackMoney)}</strong></article>
+        <article><small>JOB</small><strong style="font-size:15px">${escapeHtml(src.jobLabel || src.job || '—')}</strong></article>
+      </div>
+      <p style="margin:0 0 6px"><small style="color:var(--muted)">VEHICULE</small><br>${
+        (src.vehicles && src.vehicles.length)
+          ? src.vehicles.map(v => `<span class="pill info" style="margin:3px 4px 0 0;display:inline-block">${escapeHtml(v.name ? `${v.name} (${v.plate})` : (v.plate || '?'))}</span>`).join('')
+          : '<span class="muted">Niciun vehicul.</span>'
+      }</p>
+      ${!p.online ? `<p class="muted" style="margin:0 0 18px;font-size:11px">Ultima dată văzut pe server: ${fmtDate(p.lastKnown.syncedAt)}. Nu ești conectat acum, deci ar putea să nu mai fie exact la secundă.</p>` : `<p style="margin:0 0 18px"></p>`}
+    ` : `<p class="muted" style="margin:0 0 18px">Nu ești conectat la server acum, și încă nu avem nicio poză salvată din ultima dată — bani/vehicule vor apărea aici după prima conectare.</p>`;
+    const live = moneyBlock;
+
+    const sanctions = (p.punishments && p.punishments.length) ? `
+      <small style="color:var(--muted);display:block;margin-bottom:8px">SANCȚIUNILE MELE</small>
+      <div class="thread">${p.punishments.map(pu => `<div class="msg"><b>${escapeHtml(pu.type)}</b><span>${escapeHtml(pu.reason)}</span><small>${fmtDate(pu.created_at)}</small></div>`).join('')}</div>
+    ` : `<small style="color:var(--muted);display:block">Nicio sancțiune — așa să rămână! 🙂</small>`;
+
+    bodyEl.innerHTML = live + sanctions;
+  } catch {
+    statusEl.textContent = '';
+    bodyEl.innerHTML = '<p class="muted" style="margin:0">Nu am putut încărca profilul.</p>';
+  }
+}
+
 (async () => {
   if (!requireAuth()) return;
   try {
@@ -44,6 +110,8 @@
     if (['moderator', 'admin', 'co-fondator', 'owner'].includes(me.role)) {
       document.getElementById('admin-link').hidden = false;
     }
+
+    loadProfileExtra();
   } catch (err) {
     // apiFetch already clears the session and redirects on a genuine 401.
     // Anything else that lands here (network hiccup) should NOT log the

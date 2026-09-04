@@ -41,6 +41,22 @@ CREATE TABLE IF NOT EXISTS players (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- "Ultima dată văzut" — o poză (snapshot) a banilor/jobului/vehiculelor unui
+-- jucător, salvată automat de backend din moldovarp-api la fiecare ~60s cât
+-- timp e online (vezi syncPlayerSnapshots în server.js). Scopul: profilul
+-- unui jucător (pagina "Profilul meu" / profilul din admin) să arate ceva
+-- relevant și când jucătorul e OFFLINE, nu doar "nu e conectat acum" — un
+-- portal "profesional" ține minte ultima stare cunoscută, nu doar live.
+-- last_synced_at = NULL înseamnă "nu am prins încă nicio poză" (cont nou,
+-- sau jucătorul nu a fost încă online de când există această coloană).
+ALTER TABLE players ADD COLUMN IF NOT EXISTS last_cash INTEGER;
+ALTER TABLE players ADD COLUMN IF NOT EXISTS last_bank INTEGER;
+ALTER TABLE players ADD COLUMN IF NOT EXISTS last_black_money INTEGER;
+ALTER TABLE players ADD COLUMN IF NOT EXISTS last_job VARCHAR(60);
+ALTER TABLE players ADD COLUMN IF NOT EXISTS last_job_label VARCHAR(100);
+ALTER TABLE players ADD COLUMN IF NOT EXISTS last_vehicles JSONB;
+ALTER TABLE players ADD COLUMN IF NOT EXISTS last_synced_at TIMESTAMPTZ;
+
 CREATE TABLE IF NOT EXISTS factions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name VARCHAR(100) UNIQUE NOT NULL,

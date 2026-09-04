@@ -14,6 +14,7 @@
   </div>
   <table><thead><tr><th>JUCĂTOR</th><th>FACȚIUNE</th><th>CASH</th><th>BANCĂ</th><th>BANI MURDARI</th><th>VEHICULE</th></tr></thead>
   <tbody id="list-body"><tr><td colspan="6">Se încarcă…</td></tr></tbody></table>
+  <p class="muted" style="margin:0 22px 16px;font-size:11px">Apasă pe orice jucător din listă pentru profilul complet (bani, vehicule, sancțiuni, tichete, activitate, kill-uri).</p>
 </section>
 
 <section class="formbox" id="offline-help" hidden>
@@ -50,9 +51,28 @@
 </section>
 
 </main>
+
+<div class="modal-overlay" id="profile-overlay" hidden>
+  <section class="formbox modal-box" id="profile-box">
+    <div class="modal-head">
+      <h2 id="profile-title">Profil jucător</h2>
+      <button type="button" class="modal-close" id="profile-close-btn" aria-label="Închide">✕</button>
+    </div>
+    <div id="profile-body"><p class="muted">Se încarcă…</p></div>
+  </section>
+</div>
 <script src="auth-client.js"></script>
 <script>
 function fmtMoney(n) { return '$' + Number(n || 0).toLocaleString('ro-RO'); }
+
+const escapeHtml = s => (s ?? '').toString()
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
+function fmtDate(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
 
 function vehiclesHtml(vehicles) {
   if (!vehicles || !vehicles.length) return '<span class="muted">—</span>';
@@ -86,14 +106,17 @@ async function loadPlayers(force) {
       : `${d.players.length} jucători online — date live.`;
 
     tbody.innerHTML = d.players.length ? d.players.slice().sort((a, b) => a.name.localeCompare(b.name, 'ro')).map(p => `
-      <tr>
-        <td><strong>${p.name}</strong><br><small style="color:var(--muted)">ID server #${p.id}</small></td>
-        <td>${p.jobLabel || p.job}</td>
+      <tr class="player-row" data-name="${escapeHtml(p.name)}" style="cursor:pointer">
+        <td><strong>${escapeHtml(p.name)}</strong><br><small style="color:var(--muted)">ID server #${p.id}</small></td>
+        <td>${escapeHtml(p.jobLabel || p.job)}</td>
         <td>${fmtMoney(p.cash)}</td>
         <td>${fmtMoney(p.bank)}</td>
         <td>${p.blackMoney == null ? '<span class="muted">—</span>' : fmtMoney(p.blackMoney)}</td>
         <td>${vehiclesHtml(p.vehicles)}</td>
       </tr>`).join('') : '<tr><td colspan="6">Niciun jucător online momentan.</td></tr>';
+    tbody.querySelectorAll('tr.player-row').forEach(tr => {
+      tr.addEventListener('click', () => openProfile(tr.dataset.name));
+    });
   } catch {
     statusNote.textContent = 'Nu am putut încărca datele.';
     tbody.innerHTML = '<tr><td colspan="6">Eroare la încărcare.</td></tr>';
@@ -123,6 +146,102 @@ async function loadJobs() {
     tbody.innerHTML = '<tr><td colspan="2">Nu am putut încărca lista de joburi.</td></tr>';
   }
 }
+
+// ---------------------------------------------------------------------------
+// Profil complet jucător (modal) — cere /api/admin/player-profile?name=X,
+// care combină date live (dacă e online), contul de site (dacă are), sancțiuni,
+// tichete, activitate recentă și kill-uri (ca victimă și ca ucigaș).
+// ---------------------------------------------------------------------------
+function killCauseLabel(k) {
+  if (k.adminKill) return `ucis de <strong>admin ${escapeHtml(k.adminKill.staff || 'necunoscut')}</strong>`;
+  if (k.killer) return `ucis de <strong>${escapeHtml(k.killer)}</strong>${k.cause ? ` <span class="muted">(${escapeHtml(k.cause)})</span>` : ''}`;
+  return '<span class="muted">necunoscut — detectat automat</span>';
+}
+
+function activityLine(log) {
+  const cat = escapeHtml(log.category || '?');
+  const who = escapeHtml(log.player || '');
+  let extra = '';
+  if (log.category === 'death') extra = killCauseLabel({ killer: log.details?.killer, adminKill: log.details?.adminKill, cause: log.details?.cause });
+  else if (log.category === 'admin') extra = `<span class="muted">${escapeHtml(log.details?.action || '')} ${log.details?.target ? '→ ' + escapeHtml(log.details.target) : ''}</span>`;
+  else if (log.details?.item) extra = `<strong>${escapeHtml((log.details.count ? log.details.count + 'x ' : '') + log.details.item)}</strong>`;
+  return `<div class="msg"><b>${cat}${who ? ' · ' + who : ''}</b><span>${extra || '<span class="muted">—</span>'}</span><small>${fmtDate(log.at)}</small></div>`;
+}
+
+function renderProfile(p) {
+  const body = document.getElementById('profile-body');
+  document.getElementById('profile-title').textContent = `Profil — ${p.name}`;
+
+  const liveSrc = p.live || p.lastKnown;
+  const live = liveSrc ? `
+    <div class="metrics" style="grid-template-columns:repeat(4,1fr);margin-bottom:18px">
+      <article><small>STATUS</small><strong style="font-size:16px;color:${p.live ? 'var(--green)' : 'var(--muted)'}">${p.live ? 'ONLINE' : 'OFFLINE'}</strong><em>${escapeHtml(liveSrc.jobLabel || liveSrc.job || '')}</em></article>
+      <article><small>CASH</small><strong>${fmtMoney(liveSrc.cash)}</strong><em>&nbsp;</em></article>
+      <article><small>BANCĂ</small><strong>${fmtMoney(liveSrc.bank)}</strong><em>&nbsp;</em></article>
+      <article><small>BANI MURDARI</small><strong>${liveSrc.blackMoney == null ? '—' : fmtMoney(liveSrc.blackMoney)}</strong><em>${p.live && liveSrc.group && liveSrc.group !== 'user' ? escapeHtml(liveSrc.group) : '&nbsp;'}</em></article>
+    </div>
+    <p style="margin:0 0 6px"><b style="font-size:11px;color:var(--muted);letter-spacing:.08em">VEHICULE</b><br>${vehiclesHtml(liveSrc.vehicles)}</p>
+    ${!p.live ? `<p class="muted" style="margin:0 0 18px;font-size:11px">Date din ultima dată văzut online: ${fmtDate(p.lastKnown.syncedAt)} — nu sunt live.</p>` : `<p style="margin:0 0 18px"></p>`}
+  ` : `<p class="muted" style="margin:0 0 18px">Jucătorul nu e online momentan și nu avem încă nicio poză salvată din ultima dată — se arată doar istoricul de mai jos.</p>`;
+
+  const account = p.account ? `
+    <p style="margin:0 0 18px">
+      <b style="font-size:11px;color:var(--muted);letter-spacing:.08em">CONT SITE</b><br>
+      ${escapeHtml(p.account.username)} ${p.account.game_id ? `<span class="muted">(ID #${p.account.game_id})</span>` : ''}
+      ${p.account.faction_name ? ` · ${escapeHtml(p.account.faction_name)}${p.account.rank_name ? ' — ' + escapeHtml(p.account.rank_name) : ''}` : ''}
+      ${p.account.playtime_minutes != null ? ` · ${Math.round(p.account.playtime_minutes / 60)}h jucate` : ''}
+    </p>` : `<p class="muted" style="margin:0 0 18px">Jucătorul nu are (încă) cont pe site.</p>`;
+
+  const punishments = p.punishments.length ? `<table><thead><tr><th>TIP</th><th>MOTIV</th><th>DE CINE</th><th>CÂND</th></tr></thead><tbody>${
+    p.punishments.map(pu => `<tr><td><span class="pill warn">${escapeHtml(pu.type)}</span></td><td>${escapeHtml(pu.reason)}</td><td>${escapeHtml(pu.issued_by || '—')}</td><td>${fmtDate(pu.created_at)}</td></tr>`).join('')
+  }</tbody></table>` : `<p class="muted" style="margin:0">Nicio sancțiune.</p>`;
+
+  const tickets = p.tickets.length ? `<table><thead><tr><th>SUBIECT</th><th>STATUS</th><th>DESCHIS</th></tr></thead><tbody>${
+    p.tickets.map(t => `<tr><td>${escapeHtml(t.subject)}</td><td><span class="pill ${t.status === 'open' ? 'warn' : 'off'}">${escapeHtml(t.status)}</span></td><td>${fmtDate(t.created_at)}</td></tr>`).join('')
+  }</tbody></table>` : `<p class="muted" style="margin:0">Niciun tichet.</p>`;
+
+  const activity = p.recentActivity.length ? `<div class="thread">${p.recentActivity.map(activityLine).join('')}</div>` : `<p class="muted" style="margin:0">Nicio activitate recentă.</p>`;
+
+  const killsVictim = p.killsAsVictim.length ? `<div class="thread">${p.killsAsVictim.map(k => `<div class="msg"><span>${killCauseLabel(k)}</span><small>${fmtDate(k.at)}</small></div>`).join('')}</div>` : `<p class="muted" style="margin:0">Nicio moarte recentă.</p>`;
+  const killsKiller = p.killsAsKiller.length ? `<div class="thread">${p.killsAsKiller.map(k => `<div class="msg"><span>a ucis pe <strong>${escapeHtml(k.victim)}</strong>${k.cause ? ` <span class="muted">(${escapeHtml(k.cause)})</span>` : ''}</span><small>${fmtDate(k.at)}</small></div>`).join('')}</div>` : `<p class="muted" style="margin:0">Niciun kill recent (din ultimele ~300 de morți de pe server).</p>`;
+
+  body.innerHTML = `
+    ${live}
+    ${account}
+    <h2 style="font-size:14px;margin:22px 0 10px">⚠ Sancțiuni</h2>${punishments}
+    <h2 style="font-size:14px;margin:22px 0 10px">🎫 Tichete</h2>${tickets}
+    <h2 style="font-size:14px;margin:22px 0 10px">🗂 Activitate recentă</h2>${activity}
+    <h2 style="font-size:14px;margin:22px 0 10px">🔪 Kill-uri — ca victimă</h2>${killsVictim}
+    <h2 style="font-size:14px;margin:22px 0 10px">🔪 Kill-uri — ca ucigaș</h2>${killsKiller}
+  `;
+}
+
+async function openProfile(name) {
+  document.getElementById('profile-overlay').hidden = false;
+  document.body.classList.add('modal-open');
+  document.getElementById('profile-title').textContent = `Profil — ${name}`;
+  document.getElementById('profile-body').innerHTML = '<p class="muted">Se încarcă…</p>';
+  try {
+    const res = await apiFetch(`/api/admin/player-profile?name=${encodeURIComponent(name)}`);
+    if (!res.ok) throw new Error();
+    renderProfile(await res.json());
+  } catch {
+    document.getElementById('profile-body').innerHTML = '<p class="muted">Nu am putut încărca profilul.</p>';
+  }
+}
+
+function closeProfile() {
+  document.getElementById('profile-overlay').hidden = true;
+  document.body.classList.remove('modal-open');
+}
+
+document.getElementById('profile-overlay').addEventListener('click', (e) => {
+  if (e.target.id === 'profile-overlay') closeProfile();
+});
+document.getElementById('profile-close-btn').addEventListener('click', closeProfile);
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !document.getElementById('profile-overlay').hidden) closeProfile();
+});
 
 (async () => {
   const me = await requireRole('admin', 'co-fondator', 'owner');

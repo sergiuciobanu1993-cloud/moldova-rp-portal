@@ -272,6 +272,52 @@ app.get("/api/admin/live/players", auth, requireRole(...ADMIN_ROLES), asyncRoute
   res.json(await getPlayersDetail(req.query.force === "1"));
 }));
 
+// "Ultima dată văzut" — la fiecare 60 de secunde, indiferent dacă cineva se
+// uită chiar acum în admin panel sau pe homepage, salvăm pentru fiecare
+// jucător ONLINE (matching după display_name, doar pentru cei care au deja
+// cont pe site) ultimele valori cunoscute — bani, job, vehicule — în
+// coloanele last_* din players (vezi migrarea din database/schema.sql).
+// Scopul: profilul jucătorului să arate ceva relevant și când e OFFLINE, nu
+// doar "nu ești conectat acum" — asta era exact observația care a dus la
+// acest sync ("ar fi mult mai profesional" să meargă și offline).
+// Best-effort, tăcut: dacă serverul de joc e jos momentan, pur și simplu nu
+// actualizăm nimic la acest tur — nu ștergem/stricăm ultima poză bună deja
+// salvată.
+async function syncPlayerSnapshots() {
+  if (!FIVEM_API_SECRET) return;
+  try {
+    const detail = await fetchPlayersDetail();
+    if (!detail.online || !detail.players.length) return;
+    for (const pl of detail.players) {
+      const name = (pl.name || "").toString().trim();
+      if (!name) continue;
+      await pool.query(
+        `UPDATE players SET
+           last_cash = $1, last_bank = $2, last_black_money = $3,
+           last_job = $4, last_job_label = $5, last_vehicles = $6,
+           last_synced_at = NOW()
+         WHERE display_name ILIKE $7`,
+        [
+          Number.isFinite(pl.cash) ? pl.cash : null,
+          Number.isFinite(pl.bank) ? pl.bank : null,
+          Number.isFinite(pl.blackMoney) ? pl.blackMoney : null,
+          pl.job || null,
+          pl.jobLabel || null,
+          JSON.stringify(pl.vehicles || []),
+          name,
+        ]
+      );
+    }
+  } catch (err) {
+    console.error("syncPlayerSnapshots a eșuat (ignorat, reîncercăm la următorul tur):", err.message);
+  }
+}
+
+if (FIVEM_API_SECRET) {
+  setInterval(syncPlayerSnapshots, 60_000);
+  syncPlayerSnapshots();
+}
+
 // Lista COMPLETĂ a joburilor/facțiunilor configurate pe server (tabela ESX
 // "jobs"), nu doar cele cu jucători online acum. O folosim ca să vedem toate
 // numele existente — inclusiv găști fără niciun membru online în acel moment.
@@ -509,6 +555,145 @@ app.get("/api/admin/kill-logs", auth, requireRole(...MOD_ROLES), asyncRoute(asyn
 
   const nextCursor = kills.length ? kills[kills.length - 1].at : null;
   res.json({ online, kills, nextCursor });
+}));
+
+// ---------------------------------------------------------------------------
+// Profilul unui jucător — pagina cerută explicit ("apesi pe player și se
+// deschide pagina cu toată informația lui"). Combină TOATE sursele deja
+// folosite separat în alte pagini, într-un singur rezumat:
+//   - date live din moldovarp-api (bani, vehicule, job) — doar dacă jucătorul
+//     e online chiar acum, altfel `live` rămâne null (nu inventăm date vechi
+//     aici — pentru asta există deja Loguri, care arată istoricul)
+//   - contul de pe site, dacă jucătorul din joc are și cont (majoritatea
+//     jucătorilor pot să nu aibă — potrivirea e după numele afișat)
+//   - sancțiuni (după target_name, la fel ca pagina de Sancțiuni)
+//   - tichetele contului, dacă are cont
+//   - activitate recentă (aceleași loguri ca la pagina Loguri, filtrate pe
+//     acest jucător)
+//   - kill-uri, ATÂT ca victimă CÂT ȘI ca ucigaș (pentru "ca ucigaș" nu putem
+//     filtra la sursă — moldovarp-api filtrează după victimă — deci citim un
+//     lot mai mare de morți recente și filtrăm aici după numele ucigașului;
+//     acceptabil pentru un rezumat de profil, nu pentru un istoric complet)
+// Găsită după NUME (case-insensitive), nu după un id din baza noastră —
+// pentru că jucătorul din joc poate să nu aibă deloc cont pe site.
+// ---------------------------------------------------------------------------
+async function buildPlayerProfile(name) {
+  const cleanName = (name || "").toString().trim().slice(0, 64);
+  if (!cleanName) return null;
+  const lower = cleanName.toLowerCase();
+
+  const [liveDetail, accountResult, punishmentResult, activityResult, staffActivity, deathsResult] = await Promise.all([
+    getPlayersDetail(),
+    pool.query(
+      `SELECT p.id, p.game_id, p.display_name, p.playtime_minutes, p.status, p.created_at,
+              p.last_cash, p.last_bank, p.last_black_money, p.last_job, p.last_job_label,
+              p.last_vehicles, p.last_synced_at,
+              u.id AS user_id, u.username, u.email,
+              f.name AS faction_name, fr.name AS rank_name
+       FROM players p
+       JOIN users u ON u.id = p.user_id
+       LEFT JOIN faction_members fm ON fm.player_id = p.id
+       LEFT JOIN factions f ON f.id = fm.faction_id
+       LEFT JOIN faction_ranks fr ON fr.id = fm.rank_id
+       WHERE p.display_name ILIKE $1
+       LIMIT 1`, [cleanName]
+    ),
+    pool.query(
+      `SELECT pu.id, pu.type, pu.reason, pu.duration_minutes, pu.created_at, u.username AS issued_by,
+              CASE WHEN pu.duration_minutes IS NOT NULL
+                   THEN pu.created_at + (pu.duration_minutes || ' minutes')::interval
+                   ELSE NULL END AS expires_at
+       FROM punishments pu LEFT JOIN users u ON u.id = pu.issued_by
+       WHERE pu.target_name ILIKE $1
+       ORDER BY pu.created_at DESC LIMIT 20`, [cleanName]
+    ),
+    fetchGameLogs({ player: cleanName, limit: 25 }),
+    fetchStaffLogs({ player: cleanName, limit: 25 }),
+    fetchGameLogs({ category: "death", limit: 300 }),
+  ]);
+
+  const live = liveDetail.online
+    ? (liveDetail.players || []).find(p => (p.name || "").toLowerCase().trim() === lower) || null
+    : null;
+
+  const account = accountResult.rows[0] || null;
+  let tickets = [];
+  if (account) {
+    const t = await pool.query(
+      `SELECT id, subject, category, status, created_at FROM tickets WHERE user_id = $1 ORDER BY created_at DESC LIMIT 10`,
+      [account.user_id]
+    );
+    tickets = t.rows;
+  }
+
+  const recentActivity = [...activityResult.logs, ...staffActivity]
+    .sort((a, b) => new Date(b.at) - new Date(a.at))
+    .slice(0, 25);
+
+  const allDeaths = deathsResult.logs;
+  correlateStaffAction(allDeaths, staffActivity, "death", /kill/i, "adminKill");
+
+  const killsAsVictim = allDeaths
+    .filter(d => (d.player || "").toLowerCase().trim() === lower)
+    .map(d => ({ killer: d.details.killer || null, adminKill: d.details.adminKill || null, cause: d.details.cause || null, at: d.at }))
+    .slice(0, 20);
+
+  const killsAsKiller = allDeaths
+    .filter(d => (d.details.killer || "").toLowerCase().trim() === lower)
+    .map(d => ({ victim: d.player, cause: d.details.cause || null, at: d.at }))
+    .slice(0, 20);
+
+  // Cand jucatorul e offline ACUM, dar avem o poza salvata de cand a fost
+  // ultima data online (vezi syncPlayerSnapshots, la fiecare 60s), o
+  // aratam clar etichetata cu "ultima data vazut" — nu o confundam cu date
+  // live. Fara asta, un jucator offline nu vedea absolut nimic despre
+  // banii/vehiculele lui, ceea ce nu parea profesional.
+  const lastKnown = (!live && account && account.last_synced_at) ? {
+    cash: account.last_cash, bank: account.last_bank, blackMoney: account.last_black_money,
+    job: account.last_job, jobLabel: account.last_job_label,
+    vehicles: account.last_vehicles || [], syncedAt: account.last_synced_at,
+  } : null;
+
+  return {
+    name: cleanName,
+    online: !!live,
+    live: live ? {
+      serverId: live.id, job: live.job, jobLabel: live.jobLabel, group: live.group,
+      cash: live.cash, bank: live.bank, blackMoney: live.blackMoney, vehicles: live.vehicles || [],
+    } : null,
+    lastKnown,
+    account: account ? {
+      id: account.id, game_id: account.game_id, display_name: account.display_name,
+      playtime_minutes: account.playtime_minutes, status: account.status, created_at: account.created_at,
+      username: account.username, faction_name: account.faction_name, rank_name: account.rank_name,
+    } : null,
+    punishments: punishmentResult.rows,
+    tickets,
+    recentActivity,
+    killsAsVictim,
+    killsAsKiller,
+  };
+}
+
+app.get("/api/admin/player-profile", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
+  const name = String(req.query.name || "").trim();
+  if (!name) return res.status(400).json({ error: "Parametrul name este obligatoriu." });
+  const profile = await buildPlayerProfile(name);
+  if (!profile) return res.status(400).json({ error: "Nume invalid." });
+  res.json(profile);
+}));
+
+// Profilul PROPRIU al jucătorului logat — aceeași agregare ca mai sus, dar
+// legată strict de contul autentificat (nu poate cere profilul altcuiva).
+// Necesită un cont de site cu display_name setat (vine din players.display_name,
+// populat la prima sincronizare cu jocul) — dacă nu există încă, răspundem
+// degradat, nu cu eroare.
+app.get("/api/me/profile", auth, asyncRoute(async (req, res) => {
+  const { rows } = await pool.query(`SELECT display_name FROM players WHERE user_id = $1 LIMIT 1`, [req.user.sub]);
+  const displayName = rows[0]?.display_name;
+  if (!displayName) return res.json({ hasGameProfile: false });
+  const profile = await buildPlayerProfile(displayName);
+  res.json({ hasGameProfile: true, ...profile });
 }));
 
 // Webhook primit direct de la Luxu Admin (panoul lor cloud, tab "Webhooks"),

@@ -384,6 +384,14 @@ app.get("/api/dev/file", requireDevProxy, asyncRoute(async (req, res) => {
   res.status(r.status).type(r.contentType).send(r.body);
 }));
 
+app.get("/api/dev/listdir", requireDevProxy, asyncRoute(async (req, res) => {
+  const qs = new URLSearchParams();
+  if (req.query.resource) qs.set("resource", String(req.query.resource));
+  if (req.query.dir) qs.set("dir", String(req.query.dir));
+  const r = await fetchFromGameDev(`/dev/listdir?${qs.toString()}`);
+  res.status(r.status).type(r.contentType).send(r.body);
+}));
+
 app.get("/api/dev/db-tables", requireDevProxy, asyncRoute(async (_req, res) => {
   const r = await fetchFromGameDev("/dev/db-tables");
   res.status(r.status).type(r.contentType).send(r.body);

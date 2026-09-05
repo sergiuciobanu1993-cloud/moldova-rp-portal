@@ -23,6 +23,8 @@ body.modal-open{overflow:hidden}
 .modal-head h2{margin:0}
 .modal-close{background:transparent;border:1px solid var(--line);border-radius:8px;width:32px;height:32px;flex-shrink:0;color:var(--muted);font-size:14px;line-height:1;cursor:pointer;display:grid;place-items:center}
 .modal-close:hover{border-color:var(--orange);color:var(--orange)}
+.player-link{background:none;border:0;padding:0;font:inherit;font-weight:700;color:inherit;cursor:pointer;text-align:left}
+.player-link:hover{color:var(--orange);text-decoration:underline}
 .field textarea.textarea-lg{min-height:54vh;line-height:1.65;font-size:13.5px}
 @media(max-width:800px){.modal-overlay{padding:0}.modal-box{width:100%;min-height:100vh;border-radius:0}.field textarea.textarea-lg{min-height:40vh}}
 @media(max-width:800px){.side{position:static;width:190px}.metrics{grid-template-columns:repeat(2,1fr)}main{margin:0;width:calc(100% - 190px);padding:25px 15px}.formgrid{grid-template-columns:1fr}}

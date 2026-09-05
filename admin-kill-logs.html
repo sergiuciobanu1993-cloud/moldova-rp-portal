@@ -29,6 +29,7 @@
 
 </main>
 <script src="auth-client.js"></script>
+<script src="player-profile-modal.js"></script>
 <script>
 const escapeHtml = s => (s ?? '').toString()
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -41,11 +42,19 @@ function truncate(value, max) {
 
 function fmtDate(d) { return new Date(d).toLocaleString('ro-RO'); }
 
+// Numele unui jucător real (nu username-ul de staff al unui admin — acela
+// nu are neapărat legătură cu vreun personaj din joc, deci nu-l facem
+// clickabil ca să nu deschidem un profil gol/derutant) — buton, nu link,
+// ca să rămână accesibil de la tastatură și fără să navigheze nicăieri.
+function playerButton(name) {
+  return `<button type="button" class="player-link" data-player="${escapeHtml(name)}">${escapeHtml(name)}</button>`;
+}
+
 function formatKiller(k) {
   if (k.adminKill) {
     return `<strong>admin ${escapeHtml(k.adminKill.staff || 'necunoscut')}</strong> <span class="muted">(comandă din panoul de admin)</span>`;
   }
-  if (k.killer) return `<strong>${escapeHtml(k.killer)}</strong>`;
+  if (k.killer) return `<strong>${playerButton(k.killer)}</strong>`;
   if (k.detectedBy === 'health') {
     return '<span class="muted">necunoscut — detectat automat (fără ucigaș cunoscut)</span>';
   }
@@ -63,13 +72,22 @@ function formatLoot(looted) {
 function rowsHtml(kills) {
   return kills.map(k => `
       <tr>
-        <td><strong>${escapeHtml(k.victim || 'necunoscut')}</strong>${k.job ? ` <span class="muted">· job: ${escapeHtml(k.job)}</span>` : ''}</td>
+        <td><strong>${k.victim ? playerButton(k.victim) : 'necunoscut'}</strong>${k.job ? ` <span class="muted">· job: ${escapeHtml(k.job)}</span>` : ''}</td>
         <td>${formatKiller(k)}</td>
         <td>${k.cause ? escapeHtml(truncate(String(k.cause), 100)) : '<span class="muted">—</span>'}</td>
         <td>${formatLoot(k.looted)}</td>
         <td>${fmtDate(k.at)}</td>
       </tr>`).join('');
 }
+
+// Delegare de evenimente pe tot tabelul (nu pe fiecare buton individual) —
+// rândurile se re-randează des (reîmprospătare automată la 60s, filtrare,
+// "încarcă mai vechi"), deci un singur listener pus o dată, la încărcare,
+// e mai simplu și mai sigur decât să re-legăm listenere de fiecare dată.
+document.getElementById('kills-table').addEventListener('click', (e) => {
+  const btn = e.target.closest('.player-link');
+  if (btn) window.openPlayerProfile(btn.dataset.player);
+});
 
 let debounceTimer = null;
 function scheduleReload() {

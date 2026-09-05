@@ -145,7 +145,14 @@ document.getElementById('load-more-btn').addEventListener('click', () => loadKil
   if (!me) return;
   document.getElementById('admin-name').textContent = me.username;
   loadKills();
-  setInterval(loadKills, 60000);
+  // Reîmprospătarea automată NU trebuie să te tragă înapoi la prima pagină
+  // dacă tocmai ai apăsat "Încarcă mai vechi" ca să sapi în istoric — înainte,
+  // la fiecare 60s se apela loadKills() fără argumente, ceea ce înseamnă
+  // reset=true necondiționat, ștergând tot ce încărcaseși în plus și punând
+  // înapoi doar prima pagină (raportat explicit: "se reîncarcă aceeași
+  // pagină, nu te duci la loguri mai vechi"). Acum reîmprospătarea automată
+  // rulează DOAR cât timp ești pe prima pagină (currentCursor e încă null).
+  setInterval(() => { if (!currentCursor) loadKills(); }, 60000);
 })();
 </script>
 </body></html>

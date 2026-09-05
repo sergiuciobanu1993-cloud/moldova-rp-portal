@@ -429,7 +429,10 @@ document.getElementById('load-more-btn').addEventListener('click', () => loadLog
   if (!me) return;
   document.getElementById('admin-name').textContent = me.username;
   loadLogs();
-  setInterval(loadLogs, 60000);
+  // Aceeași reparare ca la Kill Logs: reîmprospătarea automată la 60s nu mai
+  // resetează pagina la prima dacă ai apăsat deja "Încarcă mai vechi" — rulează
+  // doar cât timp ești pe prima pagină (currentCursor încă null).
+  setInterval(() => { if (!currentCursor) loadLogs(); }, 60000);
 })();
 </script>
 </body></html>

@@ -171,6 +171,16 @@
     <p class="copyright">© 2026 Moldova RP. Toate drepturile rezervate.</p>
   </footer>
 
+  <div class="news-modal-overlay" id="news-modal-overlay" hidden>
+    <div class="news-modal" role="dialog" aria-modal="true" aria-labelledby="news-modal-title">
+      <button type="button" class="news-modal-close" id="news-modal-close" aria-label="Închide">✕</button>
+      <div class="news-modal-video" id="news-modal-video" hidden></div>
+      <div class="news-modal-meta"><span class="tag" id="news-modal-tag"></span><span class="news-modal-date" id="news-modal-date"></span></div>
+      <h2 id="news-modal-title"></h2>
+      <div class="news-modal-body" id="news-modal-body"></div>
+    </div>
+  </div>
+
   <script src="auth-client.js"></script>
   <script src="app.js"></script>
 

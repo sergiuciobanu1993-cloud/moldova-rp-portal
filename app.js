@@ -275,6 +275,90 @@ if (newsList) {
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   const truncate = (s, n) => (s || '').length > n ? s.slice(0, n).trim() + '…' : (s || '');
+  // Transformă orice formă obișnuită de link YouTube (youtu.be/ID,
+  // watch?v=ID, deja /embed/ID) într-un URL de embed, ca să putem afișa
+  // videoclipul direct pe site (iframe), nu doar un link către YouTube.
+  // Întoarce null daca nu recunoaștem formatul — în acel caz păstrăm doar
+  // un link normal, ca fallback (vezi mai jos, la construirea cardului).
+  const youtubeEmbedUrl = (url) => {
+    if (!url) return null;
+    try {
+      const u = new URL(url);
+      const host = u.hostname.replace(/^www\./, '');
+      let id = null;
+      if (host === 'youtu.be') id = u.pathname.slice(1);
+      else if (host === 'youtube.com' || host === 'm.youtube.com') {
+        if (u.pathname === '/watch') id = u.searchParams.get('v');
+        else if (u.pathname.startsWith('/embed/')) id = u.pathname.slice('/embed/'.length);
+        else if (u.pathname.startsWith('/shorts/')) id = u.pathname.slice('/shorts/'.length);
+      }
+      id = (id || '').split(/[?&/]/)[0];
+      return id ? `https://www.youtube.com/embed/${id}` : null;
+    } catch {
+      return null;
+    }
+  };
+  // Conținutul e text simplu, cu paragrafe separate prin linie goală (vezi
+  // cum e scris în Admin → Anunțuri) — îl transformăm în <p>-uri separate
+  // pentru modalul de detaliu (pe card rămâne doar rezumatul trunchiat).
+  const renderParagraphs = (s) => (s || '').split(/\n\s*\n/)
+    .map(p => p.trim()).filter(Boolean)
+    .map(p => `<p>${escapeHtml(p).replace(/\n/g, '<br>')}</p>`).join('') || `<p>${escapeHtml(s)}</p>`;
+
+  const modalOverlay = document.getElementById('news-modal-overlay');
+  const modalClose = document.getElementById('news-modal-close');
+  const modalVideo = document.getElementById('news-modal-video');
+  const modalTag = document.getElementById('news-modal-tag');
+  const modalDate = document.getElementById('news-modal-date');
+  const modalTitle = document.getElementById('news-modal-title');
+  const modalBody = document.getElementById('news-modal-body');
+
+  const closeModal = () => {
+    if (!modalOverlay) return;
+    modalOverlay.hidden = true;
+    modalVideo.innerHTML = ''; // oprește playback-ul video la închidere
+  };
+  const openModal = (a) => {
+    if (!modalOverlay) return;
+    modalTag.textContent = (a.category || 'General').toUpperCase();
+    modalDate.textContent = fmtNewsDate(a.published_at);
+    modalTitle.textContent = a.title;
+    modalBody.innerHTML = renderParagraphs(a.content);
+    const embedUrl = youtubeEmbedUrl(a.video_url);
+    if (embedUrl) {
+      modalVideo.innerHTML = `<iframe src="${escapeHtml(embedUrl)}" title="${escapeHtml(a.title)}" loading="lazy" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
+      modalVideo.hidden = false;
+    } else if (a.video_url) {
+      // Link necunoscut ca format — nu putem încorpora, dar tot oferim accesul.
+      modalVideo.innerHTML = `<a class="news-video" href="${escapeHtml(a.video_url)}" target="_blank" rel="noopener noreferrer">▶ Vezi videoclipul</a>`;
+      modalVideo.hidden = false;
+    } else {
+      modalVideo.hidden = true;
+    }
+    modalOverlay.hidden = false;
+  };
+  if (modalOverlay) {
+    modalClose.addEventListener('click', closeModal);
+    modalOverlay.addEventListener('click', (e) => { if (e.target === modalOverlay) closeModal(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !modalOverlay.hidden) closeModal(); });
+  }
+
+  let currentItems = [];
+  newsList.addEventListener('click', (e) => {
+    const card = e.target.closest('[data-news-index]');
+    if (!card) return;
+    const item = currentItems[Number(card.dataset.newsIndex)];
+    if (item) openModal(item);
+  });
+  newsList.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const card = e.target.closest('[data-news-index]');
+    if (!card) return;
+    e.preventDefault();
+    const item = currentItems[Number(card.dataset.newsIndex)];
+    if (item) openModal(item);
+  });
+
   const loadNews = async () => {
     try {
       const res = await fetch('/api/announcements');
@@ -284,15 +368,16 @@ if (newsList) {
         newsList.innerHTML = '<div class="empty-state">Niciun anunț publicat momentan.</div>';
         return;
       }
-      newsList.innerHTML = items.slice(0, 6).map(a => `
-        <article class="news">
+      currentItems = items.slice(0, 6);
+      newsList.innerHTML = currentItems.map((a, i) => `
+        <article class="news" data-news-index="${i}" tabindex="0" role="button" aria-label="Citește anunțul: ${escapeHtml(a.title)}">
           <span class="news-date">${escapeHtml(fmtNewsDate(a.published_at))}</span>
           <div>
             ${a.image_url ? `<img class="news-img" src="${escapeHtml(a.image_url)}" alt="" loading="lazy" onerror="this.remove()">` : ''}
             <span class="tag">${escapeHtml((a.category || 'General').toUpperCase())}</span>
             <h3>${escapeHtml(a.title)}</h3>
             <p>${escapeHtml(truncate(a.content, 160))}</p>
-            ${a.video_url ? `<a class="news-video" href="${escapeHtml(a.video_url)}" target="_blank" rel="noopener noreferrer">▶ Vezi videoclipul</a>` : ''}
+            <span class="news-readmore">${a.video_url ? '▶ Are video · ' : ''}Citește tot →</span>
           </div>
         </article>`).join('');
     } catch {

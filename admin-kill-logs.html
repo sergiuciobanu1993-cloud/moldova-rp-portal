@@ -61,12 +61,18 @@ function formatKiller(k) {
   return '<span class="muted">necunoscut</span>';
 }
 
+// Fiecare item luat, ca un "pill" separat, într-un container care se
+// întinde pe lățime (flex-wrap) — NU mai trunchiem șirul la un număr fix de
+// caractere ca înainte (tăia lista la vreo 6-7 iteme, chiar dacă mai
+// erau — raportat explicit de staff). Fără trunchiere de caractere, nici
+// riscul vechi de a rupe un tag HTML la mijloc (motivul pentru care fusese
+// lăsat așa inițial) nu mai există.
 function formatLoot(looted) {
   if (!looted || !looted.length) return '<span class="muted">—</span>';
   const items = looted.map(l =>
-    `<strong>${escapeHtml((l.count ? l.count + 'x ' : '') + (l.item || 'un item'))}</strong> → ${escapeHtml(l.to || 'necunoscut')}`
+    `<span class="pill off" style="margin:0;white-space:nowrap">${escapeHtml((l.count ? l.count + 'x ' : '') + (l.item || 'un item'))} → ${escapeHtml(l.to || 'necunoscut')}</span>`
   );
-  return truncate(items.join(', '), 260);
+  return `<div style="display:flex;flex-wrap:wrap;gap:4px;max-width:340px">${items.join('')}</div>`;
 }
 
 function rowsHtml(kills) {

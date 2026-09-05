@@ -88,10 +88,23 @@ window.openPlayerProfile = (function () {
     if (warnCount) {
       rows.push(`<p style="margin:0 0 10px"><span class="pill warn">${warnCount} AVERTISMENT${warnCount > 1 ? 'E' : ''}</span></p>`);
     }
-    const items = [...(mod.bans || []).map(b => ({ ...b, kind: 'Ban' })), ...(mod.warnings || []).map(w => ({ ...w, kind: 'Avertisment' }))]
-      .sort((a, b) => new Date(b.date || b.created_at) - new Date(a.date || a.created_at));
-    const table = items.length ? `<table><thead><tr><th>TIP</th><th>MOTIV</th><th>ADMIN</th><th>DATA</th></tr></thead><tbody>${
-      items.map(it => `<tr><td><span class="pill ${it.kind === 'Ban' ? 'warn' : 'off'}">${escapeHtml(it.kind.toUpperCase())}</span></td><td>${escapeHtml(it.reason || '—')}</td><td>${escapeHtml(it.admin || '—')}</td><td>${fmtDate(it.date || it.created_at)}</td></tr>`).join('')
+    // Ban-urile pot avea dată de expirare (sau nu — permanente); avertismentele
+    // n-au niciodată; închisoarea (dacă mai există istoric, dincolo de cea
+    // activă arătată deja mai sus) are mereu. Arătăm coloana EXPIRĂ pentru
+    // toate trei, cu "—"/"Permanent" cand nu se aplică.
+    function expiry(it) {
+      if (it.kind === 'Avertisment') return '<span class="muted">—</span>';
+      if (!it.expires_at) return '<span class="muted">Permanent</span>';
+      const expired = new Date(it.expires_at) < new Date();
+      return `${fmtDate(it.expires_at)}${expired ? ' <span class="muted">(expirat)</span>' : ''}`;
+    }
+    const items = [
+      ...(mod.bans || []).map(b => ({ ...b, kind: 'Ban' })),
+      ...(mod.warnings || []).map(w => ({ ...w, kind: 'Avertisment' })),
+      ...(mod.jail && !mod.jail.active ? [{ ...mod.jail, kind: 'Închisoare' }] : []),
+    ].sort((a, b) => new Date(b.date || b.created_at) - new Date(a.date || a.created_at));
+    const table = items.length ? `<table><thead><tr><th>TIP</th><th>MOTIV</th><th>ADMIN</th><th>DATA</th><th>EXPIRĂ</th></tr></thead><tbody>${
+      items.map(it => `<tr><td><span class="pill ${it.kind === 'Avertisment' ? 'off' : 'warn'}">${escapeHtml(it.kind.toUpperCase())}</span></td><td>${escapeHtml(it.reason || '—')}</td><td>${escapeHtml(it.admin || '—')}</td><td>${fmtDate(it.date || it.created_at)}</td><td>${expiry(it)}</td></tr>`).join('')
     }</tbody></table>` : `<p class="muted" style="margin:0">Niciun ban/avertisment în Luxu Admin.</p>`;
     return `<h2 style="font-size:14px;margin:22px 0 10px">🛡 Moderare (Luxu Admin)</h2>${rows.join('')}${table}`;
   }

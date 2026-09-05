@@ -31,8 +31,8 @@
     Apasă pe orice jucător pentru profilul complet (arată acolo dacă are avertismente sau stă acum la închisoare).
   </p>
   <p class="muted" id="luxu-offline-note" style="margin:0 22px 16px" hidden>Serverul de joc nu răspunde momentan — lista poate fi incompletă.</p>
-  <table><thead><tr><th>JUCĂTOR</th><th>TIP</th><th>MOTIV</th><th>ADMIN</th><th>DATA</th></tr></thead>
-  <tbody id="luxu-list-body"><tr><td colspan="5">Se încarcă…</td></tr></tbody></table>
+  <table><thead><tr><th>JUCĂTOR</th><th>TIP</th><th>MOTIV</th><th>ADMIN</th><th>DATA</th><th>EXPIRĂ</th></tr></thead>
+  <tbody id="luxu-list-body"><tr><td colspan="6">Se încarcă…</td></tr></tbody></table>
 </section>
 
 <section class="formbox" id="form-box" hidden>
@@ -190,6 +190,17 @@ function luxuPlayerButton(name) {
   return `<button type="button" class="player-link" data-player="${escapeHtml(name)}">${escapeHtml(name)}</button>`;
 }
 
+// Avertismentele nu au dată de expirare (Luxu Admin nu reține una pentru
+// ele) — doar ban-urile (dacă nu-s permanente) și închisoarea au. Pentru un
+// ban cu data de expirare deja trecută, marcăm explicit "(expirat)" lângă
+// dată, ca să nu pară încă activ doar pentru că are o dată acolo.
+function expiryCell(it) {
+  if (it.kind === 'Avertisment') return '<span class="muted">—</span>';
+  if (!it.expires_at) return '<span class="muted">Permanent</span>';
+  const expired = new Date(it.expires_at) < new Date();
+  return `${fmtDate(it.expires_at)}${expired ? ' <span class="muted">(expirat)</span>' : ''}`;
+}
+
 async function loadLuxuModeration() {
   const tbody = document.getElementById('luxu-list-body');
   const offlineNote = document.getElementById('luxu-offline-note');
@@ -210,9 +221,10 @@ async function loadLuxuModeration() {
         <td>${escapeHtml(it.reason || '—')}</td>
         <td>${it.admin ? escapeHtml(it.admin) : '<span class="muted">necunoscut</span>'}</td>
         <td>${fmtDate(it.created_at)}</td>
-      </tr>`).join('') : '<tr><td colspan="5">Nicio sancțiune Luxu Admin înregistrată.</td></tr>';
+        <td>${expiryCell(it)}</td>
+      </tr>`).join('') : '<tr><td colspan="6">Nicio sancțiune Luxu Admin înregistrată.</td></tr>';
   } catch {
-    tbody.innerHTML = '<tr><td colspan="5">Nu am putut încărca sancțiunile din Luxu Admin.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6">Nu am putut încărca sancțiunile din Luxu Admin.</td></tr>';
   }
 }
 

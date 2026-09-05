@@ -20,6 +20,21 @@
   <tbody id="list-body"><tr><td colspan="7">Se încarcă…</td></tr></tbody></table>
 </section>
 
+<section class="tablebox" style="margin-top:18px">
+  <div class="title">
+    <h2>Sancțiuni Luxu Admin</h2>
+    <button id="luxu-refresh-btn" class="btn-ghost" type="button">Reîmprospătează</button>
+  </div>
+  <p class="muted" style="margin:0 22px 16px">
+    Citite direct din panoul Luxu Admin instalat pe serverul de joc (ban-uri, avertismente, perioade de închisoare) —
+    nu sunt emise de pe site-ul nostru, doar afișate aici ca să nu mai fie nevoie să deschizi separat panoul lor.
+    Apasă pe orice jucător pentru profilul complet (arată acolo dacă are avertismente sau stă acum la închisoare).
+  </p>
+  <p class="muted" id="luxu-offline-note" style="margin:0 22px 16px" hidden>Serverul de joc nu răspunde momentan — lista poate fi incompletă.</p>
+  <table><thead><tr><th>JUCĂTOR</th><th>TIP</th><th>MOTIV</th><th>ADMIN</th><th>DATA</th></tr></thead>
+  <tbody id="luxu-list-body"><tr><td colspan="5">Se încarcă…</td></tr></tbody></table>
+</section>
+
 <section class="formbox" id="form-box" hidden>
   <h2>Sancțiune nouă</h2>
   <form id="punish-form">
@@ -51,6 +66,7 @@
 
 </main>
 <script src="auth-client.js"></script>
+<script src="player-profile-modal.js"></script>
 <script>
 const TYPE_LABEL = { ban: 'Ban', mute: 'Mute', kick: 'Kick', warn: 'Avertisment' };
 const TYPE_PILL = { ban: 'warn', mute: 'info', kick: 'off', warn: 'off' };
@@ -168,11 +184,50 @@ document.getElementById('punish-form').addEventListener('submit', async (e) => {
 
 document.getElementById('status-filter').addEventListener('change', loadList);
 
+// Numele jucătorului — buton, nu link, ca la Kill Logs (playerButton) — dă
+// clic pentru fereastra flotantă de profil (player-profile-modal.js).
+function luxuPlayerButton(name) {
+  return `<button type="button" class="player-link" data-player="${escapeHtml(name)}">${escapeHtml(name)}</button>`;
+}
+
+async function loadLuxuModeration() {
+  const tbody = document.getElementById('luxu-list-body');
+  const offlineNote = document.getElementById('luxu-offline-note');
+  try {
+    const res = await apiFetch('/api/admin/live/moderation');
+    if (!res.ok) throw new Error();
+    const d = await res.json();
+    offlineNote.hidden = d.online !== false;
+    const items = [
+      ...(d.bans || []).map(b => ({ ...b, kind: 'Ban', pill: 'warn' })),
+      ...(d.warnings || []).map(w => ({ ...w, kind: 'Avertisment', pill: 'off' })),
+      ...(d.jail || []).map(j => ({ ...j, kind: j.active ? 'Închisoare (acum)' : 'Închisoare (expirat)', pill: j.active ? 'warn' : 'off' })),
+    ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    tbody.innerHTML = items.length ? items.map(it => `
+      <tr>
+        <td><strong>${luxuPlayerButton(it.player)}</strong></td>
+        <td><span class="pill ${it.pill}">${escapeHtml(it.kind.toUpperCase())}</span></td>
+        <td>${escapeHtml(it.reason || '—')}</td>
+        <td>${it.admin ? escapeHtml(it.admin) : '<span class="muted">necunoscut</span>'}</td>
+        <td>${fmtDate(it.created_at)}</td>
+      </tr>`).join('') : '<tr><td colspan="5">Nicio sancțiune Luxu Admin înregistrată.</td></tr>';
+  } catch {
+    tbody.innerHTML = '<tr><td colspan="5">Nu am putut încărca sancțiunile din Luxu Admin.</td></tr>';
+  }
+}
+
+document.getElementById('luxu-list-body').addEventListener('click', (e) => {
+  const btn = e.target.closest('.player-link');
+  if (btn) window.openPlayerProfile(btn.dataset.player);
+});
+document.getElementById('luxu-refresh-btn').addEventListener('click', loadLuxuModeration);
+
 (async () => {
   const me = await requireRole('moderator', 'admin', 'co-fondator', 'owner');
   if (!me) return;
   document.getElementById('admin-name').textContent = me.username;
   loadList();
+  loadLuxuModeration();
 })();
 </script>
 </body></html>

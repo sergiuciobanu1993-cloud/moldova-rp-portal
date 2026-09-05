@@ -474,6 +474,34 @@ async function fetchGameLogs({ player, category, limit, before }) {
   }
 }
 
+// Sancțiuni date direct din Luxu Admin (resursa lor separată, instalată pe
+// serverul de joc) — ban-uri, avertismente și perioade de închisoare, citite
+// direct din tabelele lor MySQL (bans/warnings/jail) prin noul endpoint
+// "/moderation" al moldovarp-api (vezi getModeration() în server.lua).
+// `player` opțional: fără el, vin ultimele sancțiuni de pe tot serverul
+// (pagina Sancțiuni); cu el, doar ale unui singur jucător (fereastra de
+// profil). La fel ca fetchGameLogs, degradăm silențios la "offline" dacă
+// serverul de joc nu răspunde — nu blocăm restul paginii pentru asta.
+async function fetchLuxuModeration({ player } = {}) {
+  const qs = new URLSearchParams();
+  if (player) qs.set("player", player);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const r = await fetch(`http://${FIVEM_ADDRESS}/moldovarp-api/moderation?${qs.toString()}`, {
+      headers: { "x-api-key": FIVEM_API_SECRET },
+      signal: controller.signal,
+    });
+    if (!r.ok) throw new Error(`moldovarp-api HTTP ${r.status}`);
+    const body = await r.json();
+    return { online: true, bans: body.bans || [], warnings: body.warnings || [], jail: body.jail || [] };
+  } catch {
+    return { online: false, bans: [], warnings: [], jail: [] };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 // Acțiunile de staff (Luxu), sursa separata (Postgres) folosita atat pentru
 // categoria "admin" din Loguri cat si pentru corelarile best-effort de mai
 // jos (kill/revive/item de admin etc.) si pentru Kill Logs.
@@ -640,6 +668,16 @@ app.get("/api/admin/kill-logs", auth, requireRole(...MOD_ROLES), asyncRoute(asyn
   res.json({ online, kills, nextCursor });
 }));
 
+// Sancțiuni Luxu Admin, pentru pagina Sancțiuni de pe site — cerută explicit,
+// ca staff-ul nostru să vadă și ban-urile/avertismentele/închisorile date
+// prin panoul Luxu, fără să deschidă separat panoul lor. Fără filtru de
+// jucător = ultimele de pe tot serverul.
+app.get("/api/admin/live/moderation", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
+  const player = req.query.player ? String(req.query.player).trim().slice(0, 64) : "";
+  const result = await fetchLuxuModeration({ player });
+  res.json(result);
+}));
+
 // ---------------------------------------------------------------------------
 // Profilul unui jucător — pagina cerută explicit ("apesi pe player și se
 // deschide pagina cu toată informația lui"). Combină TOATE sursele deja
@@ -665,7 +703,7 @@ async function buildPlayerProfile(name) {
   if (!cleanName) return null;
   const lower = cleanName.toLowerCase();
 
-  const [liveDetail, accountResult, punishmentResult, activityResult, staffActivity, deathsResult] = await Promise.all([
+  const [liveDetail, accountResult, punishmentResult, activityResult, staffActivity, deathsResult, moderationResult] = await Promise.all([
     getPlayersDetail(),
     pool.query(
       `SELECT p.id, p.game_id, p.display_name, p.playtime_minutes, p.status, p.created_at,
@@ -693,6 +731,7 @@ async function buildPlayerProfile(name) {
     fetchGameLogs({ player: cleanName, limit: 25 }),
     fetchStaffLogs({ player: cleanName, limit: 25 }),
     fetchGameLogs({ category: "death", limit: 300 }),
+    fetchLuxuModeration({ player: cleanName }),
   ]);
 
   const live = liveDetail.online
@@ -731,6 +770,15 @@ async function buildPlayerProfile(name) {
   // aratam clar etichetata cu "ultima data vazut" — nu o confundam cu date
   // live. Fara asta, un jucator offline nu vedea absolut nimic despre
   // banii/vehiculele lui, ceea ce nu parea profesional.
+  // player-profile-modal.js (moderationHtml) așteaptă un singur obiect
+  // "jail", nu o listă — arătăm cea mai relevantă intrare: una activă acum,
+  // altfel cea mai recentă (istoric), altfel deloc dacă n-a stat niciodată.
+  const moderation = moderationResult.online ? {
+    bans: moderationResult.bans,
+    warnings: moderationResult.warnings,
+    jail: moderationResult.jail.find(j => j.active) || moderationResult.jail[0] || null,
+  } : null;
+
   const lastKnown = (!live && account && account.last_synced_at) ? {
     cash: account.last_cash, bank: account.last_bank, blackMoney: account.last_black_money,
     job: account.last_job, jobLabel: account.last_job_label,
@@ -751,6 +799,7 @@ async function buildPlayerProfile(name) {
       username: account.username, faction_name: account.faction_name, rank_name: account.rank_name,
     } : null,
     punishments: punishmentResult.rows,
+    moderation,
     tickets,
     recentActivity,
     killsAsVictim,

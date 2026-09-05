@@ -324,6 +324,74 @@ if (FIVEM_API_SECRET) {
 let jobsCache = { data: null, fetchedAt: 0 };
 const JOBS_CACHE_MS = 60_000;
 
+// ---------------------------------------------------------------------------
+// Proxy de dezvoltare către endpoint-urile "/dev/..." ale resursei
+// moldovarp-api (v1.15.0+) de pe serverul de joc.
+// ---------------------------------------------------------------------------
+// De ce există: sandbox-ul din care developerul (Claude) lucrează nu poate
+// deschide conexiuni de rețea directe către IP-ul brut al serverului de joc
+// (doar către domenii web obișnuite, prin HTTPS) — dar Railway, unde rulează
+// acest site, poate perfect (la fel cum citește deja /snapshot, /players,
+// /jobs, /logs mai sus). Așa că site-ul face "puntea": primește o cerere pe
+// un domeniu HTTPS normal (acesta), o pasează mai departe către
+// http://IP:PORT/moldovarp-api/dev/..., și întoarce rezultatul.
+//
+// Protejat cu DEV_PROXY_SECRET — o cheie DIFERITĂ de FIVEM_DEV_SECRET (care e
+// cea folosită între site și serverul de joc) și diferită de orice cheie
+// folosită de site-ul public — nu necesită cont/login, deci trebuie separată
+// clar de restul. Nu e nevoie ca cineva să rețină sau să introducă vreo
+// cheie aici — o generez și o setez direct pe Railway.
+const DEV_PROXY_SECRET = process.env.DEV_PROXY_SECRET || "";
+const FIVEM_DEV_SECRET = process.env.FIVEM_DEV_SECRET || "";
+
+function requireDevProxy(req, res, next) {
+  if (!DEV_PROXY_SECRET || req.headers["x-dev-proxy-key"] !== DEV_PROXY_SECRET) {
+    return res.status(401).json({ error: "unauthorized" });
+  }
+  next();
+}
+
+async function fetchFromGameDev(path) {
+  if (!FIVEM_DEV_SECRET) throw new Error("FIVEM_DEV_SECRET nu e configurat.");
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10000);
+  try {
+    const res = await fetch(`http://${FIVEM_ADDRESS}/moldovarp-api${path}`, {
+      headers: { "x-dev-key": FIVEM_DEV_SECRET },
+      signal: controller.signal,
+    });
+    const text = await res.text();
+    return { status: res.status, contentType: res.headers.get("content-type") || "text/plain", body: text };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+app.get("/api/dev/resources", requireDevProxy, asyncRoute(async (_req, res) => {
+  const r = await fetchFromGameDev("/dev/resources");
+  res.status(r.status).type(r.contentType).send(r.body);
+}));
+
+app.get("/api/dev/file", requireDevProxy, asyncRoute(async (req, res) => {
+  const qs = new URLSearchParams();
+  if (req.query.resource) qs.set("resource", String(req.query.resource));
+  if (req.query.file) qs.set("file", String(req.query.file));
+  const r = await fetchFromGameDev(`/dev/file?${qs.toString()}`);
+  res.status(r.status).type(r.contentType).send(r.body);
+}));
+
+app.get("/api/dev/db-tables", requireDevProxy, asyncRoute(async (_req, res) => {
+  const r = await fetchFromGameDev("/dev/db-tables");
+  res.status(r.status).type(r.contentType).send(r.body);
+}));
+
+app.get("/api/dev/db-columns", requireDevProxy, asyncRoute(async (req, res) => {
+  const qs = new URLSearchParams();
+  if (req.query.table) qs.set("table", String(req.query.table));
+  const r = await fetchFromGameDev(`/dev/db-columns?${qs.toString()}`);
+  res.status(r.status).type(r.contentType).send(r.body);
+}));
+
 app.get("/api/admin/live/jobs", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
   const force = req.query.force === "1";
   const age = Date.now() - jobsCache.fetchedAt;

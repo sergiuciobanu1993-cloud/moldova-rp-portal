@@ -384,11 +384,14 @@ app.get("/api/dev/file", requireDevProxy, asyncRoute(async (req, res) => {
   res.status(r.status).type(r.contentType).send(r.body);
 }));
 
-app.get("/api/dev/listdir", requireDevProxy, asyncRoute(async (req, res) => {
+// "/dev/listdir" (io.popen, risc de blocare a firului principal FXServer)
+// a fost RETRAS pe partea de joc — vezi server.lua din moldovarp-api. Rutat
+// acum către "/dev/checkfiles", varianta sigură (doar LoadResourceFile).
+app.get("/api/dev/checkfiles", requireDevProxy, asyncRoute(async (req, res) => {
   const qs = new URLSearchParams();
   if (req.query.resource) qs.set("resource", String(req.query.resource));
-  if (req.query.dir) qs.set("dir", String(req.query.dir));
-  const r = await fetchFromGameDev(`/dev/listdir?${qs.toString()}`);
+  if (req.query.files) qs.set("files", String(req.query.files));
+  const r = await fetchFromGameDev(`/dev/checkfiles?${qs.toString()}`);
   res.status(r.status).type(r.contentType).send(r.body);
 }));
 

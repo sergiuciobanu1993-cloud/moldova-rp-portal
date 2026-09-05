@@ -127,6 +127,11 @@ ALTER TABLE announcements ADD COLUMN IF NOT EXISTS category VARCHAR(40) NOT NULL
 -- NULL = fără imagine, nimic nu se afișează. Safe pe baze existente.
 ALTER TABLE announcements ADD COLUMN IF NOT EXISTS image_url TEXT;
 
+-- video_url — un link opțional (YouTube etc.) atașat anunțului. Afișat pe
+-- homepage ca buton "▶ Vezi videoclipul" sub titlu, doar cand e completat.
+-- NULL = fără video, butonul nu apare. Safe pe baze existente.
+ALTER TABLE announcements ADD COLUMN IF NOT EXISTS video_url TEXT;
+
 CREATE TABLE IF NOT EXISTS punishments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   player_id UUID REFERENCES players(id) ON DELETE SET NULL,

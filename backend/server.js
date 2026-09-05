@@ -1214,7 +1214,7 @@ app.get("/api/factions", asyncRoute(async (_req, res) => {
 
 app.get("/api/announcements", asyncRoute(async (_req, res) => {
   const { rows } = await pool.query(
-    `SELECT a.id,a.title,a.content,a.category,a.image_url,a.published_at,u.username author
+    `SELECT a.id,a.title,a.content,a.category,a.image_url,a.video_url,a.published_at,u.username author
      FROM announcements a LEFT JOIN users u ON u.id=a.author_id
      WHERE a.is_published=true ORDER BY a.published_at DESC LIMIT 30`
   );
@@ -1933,13 +1933,13 @@ app.get("/api/admin/announcements/:id", auth, requireRole(...MOD_ROLES), asyncRo
 }));
 
 app.post("/api/admin/announcements", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
-  const { title, content, category, is_published, image_url } = req.body;
+  const { title, content, category, is_published, image_url, video_url } = req.body;
   if (!title || !content)
     return res.status(400).json({ error: "Titlu și conținut sunt obligatorii." });
   const { rows } = await pool.query(
-    `INSERT INTO announcements(title, content, category, author_id, is_published, image_url)
-     VALUES($1,$2,$3,$4,$5,$6) RETURNING *`,
-    [title.trim(), content, category?.trim() || "General", req.user.sub, is_published ?? true, image_url?.trim() || null]
+    `INSERT INTO announcements(title, content, category, author_id, is_published, image_url, video_url)
+     VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+    [title.trim(), content, category?.trim() || "General", req.user.sub, is_published ?? true, image_url?.trim() || null, video_url?.trim() || null]
   );
   await logAction(req.user.sub, "announcement.create", "announcement", rows[0].id, { title }, req.ip);
   if (rows[0].is_published) notifyDiscordAnnouncement({ ...rows[0], author: req.user.username });
@@ -1948,7 +1948,7 @@ app.post("/api/admin/announcements", auth, requireRole(...ADMIN_ROLES), asyncRou
 
 app.put("/api/admin/announcements/:id", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
   const { id } = req.params;
-  const { title, content, category, is_published, image_url } = req.body;
+  const { title, content, category, is_published, image_url, video_url } = req.body;
   const before = await pool.query("SELECT is_published FROM announcements WHERE id=$1", [id]);
   if (!before.rows[0]) return res.status(404).json({ error: "Anunțul nu există." });
   const wasPublished = before.rows[0].is_published;
@@ -1959,9 +1959,10 @@ app.put("/api/admin/announcements/:id", auth, requireRole(...ADMIN_ROLES), async
        content = COALESCE($2, content),
        category = COALESCE($3, category),
        is_published = COALESCE($4, is_published),
-       image_url = COALESCE($5, image_url)
-     WHERE id = $6 RETURNING *`,
-    [title || null, content || null, category?.trim() || null, is_published ?? null, image_url?.trim() || null, id]
+       image_url = COALESCE($5, image_url),
+       video_url = COALESCE($6, video_url)
+     WHERE id = $7 RETURNING *`,
+    [title || null, content || null, category?.trim() || null, is_published ?? null, image_url?.trim() || null, video_url?.trim() || null, id]
   );
   if (!rows[0]) return res.status(404).json({ error: "Anunțul nu există." });
   await logAction(req.user.sub, "announcement.update", "announcement", id, req.body, req.ip);

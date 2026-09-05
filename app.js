@@ -292,6 +292,7 @@ if (newsList) {
             <span class="tag">${escapeHtml((a.category || 'General').toUpperCase())}</span>
             <h3>${escapeHtml(a.title)}</h3>
             <p>${escapeHtml(truncate(a.content, 160))}</p>
+            ${a.video_url ? `<a class="news-video" href="${escapeHtml(a.video_url)}" target="_blank" rel="noopener noreferrer">▶ Vezi videoclipul</a>` : ''}
           </div>
         </article>`).join('');
     } catch {

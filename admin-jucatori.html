@@ -25,14 +25,47 @@
   </p>
 </section>
 
-<section class="formbox" id="scope-note" style="margin-top:18px">
-  <h2>Ce nu e (încă) inclus aici</h2>
-  <p class="muted" style="margin:0">
-    Casele și afacerile jucătorilor nu apar aici momentan — sunt gestionate de resurse separate
-    (0r-pixelhouse / qua_0r_house pentru case) ale căror tabele din baza de date nu le-am confirmat încă.
-    Trimite-mi schema lor (fișierul <code>database.sql</code> al resursei, sau un export din phpMyAdmin/HeidiSQL)
-    și le adaug în siguranță, fără riscul de a citi greșit datele.
+<section class="tablebox" style="margin-top:18px">
+  <div class="title">
+    <h2>Case deținute</h2>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <input id="f-house-owner" class="filter-select" placeholder="Filtrează după proprietar..." autocomplete="off" style="min-width:180px">
+      <button id="houses-refresh-btn" class="btn-ghost" type="button">Reîmprospătează</button>
+    </div>
+  </div>
+  <p class="muted" id="houses-offline-note" style="margin:0 22px 16px" hidden>Serverul de joc nu răspunde momentan — lista poate fi incompletă.</p>
+  <table><thead><tr><th>PROPRIETAR</th><th>CASĂ</th><th>PREȚ</th><th>DE LA</th></tr></thead>
+  <tbody id="houses-body"><tr><td colspan="4">Se încarcă…</td></tr></tbody></table>
+</section>
+
+<section class="tablebox" style="margin-top:18px">
+  <div class="title">
+    <h2>Business-uri</h2>
+    <button id="businesses-refresh-btn" class="btn-ghost" type="button">Reîmprospătează</button>
+  </div>
+  <p class="muted" style="margin:0 22px 16px">
+    Din resursa business-urilor — coloana CREAT DE arată exact ce a reținut resursa la creare, nu neapărat numele
+    personajului (poate fi și un identificator, în funcție de cum a fost creat business-ul) — de-aia nu e clickabil.
   </p>
+  <p class="muted" id="businesses-offline-note" style="margin:0 22px 16px" hidden>Serverul de joc nu răspunde momentan — lista poate fi incompletă.</p>
+  <table><thead><tr><th>JOB</th><th>CREAT DE</th></tr></thead>
+  <tbody id="businesses-body"><tr><td colspan="2">Se încarcă…</td></tr></tbody></table>
+</section>
+
+<section class="tablebox" style="margin-top:18px">
+  <div class="title">
+    <h2>Găști (op-crime)</h2>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <input id="f-gang-nick" class="filter-select" placeholder="Filtrează după poreclă..." autocomplete="off" style="min-width:180px">
+      <button id="gangs-refresh-btn" class="btn-ghost" type="button">Reîmprospătează</button>
+    </div>
+  </div>
+  <p class="muted" style="margin:0 22px 16px">
+    Jucătorul e identificat după porecla setată în op-crime — de obicei numele personajului, dar poate fi diferită dacă a fost schimbată manual.
+  </p>
+  <p class="muted" id="gangs-offline-note" style="margin:0 22px 16px" hidden>Serverul de joc nu răspunde momentan — lista poate fi incompletă.</p>
+  <table><thead><tr><th>JUCĂTOR</th><th>GAȘCĂ</th><th>RANG</th></tr></thead>
+  <tbody id="gangs-body"><tr><td colspan="3">Se încarcă…</td></tr></tbody></table>
 </section>
 
 <section class="tablebox" style="margin-top:18px">
@@ -139,12 +172,113 @@ async function loadJobs() {
   }
 }
 
+// Numele proprietarului/porecla din op-crime — buton clickabil, la fel ca la
+// Kill Logs/Sancțiuni, ca să deschidă fereastra flotantă de profil.
+function assetPlayerButton(name) {
+  return `<button type="button" class="player-link" data-player="${escapeHtml(name)}">${escapeHtml(name)}</button>`;
+}
+
+let houseDebounce = null;
+function scheduleHousesReload() {
+  clearTimeout(houseDebounce);
+  houseDebounce = setTimeout(loadHouses, 300);
+}
+
+async function loadHouses() {
+  const tbody = document.getElementById('houses-body');
+  const offlineNote = document.getElementById('houses-offline-note');
+  const owner = document.getElementById('f-house-owner').value.trim();
+  try {
+    const qs = owner ? `?player=${encodeURIComponent(owner)}` : '';
+    const res = await apiFetch(`/api/admin/live/assets${qs}`);
+    if (!res.ok) throw new Error();
+    const d = await res.json();
+    offlineNote.hidden = d.online !== false;
+    const houses = d.houses || [];
+    tbody.innerHTML = houses.length ? houses.map(h => `
+      <tr>
+        <td><strong>${h.ownerName ? assetPlayerButton(h.ownerName) : '<span class="muted">necunoscut</span>'}</strong></td>
+        <td>${escapeHtml(h.label || ('Casă #' + h.houseId))}</td>
+        <td>${h.price != null ? fmtMoney(h.price) : '<span class="muted">—</span>'}</td>
+        <td>${fmtDate(h.updated_at || h.created_at)}</td>
+      </tr>`).join('') : '<tr><td colspan="4">Nicio casă găsită.</td></tr>';
+  } catch {
+    tbody.innerHTML = '<tr><td colspan="4">Nu am putut încărca casele.</td></tr>';
+  }
+}
+
+async function loadBusinesses() {
+  const tbody = document.getElementById('businesses-body');
+  const offlineNote = document.getElementById('businesses-offline-note');
+  try {
+    const res = await apiFetch('/api/admin/live/assets');
+    if (!res.ok) throw new Error();
+    const d = await res.json();
+    offlineNote.hidden = d.online !== false;
+    const businesses = d.businesses || [];
+    tbody.innerHTML = businesses.length ? businesses.map(b => `
+      <tr>
+        <td>${escapeHtml(b.jobLabel || b.job || '—')}</td>
+        <td>${b.creator ? escapeHtml(b.creator) : '<span class="muted">necunoscut</span>'}</td>
+      </tr>`).join('') : '<tr><td colspan="2">Niciun business găsit.</td></tr>';
+  } catch {
+    tbody.innerHTML = '<tr><td colspan="2">Nu am putut încărca business-urile.</td></tr>';
+  }
+}
+
+let gangDebounce = null;
+function scheduleGangsReload() {
+  clearTimeout(gangDebounce);
+  gangDebounce = setTimeout(loadGangs, 300);
+}
+
+async function loadGangs() {
+  const tbody = document.getElementById('gangs-body');
+  const offlineNote = document.getElementById('gangs-offline-note');
+  const nick = document.getElementById('f-gang-nick').value.trim();
+  try {
+    const qs = nick ? `?player=${encodeURIComponent(nick)}` : '';
+    const res = await apiFetch(`/api/admin/live/assets${qs}`);
+    if (!res.ok) throw new Error();
+    const d = await res.json();
+    offlineNote.hidden = d.online !== false;
+    const gangs = d.gangs || [];
+    tbody.innerHTML = gangs.length ? gangs.map(g => `
+      <tr>
+        <td><strong>${assetPlayerButton(g.nick)}</strong> ${g.isOwner ? '<span class="pill warn">LIDER</span>' : ''}</td>
+        <td>${escapeHtml(g.org)}</td>
+        <td>${escapeHtml(g.rank || '—')}</td>
+      </tr>`).join('') : '<tr><td colspan="3">Niciun membru găsit.</td></tr>';
+  } catch {
+    tbody.innerHTML = '<tr><td colspan="3">Nu am putut încărca găștile.</td></tr>';
+  }
+}
+
+// Delegare de evenimente — un singur listener per tabel (la fel ca la Kill
+// Logs), pentru că rândurile se re-randează des (filtrare, reîmprospătare).
+document.getElementById('houses-body').addEventListener('click', (e) => {
+  const btn = e.target.closest('.player-link');
+  if (btn) window.openPlayerProfile(btn.dataset.player);
+});
+document.getElementById('gangs-body').addEventListener('click', (e) => {
+  const btn = e.target.closest('.player-link');
+  if (btn) window.openPlayerProfile(btn.dataset.player);
+});
+document.getElementById('f-house-owner').addEventListener('input', scheduleHousesReload);
+document.getElementById('houses-refresh-btn').addEventListener('click', loadHouses);
+document.getElementById('businesses-refresh-btn').addEventListener('click', loadBusinesses);
+document.getElementById('f-gang-nick').addEventListener('input', scheduleGangsReload);
+document.getElementById('gangs-refresh-btn').addEventListener('click', loadGangs);
+
 (async () => {
   const me = await requireRole('admin', 'co-fondator', 'owner');
   if (!me) return;
   document.getElementById('admin-name').textContent = me.username;
   loadPlayers();
   loadJobs();
+  loadHouses();
+  loadBusinesses();
+  loadGangs();
   setInterval(loadPlayers, 30000);
 })();
 </script>

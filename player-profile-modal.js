@@ -109,6 +109,44 @@ window.openPlayerProfile = (function () {
     return `<h2 style="font-size:14px;margin:22px 0 10px">🛡 Moderare (Luxu Admin)</h2>${rows.join('')}${table}`;
   }
 
+  // Case + business-uri + gașcă (op-crime) — la fel ca la moderare, secțiunea
+  // apare doar dacă backend-ul chiar a reușit să contacteze jocul (altfel
+  // houses/businesses sunt liste goale și gang e null, indistinct de "nu are
+  // nimic" — dar profilul funcționează normal oricum, nu blocăm restul).
+  function propertyHtml(p) {
+    const houses = (p.houses || []).map(h => `
+      <tr>
+        <td><strong>${escapeHtml(h.label || ('Casă #' + h.houseId))}</strong></td>
+        <td>${h.price != null ? fmtMoney(h.price) : '<span class="muted">—</span>'}</td>
+        <td>${fmtDate(h.updated_at || h.created_at)}</td>
+      </tr>`).join('');
+    const housesTable = houses ? `<table><thead><tr><th>CASĂ</th><th>PREȚ</th><th>DE LA</th></tr></thead><tbody>${houses}</tbody></table>`
+      : `<p class="muted" style="margin:0 0 14px">Nicio casă deținută.</p>`;
+
+    const businesses = (p.businesses || []).map(b => `
+      <tr>
+        <td>${escapeHtml(b.jobLabel || b.job || '—')}</td>
+        <td>${b.creator ? escapeHtml(b.creator) : '<span class="muted">necunoscut</span>'}</td>
+      </tr>`).join('');
+    // "creator" nu e garantat un nume de jucător real (vezi comentariul din
+    // server.lua/getBusinesses) — de-aia nu-l facem buton clickabil aici, ca
+    // să nu deschidem din greșeală profilul altcuiva.
+    const businessesTable = businesses ? `<table><thead><tr><th>BUSINESS</th><th>CREAT DE</th></tr></thead><tbody>${businesses}</tbody></table>`
+      : `<p class="muted" style="margin:0 0 14px">Niciun business găsit (după nume — vezi nota din pagina Jucători dacă lipsește unul știut).</p>`;
+
+    const gang = p.gang ? `
+      <p style="margin:0 0 14px">
+        <span class="pill ${p.gang.isOwner ? 'warn' : 'off'}">${p.gang.isOwner ? 'LIDER' : 'MEMBRU'}</span>
+        <strong>${escapeHtml(p.gang.org)}</strong> ${p.gang.rank ? `<span class="muted">— ${escapeHtml(p.gang.rank)}</span>` : ''}
+      </p>` : `<p class="muted" style="margin:0 0 14px">Nu face parte din nicio gașcă (op-crime).</p>`;
+
+    return `
+      <h2 style="font-size:14px;margin:22px 0 10px">🏠 Case</h2>${housesTable}
+      <h2 style="font-size:14px;margin:22px 0 10px">🏢 Business-uri</h2>${businessesTable}
+      <h2 style="font-size:14px;margin:22px 0 10px">🔫 Gașcă (op-crime)</h2>${gang}
+    `;
+  }
+
   function renderProfile(p) {
     const body = document.getElementById('profile-body');
     document.getElementById('profile-title').textContent = `Profil — ${p.name}`;
@@ -151,6 +189,7 @@ window.openPlayerProfile = (function () {
       ${account}
       <h2 style="font-size:14px;margin:22px 0 10px">⚠ Sancțiuni</h2>${punishments}
       ${moderationHtml(p.moderation)}
+      ${propertyHtml(p)}
       <h2 style="font-size:14px;margin:22px 0 10px">🎫 Tichete</h2>${tickets}
       <h2 style="font-size:14px;margin:22px 0 10px">🗂 Activitate recentă</h2>${activity}
       <h2 style="font-size:14px;margin:22px 0 10px">🔪 Kill-uri — ca victimă</h2>${killsVictim}

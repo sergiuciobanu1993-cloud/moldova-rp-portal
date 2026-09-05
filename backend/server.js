@@ -509,6 +509,33 @@ async function fetchLuxuModeration({ player } = {}) {
   }
 }
 
+// Case, business-uri și apartenența la găști (op-crime) — citite direct din
+// tabelele resurselor deja instalate pe serverul de joc (0resmon_ph_houses/
+// 0resmon_ph_owned_houses, pug_businesses, opcrime_players/opcrime_orgs/
+// opcrime_ranks) prin noul endpoint "/assets" al moldovarp-api (vezi
+// getHouses()/getBusinesses()/getGangs() în server.lua). La fel ca la
+// moderare: `player` opțional filtrează după numele proprietarului/porecla
+// din op-crime; fără el, vin listele nefiltrate pentru pagina Jucători.
+async function fetchAssets({ player } = {}) {
+  const qs = new URLSearchParams();
+  if (player) qs.set("player", player);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const r = await fetch(`http://${FIVEM_ADDRESS}/moldovarp-api/assets?${qs.toString()}`, {
+      headers: { "x-api-key": FIVEM_API_SECRET },
+      signal: controller.signal,
+    });
+    if (!r.ok) throw new Error(`moldovarp-api HTTP ${r.status}`);
+    const body = await r.json();
+    return { online: true, houses: body.houses || [], businesses: body.businesses || [], gangs: body.gangs || [] };
+  } catch {
+    return { online: false, houses: [], businesses: [], gangs: [] };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 // Acțiunile de staff (Luxu), sursa separata (Postgres) folosita atat pentru
 // categoria "admin" din Loguri cat si pentru corelarile best-effort de mai
 // jos (kill/revive/item de admin etc.) si pentru Kill Logs.
@@ -685,6 +712,14 @@ app.get("/api/admin/live/moderation", auth, requireRole(...MOD_ROLES), asyncRout
   res.json(result);
 }));
 
+// Case, business-uri și găști — pagina Jucători, secțiunea "Proprietăți" (fără
+// filtru de jucător = tot ce există pe server, pentru răsfoire).
+app.get("/api/admin/live/assets", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
+  const player = req.query.player ? String(req.query.player).trim().slice(0, 64) : "";
+  const result = await fetchAssets({ player });
+  res.json(result);
+}));
+
 // ---------------------------------------------------------------------------
 // Profilul unui jucător — pagina cerută explicit ("apesi pe player și se
 // deschide pagina cu toată informația lui"). Combină TOATE sursele deja
@@ -710,7 +745,7 @@ async function buildPlayerProfile(name) {
   if (!cleanName) return null;
   const lower = cleanName.toLowerCase();
 
-  const [liveDetail, accountResult, punishmentResult, activityResult, staffActivity, deathsResult, moderationResult] = await Promise.all([
+  const [liveDetail, accountResult, punishmentResult, activityResult, staffActivity, deathsResult, moderationResult, assetsResult] = await Promise.all([
     getPlayersDetail(),
     pool.query(
       `SELECT p.id, p.game_id, p.display_name, p.playtime_minutes, p.status, p.created_at,
@@ -739,6 +774,7 @@ async function buildPlayerProfile(name) {
     fetchStaffLogs({ player: cleanName, limit: 25 }),
     fetchGameLogs({ category: "death", limit: 300 }),
     fetchLuxuModeration({ player: cleanName }),
+    fetchAssets({ player: cleanName }),
   ]);
 
   const live = liveDetail.online
@@ -786,6 +822,14 @@ async function buildPlayerProfile(name) {
     jail: moderationResult.jail.find(j => j.active) || moderationResult.jail[0] || null,
   } : null;
 
+  // Un jucător poate avea mai multe case (houses e listă întreagă), dar de
+  // obicei o singură gașcă activă — luăm prima găsită după porecla din
+  // op-crime (vezi comentariul din fetchAssets/getGangs despre limitările
+  // acelei potriviri).
+  const houses = assetsResult.online ? assetsResult.houses : [];
+  const businesses = assetsResult.online ? assetsResult.businesses : [];
+  const gang = assetsResult.online ? (assetsResult.gangs[0] || null) : null;
+
   const lastKnown = (!live && account && account.last_synced_at) ? {
     cash: account.last_cash, bank: account.last_bank, blackMoney: account.last_black_money,
     job: account.last_job, jobLabel: account.last_job_label,
@@ -807,6 +851,9 @@ async function buildPlayerProfile(name) {
     } : null,
     punishments: punishmentResult.rows,
     moderation,
+    houses,
+    businesses,
+    gang,
     tickets,
     recentActivity,
     killsAsVictim,

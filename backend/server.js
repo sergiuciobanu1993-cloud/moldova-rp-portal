@@ -5,7 +5,6 @@ const helmet = require("helmet");
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
-const nodemailer = require("nodemailer");
 const path = require("path");
 const { Pool } = require("pg");
 
@@ -791,40 +790,39 @@ app.post("/api/auth/login", asyncRoute(async (req, res) => {
 // ---------------------------------------------------------------------------
 // Email de confirmare (cod de 6 cifre) — folosit la "Setează parola"
 // ---------------------------------------------------------------------------
-// Configurare prin variabile de mediu (SMTP_HOST/PORT/USER/PASS/FROM), la fel
-// ca la Discord mai jos — dacă nu sunt setate, endpoint-urile răspund clar cu
-// "nu e configurat" în loc să pretindă că au trimis un email care nu a plecat
-// niciodată. Cel mai simplu de configurat: un cont Gmail cu "App Password"
-// (Cont Google → Securitate → Verificare în 2 pași → Parole pentru aplicații),
-// SMTP_HOST=smtp.gmail.com, SMTP_PORT=465, SMTP_USER=adresa@gmail.com,
-// SMTP_PASS=parola de aplicație (16 caractere), SMTP_FROM opțional.
-function smtpConfigured() {
-  return Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
-}
-
-let cachedTransporter = null;
-function getMailTransporter() {
-  if (!cachedTransporter) {
-    cachedTransporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: Number(process.env.SMTP_PORT || 465),
-      secure: Number(process.env.SMTP_PORT || 465) === 465,
-      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-    });
-  }
-  return cachedTransporter;
+// Trimitem prin API-ul HTTP al Brevo (nu prin SMTP!) — Railway blochează
+// traficul SMTP ieșit (porturile 465/587) pe planurile Free/Trial/Hobby, ceea
+// ce făcea ca trimiterea prin nodemailer să rămână agățată la infinit fără
+// nicio eroare vizibilă. API-ul e peste HTTPS normal, deci nu e blocat.
+// Variabile de mediu necesare: BREVO_API_KEY (din Brevo → SMTP & API → API
+// Keys, NU cheia SMTP) și EMAIL_FROM (adresa de expeditor — de obicei
+// adresa cu care te-ai înregistrat pe Brevo, care e verificată automat).
+function emailApiConfigured() {
+  return Boolean(process.env.BREVO_API_KEY && process.env.EMAIL_FROM);
 }
 
 async function sendVerificationEmail(to, code) {
-  await getMailTransporter().sendMail({
-    from: process.env.SMTP_FROM || `Moldova RP <${process.env.SMTP_USER}>`,
-    to,
-    subject: `Codul tău de confirmare: ${code}`,
-    text: `Codul tău de confirmare pentru contul de pe moldovarp.md este: ${code}\n\nCodul expiră în 15 minute. Dacă nu ai cerut tu asta, ignoră acest email.`,
-    html: `<p>Codul tău de confirmare pentru contul de pe <b>moldovarp.md</b> este:</p>
+  const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      "content-type": "application/json",
+      "api-key": process.env.BREVO_API_KEY,
+    },
+    body: JSON.stringify({
+      sender: { email: process.env.EMAIL_FROM, name: "Moldova RP" },
+      to: [{ email: to }],
+      subject: `Codul tău de confirmare: ${code}`,
+      textContent: `Codul tău de confirmare pentru contul de pe moldovarp.md este: ${code}\n\nCodul expiră în 15 minute. Dacă nu ai cerut tu asta, ignoră acest email.`,
+      htmlContent: `<p>Codul tău de confirmare pentru contul de pe <b>moldovarp.md</b> este:</p>
            <p style="font-size:28px;font-weight:bold;letter-spacing:4px">${code}</p>
            <p>Codul expiră în 15 minute. Dacă nu ai cerut tu asta, ignoră acest email.</p>`,
+    }),
   });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`Brevo API a răspuns cu ${res.status}: ${body.slice(0, 300)}`);
+  }
 }
 
 function generateVerifyCode() {
@@ -853,7 +851,7 @@ app.post("/api/auth/set-password", auth, asyncRoute(async (req, res) => {
     return res.status(400).json({ error: "Email invalid." });
   if (!password || password.length < 8)
     return res.status(400).json({ error: "Parola trebuie să aibă minimum 8 caractere." });
-  if (!smtpConfigured())
+  if (!emailApiConfigured())
     return res.status(503).json({ error: "Trimiterea de email-uri nu este configurată încă pe server." });
 
   const existing = await pool.query("SELECT id FROM users WHERE email=$1 AND id<>$2", [cleanEmail, req.user.sub]);

@@ -458,12 +458,22 @@ const LOG_CATEGORIES = [...GAME_LOG_CATEGORIES, "admin"];
 // interogheze pe toate deodata — vezi Kill Logs mai jos, care are nevoie
 // simultan de "death" si "item_transfer" ca sa coreleze o moarte cu ce s-a
 // luat din inventarul victimei imediat dupa).
-async function fetchGameLogs({ player, category, limit, before }) {
+// `after` (created_at > ?) și `page`/`pageSize` (paginare pe număr de pagină,
+// OFFSET direct) sunt opționale, adăugate special pentru Kill Logs — vezi
+// ruta /api/admin/kill-logs mai jos pentru motivul din spate (mortile erau
+// "împinse" din pagini de volumul mare de transferuri de iteme cand foloseam
+// doar cursorul "beforeAt" pe categoriile combinate death+item_transfer).
+// `withTotal` cere și numărul total de rânduri care s-ar potrivi (fără
+// limit/offset), pentru calculul numărului de pagini.
+async function fetchGameLogs({ player, category, limit, before, after, page, pageSize, withTotal }) {
   const qs = new URLSearchParams();
   if (player) qs.set("player", player);
   if (category) qs.set("category", category);
-  qs.set("limit", String(limit));
+  qs.set("limit", String(pageSize || limit));
   if (before) qs.set("beforeAt", before.toISOString());
+  if (after) qs.set("afterAt", after.toISOString());
+  if (page) qs.set("page", String(page));
+  if (withTotal) qs.set("withTotal", "1");
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8000);
   try {
@@ -473,9 +483,9 @@ async function fetchGameLogs({ player, category, limit, before }) {
     });
     if (!r.ok) throw new Error(`moldovarp-api HTTP ${r.status}`);
     const body = await r.json();
-    return { online: true, logs: body.logs || [] };
+    return { online: true, logs: body.logs || [], total: typeof body.total === "number" ? body.total : null };
   } catch {
-    return { online: false, logs: [] };
+    return { online: false, logs: [], total: null };
   } finally {
     clearTimeout(timeout);
   }
@@ -539,7 +549,7 @@ async function fetchAssets({ player } = {}) {
 // Acțiunile de staff (Luxu), sursa separata (Postgres) folosita atat pentru
 // categoria "admin" din Loguri cat si pentru corelarile best-effort de mai
 // jos (kill/revive/item de admin etc.) si pentru Kill Logs.
-async function fetchStaffLogs({ player, before, limit }) {
+async function fetchStaffLogs({ player, before, after, limit }) {
   const conditions = [];
   const params = [];
   if (player) {
@@ -549,6 +559,10 @@ async function fetchStaffLogs({ player, before, limit }) {
   if (before) {
     params.push(before.toISOString());
     conditions.push(`created_at < $${params.length}`);
+  }
+  if (after) {
+    params.push(after.toISOString());
+    conditions.push(`created_at > $${params.length}`);
   }
   params.push(limit);
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
@@ -639,67 +653,90 @@ app.get("/api/admin/logs", auth, requireRole(...MOD_ROLES), asyncRoute(async (re
 }));
 
 // Pagina separata "Kill Logs" — cerută explicit: cine pe cine a ucis, și ce
-// s-a luat din inventarul victimei imediat după (jaf de cadavru). Combină
-// mortile (category "death", care includ deja corelarea cu un kill de admin
-// — vezi mai sus) cu transferurile de iteme (category "item_transfer") de
-// la ACELEAȘI moldovarp_logs, apoi asociem local orice transfer care pleacă
-// de la victimă în scurt timp după ce a murit.
+// s-a luat din inventarul victimei imediat după (jaf de cadavru).
 //
 // Aproximare, nu certitudine: nu știm dacă cel care a luat itemele chiar e
 // ucigașul (poate fi oricine ajunge primul la cadavru) — de-aia arătăm
 // explicit cine a luat, nu presupunem că e ucigașul. Fereastra e de 3 minute
-// după moarte. Cum mortile și transferurile sunt cerute cu aceeași limită/
-// cursor, o moarte foarte aproape de marginea paginii ar putea rata un jaf
-// care a picat pe pagina următoare — acceptabil, nu am vrut să complicăm
-// paginarea pentru un caz marginal.
+// după moarte.
+//
+// Paginare pe NUMĂR de pagină (1, 2, 3...), nu pe cursor — cerut explicit de
+// staff, după ce cursorul vechi ("Încarcă mai vechi") s-a dovedit nefiabil:
+// cerea mortile ȘI transferurile de iteme din ACELEAȘI moldovarp_logs cu o
+// singură limită comună, iar pe un server activ transferurile (mult mai
+// frecvente decât mortile) "împingeau" mortile vechi în afara ferestrei
+// paginate — uneori o pagină întreagă nu mai conținea nicio moarte nouă,
+// deși mai existau, mult mai vechi. Acum cerem mortile SINGURE, paginate
+// direct pe numărul cerut (offset în baza de date, vezi getLogs în
+// server.lua), independent de volumul de transferuri — și abia apoi cerem
+// transferurile relevante într-o fereastră de timp STRICT delimitată de
+// mortile de pe pagina curentă (de la cea mai veche până la cea mai nouă +3
+// minute), deci un query mult mai mic și mai țintit, nu concurează deloc cu
+// paginarea mortilor. Asta garantează și cerința de "cel puțin 72h în urmă"
+// pentru tichete/anchete — fiind acum independentă de traficul de iteme,
+// paginarea ajunge oricât de departe în istoric (până la limita de păstrare
+// de 30 de zile), fără ca vreo pagină să "sară" morti.
 app.get("/api/admin/kill-logs", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
   const player = req.query.player ? String(req.query.player).slice(0, 64) : "";
-  const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 50));
-  const beforeDate = req.query.before ? new Date(String(req.query.before)) : null;
-  const before = beforeDate && !Number.isNaN(beforeDate.getTime()) ? beforeDate : null;
+  const pageSize = Math.min(100, Math.max(1, Number(req.query.pageSize) || 20));
+  const page = Math.max(1, Number(req.query.page) || 1);
 
-  // Filtrul de jucator caută după numele VICTIMEI (asta stochează
-  // moldovarp_logs pentru o moarte) — filtrează implicit și transferurile
-  // relevante, pentru că un jaf de cadavru pleacă tot de la numele victimei.
-  const { online, logs } = await fetchGameLogs({
+  const { online, logs: deaths, total } = await fetchGameLogs({
     player,
-    category: "death,item_transfer",
-    limit: Math.min(500, limit * 4), // spatiu in plus pentru transferurile de corelat, nu doar morti
-    before,
+    category: "death",
+    page,
+    pageSize,
+    withTotal: true,
   });
-  const deaths = logs.filter(l => l.category === "death");
-  const transfers = logs.filter(l => l.category === "item_transfer");
 
-  const staffLogs = await fetchStaffLogs({ before, limit: 500 });
-  correlateStaffAction(deaths, staffLogs, "death", /kill/i, "adminKill");
+  let kills = [];
+  if (deaths.length) {
+    const times = deaths.map(d => new Date(d.at).getTime());
+    const oldest = new Date(Math.min(...times));
+    const newest = new Date(Math.max(...times) + 3 * 60 * 1000); // +3 minute (fereastra de jaf)
 
-  function lootedAfterDeath(victim, deathAt) {
-    const deathTime = new Date(deathAt).getTime();
-    return transfers
-      .filter(t => (t.player || "").toLowerCase().trim() === (victim || "").toLowerCase().trim())
-      .filter(t => {
-        const dt = new Date(t.at).getTime() - deathTime;
-        return dt >= 0 && dt <= 3 * 60 * 1000;
-      })
-      .map(t => ({ item: t.details.item, count: t.details.count, to: t.details.to, at: t.at }));
+    // Transferurile relevante — DOAR în fereastra de timp a acestei pagini,
+    // nu din tot istoricul. Limita de 500 e doar o plasă de siguranță pentru
+    // un interval neobișnuit de aglomerat — fereastra fiind deja restrânsă la
+    // mortile paginii curente, în practică e mult sub atât.
+    const { logs: transfers } = await fetchGameLogs({
+      player,
+      category: "item_transfer",
+      after: oldest,
+      before: newest,
+      pageSize: 500,
+    });
+
+    const staffLogs = await fetchStaffLogs({ after: oldest, before: newest, limit: 500 });
+    correlateStaffAction(deaths, staffLogs, "death", /kill/i, "adminKill");
+
+    function lootedAfterDeath(victim, deathAt) {
+      const deathTime = new Date(deathAt).getTime();
+      return transfers
+        .filter(t => (t.player || "").toLowerCase().trim() === (victim || "").toLowerCase().trim())
+        .filter(t => {
+          const dt = new Date(t.at).getTime() - deathTime;
+          return dt >= 0 && dt <= 3 * 60 * 1000;
+        })
+        .map(t => ({ item: t.details.item, count: t.details.count, to: t.details.to, at: t.at }));
+    }
+
+    kills = deaths
+      .map(d => ({
+        victim: d.player,
+        killer: d.details.killer || null,
+        adminKill: d.details.adminKill || null,
+        cause: d.details.cause || null,
+        job: d.details.job || null,
+        detectedBy: d.details.detectedBy || "event",
+        at: d.at,
+        looted: lootedAfterDeath(d.player, d.at),
+      }))
+      .sort((a, b) => new Date(b.at) - new Date(a.at));
   }
 
-  const kills = deaths
-    .map(d => ({
-      victim: d.player,
-      killer: d.details.killer || null,
-      adminKill: d.details.adminKill || null,
-      cause: d.details.cause || null,
-      job: d.details.job || null,
-      detectedBy: d.details.detectedBy || "event",
-      at: d.at,
-      looted: lootedAfterDeath(d.player, d.at),
-    }))
-    .sort((a, b) => new Date(b.at) - new Date(a.at))
-    .slice(0, limit);
-
-  const nextCursor = kills.length ? kills[kills.length - 1].at : null;
-  res.json({ online, kills, nextCursor });
+  const totalPages = total != null ? Math.max(1, Math.ceil(total / pageSize)) : null;
+  res.json({ online, kills, page, pageSize, total, totalPages });
 }));
 
 // Sancțiuni Luxu Admin, pentru pagina Sancțiuni de pe site — cerută explicit,

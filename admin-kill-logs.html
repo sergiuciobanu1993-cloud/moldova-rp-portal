@@ -22,9 +22,7 @@
   <p class="muted" id="offline-note" style="margin:0 22px 16px" hidden>Serverul de joc nu răspunde momentan — lista poate fi incompletă.</p>
   <table id="kills-table"><thead><tr><th>VICTIMĂ</th><th>UCIGAȘ</th><th>CAUZĂ</th><th>JAF DUPĂ MOARTE</th><th>DATA</th></tr></thead>
   <tbody id="list-body"><tr><td colspan="5">Se încarcă…</td></tr></tbody></table>
-  <div style="padding:16px 22px;text-align:center">
-    <button id="load-more-btn" class="btn-ghost" type="button" hidden>Încarcă mai vechi</button>
-  </div>
+  <div id="pagination" style="padding:16px 22px;display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap"></div>
 </section>
 
 </main>
@@ -98,61 +96,84 @@ document.getElementById('kills-table').addEventListener('click', (e) => {
 let debounceTimer = null;
 function scheduleReload() {
   clearTimeout(debounceTimer);
-  debounceTimer = setTimeout(() => loadKills(), 300);
+  debounceTimer = setTimeout(() => loadKills(1), 300);
 }
 
-// Aceeasi paginare pe cursor ca la Loguri (vezi admin-loguri.html) — "Încarcă
-// mai vechi" cere strict ce e mai vechi decat ultima intrare afisata, ca sa
-// nu fim limitati la ultimele ~cateva ore pe un server activ.
-let currentCursor = null;
+// Paginare pe NUMĂR de pagină (1, 2, 3...), nu pe cursor "Încarcă mai vechi"
+// — cel vechi se dovedise nefiabil: cerea morțile ȘI transferurile de iteme
+// din același loc cu o limită comună, iar pe un server activ transferurile
+// (mult mai frecvente) "împingeau" morțile vechi în afara ferestrei, ceea
+// ce ducea, în cazuri reale, la reîncărcarea aceleiași pagini în loc să
+// avanseze (raportat explicit de staff). Acum backend-ul (vezi
+// /api/admin/kill-logs) paginează DOAR pe morți, deci fiecare pagină e
+// stabilă și predictibilă — și poți ajunge oricât de departe în istoric
+// (până la 30 de zile), nu doar câteva ore, util la anchete/tichete.
+let currentPage = 1;
+let currentTotalPages = null;
 
-async function loadKills(opts) {
-  const reset = !opts || opts.reset !== false;
+function renderPagination(page, totalPages) {
+  const el = document.getElementById('pagination');
+  if (!totalPages || totalPages <= 1) { el.innerHTML = ''; return; }
+
+  // Fereastră de pagini vizibile în jurul celei curente (±2), plus mereu
+  // prima și ultima — cu "…" între, ca să nu umplem ecranul cu sute de
+  // butoane pe un istoric lung de 30 de zile.
+  const pages = new Set([1, totalPages]);
+  for (let p = page - 2; p <= page + 2; p++) if (p >= 1 && p <= totalPages) pages.add(p);
+  const sorted = [...pages].sort((a, b) => a - b);
+
+  let html = `<button type="button" class="btn-ghost" data-page="${page - 1}" ${page <= 1 ? 'disabled' : ''}>‹ Precedenta</button>`;
+  let prev = 0;
+  for (const p of sorted) {
+    if (p - prev > 1) html += `<span class="muted" style="padding:0 4px">…</span>`;
+    html += `<button type="button" class="btn-ghost${p === page ? ' active' : ''}" data-page="${p}" ${p === page ? 'style="background:var(--orange);color:#000;border-color:var(--orange)"' : ''}>${p}</button>`;
+    prev = p;
+  }
+  html += `<button type="button" class="btn-ghost" data-page="${page + 1}" ${page >= totalPages ? 'disabled' : ''}>Următoarea ›</button>`;
+  el.innerHTML = html;
+  el.querySelectorAll('button[data-page]').forEach(btn => {
+    btn.addEventListener('click', () => loadKills(Number(btn.dataset.page)));
+  });
+}
+
+async function loadKills(page) {
+  currentPage = page || currentPage || 1;
   const tbody = document.getElementById('list-body');
   const offlineNote = document.getElementById('offline-note');
-  const loadMoreBtn = document.getElementById('load-more-btn');
   const player = document.getElementById('f-player').value.trim();
   const qs = new URLSearchParams();
   if (player) qs.set('player', player);
-  qs.set('limit', '50');
-  if (reset) currentCursor = null;
-  else if (currentCursor) qs.set('before', currentCursor);
+  qs.set('page', String(currentPage));
+  qs.set('pageSize', '20');
   try {
     const res = await apiFetch(`/api/admin/kill-logs?${qs.toString()}`);
     if (!res.ok) throw new Error();
     const d = await res.json();
     offlineNote.hidden = d.online !== false;
-    if (reset && (!d.kills || !d.kills.length)) {
-      tbody.innerHTML = '<tr><td colspan="5">Nicio moarte găsită.</td></tr>';
-      loadMoreBtn.hidden = true;
-      return;
+    currentPage = d.page || currentPage;
+    currentTotalPages = d.totalPages || null;
+    if (!d.kills || !d.kills.length) {
+      tbody.innerHTML = `<tr><td colspan="5">${currentPage > 1 ? 'Nicio moarte pe această pagină.' : 'Nicio moarte găsită.'}</td></tr>`;
+    } else {
+      tbody.innerHTML = rowsHtml(d.kills);
     }
-    const html = rowsHtml(d.kills || []);
-    if (reset) tbody.innerHTML = html; else tbody.insertAdjacentHTML('beforeend', html);
-    currentCursor = d.nextCursor || null;
-    loadMoreBtn.hidden = !currentCursor || !(d.kills && d.kills.length);
+    renderPagination(currentPage, currentTotalPages);
   } catch {
-    if (reset) tbody.innerHTML = '<tr><td colspan="5">Nu am putut încărca kill logs.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5">Nu am putut încărca kill logs.</td></tr>';
   }
 }
 
 document.getElementById('f-player').addEventListener('input', scheduleReload);
-document.getElementById('refresh-btn').addEventListener('click', () => loadKills());
-document.getElementById('load-more-btn').addEventListener('click', () => loadKills({ reset: false }));
+document.getElementById('refresh-btn').addEventListener('click', () => loadKills(currentPage));
 
 (async () => {
   const me = await requireRole('moderator', 'admin', 'co-fondator', 'owner');
   if (!me) return;
   document.getElementById('admin-name').textContent = me.username;
-  loadKills();
-  // Reîmprospătarea automată NU trebuie să te tragă înapoi la prima pagină
-  // dacă tocmai ai apăsat "Încarcă mai vechi" ca să sapi în istoric — înainte,
-  // la fiecare 60s se apela loadKills() fără argumente, ceea ce înseamnă
-  // reset=true necondiționat, ștergând tot ce încărcaseși în plus și punând
-  // înapoi doar prima pagină (raportat explicit: "se reîncarcă aceeași
-  // pagină, nu te duci la loguri mai vechi"). Acum reîmprospătarea automată
-  // rulează DOAR cât timp ești pe prima pagină (currentCursor e încă null).
-  setInterval(() => { if (!currentCursor) loadKills(); }, 60000);
+  loadKills(1);
+  // Reîmprospătarea automată nu trebuie să te tragă înapoi la pagina 1 dacă
+  // răsfoiești istoricul — rulează doar cât timp ești chiar pe pagina 1.
+  setInterval(() => { if (currentPage === 1) loadKills(1); }, 60000);
 })();
 </script>
 </body></html>

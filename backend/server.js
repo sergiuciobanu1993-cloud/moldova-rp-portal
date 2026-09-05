@@ -344,8 +344,12 @@ const JOBS_CACHE_MS = 60_000;
 const DEV_PROXY_SECRET = process.env.DEV_PROXY_SECRET || "";
 const FIVEM_DEV_SECRET = process.env.FIVEM_DEV_SECRET || "";
 
+// Accepta cheia fie ca header (x-dev-proxy-key), fie ca query param (?key=)
+// — al doilea exista special pentru ca uneltele mele de citit pagini web nu
+// pot trimite header-e custom, doar un URL simplu.
 function requireDevProxy(req, res, next) {
-  if (!DEV_PROXY_SECRET || req.headers["x-dev-proxy-key"] !== DEV_PROXY_SECRET) {
+  const provided = req.headers["x-dev-proxy-key"] || req.query.key;
+  if (!DEV_PROXY_SECRET || provided !== DEV_PROXY_SECRET) {
     return res.status(401).json({ error: "unauthorized" });
   }
   next();

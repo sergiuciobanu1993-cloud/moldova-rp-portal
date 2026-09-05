@@ -842,6 +842,14 @@ async function buildPlayerProfile(name) {
     live: live ? {
       serverId: live.id, job: live.job, jobLabel: live.jobLabel, group: live.group,
       cash: live.cash, bank: live.bank, blackMoney: live.blackMoney, vehicles: live.vehicles || [],
+      // cfxName = numele raportat de platformă (Steam/Rockstar), serverName =
+      // numele personajului RP din baza jocului (users.firstname/lastname) —
+      // pot diferi complet; license = identificatorul stabil (license:...).
+      // Doar cât jucătorul e online (`live`) — quando offline, folosim doar
+      // numele cu care a fost găsit profilul (cleanName), fără să inventăm.
+      cfxName: live.name || null,
+      serverName: live.serverName || null,
+      license: live.license || null,
     } : null,
     lastKnown,
     account: account ? {

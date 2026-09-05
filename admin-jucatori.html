@@ -132,7 +132,11 @@ async function loadPlayers(force) {
 
     tbody.innerHTML = d.players.length ? d.players.slice().sort((a, b) => a.name.localeCompare(b.name, 'ro')).map(p => `
       <tr class="player-row" data-name="${escapeHtml(p.name)}" style="cursor:pointer">
-        <td><strong>${escapeHtml(p.name)}</strong><br><small style="color:var(--muted)">ID server #${p.id}</small></td>
+        <td>
+          <strong>${escapeHtml(p.serverName || p.name)}</strong><br>
+          <small style="color:var(--muted)">CFX: ${escapeHtml(p.name)} · ID server #${p.id}</small>
+          ${p.license ? `<br><small style="color:var(--muted)"><code>${escapeHtml(p.license)}</code></small>` : ''}
+        </td>
         <td>${escapeHtml(p.jobLabel || p.job)}</td>
         <td>${fmtMoney(p.cash)}</td>
         <td>${fmtMoney(p.bank)}</td>

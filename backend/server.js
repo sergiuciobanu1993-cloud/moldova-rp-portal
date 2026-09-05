@@ -298,9 +298,16 @@ async function syncPlayerSnapshots() {
            last_synced_at = NOW()
          WHERE display_name ILIKE $7`,
         [
-          Number.isFinite(pl.cash) ? pl.cash : null,
-          Number.isFinite(pl.bank) ? pl.bank : null,
-          Number.isFinite(pl.blackMoney) ? pl.blackMoney : null,
+          // last_cash/last_bank/last_black_money sunt INTEGER — jocul poate
+          // trimite valori cu zecimale (ex: bani murdari calculați ca procent,
+          // 333112.75), ceea ce Postgres refuză direct la INSERT/UPDATE cu
+          // "invalid input syntax for type integer". Rotunjim aici, nu
+          // schimbăm coloana la NUMERIC, pentru că banii din joc sunt oricum
+          // afișați ca sumă întreagă peste tot pe site (fmtMoney) — nu pierdem
+          // nimic relevant vizual.
+          Number.isFinite(pl.cash) ? Math.round(pl.cash) : null,
+          Number.isFinite(pl.bank) ? Math.round(pl.bank) : null,
+          Number.isFinite(pl.blackMoney) ? Math.round(pl.blackMoney) : null,
           pl.job || null,
           pl.jobLabel || null,
           JSON.stringify(pl.vehicles || []),

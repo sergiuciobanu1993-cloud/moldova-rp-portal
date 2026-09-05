@@ -1,6 +1,33 @@
 <!doctype html>
 <html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Autentificare — Moldova RP</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="auth.css"></head>
-<body><div class="auth"><div class="brand"><img src="assets/logo.png" alt=""><b>MOLDOVA<span>RP</span></b></div><div class="box"><p>PORTAL OFICIAL</p><h1>Autentificare</h1><form id="login-form" novalidate><label>Email / Username</label><input id="login-input" name="login" placeholder="username" autocomplete="username" required><label>Parolă</label><input id="password-input" name="password" type="password" placeholder="••••••••" autocomplete="current-password" required><p id="login-error" class="error" hidden></p><button type="submit" id="login-submit">Intră în cont</button></form><div class="or"><span>sau</span></div><a class="discord" href="/api/auth/discord">Conectare cu Discord</a><small>Contul se autentifică prin API-ul real (/api/auth/login). Discord e bun pentru jucători, dar din motive de securitate acordă mereu doar accesul de jucător — staff-ul trebuie să intre cu email/username + parolă.</small></div><a href="register.html">Nu ai cont? Înregistrează-te</a><a href="index.html">← Înapoi la site</a></div>
+<body><div class="auth"><div class="brand"><img src="assets/logo.png" alt=""><b>MOLDOVA<span>RP</span></b></div>
+<div class="box" id="login-box"><p>PORTAL OFICIAL</p><h1>Autentificare</h1><form id="login-form" novalidate><label>Email / Username</label><input id="login-input" name="login" placeholder="username" autocomplete="username" required><label>Parolă</label><input id="password-input" name="password" type="password" placeholder="••••••••" autocomplete="current-password" required><p id="login-error" class="error" hidden></p><button type="submit" id="login-submit">Intră în cont</button></form>
+<p style="margin:10px 0 0"><a href="#" id="forgot-link" style="font-size:13px">Ai uitat parola?</a></p>
+<div class="or"><span>sau</span></div><a class="discord" href="/api/auth/discord">Conectare cu Discord</a><small>Contul se autentifică prin API-ul real (/api/auth/login). Discord e bun pentru jucători, dar din motive de securitate acordă mereu doar accesul de jucător — staff-ul trebuie să intre cu email/username + parolă.</small></div>
+
+<div class="box" id="forgot-box" hidden>
+  <p>RECUPERARE CONT</p><h1>Am uitat parola</h1>
+  <form id="forgot-request-form" novalidate>
+    <label>Email-ul contului</label>
+    <input id="forgot-email" type="email" placeholder="nume@exemplu.com" autocomplete="email" required>
+    <p id="forgot-request-error" class="error" hidden></p>
+    <p id="forgot-request-msg" hidden></p>
+    <button type="submit" id="forgot-request-submit">Trimite codul de resetare</button>
+  </form>
+  <form id="forgot-confirm-form" novalidate hidden style="margin-top:16px">
+    <label>Codul primit pe email</label>
+    <input id="forgot-code" placeholder="123456" inputmode="numeric" autocomplete="one-time-code" required>
+    <label>Parolă nouă (minim 8 caractere)</label>
+    <input id="forgot-password" type="password" placeholder="••••••••" autocomplete="new-password" required>
+    <label>Confirmă parola</label>
+    <input id="forgot-password-confirm" type="password" placeholder="••••••••" autocomplete="new-password" required>
+    <p id="forgot-confirm-error" class="error" hidden></p>
+    <button type="submit" id="forgot-confirm-submit">Schimbă parola</button>
+  </form>
+  <p style="margin:14px 0 0"><a href="#" id="back-to-login-link">← Înapoi la autentificare</a></p>
+</div>
+
+<a href="register.html">Nu ai cont? Înregistrează-te</a><a href="index.html">← Înapoi la site</a></div>
 <script src="auth-client.js"></script>
 <script>
 const form = document.getElementById('login-form');
@@ -30,6 +57,92 @@ form.addEventListener('submit', async (e) => {
   } finally {
     submitBtn.disabled = false;
     submitBtn.textContent = 'Intră în cont';
+  }
+});
+
+// --- "Am uitat parola" ------------------------------------------------
+const loginBox = document.getElementById('login-box');
+const forgotBox = document.getElementById('forgot-box');
+const forgotLink = document.getElementById('forgot-link');
+const backToLoginLink = document.getElementById('back-to-login-link');
+const forgotRequestForm = document.getElementById('forgot-request-form');
+const forgotRequestError = document.getElementById('forgot-request-error');
+const forgotRequestMsg = document.getElementById('forgot-request-msg');
+const forgotRequestSubmit = document.getElementById('forgot-request-submit');
+const forgotConfirmForm = document.getElementById('forgot-confirm-form');
+const forgotConfirmError = document.getElementById('forgot-confirm-error');
+const forgotConfirmSubmit = document.getElementById('forgot-confirm-submit');
+let forgotEmail = '';
+
+function showForgot() {
+  loginBox.hidden = true;
+  forgotBox.hidden = false;
+}
+function showLogin() {
+  forgotBox.hidden = true;
+  loginBox.hidden = false;
+}
+
+forgotLink.addEventListener('click', (e) => { e.preventDefault(); showForgot(); });
+backToLoginLink.addEventListener('click', (e) => { e.preventDefault(); showLogin(); });
+
+forgotRequestForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  forgotRequestError.hidden = true;
+  forgotRequestSubmit.disabled = true;
+  forgotRequestSubmit.textContent = 'Se trimite codul…';
+  try {
+    forgotEmail = document.getElementById('forgot-email').value.trim().toLowerCase();
+    const res = await fetch('/api/auth/forgot-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: forgotEmail })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Nu am putut trimite codul.');
+    forgotRequestMsg.textContent = data.message || 'Cod trimis pe email.';
+    forgotRequestMsg.hidden = false;
+    document.getElementById('forgot-email').disabled = true;
+    forgotRequestSubmit.hidden = true;
+    forgotConfirmForm.hidden = false;
+  } catch (err) {
+    forgotRequestError.textContent = err.message || 'Nu ne-am putut conecta la server.';
+    forgotRequestError.hidden = false;
+    forgotRequestSubmit.disabled = false;
+    forgotRequestSubmit.textContent = 'Trimite codul de resetare';
+  }
+});
+
+forgotConfirmForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  forgotConfirmError.hidden = true;
+  const code = document.getElementById('forgot-code').value.trim();
+  const password = document.getElementById('forgot-password').value;
+  const confirmPassword = document.getElementById('forgot-password-confirm').value;
+  if (password !== confirmPassword) {
+    forgotConfirmError.textContent = 'Parolele nu coincid.';
+    forgotConfirmError.hidden = false;
+    return;
+  }
+  forgotConfirmSubmit.disabled = true;
+  forgotConfirmSubmit.textContent = 'Se schimbă parola…';
+  try {
+    const res = await fetch('/api/auth/reset-password/confirm', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: forgotEmail, code, password })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Nu am putut schimba parola.');
+    forgotConfirmForm.hidden = true;
+    forgotRequestMsg.textContent = 'Parola a fost schimbată. Te poți autentifica acum.';
+    setTimeout(showLogin, 1500);
+  } catch (err) {
+    forgotConfirmError.textContent = err.message || 'Nu ne-am putut conecta la server.';
+    forgotConfirmError.hidden = false;
+  } finally {
+    forgotConfirmSubmit.disabled = false;
+    forgotConfirmSubmit.textContent = 'Schimbă parola';
   }
 });
 </script>

@@ -38,6 +38,12 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_password_hash TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verify_code VARCHAR(10);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verify_expires TIMESTAMPTZ;
 
+-- "Am uitat parola" — cod de 6 cifre trimis pe emailul contului (funcționează
+-- doar pentru conturi care au deja un email+parolă reale, nu pentru conturi
+-- doar-Discord, care nu au un email verificat de care să ne putem folosi).
+ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_password_code VARCHAR(10);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_password_expires TIMESTAMPTZ;
+
 CREATE TABLE IF NOT EXISTS players (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID UNIQUE REFERENCES users(id) ON DELETE CASCADE,

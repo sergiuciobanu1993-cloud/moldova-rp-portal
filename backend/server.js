@@ -801,7 +801,9 @@ function emailApiConfigured() {
   return Boolean(process.env.BREVO_API_KEY && process.env.EMAIL_FROM);
 }
 
-async function sendVerificationEmail(to, code) {
+// intro = propoziția care apare deasupra codului, adaptată la context (email
+// de confirmare la setarea parolei, vs. cod de resetare parolă uitată etc).
+async function sendCodeEmail(to, code, { subject, intro }) {
   const res = await fetch("https://api.brevo.com/v3/smtp/email", {
     method: "POST",
     headers: {
@@ -812,9 +814,9 @@ async function sendVerificationEmail(to, code) {
     body: JSON.stringify({
       sender: { email: process.env.EMAIL_FROM, name: "Moldova RP" },
       to: [{ email: to }],
-      subject: `Codul tău de confirmare: ${code}`,
-      textContent: `Codul tău de confirmare pentru contul de pe moldovarp.md este: ${code}\n\nCodul expiră în 15 minute. Dacă nu ai cerut tu asta, ignoră acest email.`,
-      htmlContent: `<p>Codul tău de confirmare pentru contul de pe <b>moldovarp.md</b> este:</p>
+      subject,
+      textContent: `${intro} ${code}\n\nCodul expiră în 15 minute. Dacă nu ai cerut tu asta, ignoră acest email.`,
+      htmlContent: `<p>${intro}</p>
            <p style="font-size:28px;font-weight:bold;letter-spacing:4px">${code}</p>
            <p>Codul expiră în 15 minute. Dacă nu ai cerut tu asta, ignoră acest email.</p>`,
     }),
@@ -823,6 +825,20 @@ async function sendVerificationEmail(to, code) {
     const body = await res.text().catch(() => "");
     throw new Error(`Brevo API a răspuns cu ${res.status}: ${body.slice(0, 300)}`);
   }
+}
+
+function sendVerificationEmail(to, code) {
+  return sendCodeEmail(to, code, {
+    subject: `Codul tău de confirmare: ${code}`,
+    intro: "Codul tău de confirmare pentru contul de pe moldovarp.md este:",
+  });
+}
+
+function sendResetCodeEmail(to, code) {
+  return sendCodeEmail(to, code, {
+    subject: `Codul tău de resetare a parolei: ${code}`,
+    intro: "Cineva (probabil tu) a cerut resetarea parolei pentru contul de pe moldovarp.md. Codul tău este:",
+  });
 }
 
 function generateVerifyCode() {
@@ -898,6 +914,74 @@ app.post("/api/auth/set-password/confirm", auth, asyncRoute(async (req, res) => 
     [row.pending_email, row.pending_password_hash, req.user.sub]
   );
   await logAction(req.user.sub, "auth.set_password", "user", req.user.sub, null, req.ip);
+  res.json({ ok: true });
+}));
+
+// ---------------------------------------------------------------------------
+// "Am uitat parola" — cod de 6 cifre pe email, apoi parolă nouă
+// ---------------------------------------------------------------------------
+// Merge DOAR pentru conturi care au deja un email+parolă reale (adică au
+// trecut prin înregistrare directă sau prin "Setează parola" de mai sus) —
+// un cont creat doar prin Discord nu are un email verificat de care să ne
+// putem folosi aici, deci îl tratăm la fel ca "email inexistent".
+//
+// Ca să nu dăm de gol cine are cont pe site (enumerare de emailuri), acest
+// endpoint răspunde mereu cu același mesaj de succes, indiferent dacă
+// emailul există sau nu — codul chiar pleacă doar dacă există un cont
+// potrivit, dar cel care întreabă nu poate distinge cele două cazuri.
+app.post("/api/auth/forgot-password", asyncRoute(async (req, res) => {
+  const cleanEmail = (req.body.email || "").trim().toLowerCase();
+  const genericOk = { ok: true, message: "Dacă adresa există în baza noastră de date, a fost trimis un cod pe email." };
+  if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) return res.json(genericOk);
+  if (!emailApiConfigured())
+    return res.status(503).json({ error: "Trimiterea de email-uri nu este configurată încă pe server." });
+
+  const { rows } = await pool.query(
+    "SELECT id FROM users WHERE email=$1 AND password_hash IS NOT NULL", [cleanEmail]
+  );
+  const user = rows[0];
+  if (!user) return res.json(genericOk);
+
+  const code = generateVerifyCode();
+  await pool.query(
+    `UPDATE users SET reset_password_code=$1, reset_password_expires=NOW() + INTERVAL '15 minutes', updated_at=NOW()
+     WHERE id=$2`,
+    [code, user.id]
+  );
+  try {
+    await sendResetCodeEmail(cleanEmail, code);
+  } catch (e) {
+    console.error("Trimiterea emailului de resetare a eșuat:", e.message);
+    // Tot răspuns generic — nu vrem să confirmăm existența contului prin
+    // diferența dintre "a mers" și "n-a mers să trimită".
+  }
+  res.json(genericOk);
+}));
+
+app.post("/api/auth/reset-password/confirm", asyncRoute(async (req, res) => {
+  const cleanEmail = (req.body.email || "").trim().toLowerCase();
+  const { code, password } = req.body;
+  if (!password || password.length < 8)
+    return res.status(400).json({ error: "Parola trebuie să aibă minimum 8 caractere." });
+
+  const { rows } = await pool.query(
+    "SELECT id, reset_password_code, reset_password_expires FROM users WHERE email=$1", [cleanEmail]
+  );
+  const user = rows[0];
+  if (!user || !user.reset_password_code)
+    return res.status(400).json({ error: "Cod invalid sau expirat. Cere unul nou." });
+  if (new Date(user.reset_password_expires) < new Date())
+    return res.status(400).json({ error: "Codul a expirat. Cere unul nou." });
+  if (String(code || "").trim() !== user.reset_password_code)
+    return res.status(400).json({ error: "Cod incorect." });
+
+  const hash = await bcrypt.hash(password, 12);
+  await pool.query(
+    `UPDATE users SET password_hash=$1, reset_password_code=NULL, reset_password_expires=NULL, updated_at=NOW()
+     WHERE id=$2`,
+    [hash, user.id]
+  );
+  await logAction(user.id, "auth.reset_password", "user", user.id, null, req.ip);
   res.json({ ok: true });
 }));
 

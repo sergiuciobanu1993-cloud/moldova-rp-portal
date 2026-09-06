@@ -10,7 +10,10 @@
 <section class="tablebox">
   <div class="title">
     <h2>Detaliu jucători conectați acum</h2>
-    <button id="refresh-btn">↻ Actualizează</button>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <input id="f-player-search" class="filter-select" placeholder="Caută jucător (CFX sau nume personaj)..." autocomplete="off" style="min-width:220px">
+      <button id="refresh-btn">↻ Actualizează</button>
+    </div>
   </div>
   <table><thead><tr><th>JUCĂTOR</th><th>FACȚIUNE</th><th>CASH</th><th>BANCĂ</th><th>BANI MURDARI</th><th>VEHICULE</th></tr></thead>
   <tbody id="list-body"><tr><td colspan="6">Se încarcă…</td></tr></tbody></table>
@@ -107,6 +110,43 @@ function vehiclesHtml(vehicles) {
   }).join(' ');
 }
 
+// Lista completă primită ultima dată de la server — ținută în memorie ca să
+// putem filtra instant (bara de căutare) fără să mai cerem datele din nou.
+let lastPlayersList = [];
+
+function renderPlayers(players) {
+  const tbody = document.getElementById('list-body');
+  tbody.innerHTML = players.length ? players.slice().sort((a, b) => a.name.localeCompare(b.name, 'ro')).map(p => `
+    <tr class="player-row" data-name="${escapeHtml(p.name)}" style="cursor:pointer">
+      <td>
+        <strong>${escapeHtml(p.serverName || p.name)}</strong><br>
+        <small style="color:var(--muted)">CFX: ${escapeHtml(p.name)} · ID server #${p.id}</small>
+        ${p.license ? `<br><small style="color:var(--muted)"><code>${escapeHtml(p.license)}</code></small>` : ''}
+      </td>
+      <td>${escapeHtml(p.jobLabel || p.job)}</td>
+      <td>${fmtMoney(p.cash)}</td>
+      <td>${fmtMoney(p.bank)}</td>
+      <td>${p.blackMoney == null ? '<span class="muted">—</span>' : fmtMoney(p.blackMoney)}</td>
+      <td>${vehiclesHtml(p.vehicles)}</td>
+    </tr>`).join('') : '<tr><td colspan="6">Niciun jucător online momentan.</td></tr>';
+  tbody.querySelectorAll('tr.player-row').forEach(tr => {
+    tr.addEventListener('click', () => window.openPlayerProfile(tr.dataset.name));
+  });
+}
+
+function applyPlayerSearch() {
+  const q = document.getElementById('f-player-search').value.trim().toLowerCase();
+  if (!q) { renderPlayers(lastPlayersList); return; }
+  const filtered = lastPlayersList.filter(p =>
+    (p.name || '').toLowerCase().includes(q) || (p.serverName || '').toLowerCase().includes(q));
+  const tbody = document.getElementById('list-body');
+  if (!filtered.length) {
+    tbody.innerHTML = '<tr><td colspan="6">Niciun jucător nu corespunde căutării.</td></tr>';
+    return;
+  }
+  renderPlayers(filtered);
+}
+
 async function loadPlayers(force) {
   const statusNote = document.getElementById('status-note');
   const offlineHelp = document.getElementById('offline-help');
@@ -121,6 +161,7 @@ async function loadPlayers(force) {
     if (!d.online) {
       statusNote.textContent = 'Offline — resursa moldovarp-api nu e încă activă pe server.';
       offlineHelp.hidden = false;
+      lastPlayersList = [];
       tbody.innerHTML = '<tr><td colspan="6">Fără date live momentan.</td></tr>';
       return;
     }
@@ -130,22 +171,8 @@ async function loadPlayers(force) {
       ? `${d.players.length} jucători online — date posibil ușor întârziate.`
       : `${d.players.length} jucători online — date live.`;
 
-    tbody.innerHTML = d.players.length ? d.players.slice().sort((a, b) => a.name.localeCompare(b.name, 'ro')).map(p => `
-      <tr class="player-row" data-name="${escapeHtml(p.name)}" style="cursor:pointer">
-        <td>
-          <strong>${escapeHtml(p.serverName || p.name)}</strong><br>
-          <small style="color:var(--muted)">CFX: ${escapeHtml(p.name)} · ID server #${p.id}</small>
-          ${p.license ? `<br><small style="color:var(--muted)"><code>${escapeHtml(p.license)}</code></small>` : ''}
-        </td>
-        <td>${escapeHtml(p.jobLabel || p.job)}</td>
-        <td>${fmtMoney(p.cash)}</td>
-        <td>${fmtMoney(p.bank)}</td>
-        <td>${p.blackMoney == null ? '<span class="muted">—</span>' : fmtMoney(p.blackMoney)}</td>
-        <td>${vehiclesHtml(p.vehicles)}</td>
-      </tr>`).join('') : '<tr><td colspan="6">Niciun jucător online momentan.</td></tr>';
-    tbody.querySelectorAll('tr.player-row').forEach(tr => {
-      tr.addEventListener('click', () => window.openPlayerProfile(tr.dataset.name));
-    });
+    lastPlayersList = d.players || [];
+    applyPlayerSearch();
   } catch {
     statusNote.textContent = 'Nu am putut încărca datele.';
     tbody.innerHTML = '<tr><td colspan="6">Eroare la încărcare.</td></tr>';
@@ -155,6 +182,7 @@ async function loadPlayers(force) {
 }
 
 document.getElementById('refresh-btn').addEventListener('click', () => loadPlayers(true));
+document.getElementById('f-player-search').addEventListener('input', applyPlayerSearch);
 
 async function loadJobs() {
   const tbody = document.getElementById('jobs-body');

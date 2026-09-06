@@ -483,8 +483,21 @@ async function fetchGameLogs({ player, category, limit, before, after, page, pag
   if (player) qs.set("player", player);
   if (category) qs.set("category", category);
   qs.set("limit", String(pageSize || limit));
-  if (before) qs.set("beforeAt", before.toISOString());
-  if (after) qs.set("afterAt", after.toISOString());
+  // BUG REAL gasit acum (06.09.2026, confirmat direct din "/dev/db-sample"):
+  // "created_at" in moldovarp_logs (MySQL) e stocat ca NUMAR (milisecunde de
+  // la epoch, ex: 1788709662000), NU ca text/DATETIME. Trimiteam aici
+  // before/after.toISOString() (text, ex: "2026-09-06T13:22:13.000Z") — MySQL,
+  // comparand text cu o coloana numerica, trunchiaza textul la primul grup de
+  // cifre valid ("2026"), deci "created_at < ?" devenea "created_at < 2026",
+  // FALS pentru orice valoare reala (milisecunde de la epoch sunt mult mai
+  // mari) — filtrul "beforeAt" excludea ABSOLUT TOATE randurile, intotdeauna.
+  // Exact de-aia "Jaf dupa moarte" (Kill Logs, singurul loc care foloseste
+  // "before") nu arata niciodata nimic, indiferent daca transferul chiar
+  // exista in baza de date (confirmat separat ca EXISTA, corect atribuit).
+  // Fix: trimitem milisecunde de la epoch (numar, ca text simplu), nu ISO —
+  // se compara corect cu coloana numerica.
+  if (before) qs.set("beforeAt", String(before.getTime()));
+  if (after) qs.set("afterAt", String(after.getTime()));
   if (page) qs.set("page", String(page));
   if (withTotal) qs.set("withTotal", "1");
   const controller = new AbortController();

@@ -1,13 +1,13 @@
 <!doctype html>
-<html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cazuri — Moldova RP</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="dashboard.css"></head>
+<html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>VIP Shop — Moldova RP</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="dashboard.css"></head>
 <body>
-<header><a class="brand" href="index.html"><img src="assets/logo.png" alt="">MOLDOVA<span>RP</span></a><nav id="dash-nav"><a href="index.html">Acasă</a><a href="dashboard.html">Dashboard</a><a href="tichete.html">Tichete</a><a href="cazuri.html" style="color:var(--orange)">Cazuri</a></nav><button class="menu-toggle" id="dash-menu-toggle" type="button" aria-label="Deschide meniul" aria-expanded="false">☰</button><a class="logout" href="login.html" id="logout-link">Deconectare</a></header>
+<header><a class="brand" href="index.html"><img src="assets/logo.png" alt="">MOLDOVA<span>RP</span></a><nav id="dash-nav"><a href="index.html">Acasă</a><a href="dashboard.html">Dashboard</a><a href="tichete.html">Tichete</a><a href="vip-shop.html" style="color:var(--orange)">VIP Shop</a></nav><button class="menu-toggle" id="dash-menu-toggle" type="button" aria-label="Deschide meniul" aria-expanded="false">☰</button><a class="logout" href="login.html" id="logout-link">Deconectare</a></header>
 <main>
-<section class="welcome"><div><p>MAGAZIN COINS</p><h1>Cazuri</h1><small>Cheltuiește coins-urile deja cumpărate pe un caz cu șansă — recompensa se ridică din joc.</small></div></section>
+<section class="welcome"><div><p>MAGAZIN COINS</p><h1>VIP Shop</h1><small>Cheltuiește coins-urile deja cumpărate pe o recompensă cu șansă — se ridică din joc.</small></div></section>
 
 <p class="muted" style="margin:18px 0 24px">
   Coins-urile se cumpără exact ca până acum: din joc, apasă <strong>„Cumpără coins"</strong> în meniul VIP, plătește pe Tebex,
-  apoi introdu ID-ul tranzacției acolo ca să-ți fie creditate. Pagina asta doar arată soldul și îți lasă să-l cheltui pe un caz —
+  apoi introdu ID-ul tranzacției acolo ca să-ți fie creditate. Pagina asta doar arată soldul și îți lasă să-l cheltui pe o recompensă —
   nu schimbă nimic la cumpărarea coins-urilor în sine.
 </p>
 
@@ -22,8 +22,8 @@
 </section>
 
 <section class="panel" id="cases-panel" style="margin-top:20px" hidden>
-  <div class="head"><h2>Cazuri disponibile</h2><span id="coins-balance" class="pill info">— coins</span></div>
-  <p class="muted" id="cases-offline-note" style="margin:0 0 14px" hidden>Serverul de joc nu răspunde momentan — cazurile nu pot fi deschise chiar acum.</p>
+  <div class="head"><h2>Recompense disponibile</h2><span id="coins-balance" class="pill info">— coins</span></div>
+  <p class="muted" id="cases-offline-note" style="margin:0 0 14px" hidden>Serverul de joc nu răspunde momentan — recompensele nu pot fi deschise chiar acum.</p>
   <div id="cases-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px"></div>
 </section>
 
@@ -156,12 +156,12 @@ async function openCase(caseId) {
   const spinTimer = setInterval(() => { spin.textContent = icons[i % icons.length]; i++; }, 120);
 
   try {
-    const res = await apiFetch('/api/cazuri/deschide', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ caseId }) });
+    const res = await apiFetch('/api/vip-shop/deschide', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ caseId }) });
     const d = await res.json();
     clearInterval(spinTimer);
     if (!res.ok) {
       spin.textContent = '⚠';
-      title.textContent = 'Nu am putut deschide cazul';
+      title.textContent = 'Nu am putut deschide recompensa';
       text.textContent = d.error || 'Eroare necunoscută.';
       closeBtn.hidden = false;
       return;
@@ -186,7 +186,7 @@ document.getElementById('reveal-close').addEventListener('click', () => {
 
 async function loadAll() {
   try {
-    const res = await apiFetch('/api/cazuri');
+    const res = await apiFetch('/api/vip-shop');
     if (!res.ok) throw new Error();
     const d = await res.json();
     renderLinkPanel(d);

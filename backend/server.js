@@ -1091,11 +1091,11 @@ app.post("/api/cont/dezleaga-joc", auth, asyncRoute(async (req, res) => {
   res.json({ ok: true });
 }));
 
-// Pagina "Cazuri" — soldul de coins + recompensele "în așteptare" + lista
-// cazurilor disponibile cu șansele afișate transparent. Fără cont legat de
+// Pagina "VIP Shop" — soldul de coins + recompensele "în așteptare" + lista
+// recompenselor disponibile cu șansele afișate transparent. Fără cont legat de
 // joc, răspundem "linked: false" (nu e o eroare — jucătorul doar nu a
 // parcurs încă pasul de legare).
-app.get("/api/cazuri", auth, asyncRoute(async (req, res) => {
+app.get("/api/vip-shop", auth, asyncRoute(async (req, res) => {
   const { rows } = await pool.query(`SELECT game_identifier, game_identifier_name FROM users WHERE id = $1`, [req.user.sub]);
   const identifier = rows[0]?.game_identifier;
   if (!identifier) return res.json({ linked: false });
@@ -1111,7 +1111,7 @@ app.get("/api/cazuri", auth, asyncRoute(async (req, res) => {
   });
 }));
 
-app.post("/api/cazuri/deschide", auth, asyncRoute(async (req, res) => {
+app.post("/api/vip-shop/deschide", auth, asyncRoute(async (req, res) => {
   const { rows } = await pool.query(`SELECT game_identifier, game_identifier_name FROM users WHERE id = $1`, [req.user.sub]);
   const identifier = rows[0]?.game_identifier;
   if (!identifier) return res.status(400).json({ error: "Leagă-ți mai întâi contul de personajul din joc." });
@@ -1122,11 +1122,11 @@ app.post("/api/cazuri/deschide", auth, asyncRoute(async (req, res) => {
   const outcome = await postOpenCase({ identifier, playerName: rows[0].game_identifier_name, caseId });
   if (!outcome.ok) {
     const messages = {
-      coins_insuficienti: "Nu ai suficienți coins pentru acest caz.",
-      caz_necunoscut: "Cazul nu mai există.",
+      coins_insuficienti: "Nu ai suficienți coins pentru această recompensă.",
+      caz_necunoscut: "Recompensa nu mai există.",
       server_offline: "Serverul de joc nu răspunde momentan.",
     };
-    return res.status(400).json({ error: messages[outcome.error] || "Nu am putut deschide cazul." });
+    return res.status(400).json({ error: messages[outcome.error] || "Nu am putut deschide recompensa." });
   }
   res.json({ ok: true, ...outcome.result });
 }));

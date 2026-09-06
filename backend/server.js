@@ -436,11 +436,23 @@ app.get("/api/dev/db-sample", requireDevProxy, asyncRoute(async (req, res) => {
 // API-ului. Doar citire, nimic nu se schimbă în baza de date.
 app.get("/api/dev/kill-logs-debug", requireDevProxy, asyncRoute(async (req, res) => {
   const player = req.query.player ? String(req.query.player).slice(0, 64) : "";
+
+  // "raw=1" — ignora complet mortile/fereastra: ultimele N transferuri de
+  // item (implicit 20, orice jucator), FARA nicio conditie de timp (fara
+  // beforeAt/afterAt) — folosit ca sa izolam daca problema e STRICT in
+  // compararea de timp sau in altceva (ex: transferurile nici nu ajung sa
+  // fie citite deloc de "/logs" pentru categoria asta).
+  if (req.query.raw === "1") {
+    const rawLimit = Math.min(50, Math.max(1, Number(req.query.limit) || 20));
+    const r = await fetchGameLogs({ player, category: "item_transfer", pageSize: rawLimit });
+    return res.json({ online: r.online, transfersFound: r.logs.length, transfers: r.logs });
+  }
+
   const { online, logs: deaths, total } = await fetchGameLogs({
     player,
     category: "death",
     page: 1,
-    pageSize: 5,
+    pageSize: Math.min(50, Math.max(1, Number(req.query.deathsLimit) || 5)),
     withTotal: true,
   });
 

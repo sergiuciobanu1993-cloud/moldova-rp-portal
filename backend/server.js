@@ -545,10 +545,19 @@ async function fetchLuxuModeration({ player } = {}) {
 // folosit peste tot pe site — asta era motivul pentru care un jucător
 // online, cu vehicule afișate corect, putea totuși ieși fără casă/gașcă
 // găsită, chiar dacă avea).
-async function fetchAssets({ player, identifier } = {}) {
+async function fetchAssets({ player, identifier, rpName } = {}) {
   const qs = new URLSearchParams();
   if (player) qs.set("player", player);
   if (identifier) qs.set("identifier", identifier);
+  // Business-urile (pug_businesses) nu au identificator de proprietar —
+  // rămân căutate după nume în coloana "creator". Diagnostic (v1.26.2, cerut
+  // explicit după ce afacerile ieșeau mereu goale): valorile reale din
+  // "creator" (ex: "Jora", "Misa") sunt prenume/porecle de personaj RP, NU
+  // numele CFX de pe site (gen "BluntCat2951") — deci căutarea după numele
+  // CFX nu avea NICIODATĂ șansa să găsească ceva. Cand știm și numele de
+  // personaj RP (jucătorul online chiar acum, vezi buildPlayerProfile), îl
+  // trimitem separat, ca a doua variantă de căutare — vezi getBusinesses.
+  if (rpName) qs.set("rpName", rpName);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8000);
   try {
@@ -979,7 +988,7 @@ async function buildPlayerProfile(name) {
   // sigur pe casă/gașcă (owner/identificator), în loc de potrivire de nume
   // (owner_name/customnick — pot să nu semene deloc cu numele CFX). Fără el
   // (jucător offline), rămâne căutarea după nume, cu limitările știute.
-  const assetsResult = await fetchAssets({ player: cleanName, identifier: live?.license });
+  const assetsResult = await fetchAssets({ player: cleanName, identifier: live?.license, rpName: live?.serverName });
 
   const account = accountResult.rows[0] || null;
   let tickets = [];

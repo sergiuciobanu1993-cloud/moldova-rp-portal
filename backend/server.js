@@ -526,9 +526,17 @@ async function fetchLuxuModeration({ player } = {}) {
 // getHouses()/getBusinesses()/getGangs() în server.lua). La fel ca la
 // moderare: `player` opțional filtrează după numele proprietarului/porecla
 // din op-crime; fără el, vin listele nefiltrate pentru pagina Jucători.
-async function fetchAssets({ player } = {}) {
+// `identifier` e opțional — dat DOAR când știm deja identificatorul ESX
+// exact (jucătorul e online chiar acum, vezi buildPlayerProfile mai jos) —
+// atunci case+găști se potrivesc EXACT pe el (mult mai sigur decât numele:
+// owner_name/customnick din joc pot să nu semene deloc cu numele CFX
+// folosit peste tot pe site — asta era motivul pentru care un jucător
+// online, cu vehicule afișate corect, putea totuși ieși fără casă/gașcă
+// găsită, chiar dacă avea).
+async function fetchAssets({ player, identifier } = {}) {
   const qs = new URLSearchParams();
   if (player) qs.set("player", player);
+  if (identifier) qs.set("identifier", identifier);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8000);
   try {
@@ -917,7 +925,7 @@ async function buildPlayerProfile(name) {
   if (!cleanName) return null;
   const lower = cleanName.toLowerCase();
 
-  const [liveDetail, accountResult, punishmentResult, activityResult, staffActivity, deathsResult, moderationResult, assetsResult] = await Promise.all([
+  const [liveDetail, accountResult, punishmentResult, activityResult, staffActivity, deathsResult, moderationResult] = await Promise.all([
     getPlayersDetail(),
     pool.query(
       `SELECT p.id, p.game_id, p.display_name, p.playtime_minutes, p.status, p.created_at,
@@ -946,12 +954,19 @@ async function buildPlayerProfile(name) {
     fetchStaffLogs({ player: cleanName, limit: 25 }),
     fetchGameLogs({ category: "death", limit: 300 }),
     fetchLuxuModeration({ player: cleanName }),
-    fetchAssets({ player: cleanName }),
   ]);
 
   const live = liveDetail.online
     ? (liveDetail.players || []).find(p => (p.name || "").toLowerCase().trim() === lower) || null
     : null;
+
+  // Cerută separat, DUPĂ ce știm `live` — dacă jucătorul e online chiar
+  // acum, moldovarp-api ne-a dat deja identificatorul lui ESX exact (vezi
+  // /players), pe care îl trimitem mai departe la /assets pentru un match
+  // sigur pe casă/gașcă (owner/identificator), în loc de potrivire de nume
+  // (owner_name/customnick — pot să nu semene deloc cu numele CFX). Fără el
+  // (jucător offline), rămâne căutarea după nume, cu limitările știute.
+  const assetsResult = await fetchAssets({ player: cleanName, identifier: live?.identifier });
 
   const account = accountResult.rows[0] || null;
   let tickets = [];

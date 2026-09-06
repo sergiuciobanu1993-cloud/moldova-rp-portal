@@ -44,6 +44,16 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verify_expires TIMESTAMPTZ;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_password_code VARCHAR(10);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_password_expires TIMESTAMPTZ;
 
+-- Legătura cont de site <-> personaj din joc, pentru pagina "Cazuri" (coins).
+-- Site-ul se loghează cu Discord — nu are nicio legătură nativă, verificată,
+-- cu identifier-ul (licența) din joc. Populat DOAR prin comanda din joc
+-- "/leagacont" + codul de 6 cifre verificat de POST /api/cont/leaga-joc —
+-- niciodată introdus liber de utilizator (ar putea vedea/cheltui coins-urile
+-- altcuiva doar tastând un nume). game_identifier_name e strict informativ
+-- (afișat pe pagina de cont), NU folosit pentru nicio verificare de identitate.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS game_identifier VARCHAR(80);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS game_identifier_name VARCHAR(64);
+
 CREATE TABLE IF NOT EXISTS players (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID UNIQUE REFERENCES users(id) ON DELETE CASCADE,

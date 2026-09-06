@@ -546,6 +546,95 @@ async function fetchAssets({ player } = {}) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// "Cazuri" (coins) — jucătorul cheltuie coins-uri deja cumpărate (prin fluxul
+// care există deja în g-coin-shop: "Cumpără coins" -> Tebex -> "Enter TBX
+// Transaction ID" -> Claim, NEATINS de noi) pe un caz cu șansă. Recompensa se
+// ridică din joc cu "/recompense" — vezi comentariile din server.lua
+// (moldovarp-api) pentru toată logica și motivele deciziilor de siguranță.
+// ---------------------------------------------------------------------------
+
+// Verifică codul de 6 cifre generat de comanda din joc "/leagacont" — dacă e
+// valid, moldovarp-api ne dă identifier-ul (licența) real al jucătorului.
+// Codul se consumă la prima verificare reușită (nu poate fi refolosit).
+async function fetchLinkVerify(code) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const r = await fetch(`http://${FIVEM_ADDRESS}/moldovarp-api/link/verify?code=${encodeURIComponent(code)}`, {
+      headers: { "x-api-key": FIVEM_API_SECRET },
+      signal: controller.signal,
+    });
+    if (!r.ok) return { ok: false, error: r.status === 404 ? "cod_invalid" : "eroare" };
+    const body = await r.json();
+    return { ok: true, identifier: body.identifier, name: body.name };
+  } catch {
+    return { ok: false, error: "server_offline" };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function fetchCoins(identifier) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const r = await fetch(`http://${FIVEM_ADDRESS}/moldovarp-api/coins?identifier=${encodeURIComponent(identifier)}`, {
+      headers: { "x-api-key": FIVEM_API_SECRET },
+      signal: controller.signal,
+    });
+    if (!r.ok) throw new Error(`moldovarp-api HTTP ${r.status}`);
+    const body = await r.json();
+    return { online: true, coins: body.coins || 0, pending: body.pending || [] };
+  } catch {
+    return { online: false, coins: 0, pending: [] };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function fetchCasesList() {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const r = await fetch(`http://${FIVEM_ADDRESS}/moldovarp-api/cases`, {
+      headers: { "x-api-key": FIVEM_API_SECRET },
+      signal: controller.signal,
+    });
+    if (!r.ok) throw new Error(`moldovarp-api HTTP ${r.status}`);
+    const body = await r.json();
+    return { online: true, cases: body.cases || [] };
+  } catch {
+    return { online: false, cases: [] };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+// Deschide efectiv un caz — POST către moldovarp-api, care scade coins ATOMIC
+// și alege recompensa după șanse (vezi openCase() în server.lua). Se apelează
+// o singură dată per clic — orice retry din partea clientului ar trebui să
+// vină ca o cerere nouă, nu o repetare automată de aici.
+async function postOpenCase({ identifier, playerName, caseId }) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const r = await fetch(`http://${FIVEM_ADDRESS}/moldovarp-api/cases/open`, {
+      method: "POST",
+      headers: { "x-api-key": FIVEM_API_SECRET, "Content-Type": "application/json" },
+      body: JSON.stringify({ identifier, playerName, caseId }),
+      signal: controller.signal,
+    });
+    const body = await r.json().catch(() => ({}));
+    if (!r.ok) return { ok: false, error: body.error || "eroare" };
+    return { ok: true, result: body };
+  } catch {
+    return { ok: false, error: "server_offline" };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 // Acțiunile de staff (Luxu), sursa separata (Postgres) folosita atat pentru
 // categoria "admin" din Loguri cat si pentru corelarile best-effort de mai
 // jos (kill/revive/item de admin etc.) si pentru Kill Logs.
@@ -971,6 +1060,75 @@ app.get("/api/me/profile", auth, asyncRoute(async (req, res) => {
   if (!displayName) return res.json({ hasGameProfile: false });
   const profile = await buildPlayerProfile(displayName);
   res.json({ hasGameProfile: true, ...profile });
+}));
+
+// Leagă contul de site (Discord) de personajul din joc — jucătorul scrie
+// "/leagacont" în joc, primește un cod de 6 cifre valabil 5 minute, îl
+// introduce aici o singură dată. Verificat DIRECT de moldovarp-api (vezi
+// fetchLinkVerify) — site-ul nu are cum să inventeze o legătură validă fără
+// codul real generat în joc, deci nu se poate lega contul altcuiva.
+app.post("/api/cont/leaga-joc", auth, asyncRoute(async (req, res) => {
+  const code = String(req.body?.code || "").trim();
+  if (!/^\d{6}$/.test(code)) return res.status(400).json({ error: "Codul trebuie să aibă 6 cifre." });
+  const result = await fetchLinkVerify(code);
+  if (!result.ok) {
+    const messages = {
+      cod_invalid: "Cod invalid sau deja folosit.",
+      server_offline: "Serverul de joc nu răspunde momentan — încearcă din nou puțin mai târziu.",
+      eroare: "Nu am putut verifica codul.",
+    };
+    return res.status(400).json({ error: messages[result.error] || messages.eroare });
+  }
+  await pool.query(
+    `UPDATE users SET game_identifier = $1, game_identifier_name = $2 WHERE id = $3`,
+    [result.identifier, result.name || null, req.user.sub]
+  );
+  res.json({ ok: true, name: result.name || null });
+}));
+
+app.post("/api/cont/dezleaga-joc", auth, asyncRoute(async (req, res) => {
+  await pool.query(`UPDATE users SET game_identifier = NULL, game_identifier_name = NULL WHERE id = $1`, [req.user.sub]);
+  res.json({ ok: true });
+}));
+
+// Pagina "Cazuri" — soldul de coins + recompensele "în așteptare" + lista
+// cazurilor disponibile cu șansele afișate transparent. Fără cont legat de
+// joc, răspundem "linked: false" (nu e o eroare — jucătorul doar nu a
+// parcurs încă pasul de legare).
+app.get("/api/cazuri", auth, asyncRoute(async (req, res) => {
+  const { rows } = await pool.query(`SELECT game_identifier, game_identifier_name FROM users WHERE id = $1`, [req.user.sub]);
+  const identifier = rows[0]?.game_identifier;
+  if (!identifier) return res.json({ linked: false });
+
+  const [coinsResult, casesResult] = await Promise.all([fetchCoins(identifier), fetchCasesList()]);
+  res.json({
+    linked: true,
+    name: rows[0].game_identifier_name,
+    online: coinsResult.online && casesResult.online,
+    coins: coinsResult.coins,
+    pending: coinsResult.pending,
+    cases: casesResult.cases,
+  });
+}));
+
+app.post("/api/cazuri/deschide", auth, asyncRoute(async (req, res) => {
+  const { rows } = await pool.query(`SELECT game_identifier, game_identifier_name FROM users WHERE id = $1`, [req.user.sub]);
+  const identifier = rows[0]?.game_identifier;
+  if (!identifier) return res.status(400).json({ error: "Leagă-ți mai întâi contul de personajul din joc." });
+
+  const caseId = String(req.body?.caseId || "").trim();
+  if (!caseId) return res.status(400).json({ error: "Lipsește caseId." });
+
+  const outcome = await postOpenCase({ identifier, playerName: rows[0].game_identifier_name, caseId });
+  if (!outcome.ok) {
+    const messages = {
+      coins_insuficienti: "Nu ai suficienți coins pentru acest caz.",
+      caz_necunoscut: "Cazul nu mai există.",
+      server_offline: "Serverul de joc nu răspunde momentan.",
+    };
+    return res.status(400).json({ error: messages[outcome.error] || "Nu am putut deschide cazul." });
+  }
+  res.json({ ok: true, ...outcome.result });
 }));
 
 // Webhook primit direct de la Luxu Admin (panoul lor cloud, tab "Webhooks"),

@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cazuri — Moldova RP</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="dashboard.css"></head>
+<body>
+<header><a class="brand" href="index.html"><img src="assets/logo.png" alt="">MOLDOVA<span>RP</span></a><nav id="dash-nav"><a href="index.html">Acasă</a><a href="dashboard.html">Dashboard</a><a href="tichete.html">Tichete</a><a href="cazuri.html" style="color:var(--orange)">Cazuri</a></nav><button class="menu-toggle" id="dash-menu-toggle" type="button" aria-label="Deschide meniul" aria-expanded="false">☰</button><a class="logout" href="login.html" id="logout-link">Deconectare</a></header>
+<main>
+<section class="welcome"><div><p>MAGAZIN COINS</p><h1>Cazuri</h1><small>Cheltuiește coins-urile deja cumpărate pe un caz cu șansă — recompensa se ridică din joc.</small></div></section>
+
+<p class="muted" style="margin:18px 0 24px">
+  Coins-urile se cumpără exact ca până acum: din joc, apasă <strong>„Cumpără coins"</strong> în meniul VIP, plătește pe Tebex,
+  apoi introdu ID-ul tranzacției acolo ca să-ți fie creditate. Pagina asta doar arată soldul și îți lasă să-l cheltui pe un caz —
+  nu schimbă nimic la cumpărarea coins-urilor în sine.
+</p>
+
+<section class="panel" id="link-panel">
+  <div class="head"><h2>Contul meu de joc</h2><span id="link-status" class="muted">Se încarcă…</span></div>
+  <div id="link-body"><p class="muted" style="margin:0">Se încarcă…</p></div>
+</section>
+
+<section class="panel" id="pending-panel" style="margin-top:20px" hidden>
+  <div class="head"><h2>🎁 Recompense în așteptare</h2><span class="muted">Ridică-le din joc</span></div>
+  <div id="pending-body"></div>
+</section>
+
+<section class="panel" id="cases-panel" style="margin-top:20px" hidden>
+  <div class="head"><h2>Cazuri disponibile</h2><span id="coins-balance" class="pill info">— coins</span></div>
+  <p class="muted" id="cases-offline-note" style="margin:0 0 14px" hidden>Serverul de joc nu răspunde momentan — cazurile nu pot fi deschise chiar acum.</p>
+  <div id="cases-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px"></div>
+</section>
+
+<div id="reveal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:50;align-items:center;justify-content:center">
+  <div class="panel" style="max-width:360px;width:90%;text-align:center;padding:32px 24px">
+    <div id="reveal-spin" style="font-size:48px;margin:0 0 16px;transition:transform .15s"></div>
+    <h2 id="reveal-title" style="margin:0 0 8px">Se deschide…</h2>
+    <p id="reveal-text" class="muted" style="margin:0 0 20px"></p>
+    <button type="button" class="btn-primary" id="reveal-close" hidden>Am înțeles</button>
+  </div>
+</div>
+
+</main>
+<script src="auth-client.js"></script>
+<script>
+const escapeHtml = s => (s ?? '').toString()
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+function fmtDate(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+const REWARD_ICON = { cash: '💵', item: '🎒', vehicle: '🚗' };
+
+function renderLinkPanel(data) {
+  const statusEl = document.getElementById('link-status');
+  const bodyEl = document.getElementById('link-body');
+  if (!data.linked) {
+    statusEl.textContent = 'Cont nelegat';
+    bodyEl.innerHTML = `
+      <p class="muted" style="margin:0 0 14px">
+        Ca să nu poată nimeni să vadă sau să cheltuiască coins-urile altcuiva, contul de site trebuie legat o singură dată de
+        personajul tău din joc. Scrie în chat, în joc: <code>/leagacont</code> — primești un cod de 6 cifre, valabil 5 minute.
+        Introdu-l mai jos.
+      </p>
+      <form id="link-form" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+        <div><label style="display:block;font-size:11px;color:var(--muted);margin-bottom:4px">Cod (6 cifre)</label>
+          <input id="link-code-input" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code" class="filter-select" style="letter-spacing:4px;font-size:18px;width:120px"></div>
+        <button type="submit" class="btn-primary">Leagă contul</button>
+      </form>
+      <p id="link-msg" class="muted" style="margin:10px 0 0" hidden></p>`;
+    document.getElementById('link-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const msgEl = document.getElementById('link-msg');
+      const code = document.getElementById('link-code-input').value.trim();
+      msgEl.hidden = false;
+      msgEl.textContent = 'Se verifică…';
+      try {
+        const res = await apiFetch('/api/cont/leaga-joc', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code }) });
+        const d = await res.json();
+        if (!res.ok) { msgEl.textContent = d.error || 'Cod invalid.'; return; }
+        await loadAll();
+      } catch { msgEl.textContent = 'Eroare de rețea.'; }
+    });
+    return;
+  }
+  statusEl.textContent = 'Cont legat';
+  bodyEl.innerHTML = `
+    <p style="margin:0 0 10px">Personaj legat: <strong>${escapeHtml(data.name || 'necunoscut')}</strong></p>
+    <button type="button" class="btn-ghost" id="unlink-btn">Dezleagă contul</button>`;
+  document.getElementById('unlink-btn').addEventListener('click', async () => {
+    if (!confirm('Sigur dezlegi contul de personajul din joc?')) return;
+    await apiFetch('/api/cont/dezleaga-joc', { method: 'POST' });
+    await loadAll();
+  });
+}
+
+function renderPending(pending) {
+  const panel = document.getElementById('pending-panel');
+  const body = document.getElementById('pending-body');
+  if (!pending || !pending.length) { panel.hidden = true; return; }
+  panel.hidden = false;
+  body.innerHTML = `
+    <p class="muted" style="margin:0 0 12px">Intră pe server și scrie <code>/recompense</code> ca să le ridici.</p>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      ${pending.map(p => `
+        <div style="display:flex;justify-content:space-between;gap:10px;padding:10px 14px;background:rgba(255,255,255,.04);border-radius:8px">
+          <span>${REWARD_ICON[p.reward_type] || '🎁'} <strong>${escapeHtml(p.reward_label || p.reward_type)}</strong> <span class="muted">(${escapeHtml(p.case_name || '')})</span></span>
+          <span class="muted">${fmtDate(p.created_at)}</span>
+        </div>`).join('')}
+    </div>`;
+}
+
+let currentCoins = 0;
+
+function renderCases(cases, coins) {
+  const panel = document.getElementById('cases-panel');
+  panel.hidden = false;
+  document.getElementById('coins-balance').textContent = `🪙 ${coins} coins`;
+  const grid = document.getElementById('cases-grid');
+  grid.innerHTML = cases.map(c => `
+    <div class="panel" style="padding:18px">
+      <h3 style="margin:0 0 4px">${escapeHtml(c.name)}</h3>
+      <p class="pill warn" style="margin:0 0 12px">🪙 ${c.price} coins</p>
+      <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:14px">
+        ${c.pool.map(r => `
+          <div style="display:flex;justify-content:space-between;font-size:12px">
+            <span class="muted">${REWARD_ICON[r.type] || '🎁'} ${escapeHtml(r.label)}</span>
+            <span class="muted">${r.chancePercent}%</span>
+          </div>`).join('')}
+      </div>
+      <button type="button" class="btn-primary" data-case="${escapeHtml(c.id)}" data-price="${c.price}" style="width:100%" ${coins < c.price ? 'disabled' : ''}>
+        ${coins < c.price ? 'Coins insuficienți' : 'Deschide'}
+      </button>
+    </div>`).join('');
+  grid.querySelectorAll('button[data-case]').forEach(btn => {
+    btn.addEventListener('click', () => openCase(btn.dataset.case));
+  });
+}
+
+async function openCase(caseId) {
+  const overlay = document.getElementById('reveal-overlay');
+  const spin = document.getElementById('reveal-spin');
+  const title = document.getElementById('reveal-title');
+  const text = document.getElementById('reveal-text');
+  const closeBtn = document.getElementById('reveal-close');
+
+  overlay.style.display = 'flex';
+  spin.textContent = '🎁';
+  title.textContent = 'Se deschide…';
+  text.textContent = '';
+  closeBtn.hidden = true;
+
+  // Animație simplă de "învârtire" cât timp așteptăm răspunsul serverului —
+  // nu simulează rezultatul (recompensa e deja decisă de server în momentul
+  // cererii), doar dă senzația de suspans în timp ce așteptăm răspunsul.
+  const icons = ['🎁', '💵', '🎒', '🚗', '🪙'];
+  let i = 0;
+  const spinTimer = setInterval(() => { spin.textContent = icons[i % icons.length]; i++; }, 120);
+
+  try {
+    const res = await apiFetch('/api/cazuri/deschide', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ caseId }) });
+    const d = await res.json();
+    clearInterval(spinTimer);
+    if (!res.ok) {
+      spin.textContent = '⚠';
+      title.textContent = 'Nu am putut deschide cazul';
+      text.textContent = d.error || 'Eroare necunoscută.';
+      closeBtn.hidden = false;
+      return;
+    }
+    spin.textContent = REWARD_ICON[d.reward.type] || '🎁';
+    title.textContent = 'Felicitări!';
+    text.textContent = `Ai câștigat: ${d.reward.label}. Intră pe server și scrie /recompense ca să-l ridici.`;
+    closeBtn.hidden = false;
+    await loadAll();
+  } catch {
+    clearInterval(spinTimer);
+    spin.textContent = '⚠';
+    title.textContent = 'Eroare de rețea';
+    text.textContent = 'Încearcă din nou.';
+    closeBtn.hidden = false;
+  }
+}
+
+document.getElementById('reveal-close').addEventListener('click', () => {
+  document.getElementById('reveal-overlay').style.display = 'none';
+});
+
+async function loadAll() {
+  try {
+    const res = await apiFetch('/api/cazuri');
+    if (!res.ok) throw new Error();
+    const d = await res.json();
+    renderLinkPanel(d);
+    if (!d.linked) {
+      document.getElementById('pending-panel').hidden = true;
+      document.getElementById('cases-panel').hidden = true;
+      return;
+    }
+    document.getElementById('cases-offline-note').hidden = d.online !== false;
+    renderPending(d.pending);
+    currentCoins = d.coins || 0;
+    renderCases(d.cases || [], currentCoins);
+  } catch {
+    document.getElementById('link-body').innerHTML = '<p class="muted" style="margin:0">Nu am putut încărca pagina.</p>';
+  }
+}
+
+(async () => {
+  if (!requireAuth()) return;
+  await loadAll();
+})();
+</script>
+</body></html>

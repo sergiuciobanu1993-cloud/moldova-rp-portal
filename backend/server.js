@@ -427,6 +427,42 @@ app.get("/api/dev/db-sample", requireDevProxy, asyncRoute(async (req, res) => {
   res.status(r.status).type(r.contentType).send(r.body);
 }));
 
+// Diagnostic pentru "Jaf după moarte" (v1.26.5b) — reface EXACT logica din
+// /api/admin/kill-logs (vezi mai jos), dar fără autentificare de admin (gate
+// pe DEV_PROXY_SECRET, ca toate rutele /api/dev/*) și cu informații
+// suplimentare expuse direct (fereastra de timp calculată, câte transferuri
+// s-au găsit în ea, lista lor brută) — ca să nu mai depindem de un staff care
+// deschide manual Network tab din browser ca să ne dea răspunsul brut al
+// API-ului. Doar citire, nimic nu se schimbă în baza de date.
+app.get("/api/dev/kill-logs-debug", requireDevProxy, asyncRoute(async (req, res) => {
+  const player = req.query.player ? String(req.query.player).slice(0, 64) : "";
+  const { online, logs: deaths, total } = await fetchGameLogs({
+    player,
+    category: "death",
+    page: 1,
+    pageSize: 5,
+    withTotal: true,
+  });
+
+  let transfers = [];
+  let windowInfo = null;
+  if (deaths.length) {
+    const times = deaths.map(d => new Date(d.at).getTime());
+    const oldest = new Date(Math.min(...times));
+    const newest = new Date(Math.max(...times) + 3 * 60 * 1000);
+    windowInfo = {
+      oldestIso: oldest.toISOString(),
+      newestIso: newest.toISOString(),
+      oldestMs: oldest.getTime(),
+      newestMs: newest.getTime(),
+    };
+    const r = await fetchGameLogs({ player: "", category: "item_transfer", after: oldest, before: newest, pageSize: 500 });
+    transfers = r.logs;
+  }
+
+  res.json({ online, deathsTotal: total, deaths, window: windowInfo, transfersFound: transfers.length, transfers });
+}));
+
 app.get("/api/admin/live/jobs", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
   const force = req.query.force === "1";
   const age = Date.now() - jobsCache.fetchedAt;

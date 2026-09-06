@@ -11,9 +11,11 @@
   nu schimbă nimic la cumpărarea coins-urilor în sine.
 </p>
 
-<section class="panel" id="link-panel">
-  <div class="head"><h2>Contul meu de joc</h2><span id="link-status" class="muted">Se încarcă…</span></div>
-  <div id="link-body"><p class="muted" style="margin:0">Se încarcă…</p></div>
+<section class="panel" id="cases-panel" hidden>
+  <div class="head"><h2>Recompense disponibile</h2><span id="coins-balance" class="pill info">— coins</span></div>
+  <p class="muted" id="account-line" style="margin:0 0 14px"></p>
+  <p class="muted" id="cases-offline-note" style="margin:0 0 14px" hidden>Serverul de joc nu răspunde momentan — recompensele nu pot fi deschise chiar acum.</p>
+  <div id="cases-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px"></div>
 </section>
 
 <section class="panel" id="pending-panel" style="margin-top:20px" hidden>
@@ -21,11 +23,23 @@
   <div id="pending-body"></div>
 </section>
 
-<section class="panel" id="cases-panel" style="margin-top:20px" hidden>
-  <div class="head"><h2>Recompense disponibile</h2><span id="coins-balance" class="pill info">— coins</span></div>
-  <p class="muted" id="cases-offline-note" style="margin:0 0 14px" hidden>Serverul de joc nu răspunde momentan — recompensele nu pot fi deschise chiar acum.</p>
-  <div id="cases-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px"></div>
-</section>
+<div id="link-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:50;align-items:center;justify-content:center">
+  <div class="panel" style="max-width:420px;width:90%;padding:28px 24px">
+    <h2 style="margin:0 0 10px">Leagă-ți contul de personajul din joc</h2>
+    <p class="muted" style="margin:0 0 14px">
+      Ca să nu poată nimeni să vadă sau să cheltuiască coins-urile altcuiva, contul de site trebuie legat o singură dată de
+      personajul tău din joc. Scrie în chat, în joc: <code>/leagacont</code> — primești un cod de 6 cifre, valabil 5 minute.
+      Introdu-l mai jos.
+    </p>
+    <form id="link-form" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+      <div><label style="display:block;font-size:11px;color:var(--muted);margin-bottom:4px">Cod (6 cifre)</label>
+        <input id="link-code-input" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code" class="filter-select" style="letter-spacing:4px;font-size:18px;width:120px"></div>
+      <button type="submit" class="btn-primary">Leagă contul</button>
+      <button type="button" class="btn-ghost" id="link-overlay-cancel">Anulează</button>
+    </form>
+    <p id="link-msg" class="muted" style="margin:10px 0 0" hidden></p>
+  </div>
+</div>
 
 <div id="reveal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:50;align-items:center;justify-content:center">
   <div class="panel" style="max-width:360px;width:90%;text-align:center;padding:32px 24px">
@@ -49,47 +63,59 @@ function fmtDate(iso) {
 
 const REWARD_ICON = { cash: '💵', item: '🎒', vehicle: '🚗' };
 
-function renderLinkPanel(data) {
-  const statusEl = document.getElementById('link-status');
-  const bodyEl = document.getElementById('link-body');
-  if (!data.linked) {
-    statusEl.textContent = 'Cont nelegat';
-    bodyEl.innerHTML = `
-      <p class="muted" style="margin:0 0 14px">
-        Ca să nu poată nimeni să vadă sau să cheltuiască coins-urile altcuiva, contul de site trebuie legat o singură dată de
-        personajul tău din joc. Scrie în chat, în joc: <code>/leagacont</code> — primești un cod de 6 cifre, valabil 5 minute.
-        Introdu-l mai jos.
-      </p>
-      <form id="link-form" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
-        <div><label style="display:block;font-size:11px;color:var(--muted);margin-bottom:4px">Cod (6 cifre)</label>
-          <input id="link-code-input" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code" class="filter-select" style="letter-spacing:4px;font-size:18px;width:120px"></div>
-        <button type="submit" class="btn-primary">Leagă contul</button>
-      </form>
-      <p id="link-msg" class="muted" style="margin:10px 0 0" hidden></p>`;
-    document.getElementById('link-form').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const msgEl = document.getElementById('link-msg');
-      const code = document.getElementById('link-code-input').value.trim();
-      msgEl.hidden = false;
-      msgEl.textContent = 'Se verifică…';
-      try {
-        const res = await apiFetch('/api/cont/leaga-joc', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code }) });
-        const d = await res.json();
-        if (!res.ok) { msgEl.textContent = d.error || 'Cod invalid.'; return; }
-        await loadAll();
-      } catch { msgEl.textContent = 'Eroare de rețea.'; }
-    });
-    return;
-  }
-  statusEl.textContent = 'Cont legat';
-  bodyEl.innerHTML = `
-    <p style="margin:0 0 10px">Personaj legat: <strong>${escapeHtml(data.name || 'necunoscut')}</strong></p>
-    <button type="button" class="btn-ghost" id="unlink-btn">Dezleagă contul</button>`;
-  document.getElementById('unlink-btn').addEventListener('click', async () => {
-    if (!confirm('Sigur dezlegi contul de personajul din joc?')) return;
-    await apiFetch('/api/cont/dezleaga-joc', { method: 'POST' });
+// Codul de legare poate fi cerut din două locuri: linkul "leagă-ți contul" de
+// sub sold, sau direct din clicul pe o cutie cât timp contul nu e legat încă.
+// Ținem minte care caz a fost apăsat ca să-l deschidem automat imediat după
+// ce legarea reușește, fără ca jucătorul să mai dea click o dată.
+let pendingCaseAfterLink = null;
+
+function openLinkOverlay(caseId) {
+  pendingCaseAfterLink = caseId || null;
+  document.getElementById('link-msg').hidden = true;
+  document.getElementById('link-code-input').value = '';
+  document.getElementById('link-overlay').style.display = 'flex';
+  document.getElementById('link-code-input').focus();
+}
+function closeLinkOverlay() {
+  document.getElementById('link-overlay').style.display = 'none';
+  pendingCaseAfterLink = null;
+}
+document.getElementById('link-overlay-cancel').addEventListener('click', closeLinkOverlay);
+document.getElementById('link-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const msgEl = document.getElementById('link-msg');
+  const code = document.getElementById('link-code-input').value.trim();
+  msgEl.hidden = false;
+  msgEl.textContent = 'Se verifică…';
+  try {
+    const res = await apiFetch('/api/cont/leaga-joc', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code }) });
+    const d = await res.json();
+    if (!res.ok) { msgEl.textContent = d.error || 'Cod invalid.'; return; }
+    const caseToOpen = pendingCaseAfterLink;
+    pendingCaseAfterLink = null;
+    document.getElementById('link-overlay').style.display = 'none';
     await loadAll();
-  });
+    if (caseToOpen) {
+      const c = currentCasesById[caseToOpen];
+      if (c && currentCoins >= c.price) openCase(caseToOpen);
+    }
+  } catch { msgEl.textContent = 'Eroare de rețea.'; }
+});
+
+function renderAccountLine(data) {
+  const el = document.getElementById('account-line');
+  if (data.linked) {
+    el.innerHTML = `Personaj legat: <strong>${escapeHtml(data.name || 'necunoscut')}</strong> · <a href="#" id="unlink-link">Dezleagă contul</a>`;
+    document.getElementById('unlink-link').addEventListener('click', async (e) => {
+      e.preventDefault();
+      if (!confirm('Sigur dezlegi contul de personajul din joc?')) return;
+      await apiFetch('/api/cont/dezleaga-joc', { method: 'POST' });
+      await loadAll();
+    });
+  } else {
+    el.innerHTML = `Cont nelegat de personajul din joc — <a href="#" id="link-link">leagă-l acum</a> (sau apasă direct „Deschide" pe o recompensă).`;
+    document.getElementById('link-link').addEventListener('click', (e) => { e.preventDefault(); openLinkOverlay(null); });
+  }
 }
 
 function renderPending(pending) {
@@ -109,13 +135,21 @@ function renderPending(pending) {
 }
 
 let currentCoins = 0;
+let currentCasesById = {};
 
-function renderCases(cases, coins) {
+function renderCases(cases, coins, linked) {
   const panel = document.getElementById('cases-panel');
   panel.hidden = false;
-  document.getElementById('coins-balance').textContent = `🪙 ${coins} coins`;
+  document.getElementById('coins-balance').textContent = linked ? `🪙 ${coins} coins` : '🪙 — coins';
+  currentCasesById = {};
+  cases.forEach(c => { currentCasesById[c.id] = c; });
   const grid = document.getElementById('cases-grid');
-  grid.innerHTML = cases.map(c => `
+  grid.innerHTML = cases.map(c => {
+    const canAfford = linked && coins >= c.price;
+    let label = 'Deschide';
+    if (!linked) label = 'Deschide';
+    else if (!canAfford) label = 'Coins insuficienți';
+    return `
     <div class="panel" style="padding:18px">
       <h3 style="margin:0 0 4px">${escapeHtml(c.name)}</h3>
       <p class="pill warn" style="margin:0 0 12px">🪙 ${c.price} coins</p>
@@ -126,12 +160,17 @@ function renderCases(cases, coins) {
             <span class="muted">${r.chancePercent}%</span>
           </div>`).join('')}
       </div>
-      <button type="button" class="btn-primary" data-case="${escapeHtml(c.id)}" data-price="${c.price}" style="width:100%" ${coins < c.price ? 'disabled' : ''}>
-        ${coins < c.price ? 'Coins insuficienți' : 'Deschide'}
+      <button type="button" class="btn-primary" data-case="${escapeHtml(c.id)}" style="width:100%" ${(linked && !canAfford) ? 'disabled' : ''}>
+        ${label}
       </button>
-    </div>`).join('');
+    </div>`;
+  }).join('');
   grid.querySelectorAll('button[data-case]').forEach(btn => {
-    btn.addEventListener('click', () => openCase(btn.dataset.case));
+    btn.addEventListener('click', () => {
+      const caseId = btn.dataset.case;
+      if (!linked) { openLinkOverlay(caseId); return; }
+      openCase(caseId);
+    });
   });
 }
 
@@ -189,18 +228,14 @@ async function loadAll() {
     const res = await apiFetch('/api/vip-shop');
     if (!res.ok) throw new Error();
     const d = await res.json();
-    renderLinkPanel(d);
-    if (!d.linked) {
-      document.getElementById('pending-panel').hidden = true;
-      document.getElementById('cases-panel').hidden = true;
-      return;
-    }
     document.getElementById('cases-offline-note').hidden = d.online !== false;
-    renderPending(d.pending);
-    currentCoins = d.coins || 0;
-    renderCases(d.cases || [], currentCoins);
+    renderAccountLine(d);
+    currentCoins = d.linked ? (d.coins || 0) : 0;
+    renderCases(d.cases || [], currentCoins, !!d.linked);
+    renderPending(d.linked ? d.pending : []);
   } catch {
-    document.getElementById('link-body').innerHTML = '<p class="muted" style="margin:0">Nu am putut încărca pagina.</p>';
+    document.getElementById('cases-panel').hidden = false;
+    document.getElementById('account-line').innerHTML = '<span class="muted">Nu am putut încărca pagina. Încearcă din nou mai târziu.</span>';
   }
 }
 

@@ -1091,14 +1091,20 @@ app.post("/api/cont/dezleaga-joc", auth, asyncRoute(async (req, res) => {
   res.json({ ok: true });
 }));
 
-// Pagina "VIP Shop" — soldul de coins + recompensele "în așteptare" + lista
-// recompenselor disponibile cu șansele afișate transparent. Fără cont legat de
-// joc, răspundem "linked: false" (nu e o eroare — jucătorul doar nu a
-// parcurs încă pasul de legare).
+// Pagina "VIP Shop" — lista recompenselor (cu prețuri și șanse) e publică
+// pentru orice cont logat, ca jucătorii să vadă din prima ce oferim, fără să
+// fie nevoiți să lege contul mai întâi. Soldul de coins și recompensele "în
+// așteptare" necesită cont legat de joc — fără el răspundem "linked: false"
+// și lăsăm frontend-ul să ceară legarea abia când chiar încearcă să deschidă
+// o cutie (nu e o eroare, doar jucătorul nu a parcurs încă acel pas).
 app.get("/api/vip-shop", auth, asyncRoute(async (req, res) => {
   const { rows } = await pool.query(`SELECT game_identifier, game_identifier_name FROM users WHERE id = $1`, [req.user.sub]);
   const identifier = rows[0]?.game_identifier;
-  if (!identifier) return res.json({ linked: false });
+
+  if (!identifier) {
+    const casesResult = await fetchCasesList();
+    return res.json({ linked: false, online: casesResult.online, cases: casesResult.cases });
+  }
 
   const [coinsResult, casesResult] = await Promise.all([fetchCoins(identifier), fetchCasesList()]);
   res.json({

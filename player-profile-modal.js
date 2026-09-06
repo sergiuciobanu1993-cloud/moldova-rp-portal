@@ -138,14 +138,19 @@ window.openPlayerProfile = (function () {
     // sus, cu identificator real de proprietar, deci match exact (nu ghicit
     // după nume) — dar disponibil DOAR cât jucătorul e online (identificatorul
     // exact vine din /players, nu din nimic ce putem căuta offline).
+    function coordText(coord) {
+      if (!coord) return '<span class="muted">—</span>';
+      return `<code>${coord.x.toFixed(1)}, ${coord.y.toFixed(1)}, ${coord.z.toFixed(1)}</code>`;
+    }
     function stationsHtml(list, emptyText) {
       if (!list || !list.length) return `<p class="muted" style="margin:0 0 14px">${emptyText}</p>`;
       const rows = list.map(s => `
         <tr>
           <td>${s.name ? escapeHtml(s.name) : `<span class="muted">${escapeHtml(s.stationId || '—')}</span>`}</td>
+          <td>${coordText(s.coord)}</td>
           <td><span class="pill ${s.role === 'proprietar' ? 'warn' : 'off'}">${s.role === 'proprietar' ? 'PROPRIETAR' : 'ANGAJAT'}</span></td>
         </tr>`).join('');
-      return `<table><thead><tr><th>LOCAȚIE</th><th>ROL</th></tr></thead><tbody>${rows}</tbody></table>`;
+      return `<table><thead><tr><th>NUME</th><th>COORDONATE</th><th>ROL</th></tr></thead><tbody>${rows}</tbody></table>`;
     }
     const gasStationsHtml = stationsHtml(p.gasStations, 'Nicio benzinărie (doar cât jucătorul e online — vezi pagina Jucători pentru lista completă).');
     const storesHtml = stationsHtml(p.stores, 'Niciun magazin (doar cât jucătorul e online — vezi pagina Jucători pentru lista completă).');

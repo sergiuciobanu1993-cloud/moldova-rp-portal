@@ -629,9 +629,23 @@ async function fetchAssets({ player, identifier, rpName } = {}) {
     });
     if (!r.ok) throw new Error(`moldovarp-api HTTP ${r.status}`);
     const body = await r.json();
-    return { online: true, houses: body.houses || [], businesses: body.businesses || [], gangs: body.gangs || [] };
+    return {
+      online: true,
+      houses: body.houses || [],
+      businesses: body.businesses || [],
+      // gasStations/stores (v1.27.0) — sisteme SEPARATE de pug_businesses,
+      // descoperite după ce un jucător cu benzinărie confirmată tot ieșea cu
+      // "niciun business găsit": pug_businesses are doar 3 rânduri în toată
+      // baza de date, niciuna benzinărie. gas_station_business/store_business
+      // au "user_id" = identificatorul ESX exact — match sigur, nu ghicit
+      // după nume, ca la getBusinesses. Vezi getGasStations/getStores în
+      // server.lua.
+      gasStations: body.gasStations || [],
+      stores: body.stores || [],
+      gangs: body.gangs || [],
+    };
   } catch {
-    return { online: false, houses: [], businesses: [], gangs: [] };
+    return { online: false, houses: [], businesses: [], gasStations: [], stores: [], gangs: [] };
   } finally {
     clearTimeout(timeout);
   }
@@ -1099,6 +1113,11 @@ async function buildPlayerProfile(name) {
   // acelei potriviri).
   const houses = assetsResult.online ? assetsResult.houses : [];
   const businesses = assetsResult.online ? assetsResult.businesses : [];
+  // gasStations/stores (v1.27.0) — vezi comentariul din fetchAssets. Match
+  // exact pe identificator, deci doar pentru jucătorul ONLINE chiar acum
+  // (fără identificator exact, resursa nu are cum să caute în aceste tabele).
+  const gasStations = assetsResult.online ? assetsResult.gasStations : [];
+  const stores = assetsResult.online ? assetsResult.stores : [];
   const gang = assetsResult.online ? (assetsResult.gangs[0] || null) : null;
 
   const lastKnown = (!live && account && account.last_synced_at) ? {
@@ -1132,6 +1151,8 @@ async function buildPlayerProfile(name) {
     moderation,
     houses,
     businesses,
+    gasStations,
+    stores,
     gang,
     tickets,
     recentActivity,

@@ -57,6 +57,29 @@
 
 <section class="tablebox" style="margin-top:18px">
   <div class="title">
+    <h2>Benzinării</h2>
+  </div>
+  <p class="muted" style="margin:0 22px 16px">
+    Sistem separat de „Business-uri" de mai sus (descoperit ulterior) — are un identificator real de proprietar
+    (<code>user_id</code>), deci pe profilul unui jucător online potrivirea e exactă, nu ghicită după nume.
+  </p>
+  <table><thead><tr><th>STAȚIE</th><th>NUME</th><th>PROPRIETAR (identificator)</th></tr></thead>
+  <tbody id="gas-stations-body"><tr><td colspan="3">Se încarcă…</td></tr></tbody></table>
+</section>
+
+<section class="tablebox" style="margin-top:18px">
+  <div class="title">
+    <h2>Magazine</h2>
+  </div>
+  <p class="muted" style="margin:0 22px 16px">
+    La fel ca benzinăriile — sistem separat, cu identificator real de proprietar.
+  </p>
+  <table><thead><tr><th>MAGAZIN</th><th>NUME</th><th>PROPRIETAR (identificator)</th></tr></thead>
+  <tbody id="stores-body"><tr><td colspan="3">Se încarcă…</td></tr></tbody></table>
+</section>
+
+<section class="tablebox" style="margin-top:18px">
+  <div class="title">
     <h2>Găști (op-crime)</h2>
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
       <input id="f-gang-nick" class="filter-select" placeholder="Filtrează după poreclă..." autocomplete="off" style="min-width:180px">
@@ -239,22 +262,46 @@ async function loadHouses() {
   }
 }
 
+// Benzinăriile și magazinele vin din același endpoint ca business-urile
+// (fetchAssets pe backend le întoarce pe toate trei odată) — o singură
+// cerere, trei tabele populate.
 async function loadBusinesses() {
   const tbody = document.getElementById('businesses-body');
   const offlineNote = document.getElementById('businesses-offline-note');
+  const gasBody = document.getElementById('gas-stations-body');
+  const storesBody = document.getElementById('stores-body');
   try {
     const res = await apiFetch('/api/admin/live/assets');
     if (!res.ok) throw new Error();
     const d = await res.json();
     offlineNote.hidden = d.online !== false;
+
     const businesses = d.businesses || [];
     tbody.innerHTML = businesses.length ? businesses.map(b => `
       <tr>
         <td>${escapeHtml(b.jobLabel || b.job || '—')}</td>
         <td>${b.creator ? escapeHtml(b.creator) : '<span class="muted">necunoscut</span>'}</td>
       </tr>`).join('') : '<tr><td colspan="2">Niciun business găsit.</td></tr>';
+
+    const gasStations = d.gasStations || [];
+    gasBody.innerHTML = gasStations.length ? gasStations.map(g => `
+      <tr>
+        <td>${escapeHtml(g.stationId || '—')}</td>
+        <td>${g.name ? escapeHtml(g.name) : '<span class="muted">fără nume</span>'}</td>
+        <td>${g.ownerIdentifier ? `<code>${escapeHtml(g.ownerIdentifier)}</code>` : '<span class="muted">—</span>'}</td>
+      </tr>`).join('') : '<tr><td colspan="3">Nicio benzinărie găsită.</td></tr>';
+
+    const stores = d.stores || [];
+    storesBody.innerHTML = stores.length ? stores.map(s => `
+      <tr>
+        <td>${escapeHtml(s.stationId || '—')}</td>
+        <td>${s.name ? escapeHtml(s.name) : '<span class="muted">fără nume</span>'}</td>
+        <td>${s.ownerIdentifier ? `<code>${escapeHtml(s.ownerIdentifier)}</code>` : '<span class="muted">—</span>'}</td>
+      </tr>`).join('') : '<tr><td colspan="3">Niciun magazin găsit.</td></tr>';
   } catch {
     tbody.innerHTML = '<tr><td colspan="2">Nu am putut încărca business-urile.</td></tr>';
+    gasBody.innerHTML = '<tr><td colspan="3">Nu am putut încărca benzinăriile.</td></tr>';
+    storesBody.innerHTML = '<tr><td colspan="3">Nu am putut încărca magazinele.</td></tr>';
   }
 }
 

@@ -134,6 +134,22 @@ window.openPlayerProfile = (function () {
     const businessesTable = businesses ? `<table><thead><tr><th>BUSINESS</th><th>CREAT DE</th></tr></thead><tbody>${businesses}</tbody></table>`
       : `<p class="muted" style="margin:0 0 14px">Niciun business găsit (după nume — vezi nota din pagina Jucători dacă lipsește unul știut).</p>`;
 
+    // Benzinării/magazine (v1.27.0) — sisteme SEPARATE de business-urile de mai
+    // sus, cu identificator real de proprietar, deci match exact (nu ghicit
+    // după nume) — dar disponibil DOAR cât jucătorul e online (identificatorul
+    // exact vine din /players, nu din nimic ce putem căuta offline).
+    function stationsHtml(list, emptyText) {
+      if (!list || !list.length) return `<p class="muted" style="margin:0 0 14px">${emptyText}</p>`;
+      const rows = list.map(s => `
+        <tr>
+          <td>${s.name ? escapeHtml(s.name) : `<span class="muted">${escapeHtml(s.stationId || '—')}</span>`}</td>
+          <td><span class="pill ${s.role === 'proprietar' ? 'warn' : 'off'}">${s.role === 'proprietar' ? 'PROPRIETAR' : 'ANGAJAT'}</span></td>
+        </tr>`).join('');
+      return `<table><thead><tr><th>LOCAȚIE</th><th>ROL</th></tr></thead><tbody>${rows}</tbody></table>`;
+    }
+    const gasStationsHtml = stationsHtml(p.gasStations, 'Nicio benzinărie (doar cât jucătorul e online — vezi pagina Jucători pentru lista completă).');
+    const storesHtml = stationsHtml(p.stores, 'Niciun magazin (doar cât jucătorul e online — vezi pagina Jucători pentru lista completă).');
+
     const gang = p.gang ? `
       <p style="margin:0 0 14px">
         <span class="pill ${p.gang.isOwner ? 'warn' : 'off'}">${p.gang.isOwner ? 'LIDER' : 'MEMBRU'}</span>
@@ -143,6 +159,8 @@ window.openPlayerProfile = (function () {
     return `
       <h2 style="font-size:14px;margin:22px 0 10px">🏠 Case</h2>${housesTable}
       <h2 style="font-size:14px;margin:22px 0 10px">🏢 Business-uri</h2>${businessesTable}
+      <h2 style="font-size:14px;margin:22px 0 10px">⛽ Benzinării</h2>${gasStationsHtml}
+      <h2 style="font-size:14px;margin:22px 0 10px">🏪 Magazine</h2>${storesHtml}
       <h2 style="font-size:14px;margin:22px 0 10px">🔫 Gașcă (op-crime)</h2>${gang}
     `;
   }

@@ -21,6 +21,7 @@
   </div>
   <table><thead><tr><th>FACȚIUNE</th><th>MEMBRI ONLINE</th><th>CONT SOCIETY</th></tr></thead>
   <tbody id="faction-body"><tr><td colspan="3">Se încarcă…</td></tr></tbody></table>
+  <p class="muted" style="margin:0 22px 16px;font-size:11px">Apasă pe orice facțiune din listă pentru profilul ei (membrii online chiar acum, cu nume).</p>
 </section>
 
 <section class="formbox" id="offline-help" hidden>
@@ -34,9 +35,87 @@
 
 </main>
 <script src="auth-client.js"></script>
+<script src="player-profile-modal.js"></script>
 <script>
 function fmtMoney(n) {
   return '$' + Number(n || 0).toLocaleString('ro-RO');
+}
+
+const escapeHtml = s => (s ?? '').toString()
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
+// Profilul facțiunii — cerut explicit: click pe o facțiune ca să vezi cine e
+// online chiar acum, cu numele lor. "/api/admin/live/factions" (folosit mai
+// sus, pentru tabelul principal) nu are membrii — doar numărul lor și contul
+// society — deci luăm lista completă de jucători online de la
+// "/api/admin/live/players" (aceeași folosită de pagina Jucători) și filtrăm
+// client-side după job. Reutilizăm modalul de profil jucător (player-profile-
+// modal.js) doar pentru fereastra de "Închide"/"Escape" — construim propriul
+// overlay, cu propriile ID-uri, ca să nu intre în coliziune cu el.
+function ensureFactionModal() {
+  if (document.getElementById('faction-overlay')) return;
+  const div = document.createElement('div');
+  div.className = 'modal-overlay';
+  div.id = 'faction-overlay';
+  div.hidden = true;
+  div.innerHTML = `
+    <section class="formbox modal-box" id="faction-box">
+      <div class="modal-head">
+        <h2 id="faction-title">Profil facțiune</h2>
+        <button type="button" class="modal-close" id="faction-close-btn" aria-label="Închide">✕</button>
+      </div>
+      <div id="faction-body-modal"><p class="muted">Se încarcă…</p></div>
+    </section>`;
+  document.body.appendChild(div);
+
+  function closeFaction() {
+    document.getElementById('faction-overlay').hidden = true;
+    document.body.classList.remove('modal-open');
+  }
+  div.addEventListener('click', (e) => { if (e.target.id === 'faction-overlay') closeFaction(); });
+  document.getElementById('faction-close-btn').addEventListener('click', closeFaction);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !document.getElementById('faction-overlay').hidden) closeFaction();
+  });
+  document.getElementById('faction-body-modal').addEventListener('click', (e) => {
+    const btn = e.target.closest('.player-link');
+    if (btn) window.openPlayerProfile(btn.dataset.player);
+  });
+}
+
+async function openFactionProfile(jobName, jobLabel) {
+  ensureFactionModal();
+  document.getElementById('faction-overlay').hidden = false;
+  document.body.classList.add('modal-open');
+  document.getElementById('faction-title').textContent = `Profil facțiune — ${jobLabel || jobName}`;
+  const modalBody = document.getElementById('faction-body-modal');
+  modalBody.innerHTML = '<p class="muted">Se încarcă…</p>';
+  try {
+    const res = await apiFetch('/api/admin/live/players');
+    if (!res.ok) throw new Error();
+    const d = await res.json();
+    if (!d.online) {
+      modalBody.innerHTML = '<p class="muted">Fără date live momentan.</p>';
+      return;
+    }
+    const members = (d.players || []).filter(p => p.job === jobName)
+      .sort((a, b) => (a.serverName || a.name).localeCompare(b.serverName || b.name, 'ro'));
+    if (!members.length) {
+      modalBody.innerHTML = '<p class="muted">Niciun membru online momentan.</p>';
+      return;
+    }
+    modalBody.innerHTML = `<table><thead><tr><th>PERSONAJ</th><th>CFX</th><th>ID SERVER</th></tr></thead><tbody>${
+      members.map(p => `
+        <tr>
+          <td><strong><button type="button" class="player-link" data-player="${escapeHtml(p.name)}">${escapeHtml(p.serverName || p.name)}</button></strong></td>
+          <td>${escapeHtml(p.name)}</td>
+          <td>#${p.id}</td>
+        </tr>`).join('')
+    }</tbody></table>`;
+  } catch {
+    modalBody.innerHTML = '<p class="muted">Nu am putut încărca membrii facțiunii.</p>';
+  }
 }
 
 async function loadFinancial(force) {
@@ -74,11 +153,14 @@ async function loadFinancial(force) {
 
     const factions = (d.factions || []).slice().sort((a, b) => b.online - a.online);
     factionBody.innerHTML = factions.length ? factions.map(f => `
-      <tr>
-        <td><strong>${f.label || f.name}</strong></td>
+      <tr class="faction-row" data-job="${escapeHtml(f.name)}" data-label="${escapeHtml(f.label || f.name)}" style="cursor:pointer">
+        <td><strong>${escapeHtml(f.label || f.name)}</strong></td>
         <td>${f.online}</td>
         <td>${f.societyMoney == null ? '<span class="muted">fără cont society</span>' : fmtMoney(f.societyMoney)}</td>
       </tr>`).join('') : '<tr><td colspan="3">Niciun jucător online momentan.</td></tr>';
+    factionBody.querySelectorAll('tr.faction-row').forEach(tr => {
+      tr.addEventListener('click', () => openFactionProfile(tr.dataset.job, tr.dataset.label));
+    });
   } catch {
     statusNote.textContent = 'Nu am putut încărca datele financiare.';
     factionBody.innerHTML = '<tr><td colspan="3">Eroare la încărcare.</td></tr>';

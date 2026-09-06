@@ -579,6 +579,38 @@ async function fetchStaffLogs({ player, before, after, limit }) {
   }));
 }
 
+// Varianta paginata pe NUMĂR de pagină (OFFSET direct în Postgres) a
+// funcției de mai sus — folosită DOAR când staff-ul alege explicit categoria
+// "Acțiuni staff (Luxu)" în Loguri, unde acțiunile de admin sunt chiar
+// conținutul principal al paginii, nu doar context atașat altor rânduri (vezi
+// GET /api/admin/logs mai jos). Are propriul total/totalPages, la fel ca
+// paginarea de pe Kill Logs.
+async function fetchStaffLogsPage({ player, page, pageSize }) {
+  const conditions = [];
+  const params = [];
+  if (player) {
+    params.push(`%${player}%`);
+    conditions.push(`(staff_name ILIKE $${params.length} OR target_name ILIKE $${params.length})`);
+  }
+  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+  const countRes = await pool.query(`SELECT COUNT(*)::int AS total FROM admin_action_logs ${where}`, params);
+  const total = countRes.rows[0]?.total || 0;
+
+  const limitParams = [...params, pageSize, (page - 1) * pageSize];
+  const { rows } = await pool.query(
+    `SELECT staff_name, target_name, action, reason, raw, created_at
+     FROM admin_action_logs ${where} ORDER BY created_at DESC LIMIT $${limitParams.length - 1} OFFSET $${limitParams.length}`,
+    limitParams
+  );
+  const logs = rows.map(r => ({
+    category: "admin",
+    player: r.staff_name || r.target_name || "necunoscut",
+    details: { staff: r.staff_name, target: r.target_name, action: r.action, reason: r.reason, raw: r.raw },
+    at: r.created_at,
+  }));
+  return { logs, total };
+}
+
 // Corelare best-effort: cand un log de joc (item obtinut generic, moarte,
 // vehicul nou aparut) se intampla FOARTE aproape in timp de o actiune de
 // staff din Luxu care pare potrivita (dupa un cuvant-cheie in actiune/motiv)
@@ -609,47 +641,61 @@ function correlateStaffAction(gameLogs, staffLogs, gameCategory, keywordRegex, d
   }
 }
 
+// Fix (2026-09): paginarea veche ("Încarcă mai vechi", cursor pe timp) avea
+// EXACT bug-ul găsit inițial la Kill Logs — cand nu era ales niciun filtru de
+// categorie ("Toate categoriile", vizualizarea implicită), interogam TOATE
+// categoriile de joc laolaltă cu o singură limită comună; pe un server activ,
+// categoriile foarte frecvente (chat/comenzi/transfer de iteme) umpleau
+// aproape toată pagina, iar cursorul ("mai vechi decat X") abia se mișca in
+// timp real — staff a raportat că "Încarcă mai vechi" părea să reîncarce
+// loguri din aceeași zi la nesfârșit. Rezolvare: paginare pe NUMĂR de pagină
+// (OFFSET direct), la fel ca la Kill Logs — o pagină avansează mereu exact
+// `pageSize` rânduri, indiferent de amestecul de categorii, deci nu se mai
+// poate "bloca" pe același interval de timp.
 app.get("/api/admin/logs", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
   const player = req.query.player ? String(req.query.player).slice(0, 64) : "";
   const category = LOG_CATEGORIES.includes(req.query.category) ? req.query.category : "";
-  const limit = Math.min(500, Math.max(1, Number(req.query.limit) || 100));
-  // Paginare: "before" = data (ISO) celei mai vechi intrari deja afisate pe
-  // ecran. Trimis, luam DOAR intrari strict mai vechi decat atat, din ambele
-  // surse (joc + acțiuni de staff), ca staff-ul sa poata merge inapoi in
-  // istoric oricat de mult (pana la limita de pastrare de 30 de zile), nu
-  // doar sa vada ultimele N randuri — inainte, pe un server activ, intrari
-  // vechi de doar cateva ore erau deja "impinse" din vizor de trafic nou.
-  const beforeDate = req.query.before ? new Date(String(req.query.before)) : null;
-  const before = beforeDate && !Number.isNaN(beforeDate.getTime()) ? beforeDate : null;
+  const pageSize = Math.min(100, Math.max(1, Number(req.query.pageSize) || 50));
+  const page = Math.max(1, Number(req.query.page) || 1);
 
-  let gameOnline = true;
-  let gameLogs = [];
-  if (category !== "admin") {
-    const result = await fetchGameLogs({ player, category, limit, before });
-    gameOnline = result.online;
-    gameLogs = result.logs;
+  // Categoria "Acțiuni staff (Luxu)" e o sursă unică (Postgres, a noastră) —
+  // paginăm direct pe ea, cu total/totalPages proprii.
+  if (category === "admin") {
+    const { logs, total } = await fetchStaffLogsPage({ player, page, pageSize });
+    const totalPages = Math.max(1, Math.ceil((total || 0) / pageSize));
+    return res.json({ online: true, logs, page, pageSize, total, totalPages });
   }
 
+  // "Toate categoriile" sau o singură categorie de joc aleasă — o singură
+  // sursă (moldovarp-api, de pe serverul de joc), paginată pe OFFSET direct
+  // (vezi getLogs în server.lua) — total/totalPages calculate de acolo.
+  const { online: gameOnline, logs: gameLogs, total: gameTotal } = await fetchGameLogs({
+    player, category, page, pageSize, withTotal: true,
+  });
+
+  // Acțiunile de staff se ATAȘEAZĂ (ca rânduri proprii + ca sursă de corelare
+  // pentru "adminKill"/"adminGrant") doar cand se vede "Toate categoriile",
+  // și doar în fereastra de timp acoperită STRICT de rândurile din pagina
+  // curentă — la fel ca jaful de cadavru de la Kill Logs — ca să nu
+  // reintroducem o a doua sursă paginată separat, cu propriul ei cursor, care
+  // ar putea din nou "aluneca" independent de prima. Cine vrea DOAR acțiunile
+  // de staff alege categoria dedicată de mai sus, unde sunt paginate exact.
   let staffLogs = [];
-  if (!category || category === "admin") {
-    staffLogs = await fetchStaffLogs({ player, before, limit });
+  if (!category && gameLogs.length) {
+    const times = gameLogs.map(l => new Date(l.at).getTime());
+    const oldest = new Date(Math.min(...times));
+    const newest = new Date(Math.max(...times) + 1000);
+    staffLogs = await fetchStaffLogs({ player, after: oldest, before: newest, limit: 200 });
   }
 
   correlateStaffAction(gameLogs, staffLogs, "item_obtained", /item/i, "adminGrant");
   correlateStaffAction(gameLogs, staffLogs, "death", /kill/i, "adminKill");
   correlateStaffAction(gameLogs, staffLogs, "vehicle_acquired", /vehic|masin/i, "adminGrant");
 
-  const merged = [...gameLogs, ...staffLogs]
-    .sort((a, b) => new Date(b.at) - new Date(a.at))
-    .slice(0, limit);
+  const merged = [...gameLogs, ...staffLogs].sort((a, b) => new Date(b.at) - new Date(a.at));
 
-  // Cursorul pentru "mai vechi" — data ultimei (celei mai vechi) intrari din
-  // pagina curenta. Frontend-ul il trimite inapoi ca "before" la urmatoarea
-  // cerere. Nu garanteaza ca mai exista ceva (poate fi chiar sfarsitul
-  // istoricului) — frontend-ul se oprește singur cand o pagina vine goala.
-  const nextCursor = merged.length ? merged[merged.length - 1].at : null;
-
-  res.json({ online: gameOnline, logs: merged, nextCursor });
+  const totalPages = gameTotal != null ? Math.max(1, Math.ceil(gameTotal / pageSize)) : null;
+  res.json({ online: gameOnline, logs: merged, page, pageSize, total: gameTotal, totalPages });
 }));
 
 // Pagina separata "Kill Logs" — cerută explicit: cine pe cine a ucis, și ce

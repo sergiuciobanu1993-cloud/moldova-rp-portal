@@ -38,9 +38,7 @@
   <p class="muted" id="offline-note" style="margin:0 22px 16px" hidden>Serverul de joc nu răspunde momentan — se văd doar acțiunile de staff (Luxu), dacă există.</p>
   <table id="logs-table"><thead><tr><th>CATEGORIE</th><th>JUCĂTOR</th><th>DETALII</th><th>DATA</th></tr></thead>
   <tbody id="list-body"><tr><td colspan="4">Se încarcă…</td></tr></tbody></table>
-  <div style="padding:16px 22px;text-align:center">
-    <button id="load-more-btn" class="btn-ghost" type="button" hidden>Încarcă mai vechi</button>
-  </div>
+  <div id="pagination" style="padding:16px 22px;display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap"></div>
 </section>
 
 </main>
@@ -366,7 +364,7 @@ function formatDetailsBody(log, d) {
 let debounceTimer = null;
 function scheduleReload() {
   clearTimeout(debounceTimer);
-  debounceTimer = setTimeout(() => loadLogs(), 300);
+  debounceTimer = setTimeout(() => loadLogs(1), 300);
 }
 
 function rowsHtml(logs) {
@@ -379,60 +377,82 @@ function rowsHtml(logs) {
       </tr>`).join('');
 }
 
-// Cursor de paginare ("mai vechi decat data asta") — pastrat intre apeluri
-// cat timp userul apasa "Încarcă mai vechi", resetat la orice filtru nou/
-// reîmprospătare, ca sa nu amestecam pagini din interogari diferite. Fara
-// asta, un server activ (mult trafic) "impinge" din vizor, in doar cateva
-// ore, intrari pe care staff-ul chiar are voie sa le vada — retentia reala
-// in baza de date ramane 30 de zile, doar afisarea era limitata.
-let currentCursor = null;
+// Paginare pe NUMĂR de pagină (1, 2, 3...), nu pe cursor "Încarcă mai vechi"
+// — cel vechi se dovedise nefiabil EXACT ca la Kill Logs: la "Toate
+// categoriile" (vizualizarea implicită), categoriile foarte frecvente
+// (chat/comenzi/transfer de iteme) umpleau aproape toată limita comună, iar
+// cursorul de timp abia avansa — staff a raportat că "Încarcă mai vechi"
+// părea să reîncarce loguri din aceeași zi la nesfârșit. Acum backend-ul
+// (vezi /api/admin/logs) paginează pe OFFSET direct, deci fiecare pagină
+// avansează mereu exact cu numărul de rânduri cerut, indiferent de amestecul
+// de categorii — și poți naviga oricât de departe în istoric (până la 30 de
+// zile), nu doar câteva ore.
+let currentPage = 1;
+let currentTotalPages = null;
 
-async function loadLogs(opts) {
-  const reset = !opts || opts.reset !== false;
+function renderPagination(page, totalPages) {
+  const el = document.getElementById('pagination');
+  if (!totalPages || totalPages <= 1) { el.innerHTML = ''; return; }
+
+  const pages = new Set([1, totalPages]);
+  for (let p = page - 2; p <= page + 2; p++) if (p >= 1 && p <= totalPages) pages.add(p);
+  const sorted = [...pages].sort((a, b) => a - b);
+
+  let html = `<button type="button" class="btn-ghost" data-page="${page - 1}" ${page <= 1 ? 'disabled' : ''}>‹ Precedenta</button>`;
+  let prev = 0;
+  for (const p of sorted) {
+    if (p - prev > 1) html += `<span class="muted" style="padding:0 4px">…</span>`;
+    html += `<button type="button" class="btn-ghost${p === page ? ' active' : ''}" data-page="${p}" ${p === page ? 'style="background:var(--orange);color:#000;border-color:var(--orange)"' : ''}>${p}</button>`;
+    prev = p;
+  }
+  html += `<button type="button" class="btn-ghost" data-page="${page + 1}" ${page >= totalPages ? 'disabled' : ''}>Următoarea ›</button>`;
+  el.innerHTML = html;
+  el.querySelectorAll('button[data-page]').forEach(btn => {
+    btn.addEventListener('click', () => loadLogs(Number(btn.dataset.page)));
+  });
+}
+
+async function loadLogs(page) {
+  currentPage = page || currentPage || 1;
   const tbody = document.getElementById('list-body');
   const offlineNote = document.getElementById('offline-note');
-  const loadMoreBtn = document.getElementById('load-more-btn');
   const player = document.getElementById('f-player').value.trim();
   const category = document.getElementById('f-category').value;
   const qs = new URLSearchParams();
   if (player) qs.set('player', player);
   if (category) qs.set('category', category);
-  qs.set('limit', '150');
-  if (reset) currentCursor = null;
-  else if (currentCursor) qs.set('before', currentCursor);
+  qs.set('page', String(currentPage));
+  qs.set('pageSize', '50');
   try {
     const res = await apiFetch(`/api/admin/logs?${qs.toString()}`);
     if (!res.ok) throw new Error();
     const d = await res.json();
     offlineNote.hidden = d.online !== false;
-    if (reset && (!d.logs || !d.logs.length)) {
-      tbody.innerHTML = '<tr><td colspan="4">Nicio înregistrare găsită.</td></tr>';
-      loadMoreBtn.hidden = true;
-      return;
+    currentPage = d.page || currentPage;
+    currentTotalPages = d.totalPages || null;
+    if (!d.logs || !d.logs.length) {
+      tbody.innerHTML = `<tr><td colspan="4">${currentPage > 1 ? 'Nicio înregistrare pe această pagină.' : 'Nicio înregistrare găsită.'}</td></tr>`;
+    } else {
+      tbody.innerHTML = rowsHtml(d.logs);
     }
-    const html = rowsHtml(d.logs || []);
-    if (reset) tbody.innerHTML = html; else tbody.insertAdjacentHTML('beforeend', html);
-    currentCursor = d.nextCursor || null;
-    loadMoreBtn.hidden = !currentCursor || !(d.logs && d.logs.length);
+    renderPagination(currentPage, currentTotalPages);
   } catch {
-    if (reset) tbody.innerHTML = '<tr><td colspan="4">Nu am putut încărca logurile.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="4">Nu am putut încărca logurile.</td></tr>';
   }
 }
 
 document.getElementById('f-player').addEventListener('input', scheduleReload);
-document.getElementById('f-category').addEventListener('change', () => loadLogs());
-document.getElementById('refresh-btn').addEventListener('click', () => loadLogs());
-document.getElementById('load-more-btn').addEventListener('click', () => loadLogs({ reset: false }));
+document.getElementById('f-category').addEventListener('change', () => loadLogs(1));
+document.getElementById('refresh-btn').addEventListener('click', () => loadLogs(currentPage));
 
 (async () => {
   const me = await requireRole('moderator', 'admin', 'co-fondator', 'owner');
   if (!me) return;
   document.getElementById('admin-name').textContent = me.username;
-  loadLogs();
-  // Aceeași reparare ca la Kill Logs: reîmprospătarea automată la 60s nu mai
-  // resetează pagina la prima dacă ai apăsat deja "Încarcă mai vechi" — rulează
-  // doar cât timp ești pe prima pagină (currentCursor încă null).
-  setInterval(() => { if (!currentCursor) loadLogs(); }, 60000);
+  loadLogs(1);
+  // Reîmprospătarea automată nu trebuie să te tragă înapoi la pagina 1 dacă
+  // răsfoiești istoricul — rulează doar cât timp ești chiar pe pagina 1.
+  setInterval(() => { if (currentPage === 1) loadLogs(1); }, 60000);
 })();
 </script>
 </body></html>

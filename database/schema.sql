@@ -258,6 +258,17 @@ CREATE TABLE IF NOT EXISTS page_blocks (
 );
 CREATE INDEX IF NOT EXISTS idx_page_blocks_page ON page_blocks(page, sort_order);
 
+-- Marcaje pentru seed-uri "o singură dată" (ex: un anunț creat automat la
+-- primul deploy după ce a fost adăugat în scripts/init-db.js). Diferă de
+-- page_blocks (care ține conținut editabil permanent): aici doar reținem CĂ
+-- o anumită acțiune s-a întâmplat deja, ca să nu se repete la fiecare
+-- redeploy — inclusiv dacă rândul creat de ea (ex: anunțul) e ulterior șters
+-- manual din admin. O dată bifat un key, rămâne bifat definitiv.
+CREATE TABLE IF NOT EXISTS seed_flags (
+  key VARCHAR(120) PRIMARY KEY,
+  applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 INSERT INTO roles(name, description) VALUES
 ('player', 'Jucator standard'),
 ('moderator', 'Moderator'),

@@ -301,9 +301,19 @@ if (newsList) {
   // Conținutul e text simplu, cu paragrafe separate prin linie goală (vezi
   // cum e scris în Admin → Anunțuri) — îl transformăm în <p>-uri separate
   // pentru modalul de detaliu (pe card rămâne doar rezumatul trunchiat).
+  // linkify: dacă un admin scrie o adresă simplă (https://...) în textul
+  // anunțului, ea devine link clickabil în modalul de detaliu — util ca să
+  // poți trimite cititorii direct către o altă pagină a site-ului (ex.
+  // pagina "VIP Shop — în curând"), fără să fie nevoie de HTML în formular.
+  // Rulează DUPĂ escapeHtml, deci e sigur: nu poate introduce tag-uri noi,
+  // doar înfășoară textul deja-escapat al URL-ului într-un <a>.
+  const linkify = (escaped) => escaped.replace(
+    /(https?:\/\/[^\s<]+[^\s<.,;:!?)\]'"])/g,
+    (url) => `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`
+  );
   const renderParagraphs = (s) => (s || '').split(/\n\s*\n/)
     .map(p => p.trim()).filter(Boolean)
-    .map(p => `<p>${escapeHtml(p).replace(/\n/g, '<br>')}</p>`).join('') || `<p>${escapeHtml(s)}</p>`;
+    .map(p => `<p>${linkify(escapeHtml(p).replace(/\n/g, '<br>'))}</p>`).join('') || `<p>${linkify(escapeHtml(s))}</p>`;
 
   const modalOverlay = document.getElementById('news-modal-overlay');
   const modalClose = document.getElementById('news-modal-close');

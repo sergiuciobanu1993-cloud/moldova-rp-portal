@@ -414,6 +414,18 @@ app.get("/api/dev/db-columns", requireDevProxy, asyncRoute(async (req, res) => {
   res.status(r.status).type(r.contentType).send(r.body);
 }));
 
+// Cateva randuri REALE (nu doar numele coloanelor) dintr-o tabela — folosit
+// pentru diagnosticul "afacerilor" (v1.26.2): ce contine efectiv coloana
+// "creator" din pug_businesses (nume de personaj sau identificator?).
+app.get("/api/dev/db-sample", requireDevProxy, asyncRoute(async (req, res) => {
+  const qs = new URLSearchParams();
+  if (req.query.table) qs.set("table", String(req.query.table));
+  if (req.query.columns) qs.set("columns", String(req.query.columns));
+  if (req.query.limit) qs.set("limit", String(req.query.limit));
+  const r = await fetchFromGameDev(`/dev/db-sample?${qs.toString()}`);
+  res.status(r.status).type(r.contentType).send(r.body);
+}));
+
 app.get("/api/admin/live/jobs", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
   const force = req.query.force === "1";
   const age = Date.now() - jobsCache.fetchedAt;

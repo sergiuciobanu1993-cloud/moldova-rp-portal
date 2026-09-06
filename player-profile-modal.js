@@ -116,7 +116,7 @@ window.openPlayerProfile = (function () {
   function propertyHtml(p) {
     const houses = (p.houses || []).map(h => `
       <tr>
-        <td><strong>${escapeHtml(h.label || ('Casă #' + h.houseId))}</strong></td>
+        <td><strong>${escapeHtml(h.label || 'Casă')}</strong> <span class="muted" style="font-size:11px">#${escapeHtml(h.houseId)}</span></td>
         <td>${h.price != null ? fmtMoney(h.price) : '<span class="muted">—</span>'}</td>
         <td>${fmtDate(h.updated_at || h.created_at)}</td>
       </tr>`).join('');

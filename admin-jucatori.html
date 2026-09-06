@@ -253,7 +253,7 @@ async function loadHouses() {
     tbody.innerHTML = houses.length ? houses.map(h => `
       <tr>
         <td><strong>${h.ownerName ? assetPlayerButton(h.ownerName) : '<span class="muted">necunoscut</span>'}</strong></td>
-        <td>${escapeHtml(h.label || ('Casă #' + h.houseId))}</td>
+        <td>${escapeHtml(h.label || 'Casă')} <span class="muted" style="font-size:11px">#${escapeHtml(h.houseId)}</span></td>
         <td>${h.price != null ? fmtMoney(h.price) : '<span class="muted">—</span>'}</td>
         <td>${fmtDate(h.updated_at || h.created_at)}</td>
       </tr>`).join('') : '<tr><td colspan="4">Nicio casă găsită.</td></tr>';

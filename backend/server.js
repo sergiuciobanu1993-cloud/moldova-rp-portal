@@ -1067,7 +1067,14 @@ app.get("/api/me/profile", auth, asyncRoute(async (req, res) => {
 // introduce aici o singură dată. Verificat DIRECT de moldovarp-api (vezi
 // fetchLinkVerify) — site-ul nu are cum să inventeze o legătură validă fără
 // codul real generat în joc, deci nu se poate lega contul altcuiva.
-app.post("/api/cont/leaga-joc", auth, asyncRoute(async (req, res) => {
+//
+// TEMPORAR (06.09.2026): restricționat la ADMIN_ROLES, cerut explicit — VIP
+// Shop-ul e încă în testare reală și nu trebuie să fie accesibil jucătorilor
+// obișnuiți. Legarea de cont există doar ca să poți deschide cutii, deci
+// merge sub aceeași restricție. Scoateți `requireRole(...ADMIN_ROLES)` de pe
+// toate cele 4 rute de mai jos (astea + /api/vip-shop + /api/vip-shop/deschide)
+// când VIP Shop e gata de lansare publică.
+app.post("/api/cont/leaga-joc", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
   const code = String(req.body?.code || "").trim();
   if (!/^\d{6}$/.test(code)) return res.status(400).json({ error: "Codul trebuie să aibă 6 cifre." });
   const result = await fetchLinkVerify(code);
@@ -1086,7 +1093,7 @@ app.post("/api/cont/leaga-joc", auth, asyncRoute(async (req, res) => {
   res.json({ ok: true, name: result.name || null });
 }));
 
-app.post("/api/cont/dezleaga-joc", auth, asyncRoute(async (req, res) => {
+app.post("/api/cont/dezleaga-joc", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
   await pool.query(`UPDATE users SET game_identifier = NULL, game_identifier_name = NULL WHERE id = $1`, [req.user.sub]);
   res.json({ ok: true });
 }));
@@ -1097,7 +1104,7 @@ app.post("/api/cont/dezleaga-joc", auth, asyncRoute(async (req, res) => {
 // așteptare" necesită cont legat de joc — fără el răspundem "linked: false"
 // și lăsăm frontend-ul să ceară legarea abia când chiar încearcă să deschidă
 // o cutie (nu e o eroare, doar jucătorul nu a parcurs încă acel pas).
-app.get("/api/vip-shop", auth, asyncRoute(async (req, res) => {
+app.get("/api/vip-shop", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
   const { rows } = await pool.query(`SELECT game_identifier, game_identifier_name FROM users WHERE id = $1`, [req.user.sub]);
   const identifier = rows[0]?.game_identifier;
 
@@ -1117,7 +1124,7 @@ app.get("/api/vip-shop", auth, asyncRoute(async (req, res) => {
   });
 }));
 
-app.post("/api/vip-shop/deschide", auth, asyncRoute(async (req, res) => {
+app.post("/api/vip-shop/deschide", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
   const { rows } = await pool.query(`SELECT game_identifier, game_identifier_name FROM users WHERE id = $1`, [req.user.sub]);
   const identifier = rows[0]?.game_identifier;
   if (!identifier) return res.status(400).json({ error: "Leagă-ți mai întâi contul de personajul din joc." });

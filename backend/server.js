@@ -422,6 +422,7 @@ app.get("/api/dev/db-sample", requireDevProxy, asyncRoute(async (req, res) => {
   if (req.query.table) qs.set("table", String(req.query.table));
   if (req.query.columns) qs.set("columns", String(req.query.columns));
   if (req.query.limit) qs.set("limit", String(req.query.limit));
+  if (req.query.recent) qs.set("recent", String(req.query.recent));
   const r = await fetchFromGameDev(`/dev/db-sample?${qs.toString()}`);
   res.status(r.status).type(r.contentType).send(r.body);
 }));

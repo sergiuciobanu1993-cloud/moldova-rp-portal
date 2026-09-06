@@ -77,7 +77,7 @@ function formatLoot(looted) {
 function rowsHtml(kills) {
   return kills.map(k => `
       <tr>
-        <td><strong>${k.victim ? playerButton(k.victim) : 'necunoscut'}</strong>${k.job ? ` <span class="muted">· job: ${escapeHtml(k.job)}</span>` : ''}</td>
+        <td><strong>${k.victim ? playerButton(k.victim) : 'necunoscut'}</strong>${k.job ? ` <span class="muted">· job: ${escapeHtml(k.job)}</span>` : ''}${k.victimRpName ? `<br><span class="muted" style="font-size:11px">${escapeHtml(k.victimRpName)}</span>` : ''}</td>
         <td>${formatKiller(k)}</td>
         <td>${k.cause ? escapeHtml(truncate(String(k.cause), 100)) : '<span class="muted">—</span>'}</td>
         <td>${formatLoot(k.looted)}</td>

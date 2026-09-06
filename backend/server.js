@@ -867,6 +867,7 @@ app.get("/api/admin/kill-logs", auth, requireRole(...MOD_ROLES), asyncRoute(asyn
     kills = deaths
       .map(d => ({
         victim: d.player,
+        victimRpName: d.rpName || null,
         killer: d.details.killer || null,
         adminKill: d.details.adminKill || null,
         cause: d.details.cause || null,
@@ -966,7 +967,7 @@ async function buildPlayerProfile(name) {
   // sigur pe casă/gașcă (owner/identificator), în loc de potrivire de nume
   // (owner_name/customnick — pot să nu semene deloc cu numele CFX). Fără el
   // (jucător offline), rămâne căutarea după nume, cu limitările știute.
-  const assetsResult = await fetchAssets({ player: cleanName, identifier: live?.identifier });
+  const assetsResult = await fetchAssets({ player: cleanName, identifier: live?.license });
 
   const account = accountResult.rows[0] || null;
   let tickets = [];

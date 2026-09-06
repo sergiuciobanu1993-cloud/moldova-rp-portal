@@ -372,7 +372,7 @@ function rowsHtml(logs) {
   return logs.map(log => `
       <tr>
         <td><span class="pill ${CATEGORY_PILL[log.category] || 'off'}">${escapeHtml((CATEGORY_LABEL[log.category] || log.category).toUpperCase())}</span></td>
-        <td><strong>${escapeHtml(log.player || 'necunoscut')}</strong></td>
+        <td><strong>${escapeHtml(log.player || 'necunoscut')}</strong>${log.rpName ? `<br><span class="muted" style="font-size:11px">${escapeHtml(log.rpName)}</span>` : ''}</td>
         <td>${formatDetails(log)}</td>
         <td>${fmtDate(log.at)}</td>
       </tr>`).join('');

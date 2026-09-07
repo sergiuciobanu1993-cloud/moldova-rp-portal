@@ -30,6 +30,23 @@
   </header>
 
   <main>
+    <section class="top-banner-slider" aria-label="Moldova RolePlay">
+      <div class="top-banner-slider-track" id="top-banner-track">
+        <img src="assets/banner-top/top-01.jpg" alt="Moldova RolePlay" class="is-active">
+        <img src="assets/banner-top/top-02.jpg" alt="Moldova RolePlay">
+        <img src="assets/banner-top/top-03.jpg" alt="Moldova RolePlay">
+        <img src="assets/banner-top/top-04.jpg" alt="Moldova RolePlay">
+        <img src="assets/banner-top/top-05.jpg" alt="Moldova RolePlay">
+        <img src="assets/banner-top/top-06.jpg" alt="Moldova RolePlay">
+        <img src="assets/banner-top/top-07.jpg" alt="Moldova RolePlay">
+        <img src="assets/banner-top/top-08.jpg" alt="Moldova RolePlay">
+        <img src="assets/banner-top/top-09.jpg" alt="Moldova RolePlay">
+        <img src="assets/banner-top/top-10.jpg" alt="Moldova RolePlay">
+        <img src="assets/banner-top/top-11.jpg" alt="Moldova RolePlay">
+        <img src="assets/banner-top/top-12.jpg" alt="Moldova RolePlay">
+      </div>
+    </section>
+
     <section class="highlights-marquee">
       <div class="highlights-marquee-head">
         <div><p class="eyebrow" data-block="highlights_eyebrow">MOLDOVA RP</p><h2 data-block="highlights_title">De ce Moldova RP?</h2></div>
@@ -164,6 +181,41 @@
         <div><p class="eyebrow">DESPRE PLATFORMĂ</p><h2 data-block="about_title">Un univers RolePlay construit de comunitate, pentru comunitate.</h2><div data-block="about_text"><p>Moldova RP este un server de RolePlay pe FiveM, construit în jurul propriului gamemode — Advanced Roleplay — cu o economie funcțională, zeci de meserii (minerit, pescuit, tăiat lemne, transport, construcții și multe altele), sistem de crafting, proprietăți, vehicule personalizabile, bănci și cazinouri. De la Poliție, SMURD și Armată, până la ganguri, mafii și sindicate, fiecare facțiune are proceduri, ierarhii și povești proprii, explicate direct pe acest portal.</p><p>Suntem o comunitate activă, cu evenimente constante, o echipă de administrare implicată zi de zi și un Discord mereu în mișcare. Aici găsești regulamentele, ghidul facțiunilor, legislația rutieră și tot ce ai nevoie ca să te integrezi rapid în poveste.</p></div></div>
       </div>
     </section>
+
+    <section class="brand-marquee">
+      <div class="brand-marquee-head">
+        <p class="eyebrow">MOLDOVA ROLEPLAY</p>
+        <h2>O comunitate, o singură poveste.</h2>
+      </div>
+      <div class="brand-marquee-viewport">
+        <div class="brand-marquee-track">
+          <img src="assets/banner-bottom/bottom-01.jpg" alt="Moldova RolePlay" loading="lazy">
+          <img src="assets/banner-bottom/bottom-02.jpg" alt="Moldova RolePlay" loading="lazy">
+          <img src="assets/banner-bottom/bottom-03.jpg" alt="Moldova RolePlay" loading="lazy">
+          <img src="assets/banner-bottom/bottom-04.jpg" alt="Moldova RolePlay" loading="lazy">
+          <img src="assets/banner-bottom/bottom-05.jpg" alt="Moldova RolePlay" loading="lazy">
+          <img src="assets/banner-bottom/bottom-06.jpg" alt="Moldova RolePlay" loading="lazy">
+          <img src="assets/banner-bottom/bottom-07.jpg" alt="Moldova RolePlay" loading="lazy">
+          <img src="assets/banner-bottom/bottom-08.jpg" alt="Moldova RolePlay" loading="lazy">
+          <img src="assets/banner-bottom/bottom-09.jpg" alt="Moldova RolePlay" loading="lazy">
+          <img src="assets/banner-bottom/bottom-10.jpg" alt="Moldova RolePlay" loading="lazy">
+          <img src="assets/banner-bottom/bottom-11.jpg" alt="Moldova RolePlay" loading="lazy">
+          <img src="assets/banner-bottom/bottom-12.jpg" alt="Moldova RolePlay" loading="lazy">
+          <img src="assets/banner-bottom/bottom-01.jpg" alt="" aria-hidden="true" loading="lazy">
+          <img src="assets/banner-bottom/bottom-02.jpg" alt="" aria-hidden="true" loading="lazy">
+          <img src="assets/banner-bottom/bottom-03.jpg" alt="" aria-hidden="true" loading="lazy">
+          <img src="assets/banner-bottom/bottom-04.jpg" alt="" aria-hidden="true" loading="lazy">
+          <img src="assets/banner-bottom/bottom-05.jpg" alt="" aria-hidden="true" loading="lazy">
+          <img src="assets/banner-bottom/bottom-06.jpg" alt="" aria-hidden="true" loading="lazy">
+          <img src="assets/banner-bottom/bottom-07.jpg" alt="" aria-hidden="true" loading="lazy">
+          <img src="assets/banner-bottom/bottom-08.jpg" alt="" aria-hidden="true" loading="lazy">
+          <img src="assets/banner-bottom/bottom-09.jpg" alt="" aria-hidden="true" loading="lazy">
+          <img src="assets/banner-bottom/bottom-10.jpg" alt="" aria-hidden="true" loading="lazy">
+          <img src="assets/banner-bottom/bottom-11.jpg" alt="" aria-hidden="true" loading="lazy">
+          <img src="assets/banner-bottom/bottom-12.jpg" alt="" aria-hidden="true" loading="lazy">
+        </div>
+      </div>
+    </section>
   </main>
 
   <footer>
@@ -224,6 +276,21 @@
   } catch {
     grid.innerHTML = '<div class="empty-state">Nu am putut încărca regulamentele.</div>';
   }
+})();
+</script>
+
+<script>
+(() => {
+  const track = document.getElementById('top-banner-track');
+  if (!track) return;
+  const slides = Array.from(track.children);
+  if (slides.length < 2) return;
+  let current = 0;
+  setInterval(() => {
+    slides[current].classList.remove('is-active');
+    current = (current + 1) % slides.length;
+    slides[current].classList.add('is-active');
+  }, 5000);
 })();
 </script>
 </body>

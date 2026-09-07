@@ -53,7 +53,22 @@ a{color:inherit;text-decoration:none}.site-header{height:78px;position:fixed;z-i
    hover so a curious visitor can actually read/click a pill, and disabled
    under prefers-reduced-motion. The mask fades both edges into the section
    background instead of hard-cutting the pills. */
-.highlights-marquee{position:relative;padding:102px 0 30px;border-bottom:1px solid var(--line);background:#0b0c0d;overflow:hidden}
+.top-banner-slider{position:relative;margin-top:78px;width:100%;aspect-ratio:4/1;background:#08090a;overflow:hidden;border-bottom:1px solid var(--line)}
+.top-banner-slider-track{position:relative;width:100%;height:100%}
+.top-banner-slider-track img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity 1.2s ease}
+.top-banner-slider-track img.is-active{opacity:1}
+@media(max-width:600px){.top-banner-slider{aspect-ratio:16/9;margin-top:78px}}
+.brand-marquee{position:relative;padding:70px 0;border-top:1px solid var(--line);background:#0b0c0d;overflow:hidden}
+.brand-marquee-head{max-width:1180px;margin:0 auto 28px;padding:0 24px}
+.brand-marquee-head h2{margin:4px 0 0;font-size:27px}
+.brand-marquee-viewport{overflow:hidden;-webkit-mask-image:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent);mask-image:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent)}
+.brand-marquee-track{display:flex;width:max-content;gap:16px;animation:brand-marquee-scroll 60s linear infinite}
+.brand-marquee:hover .brand-marquee-track{animation-play-state:paused}
+.brand-marquee-track img{width:220px;height:220px;object-fit:cover;border-radius:14px;border:1px solid var(--line);flex:none}
+@keyframes brand-marquee-scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+@media(prefers-reduced-motion:reduce){.brand-marquee-track{animation:none;flex-wrap:wrap;width:auto}}
+@media(max-width:600px){.brand-marquee{padding:50px 0}.brand-marquee-head{padding:0 20px}.brand-marquee-head h2{font-size:22px}.brand-marquee-track img{width:150px;height:150px}}
+.highlights-marquee{position:relative;padding:56px 0 30px;border-bottom:1px solid var(--line);background:#0b0c0d;overflow:hidden}
 .highlights-marquee-head{max-width:1180px;margin:0 auto 24px;padding:0 24px;display:flex;align-items:end;justify-content:space-between;gap:20px;flex-wrap:wrap}
 .highlights-marquee-head h2{margin:4px 0 0;font-size:27px}
 .highlights-marquee-viewport{overflow:hidden;-webkit-mask-image:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent);mask-image:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent)}
@@ -65,7 +80,7 @@ a{color:inherit;text-decoration:none}.site-header{height:78px;position:fixed;z-i
 .highlight-pill span:last-child{font-weight:800;font-size:13px}
 @keyframes highlights-marquee-scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
 @media(prefers-reduced-motion:reduce){.highlights-marquee-track{animation:none;flex-wrap:wrap;width:auto}}
-@media(max-width:600px){.highlights-marquee{padding:96px 0 26px}.highlights-marquee-head{padding:0 20px}.highlights-marquee-head h2{font-size:23px}}
+@media(max-width:600px){.highlights-marquee{padding:50px 0 26px}.highlights-marquee-head{padding:0 20px}.highlights-marquee-head h2{font-size:23px}}
 
 /* Joburi page — card grid (icon, title, 1-sentence description), grouped
    under the same .reg-group category headers used elsewhere on the site. */

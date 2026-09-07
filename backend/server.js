@@ -272,11 +272,208 @@ app.get("/api/admin/live/players", auth, requireRole(...ADMIN_ROLES), asyncRoute
   res.json(await getPlayersDetail(req.query.force === "1"));
 }));
 
+// "Ultima dată văzut" — la fiecare 60 de secunde, indiferent dacă cineva se
+// uită chiar acum în admin panel sau pe homepage, salvăm pentru fiecare
+// jucător ONLINE (matching după display_name, doar pentru cei care au deja
+// cont pe site) ultimele valori cunoscute — bani, job, vehicule — în
+// coloanele last_* din players (vezi migrarea din database/schema.sql).
+// Scopul: profilul jucătorului să arate ceva relevant și când e OFFLINE, nu
+// doar "nu ești conectat acum" — asta era exact observația care a dus la
+// acest sync ("ar fi mult mai profesional" să meargă și offline).
+// Best-effort, tăcut: dacă serverul de joc e jos momentan, pur și simplu nu
+// actualizăm nimic la acest tur — nu ștergem/stricăm ultima poză bună deja
+// salvată.
+async function syncPlayerSnapshots() {
+  if (!FIVEM_API_SECRET) return;
+  try {
+    const detail = await fetchPlayersDetail();
+    if (!detail.online || !detail.players.length) return;
+    for (const pl of detail.players) {
+      const name = (pl.name || "").toString().trim();
+      if (!name) continue;
+      await pool.query(
+        `UPDATE players SET
+           last_cash = $1, last_bank = $2, last_black_money = $3,
+           last_job = $4, last_job_label = $5, last_vehicles = $6,
+           last_synced_at = NOW()
+         WHERE display_name ILIKE $7`,
+        [
+          // last_cash/last_bank/last_black_money sunt INTEGER — jocul poate
+          // trimite valori cu zecimale (ex: bani murdari calculați ca procent,
+          // 333112.75), ceea ce Postgres refuză direct la INSERT/UPDATE cu
+          // "invalid input syntax for type integer". Rotunjim aici, nu
+          // schimbăm coloana la NUMERIC, pentru că banii din joc sunt oricum
+          // afișați ca sumă întreagă peste tot pe site (fmtMoney) — nu pierdem
+          // nimic relevant vizual.
+          Number.isFinite(pl.cash) ? Math.round(pl.cash) : null,
+          Number.isFinite(pl.bank) ? Math.round(pl.bank) : null,
+          Number.isFinite(pl.blackMoney) ? Math.round(pl.blackMoney) : null,
+          pl.job || null,
+          pl.jobLabel || null,
+          JSON.stringify(pl.vehicles || []),
+          name,
+        ]
+      );
+    }
+  } catch (err) {
+    console.error("syncPlayerSnapshots a eșuat (ignorat, reîncercăm la următorul tur):", err.message);
+  }
+}
+
+if (FIVEM_API_SECRET) {
+  setInterval(syncPlayerSnapshots, 60_000);
+  syncPlayerSnapshots();
+}
+
 // Lista COMPLETĂ a joburilor/facțiunilor configurate pe server (tabela ESX
 // "jobs"), nu doar cele cu jucători online acum. O folosim ca să vedem toate
 // numele existente — inclusiv găști fără niciun membru online în acel moment.
 let jobsCache = { data: null, fetchedAt: 0 };
 const JOBS_CACHE_MS = 60_000;
+
+// ---------------------------------------------------------------------------
+// Proxy de dezvoltare către endpoint-urile "/dev/..." ale resursei
+// moldovarp-api (v1.15.0+) de pe serverul de joc.
+// ---------------------------------------------------------------------------
+// De ce există: sandbox-ul din care developerul (Claude) lucrează nu poate
+// deschide conexiuni de rețea directe către IP-ul brut al serverului de joc
+// (doar către domenii web obișnuite, prin HTTPS) — dar Railway, unde rulează
+// acest site, poate perfect (la fel cum citește deja /snapshot, /players,
+// /jobs, /logs mai sus). Așa că site-ul face "puntea": primește o cerere pe
+// un domeniu HTTPS normal (acesta), o pasează mai departe către
+// http://IP:PORT/moldovarp-api/dev/..., și întoarce rezultatul.
+//
+// Protejat cu DEV_PROXY_SECRET — o cheie DIFERITĂ de FIVEM_DEV_SECRET (care e
+// cea folosită între site și serverul de joc) și diferită de orice cheie
+// folosită de site-ul public — nu necesită cont/login, deci trebuie separată
+// clar de restul. Nu e nevoie ca cineva să rețină sau să introducă vreo
+// cheie aici — o generez și o setez direct pe Railway.
+const DEV_PROXY_SECRET = process.env.DEV_PROXY_SECRET || "";
+const FIVEM_DEV_SECRET = process.env.FIVEM_DEV_SECRET || "";
+
+// Accepta cheia fie ca header (x-dev-proxy-key), fie ca query param (?key=)
+// — al doilea exista special pentru ca uneltele mele de citit pagini web nu
+// pot trimite header-e custom, doar un URL simplu.
+function requireDevProxy(req, res, next) {
+  const provided = req.headers["x-dev-proxy-key"] || req.query.key;
+  if (!DEV_PROXY_SECRET || provided !== DEV_PROXY_SECRET) {
+    return res.status(401).json({ error: "unauthorized" });
+  }
+  next();
+}
+
+async function fetchFromGameDev(path) {
+  if (!FIVEM_DEV_SECRET) throw new Error("FIVEM_DEV_SECRET nu e configurat.");
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10000);
+  try {
+    const res = await fetch(`http://${FIVEM_ADDRESS}/moldovarp-api${path}`, {
+      headers: { "x-dev-key": FIVEM_DEV_SECRET },
+      signal: controller.signal,
+    });
+    const text = await res.text();
+    return { status: res.status, contentType: res.headers.get("content-type") || "text/plain", body: text };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+app.get("/api/dev/resources", requireDevProxy, asyncRoute(async (_req, res) => {
+  const r = await fetchFromGameDev("/dev/resources");
+  res.status(r.status).type(r.contentType).send(r.body);
+}));
+
+app.get("/api/dev/file", requireDevProxy, asyncRoute(async (req, res) => {
+  const qs = new URLSearchParams();
+  if (req.query.resource) qs.set("resource", String(req.query.resource));
+  if (req.query.file) qs.set("file", String(req.query.file));
+  const r = await fetchFromGameDev(`/dev/file?${qs.toString()}`);
+  res.status(r.status).type(r.contentType).send(r.body);
+}));
+
+// "/dev/listdir" (io.popen, risc de blocare a firului principal FXServer)
+// a fost RETRAS pe partea de joc — vezi server.lua din moldovarp-api. Rutat
+// acum către "/dev/checkfiles", varianta sigură (doar LoadResourceFile).
+app.get("/api/dev/checkfiles", requireDevProxy, asyncRoute(async (req, res) => {
+  const qs = new URLSearchParams();
+  if (req.query.resource) qs.set("resource", String(req.query.resource));
+  if (req.query.files) qs.set("files", String(req.query.files));
+  const r = await fetchFromGameDev(`/dev/checkfiles?${qs.toString()}`);
+  res.status(r.status).type(r.contentType).send(r.body);
+}));
+
+app.get("/api/dev/db-tables", requireDevProxy, asyncRoute(async (_req, res) => {
+  const r = await fetchFromGameDev("/dev/db-tables");
+  res.status(r.status).type(r.contentType).send(r.body);
+}));
+
+app.get("/api/dev/db-columns", requireDevProxy, asyncRoute(async (req, res) => {
+  const qs = new URLSearchParams();
+  if (req.query.table) qs.set("table", String(req.query.table));
+  const r = await fetchFromGameDev(`/dev/db-columns?${qs.toString()}`);
+  res.status(r.status).type(r.contentType).send(r.body);
+}));
+
+// Cateva randuri REALE (nu doar numele coloanelor) dintr-o tabela — folosit
+// pentru diagnosticul "afacerilor" (v1.26.2): ce contine efectiv coloana
+// "creator" din pug_businesses (nume de personaj sau identificator?).
+app.get("/api/dev/db-sample", requireDevProxy, asyncRoute(async (req, res) => {
+  const qs = new URLSearchParams();
+  if (req.query.table) qs.set("table", String(req.query.table));
+  if (req.query.columns) qs.set("columns", String(req.query.columns));
+  if (req.query.limit) qs.set("limit", String(req.query.limit));
+  if (req.query.recent) qs.set("recent", String(req.query.recent));
+  const r = await fetchFromGameDev(`/dev/db-sample?${qs.toString()}`);
+  res.status(r.status).type(r.contentType).send(r.body);
+}));
+
+// Diagnostic pentru "Jaf după moarte" (v1.26.5b) — reface EXACT logica din
+// /api/admin/kill-logs (vezi mai jos), dar fără autentificare de admin (gate
+// pe DEV_PROXY_SECRET, ca toate rutele /api/dev/*) și cu informații
+// suplimentare expuse direct (fereastra de timp calculată, câte transferuri
+// s-au găsit în ea, lista lor brută) — ca să nu mai depindem de un staff care
+// deschide manual Network tab din browser ca să ne dea răspunsul brut al
+// API-ului. Doar citire, nimic nu se schimbă în baza de date.
+app.get("/api/dev/kill-logs-debug", requireDevProxy, asyncRoute(async (req, res) => {
+  const player = req.query.player ? String(req.query.player).slice(0, 64) : "";
+
+  // "raw=1" — ignora complet mortile/fereastra: ultimele N transferuri de
+  // item (implicit 20, orice jucator), FARA nicio conditie de timp (fara
+  // beforeAt/afterAt) — folosit ca sa izolam daca problema e STRICT in
+  // compararea de timp sau in altceva (ex: transferurile nici nu ajung sa
+  // fie citite deloc de "/logs" pentru categoria asta).
+  if (req.query.raw === "1") {
+    const rawLimit = Math.min(50, Math.max(1, Number(req.query.limit) || 20));
+    const r = await fetchGameLogs({ player, category: "item_transfer", pageSize: rawLimit });
+    return res.json({ online: r.online, transfersFound: r.logs.length, transfers: r.logs });
+  }
+
+  const { online, logs: deaths, total } = await fetchGameLogs({
+    player,
+    category: "death",
+    page: 1,
+    pageSize: Math.min(50, Math.max(1, Number(req.query.deathsLimit) || 5)),
+    withTotal: true,
+  });
+
+  let transfers = [];
+  let windowInfo = null;
+  if (deaths.length) {
+    const times = deaths.map(d => new Date(d.at).getTime());
+    const oldest = new Date(Math.min(...times));
+    const newest = new Date(Math.max(...times) + 3 * 60 * 1000);
+    windowInfo = {
+      oldestIso: oldest.toISOString(),
+      newestIso: newest.toISOString(),
+      oldestMs: oldest.getTime(),
+      newestMs: newest.getTime(),
+    };
+    const r = await fetchGameLogs({ player: "", category: "item_transfer", after: oldest, before: newest, pageSize: 500 });
+    transfers = r.logs;
+  }
+
+  res.json({ online, deathsTotal: total, deaths, window: windowInfo, transfersFound: transfers.length, transfers });
+}));
 
 app.get("/api/admin/live/jobs", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
   const force = req.query.force === "1";
@@ -314,99 +511,757 @@ app.get("/api/admin/live/jobs", auth, requireRole(...ADMIN_ROLES), asyncRoute(as
 // Filtrele (player/category/limit) sunt pasate mai departe. Gated la fel ca
 // Sancțiunile (moderator+) — e un instrument de investigație pentru staff,
 // nu date publice.
-const GAME_LOG_CATEGORIES = ["chat", "command", "connect", "disconnect", "death", "money", "item_buy", "item_craft", "item_transfer", "item_obtained", "item_drop", "vehicle_acquired"];
+const GAME_LOG_CATEGORIES = ["chat", "command", "connect", "disconnect", "death", "money", "item_buy", "item_craft", "item_transfer", "item_obtained", "item_drop", "item_pickup", "vehicle_acquired"];
 const LOG_CATEGORIES = [...GAME_LOG_CATEGORIES, "admin"];
 
+// Cere loguri de joc de la moldovarp-api. `category` poate fi o singura
+// categorie sau mai multe separate prin virgula (resursa stie sa le
+// interogheze pe toate deodata — vezi Kill Logs mai jos, care are nevoie
+// simultan de "death" si "item_transfer" ca sa coreleze o moarte cu ce s-a
+// luat din inventarul victimei imediat dupa).
+// `after` (created_at > ?) și `page`/`pageSize` (paginare pe număr de pagină,
+// OFFSET direct) sunt opționale, adăugate special pentru Kill Logs — vezi
+// ruta /api/admin/kill-logs mai jos pentru motivul din spate (mortile erau
+// "împinse" din pagini de volumul mare de transferuri de iteme cand foloseam
+// doar cursorul "beforeAt" pe categoriile combinate death+item_transfer).
+// `withTotal` cere și numărul total de rânduri care s-ar potrivi (fără
+// limit/offset), pentru calculul numărului de pagini.
+async function fetchGameLogs({ player, category, limit, before, after, page, pageSize, withTotal }) {
+  const qs = new URLSearchParams();
+  if (player) qs.set("player", player);
+  if (category) qs.set("category", category);
+  qs.set("limit", String(pageSize || limit));
+  // BUG REAL gasit acum (06.09.2026, confirmat direct din "/dev/db-sample"):
+  // "created_at" in moldovarp_logs (MySQL) e stocat ca NUMAR (milisecunde de
+  // la epoch, ex: 1788709662000), NU ca text/DATETIME. Trimiteam aici
+  // before/after.toISOString() (text, ex: "2026-09-06T13:22:13.000Z") — MySQL,
+  // comparand text cu o coloana numerica, trunchiaza textul la primul grup de
+  // cifre valid ("2026"), deci "created_at < ?" devenea "created_at < 2026",
+  // FALS pentru orice valoare reala (milisecunde de la epoch sunt mult mai
+  // mari) — filtrul "beforeAt" excludea ABSOLUT TOATE randurile, intotdeauna.
+  // Exact de-aia "Jaf dupa moarte" (Kill Logs, singurul loc care foloseste
+  // "before") nu arata niciodata nimic, indiferent daca transferul chiar
+  // exista in baza de date (confirmat separat ca EXISTA, corect atribuit).
+  // Fix: trimitem milisecunde de la epoch (numar, ca text simplu), nu ISO —
+  // se compara corect cu coloana numerica.
+  if (before) qs.set("beforeAt", String(before.getTime()));
+  if (after) qs.set("afterAt", String(after.getTime()));
+  if (page) qs.set("page", String(page));
+  if (withTotal) qs.set("withTotal", "1");
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const r = await fetch(`http://${FIVEM_ADDRESS}/moldovarp-api/logs?${qs.toString()}`, {
+      headers: { "x-api-key": FIVEM_API_SECRET },
+      signal: controller.signal,
+    });
+    if (!r.ok) throw new Error(`moldovarp-api HTTP ${r.status}`);
+    const body = await r.json();
+    return { online: true, logs: body.logs || [], total: typeof body.total === "number" ? body.total : null };
+  } catch {
+    return { online: false, logs: [], total: null };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+// Sancțiuni date direct din Luxu Admin (resursa lor separată, instalată pe
+// serverul de joc) — ban-uri, avertismente și perioade de închisoare, citite
+// direct din tabelele lor MySQL (bans/warnings/jail) prin noul endpoint
+// "/moderation" al moldovarp-api (vezi getModeration() în server.lua).
+// `player` opțional: fără el, vin ultimele sancțiuni de pe tot serverul
+// (pagina Sancțiuni); cu el, doar ale unui singur jucător (fereastra de
+// profil). La fel ca fetchGameLogs, degradăm silențios la "offline" dacă
+// serverul de joc nu răspunde — nu blocăm restul paginii pentru asta.
+async function fetchLuxuModeration({ player } = {}) {
+  const qs = new URLSearchParams();
+  if (player) qs.set("player", player);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const r = await fetch(`http://${FIVEM_ADDRESS}/moldovarp-api/moderation?${qs.toString()}`, {
+      headers: { "x-api-key": FIVEM_API_SECRET },
+      signal: controller.signal,
+    });
+    if (!r.ok) throw new Error(`moldovarp-api HTTP ${r.status}`);
+    const body = await r.json();
+    return { online: true, bans: body.bans || [], warnings: body.warnings || [], jail: body.jail || [] };
+  } catch {
+    return { online: false, bans: [], warnings: [], jail: [] };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+// Case, business-uri și apartenența la găști (op-crime) — citite direct din
+// tabelele resurselor deja instalate pe serverul de joc (0resmon_ph_houses/
+// 0resmon_ph_owned_houses, pug_businesses, opcrime_players/opcrime_orgs/
+// opcrime_ranks) prin noul endpoint "/assets" al moldovarp-api (vezi
+// getHouses()/getBusinesses()/getGangs() în server.lua). La fel ca la
+// moderare: `player` opțional filtrează după numele proprietarului/porecla
+// din op-crime; fără el, vin listele nefiltrate pentru pagina Jucători.
+// `identifier` e opțional — dat DOAR când știm deja identificatorul ESX
+// exact (jucătorul e online chiar acum, vezi buildPlayerProfile mai jos) —
+// atunci case+găști se potrivesc EXACT pe el (mult mai sigur decât numele:
+// owner_name/customnick din joc pot să nu semene deloc cu numele CFX
+// folosit peste tot pe site — asta era motivul pentru care un jucător
+// online, cu vehicule afișate corect, putea totuși ieși fără casă/gașcă
+// găsită, chiar dacă avea).
+async function fetchAssets({ player, identifier, rpName } = {}) {
+  const qs = new URLSearchParams();
+  if (player) qs.set("player", player);
+  if (identifier) qs.set("identifier", identifier);
+  // Business-urile (pug_businesses) nu au identificator de proprietar —
+  // rămân căutate după nume în coloana "creator". Diagnostic (v1.26.2, cerut
+  // explicit după ce afacerile ieșeau mereu goale): valorile reale din
+  // "creator" (ex: "Jora", "Misa") sunt prenume/porecle de personaj RP, NU
+  // numele CFX de pe site (gen "BluntCat2951") — deci căutarea după numele
+  // CFX nu avea NICIODATĂ șansa să găsească ceva. Cand știm și numele de
+  // personaj RP (jucătorul online chiar acum, vezi buildPlayerProfile), îl
+  // trimitem separat, ca a doua variantă de căutare — vezi getBusinesses.
+  if (rpName) qs.set("rpName", rpName);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const r = await fetch(`http://${FIVEM_ADDRESS}/moldovarp-api/assets?${qs.toString()}`, {
+      headers: { "x-api-key": FIVEM_API_SECRET },
+      signal: controller.signal,
+    });
+    if (!r.ok) throw new Error(`moldovarp-api HTTP ${r.status}`);
+    const body = await r.json();
+    return {
+      online: true,
+      houses: body.houses || [],
+      businesses: body.businesses || [],
+      // gasStations/stores (v1.27.0) — sisteme SEPARATE de pug_businesses,
+      // descoperite după ce un jucător cu benzinărie confirmată tot ieșea cu
+      // "niciun business găsit": pug_businesses are doar 3 rânduri în toată
+      // baza de date, niciuna benzinărie. gas_station_business/store_business
+      // au "user_id" = identificatorul ESX exact — match sigur, nu ghicit
+      // după nume, ca la getBusinesses. Vezi getGasStations/getStores în
+      // server.lua.
+      gasStations: body.gasStations || [],
+      stores: body.stores || [],
+      gangs: body.gangs || [],
+    };
+  } catch {
+    return { online: false, houses: [], businesses: [], gasStations: [], stores: [], gangs: [] };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// "Cazuri" (coins) — jucătorul cheltuie coins-uri deja cumpărate (prin fluxul
+// care există deja în g-coin-shop: "Cumpără coins" -> Tebex -> "Enter TBX
+// Transaction ID" -> Claim, NEATINS de noi) pe un caz cu șansă. Recompensa se
+// ridică din joc cu "/recompense" — vezi comentariile din server.lua
+// (moldovarp-api) pentru toată logica și motivele deciziilor de siguranță.
+// ---------------------------------------------------------------------------
+
+// Verifică codul de 6 cifre generat de comanda din joc "/leagacont" — dacă e
+// valid, moldovarp-api ne dă identifier-ul (licența) real al jucătorului.
+// Codul se consumă la prima verificare reușită (nu poate fi refolosit).
+async function fetchLinkVerify(code) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const r = await fetch(`http://${FIVEM_ADDRESS}/moldovarp-api/link/verify?code=${encodeURIComponent(code)}`, {
+      headers: { "x-api-key": FIVEM_API_SECRET },
+      signal: controller.signal,
+    });
+    if (!r.ok) return { ok: false, error: r.status === 404 ? "cod_invalid" : "eroare" };
+    const body = await r.json();
+    return { ok: true, identifier: body.identifier, name: body.name };
+  } catch {
+    return { ok: false, error: "server_offline" };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function fetchCoins(identifier) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const r = await fetch(`http://${FIVEM_ADDRESS}/moldovarp-api/coins?identifier=${encodeURIComponent(identifier)}`, {
+      headers: { "x-api-key": FIVEM_API_SECRET },
+      signal: controller.signal,
+    });
+    if (!r.ok) throw new Error(`moldovarp-api HTTP ${r.status}`);
+    const body = await r.json();
+    return { online: true, coins: body.coins || 0, pending: body.pending || [] };
+  } catch {
+    return { online: false, coins: 0, pending: [] };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function fetchCasesList() {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const r = await fetch(`http://${FIVEM_ADDRESS}/moldovarp-api/cases`, {
+      headers: { "x-api-key": FIVEM_API_SECRET },
+      signal: controller.signal,
+    });
+    if (!r.ok) throw new Error(`moldovarp-api HTTP ${r.status}`);
+    const body = await r.json();
+    return { online: true, cases: body.cases || [] };
+  } catch {
+    return { online: false, cases: [] };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+// Deschide efectiv un caz — POST către moldovarp-api, care scade coins ATOMIC
+// și alege recompensa după șanse (vezi openCase() în server.lua). Se apelează
+// o singură dată per clic — orice retry din partea clientului ar trebui să
+// vină ca o cerere nouă, nu o repetare automată de aici.
+async function postOpenCase({ identifier, playerName, caseId }) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const r = await fetch(`http://${FIVEM_ADDRESS}/moldovarp-api/cases/open`, {
+      method: "POST",
+      headers: { "x-api-key": FIVEM_API_SECRET, "Content-Type": "application/json" },
+      body: JSON.stringify({ identifier, playerName, caseId }),
+      signal: controller.signal,
+    });
+    const body = await r.json().catch(() => ({}));
+    if (!r.ok) return { ok: false, error: body.error || "eroare" };
+    return { ok: true, result: body };
+  } catch {
+    return { ok: false, error: "server_offline" };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+// Acțiunile de staff (Luxu), sursa separata (Postgres) folosita atat pentru
+// categoria "admin" din Loguri cat si pentru corelarile best-effort de mai
+// jos (kill/revive/item de admin etc.) si pentru Kill Logs.
+async function fetchStaffLogs({ player, before, after, limit }) {
+  const conditions = [];
+  const params = [];
+  if (player) {
+    params.push(`%${player}%`);
+    conditions.push(`(staff_name ILIKE $${params.length} OR target_name ILIKE $${params.length})`);
+  }
+  if (before) {
+    params.push(before.toISOString());
+    conditions.push(`created_at < $${params.length}`);
+  }
+  if (after) {
+    params.push(after.toISOString());
+    conditions.push(`created_at > $${params.length}`);
+  }
+  params.push(limit);
+  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+  const { rows } = await pool.query(
+    `SELECT staff_name, target_name, action, reason, raw, created_at
+     FROM admin_action_logs ${where} ORDER BY created_at DESC LIMIT $${params.length}`,
+    params
+  );
+  return rows.map(r => ({
+    category: "admin",
+    player: r.staff_name || r.target_name || "necunoscut",
+    details: { staff: r.staff_name, target: r.target_name, action: r.action, reason: r.reason, raw: r.raw },
+    at: r.created_at,
+  }));
+}
+
+// Varianta paginata pe NUMĂR de pagină (OFFSET direct în Postgres) a
+// funcției de mai sus — folosită DOAR când staff-ul alege explicit categoria
+// "Acțiuni staff (Luxu)" în Loguri, unde acțiunile de admin sunt chiar
+// conținutul principal al paginii, nu doar context atașat altor rânduri (vezi
+// GET /api/admin/logs mai jos). Are propriul total/totalPages, la fel ca
+// paginarea de pe Kill Logs.
+async function fetchStaffLogsPage({ player, page, pageSize }) {
+  const conditions = [];
+  const params = [];
+  if (player) {
+    params.push(`%${player}%`);
+    conditions.push(`(staff_name ILIKE $${params.length} OR target_name ILIKE $${params.length})`);
+  }
+  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+  const countRes = await pool.query(`SELECT COUNT(*)::int AS total FROM admin_action_logs ${where}`, params);
+  const total = countRes.rows[0]?.total || 0;
+
+  const limitParams = [...params, pageSize, (page - 1) * pageSize];
+  const { rows } = await pool.query(
+    `SELECT staff_name, target_name, action, reason, raw, created_at
+     FROM admin_action_logs ${where} ORDER BY created_at DESC LIMIT $${limitParams.length - 1} OFFSET $${limitParams.length}`,
+    limitParams
+  );
+  const logs = rows.map(r => ({
+    category: "admin",
+    player: r.staff_name || r.target_name || "necunoscut",
+    details: { staff: r.staff_name, target: r.target_name, action: r.action, reason: r.reason, raw: r.raw },
+    at: r.created_at,
+  }));
+  return { logs, total };
+}
+
+// Corelare best-effort: cand un log de joc (item obtinut generic, moarte,
+// vehicul nou aparut) se intampla FOARTE aproape in timp de o actiune de
+// staff din Luxu care pare potrivita (dupa un cuvant-cheie in actiune/motiv)
+// si vizeaza acelasi jucator, marcam intrarea ca fiind rezultatul acelei
+// actiuni de admin — ca sa nu para ceva organic din joc (item "gasit",
+// moarte "de la un jucator necunoscut", vehicul "cumparat"). Schema exactă
+// a payload-ului Luxu nu e documentată public (vezi comentariul de la
+// /api/webhooks/luxu mai jos), deci potrivirea e doar dupa cuvinte-cheie —
+// dacă observați intrări nepotrivite sau cazuri reale ratate, spuneți-mi
+// exact ce ați văzut (categoria + ce ar fi trebuit să scrie) și ajustez.
+function correlateStaffAction(gameLogs, staffLogs, gameCategory, keywordRegex, detailsField) {
+  if (!gameLogs.length || !staffLogs.length) return;
+  const matches = staffLogs.filter(s =>
+    keywordRegex.test(s.details.action || "") || keywordRegex.test(s.details.reason || "")
+  );
+  if (!matches.length) return;
+  for (const log of gameLogs) {
+    if (log.category !== gameCategory || !log.player) continue;
+    const logTime = new Date(log.at).getTime();
+    const match = matches.find(s => {
+      const target = (s.details.target || "").toLowerCase().trim();
+      if (!target || target !== log.player.toLowerCase().trim()) return false;
+      return Math.abs(new Date(s.at).getTime() - logTime) <= 8000;
+    });
+    if (match) {
+      log.details = { ...log.details, [detailsField]: { staff: match.details.staff || "admin" } };
+    }
+  }
+}
+
+// Fix (2026-09): paginarea veche ("Încarcă mai vechi", cursor pe timp) avea
+// EXACT bug-ul găsit inițial la Kill Logs — cand nu era ales niciun filtru de
+// categorie ("Toate categoriile", vizualizarea implicită), interogam TOATE
+// categoriile de joc laolaltă cu o singură limită comună; pe un server activ,
+// categoriile foarte frecvente (chat/comenzi/transfer de iteme) umpleau
+// aproape toată pagina, iar cursorul ("mai vechi decat X") abia se mișca in
+// timp real — staff a raportat că "Încarcă mai vechi" părea să reîncarce
+// loguri din aceeași zi la nesfârșit. Rezolvare: paginare pe NUMĂR de pagină
+// (OFFSET direct), la fel ca la Kill Logs — o pagină avansează mereu exact
+// `pageSize` rânduri, indiferent de amestecul de categorii, deci nu se mai
+// poate "bloca" pe același interval de timp.
 app.get("/api/admin/logs", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
   const player = req.query.player ? String(req.query.player).slice(0, 64) : "";
   const category = LOG_CATEGORIES.includes(req.query.category) ? req.query.category : "";
-  const limit = Math.min(500, Math.max(1, Number(req.query.limit) || 100));
+  const pageSize = Math.min(100, Math.max(1, Number(req.query.pageSize) || 50));
+  const page = Math.max(1, Number(req.query.page) || 1);
 
-  let gameOnline = true;
-  let gameLogs = [];
-  if (category !== "admin") {
-    const qs = new URLSearchParams();
-    if (player) qs.set("player", player);
-    if (category) qs.set("category", category);
-    qs.set("limit", String(limit));
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
-    try {
-      const r = await fetch(`http://${FIVEM_ADDRESS}/moldovarp-api/logs?${qs.toString()}`, {
-        headers: { "x-api-key": FIVEM_API_SECRET },
-        signal: controller.signal,
-      });
-      if (!r.ok) throw new Error(`moldovarp-api HTTP ${r.status}`);
-      const body = await r.json();
-      gameLogs = body.logs || [];
-    } catch {
-      gameOnline = false;
-    } finally {
-      clearTimeout(timeout);
-    }
+  // Categoria "Acțiuni staff (Luxu)" e o sursă unică (Postgres, a noastră) —
+  // paginăm direct pe ea, cu total/totalPages proprii.
+  if (category === "admin") {
+    const { logs, total } = await fetchStaffLogsPage({ player, page, pageSize });
+    const totalPages = Math.max(1, Math.ceil((total || 0) / pageSize));
+    return res.json({ online: true, logs, page, pageSize, total, totalPages });
   }
 
+  // "Toate categoriile" sau o singură categorie de joc aleasă — o singură
+  // sursă (moldovarp-api, de pe serverul de joc), paginată pe OFFSET direct
+  // (vezi getLogs în server.lua) — total/totalPages calculate de acolo.
+  const { online: gameOnline, logs: gameLogs, total: gameTotal } = await fetchGameLogs({
+    player, category, page, pageSize, withTotal: true,
+  });
+
+  // Acțiunile de staff se ATAȘEAZĂ (ca rânduri proprii + ca sursă de corelare
+  // pentru "adminKill"/"adminGrant") doar cand se vede "Toate categoriile",
+  // și doar în fereastra de timp acoperită STRICT de rândurile din pagina
+  // curentă — la fel ca jaful de cadavru de la Kill Logs — ca să nu
+  // reintroducem o a doua sursă paginată separat, cu propriul ei cursor, care
+  // ar putea din nou "aluneca" independent de prima. Cine vrea DOAR acțiunile
+  // de staff alege categoria dedicată de mai sus, unde sunt paginate exact.
   let staffLogs = [];
-  if (!category || category === "admin") {
-    const conditions = [];
-    const params = [];
-    if (player) {
-      params.push(`%${player}%`);
-      conditions.push(`(staff_name ILIKE $${params.length} OR target_name ILIKE $${params.length})`);
-    }
-    params.push(limit);
-    const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
-    const { rows } = await pool.query(
-      `SELECT staff_name, target_name, action, reason, raw, created_at
-       FROM admin_action_logs ${where} ORDER BY created_at DESC LIMIT $${params.length}`,
-      params
-    );
-    staffLogs = rows.map(r => ({
-      category: "admin",
-      player: r.staff_name || r.target_name || "necunoscut",
-      details: { staff: r.staff_name, target: r.target_name, action: r.action, reason: r.reason, raw: r.raw },
-      at: r.created_at,
-    }));
+  if (!category && gameLogs.length) {
+    const times = gameLogs.map(l => new Date(l.at).getTime());
+    const oldest = new Date(Math.min(...times));
+    const newest = new Date(Math.max(...times) + 1000);
+    staffLogs = await fetchStaffLogs({ player, after: oldest, before: newest, limit: 200 });
   }
 
-  // Corelare best-effort: cand un log de joc (item obtinut generic, moarte,
-  // vehicul nou aparut) se intampla FOARTE aproape in timp de o actiune de
-  // staff din Luxu care pare potrivita (dupa un cuvant-cheie in actiune/motiv)
-  // si vizeaza acelasi jucator, marcam intrarea ca fiind rezultatul acelei
-  // actiuni de admin — ca sa nu para ceva organic din joc (item "gasit",
-  // moarte "de la un jucator necunoscut", vehicul "cumparat"). Schema exactă
-  // a payload-ului Luxu nu e documentată public (vezi comentariul de la
-  // /api/webhooks/luxu mai jos), deci potrivirea e doar dupa cuvinte-cheie —
-  // dacă observați intrări nepotrivite sau cazuri reale ratate, spuneți-mi
-  // exact ce ați văzut (categoria + ce ar fi trebuit să scrie) și ajustez.
-  function correlateStaffAction(gameCategory, keywordRegex, detailsField) {
-    if (!gameLogs.length || !staffLogs.length) return;
-    const matches = staffLogs.filter(s =>
-      keywordRegex.test(s.details.action || "") || keywordRegex.test(s.details.reason || "")
-    );
-    if (!matches.length) return;
-    for (const log of gameLogs) {
-      if (log.category !== gameCategory || !log.player) continue;
-      const logTime = new Date(log.at).getTime();
-      const match = matches.find(s => {
-        const target = (s.details.target || "").toLowerCase().trim();
-        if (!target || target !== log.player.toLowerCase().trim()) return false;
-        return Math.abs(new Date(s.at).getTime() - logTime) <= 8000;
-      });
-      if (match) {
-        log.details = { ...log.details, [detailsField]: { staff: match.details.staff || "admin" } };
-      }
-    }
-  }
-  correlateStaffAction("item_obtained", /item/i, "adminGrant");
-  correlateStaffAction("death", /kill/i, "adminKill");
-  correlateStaffAction("vehicle_acquired", /vehic|masin/i, "adminGrant");
+  correlateStaffAction(gameLogs, staffLogs, "item_obtained", /item/i, "adminGrant");
+  correlateStaffAction(gameLogs, staffLogs, "death", /kill/i, "adminKill");
+  correlateStaffAction(gameLogs, staffLogs, "vehicle_acquired", /vehic|masin/i, "adminGrant");
 
-  const merged = [...gameLogs, ...staffLogs]
+  const merged = [...gameLogs, ...staffLogs].sort((a, b) => new Date(b.at) - new Date(a.at));
+
+  const totalPages = gameTotal != null ? Math.max(1, Math.ceil(gameTotal / pageSize)) : null;
+  res.json({ online: gameOnline, logs: merged, page, pageSize, total: gameTotal, totalPages });
+}));
+
+// Pagina separata "Kill Logs" — cerută explicit: cine pe cine a ucis, și ce
+// s-a luat din inventarul victimei imediat după (jaf de cadavru).
+//
+// Aproximare, nu certitudine: nu știm dacă cel care a luat itemele chiar e
+// ucigașul (poate fi oricine ajunge primul la cadavru) — de-aia arătăm
+// explicit cine a luat, nu presupunem că e ucigașul. Fereastra e de 3 minute
+// după moarte.
+//
+// Paginare pe NUMĂR de pagină (1, 2, 3...), nu pe cursor — cerut explicit de
+// staff, după ce cursorul vechi ("Încarcă mai vechi") s-a dovedit nefiabil:
+// cerea mortile ȘI transferurile de iteme din ACELEAȘI moldovarp_logs cu o
+// singură limită comună, iar pe un server activ transferurile (mult mai
+// frecvente decât mortile) "împingeau" mortile vechi în afara ferestrei
+// paginate — uneori o pagină întreagă nu mai conținea nicio moarte nouă,
+// deși mai existau, mult mai vechi. Acum cerem mortile SINGURE, paginate
+// direct pe numărul cerut (offset în baza de date, vezi getLogs în
+// server.lua), independent de volumul de transferuri — și abia apoi cerem
+// transferurile relevante într-o fereastră de timp STRICT delimitată de
+// mortile de pe pagina curentă (de la cea mai veche până la cea mai nouă +3
+// minute), deci un query mult mai mic și mai țintit, nu concurează deloc cu
+// paginarea mortilor. Asta garantează și cerința de "cel puțin 72h în urmă"
+// pentru tichete/anchete — fiind acum independentă de traficul de iteme,
+// paginarea ajunge oricât de departe în istoric (până la limita de păstrare
+// de 30 de zile), fără ca vreo pagină să "sară" morti.
+app.get("/api/admin/kill-logs", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
+  const player = req.query.player ? String(req.query.player).slice(0, 64) : "";
+  const pageSize = Math.min(100, Math.max(1, Number(req.query.pageSize) || 20));
+  const page = Math.max(1, Number(req.query.page) || 1);
+
+  const { online, logs: deaths, total } = await fetchGameLogs({
+    player,
+    category: "death",
+    page,
+    pageSize,
+    withTotal: true,
+  });
+
+  let kills = [];
+  if (deaths.length) {
+    const times = deaths.map(d => new Date(d.at).getTime());
+    const oldest = new Date(Math.min(...times));
+    const newest = new Date(Math.max(...times) + 3 * 60 * 1000); // +3 minute (fereastra de jaf)
+
+    // Transferurile relevante — DOAR în fereastra de timp a acestei pagini,
+    // nu din tot istoricul. Limita de 500 e doar o plasă de siguranță pentru
+    // un interval neobișnuit de aglomerat — fereastra fiind deja restrânsă la
+    // mortile paginii curente, în practică e mult sub atât.
+    const { logs: transfers } = await fetchGameLogs({
+      player,
+      category: "item_transfer",
+      after: oldest,
+      before: newest,
+      pageSize: 500,
+    });
+
+    const staffLogs = await fetchStaffLogs({ after: oldest, before: newest, limit: 500 });
+    correlateStaffAction(deaths, staffLogs, "death", /kill/i, "adminKill");
+
+    function lootedAfterDeath(victim, deathAt) {
+      const deathTime = new Date(deathAt).getTime();
+      return transfers
+        .filter(t => (t.player || "").toLowerCase().trim() === (victim || "").toLowerCase().trim())
+        .filter(t => {
+          const dt = new Date(t.at).getTime() - deathTime;
+          return dt >= 0 && dt <= 3 * 60 * 1000;
+        })
+        .map(t => ({ item: t.details.item, count: t.details.count, to: t.details.to, at: t.at }));
+    }
+
+    kills = deaths
+      .map(d => ({
+        victim: d.player,
+        victimRpName: d.rpName || null,
+        killer: d.details.killer || null,
+        adminKill: d.details.adminKill || null,
+        cause: d.details.cause || null,
+        job: d.details.job || null,
+        detectedBy: d.details.detectedBy || "event",
+        at: d.at,
+        looted: lootedAfterDeath(d.player, d.at),
+      }))
+      .sort((a, b) => new Date(b.at) - new Date(a.at));
+  }
+
+  const totalPages = total != null ? Math.max(1, Math.ceil(total / pageSize)) : null;
+  res.json({ online, kills, page, pageSize, total, totalPages });
+}));
+
+// Sancțiuni Luxu Admin, pentru pagina Sancțiuni de pe site — cerută explicit,
+// ca staff-ul nostru să vadă și ban-urile/avertismentele/închisorile date
+// prin panoul Luxu, fără să deschidă separat panoul lor. Fără filtru de
+// jucător = ultimele de pe tot serverul.
+app.get("/api/admin/live/moderation", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
+  const player = req.query.player ? String(req.query.player).trim().slice(0, 64) : "";
+  const result = await fetchLuxuModeration({ player });
+  res.json(result);
+}));
+
+// Case, business-uri și găști — pagina Jucători, secțiunea "Proprietăți" (fără
+// filtru de jucător = tot ce există pe server, pentru răsfoire).
+app.get("/api/admin/live/assets", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
+  const player = req.query.player ? String(req.query.player).trim().slice(0, 64) : "";
+  const result = await fetchAssets({ player });
+  res.json(result);
+}));
+
+// ---------------------------------------------------------------------------
+// Profilul unui jucător — pagina cerută explicit ("apesi pe player și se
+// deschide pagina cu toată informația lui"). Combină TOATE sursele deja
+// folosite separat în alte pagini, într-un singur rezumat:
+//   - date live din moldovarp-api (bani, vehicule, job) — doar dacă jucătorul
+//     e online chiar acum, altfel `live` rămâne null (nu inventăm date vechi
+//     aici — pentru asta există deja Loguri, care arată istoricul)
+//   - contul de pe site, dacă jucătorul din joc are și cont (majoritatea
+//     jucătorilor pot să nu aibă — potrivirea e după numele afișat)
+//   - sancțiuni (după target_name, la fel ca pagina de Sancțiuni)
+//   - tichetele contului, dacă are cont
+//   - activitate recentă (aceleași loguri ca la pagina Loguri, filtrate pe
+//     acest jucător)
+//   - kill-uri, ATÂT ca victimă CÂT ȘI ca ucigaș (pentru "ca ucigaș" nu putem
+//     filtra la sursă — moldovarp-api filtrează după victimă — deci citim un
+//     lot mai mare de morți recente și filtrăm aici după numele ucigașului;
+//     acceptabil pentru un rezumat de profil, nu pentru un istoric complet)
+// Găsită după NUME (case-insensitive), nu după un id din baza noastră —
+// pentru că jucătorul din joc poate să nu aibă deloc cont pe site.
+// ---------------------------------------------------------------------------
+async function buildPlayerProfile(name) {
+  const cleanName = (name || "").toString().trim().slice(0, 64);
+  if (!cleanName) return null;
+  const lower = cleanName.toLowerCase();
+
+  const [liveDetail, accountResult, punishmentResult, activityResult, staffActivity, deathsResult, moderationResult] = await Promise.all([
+    getPlayersDetail(),
+    pool.query(
+      `SELECT p.id, p.game_id, p.display_name, p.playtime_minutes, p.status, p.created_at,
+              p.last_cash, p.last_bank, p.last_black_money, p.last_job, p.last_job_label,
+              p.last_vehicles, p.last_synced_at,
+              u.id AS user_id, u.username, u.email,
+              f.name AS faction_name, fr.name AS rank_name
+       FROM players p
+       JOIN users u ON u.id = p.user_id
+       LEFT JOIN faction_members fm ON fm.player_id = p.id
+       LEFT JOIN factions f ON f.id = fm.faction_id
+       LEFT JOIN faction_ranks fr ON fr.id = fm.rank_id
+       WHERE p.display_name ILIKE $1
+       LIMIT 1`, [cleanName]
+    ),
+    pool.query(
+      `SELECT pu.id, pu.type, pu.reason, pu.duration_minutes, pu.created_at, u.username AS issued_by,
+              CASE WHEN pu.duration_minutes IS NOT NULL
+                   THEN pu.created_at + (pu.duration_minutes || ' minutes')::interval
+                   ELSE NULL END AS expires_at
+       FROM punishments pu LEFT JOIN users u ON u.id = pu.issued_by
+       WHERE pu.target_name ILIKE $1
+       ORDER BY pu.created_at DESC LIMIT 20`, [cleanName]
+    ),
+    fetchGameLogs({ player: cleanName, limit: 25 }),
+    fetchStaffLogs({ player: cleanName, limit: 25 }),
+    fetchGameLogs({ category: "death", limit: 300 }),
+    fetchLuxuModeration({ player: cleanName }),
+  ]);
+
+  const live = liveDetail.online
+    ? (liveDetail.players || []).find(p => (p.name || "").toLowerCase().trim() === lower) || null
+    : null;
+
+  // Cerută separat, DUPĂ ce știm `live` — dacă jucătorul e online chiar
+  // acum, moldovarp-api ne-a dat deja identificatorul lui ESX exact (vezi
+  // /players), pe care îl trimitem mai departe la /assets pentru un match
+  // sigur pe casă/gașcă (owner/identificator), în loc de potrivire de nume
+  // (owner_name/customnick — pot să nu semene deloc cu numele CFX). Fără el
+  // (jucător offline), rămâne căutarea după nume, cu limitările știute.
+  const assetsResult = await fetchAssets({ player: cleanName, identifier: live?.license, rpName: live?.serverName });
+
+  const account = accountResult.rows[0] || null;
+  let tickets = [];
+  if (account) {
+    const t = await pool.query(
+      `SELECT id, subject, category, status, created_at FROM tickets WHERE user_id = $1 ORDER BY created_at DESC LIMIT 10`,
+      [account.user_id]
+    );
+    tickets = t.rows;
+  }
+
+  const recentActivity = [...activityResult.logs, ...staffActivity]
     .sort((a, b) => new Date(b.at) - new Date(a.at))
-    .slice(0, limit);
+    .slice(0, 25);
 
-  res.json({ online: gameOnline, logs: merged });
+  const allDeaths = deathsResult.logs;
+  correlateStaffAction(allDeaths, staffActivity, "death", /kill/i, "adminKill");
+
+  const killsAsVictim = allDeaths
+    .filter(d => (d.player || "").toLowerCase().trim() === lower)
+    .map(d => ({ killer: d.details.killer || null, adminKill: d.details.adminKill || null, cause: d.details.cause || null, at: d.at }))
+    .slice(0, 20);
+
+  const killsAsKiller = allDeaths
+    .filter(d => (d.details.killer || "").toLowerCase().trim() === lower)
+    .map(d => ({ victim: d.player, cause: d.details.cause || null, at: d.at }))
+    .slice(0, 20);
+
+  // Cand jucatorul e offline ACUM, dar avem o poza salvata de cand a fost
+  // ultima data online (vezi syncPlayerSnapshots, la fiecare 60s), o
+  // aratam clar etichetata cu "ultima data vazut" — nu o confundam cu date
+  // live. Fara asta, un jucator offline nu vedea absolut nimic despre
+  // banii/vehiculele lui, ceea ce nu parea profesional.
+  // player-profile-modal.js (moderationHtml) așteaptă un singur obiect
+  // "jail", nu o listă — arătăm cea mai relevantă intrare: una activă acum,
+  // altfel cea mai recentă (istoric), altfel deloc dacă n-a stat niciodată.
+  const moderation = moderationResult.online ? {
+    bans: moderationResult.bans,
+    warnings: moderationResult.warnings,
+    jail: moderationResult.jail.find(j => j.active) || moderationResult.jail[0] || null,
+  } : null;
+
+  // Un jucător poate avea mai multe case (houses e listă întreagă), dar de
+  // obicei o singură gașcă activă — luăm prima găsită după porecla din
+  // op-crime (vezi comentariul din fetchAssets/getGangs despre limitările
+  // acelei potriviri).
+  const houses = assetsResult.online ? assetsResult.houses : [];
+  const businesses = assetsResult.online ? assetsResult.businesses : [];
+  // gasStations/stores (v1.27.0) — vezi comentariul din fetchAssets. Match
+  // exact pe identificator, deci doar pentru jucătorul ONLINE chiar acum
+  // (fără identificator exact, resursa nu are cum să caute în aceste tabele).
+  const gasStations = assetsResult.online ? assetsResult.gasStations : [];
+  const stores = assetsResult.online ? assetsResult.stores : [];
+  const gang = assetsResult.online ? (assetsResult.gangs[0] || null) : null;
+
+  const lastKnown = (!live && account && account.last_synced_at) ? {
+    cash: account.last_cash, bank: account.last_bank, blackMoney: account.last_black_money,
+    job: account.last_job, jobLabel: account.last_job_label,
+    vehicles: account.last_vehicles || [], syncedAt: account.last_synced_at,
+  } : null;
+
+  return {
+    name: cleanName,
+    online: !!live,
+    live: live ? {
+      serverId: live.id, job: live.job, jobLabel: live.jobLabel, group: live.group,
+      cash: live.cash, bank: live.bank, blackMoney: live.blackMoney, vehicles: live.vehicles || [],
+      // cfxName = numele raportat de platformă (Steam/Rockstar), serverName =
+      // numele personajului RP din baza jocului (users.firstname/lastname) —
+      // pot diferi complet; license = identificatorul stabil (license:...).
+      // Doar cât jucătorul e online (`live`) — quando offline, folosim doar
+      // numele cu care a fost găsit profilul (cleanName), fără să inventăm.
+      cfxName: live.name || null,
+      serverName: live.serverName || null,
+      license: live.license || null,
+    } : null,
+    lastKnown,
+    account: account ? {
+      id: account.id, game_id: account.game_id, display_name: account.display_name,
+      playtime_minutes: account.playtime_minutes, status: account.status, created_at: account.created_at,
+      username: account.username, faction_name: account.faction_name, rank_name: account.rank_name,
+    } : null,
+    punishments: punishmentResult.rows,
+    moderation,
+    houses,
+    businesses,
+    gasStations,
+    stores,
+    gang,
+    tickets,
+    recentActivity,
+    killsAsVictim,
+    killsAsKiller,
+  };
+}
+
+app.get("/api/admin/player-profile", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
+  const name = String(req.query.name || "").trim();
+  if (!name) return res.status(400).json({ error: "Parametrul name este obligatoriu." });
+  const profile = await buildPlayerProfile(name);
+  if (!profile) return res.status(400).json({ error: "Nume invalid." });
+  res.json(profile);
+}));
+
+// Profilul PROPRIU al jucătorului logat — aceeași agregare ca mai sus, dar
+// legată strict de contul autentificat (nu poate cere profilul altcuiva).
+// Necesită un cont de site cu display_name setat (vine din players.display_name,
+// populat la prima sincronizare cu jocul) — dacă nu există încă, răspundem
+// degradat, nu cu eroare.
+app.get("/api/me/profile", auth, asyncRoute(async (req, res) => {
+  const { rows } = await pool.query(`SELECT display_name FROM players WHERE user_id = $1 LIMIT 1`, [req.user.sub]);
+  const displayName = rows[0]?.display_name;
+  if (!displayName) return res.json({ hasGameProfile: false });
+  const profile = await buildPlayerProfile(displayName);
+  res.json({ hasGameProfile: true, ...profile });
+}));
+
+// Leagă contul de site (Discord) de personajul din joc — jucătorul scrie
+// "/leagacont" în joc, primește un cod de 6 cifre valabil 5 minute, îl
+// introduce aici o singură dată. Verificat DIRECT de moldovarp-api (vezi
+// fetchLinkVerify) — site-ul nu are cum să inventeze o legătură validă fără
+// codul real generat în joc, deci nu se poate lega contul altcuiva.
+//
+// TEMPORAR (06.09.2026): restricționat la ADMIN_ROLES, cerut explicit — VIP
+// Shop-ul e încă în testare reală și nu trebuie să fie accesibil jucătorilor
+// obișnuiți. Legarea de cont există doar ca să poți deschide cutii, deci
+// merge sub aceeași restricție. Scoateți `requireRole(...ADMIN_ROLES)` de pe
+// toate cele 4 rute de mai jos (astea + /api/vip-shop + /api/vip-shop/deschide)
+// când VIP Shop e gata de lansare publică.
+app.post("/api/cont/leaga-joc", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+  const code = String(req.body?.code || "").trim();
+  if (!/^\d{6}$/.test(code)) return res.status(400).json({ error: "Codul trebuie să aibă 6 cifre." });
+  const result = await fetchLinkVerify(code);
+  if (!result.ok) {
+    const messages = {
+      cod_invalid: "Cod invalid sau deja folosit.",
+      server_offline: "Serverul de joc nu răspunde momentan — încearcă din nou puțin mai târziu.",
+      eroare: "Nu am putut verifica codul.",
+    };
+    return res.status(400).json({ error: messages[result.error] || messages.eroare });
+  }
+  await pool.query(
+    `UPDATE users SET game_identifier = $1, game_identifier_name = $2 WHERE id = $3`,
+    [result.identifier, result.name || null, req.user.sub]
+  );
+  res.json({ ok: true, name: result.name || null });
+}));
+
+app.post("/api/cont/dezleaga-joc", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+  await pool.query(`UPDATE users SET game_identifier = NULL, game_identifier_name = NULL WHERE id = $1`, [req.user.sub]);
+  res.json({ ok: true });
+}));
+
+// Pagina "VIP Shop" — lista recompenselor (cu prețuri și șanse) e publică
+// pentru orice cont logat, ca jucătorii să vadă din prima ce oferim, fără să
+// fie nevoiți să lege contul mai întâi. Soldul de coins și recompensele "în
+// așteptare" necesită cont legat de joc — fără el răspundem "linked: false"
+// și lăsăm frontend-ul să ceară legarea abia când chiar încearcă să deschidă
+// o cutie (nu e o eroare, doar jucătorul nu a parcurs încă acel pas).
+app.get("/api/vip-shop", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+  const { rows } = await pool.query(`SELECT game_identifier, game_identifier_name FROM users WHERE id = $1`, [req.user.sub]);
+  const identifier = rows[0]?.game_identifier;
+
+  if (!identifier) {
+    const casesResult = await fetchCasesList();
+    return res.json({ linked: false, online: casesResult.online, cases: casesResult.cases });
+  }
+
+  const [coinsResult, casesResult] = await Promise.all([fetchCoins(identifier), fetchCasesList()]);
+  res.json({
+    linked: true,
+    name: rows[0].game_identifier_name,
+    online: coinsResult.online && casesResult.online,
+    coins: coinsResult.coins,
+    pending: coinsResult.pending,
+    cases: casesResult.cases,
+  });
+}));
+
+app.post("/api/vip-shop/deschide", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+  const { rows } = await pool.query(`SELECT game_identifier, game_identifier_name FROM users WHERE id = $1`, [req.user.sub]);
+  const identifier = rows[0]?.game_identifier;
+  if (!identifier) return res.status(400).json({ error: "Leagă-ți mai întâi contul de personajul din joc." });
+
+  const caseId = String(req.body?.caseId || "").trim();
+  if (!caseId) return res.status(400).json({ error: "Lipsește caseId." });
+
+  const outcome = await postOpenCase({ identifier, playerName: rows[0].game_identifier_name, caseId });
+  if (!outcome.ok) {
+    const messages = {
+      coins_insuficienti: "Nu ai suficienți coins pentru această recompensă.",
+      caz_necunoscut: "Recompensa nu mai există.",
+      server_offline: "Serverul de joc nu răspunde momentan.",
+    };
+    return res.status(400).json({ error: messages[outcome.error] || "Nu am putut deschide recompensa." });
+  }
+  res.json({ ok: true, ...outcome.result });
 }));
 
 // Webhook primit direct de la Luxu Admin (panoul lor cloud, tab "Webhooks"),
@@ -501,6 +1356,204 @@ app.post("/api/auth/login", asyncRoute(async (req, res) => {
 }));
 
 // ---------------------------------------------------------------------------
+// Email de confirmare (cod de 6 cifre) — folosit la "Setează parola"
+// ---------------------------------------------------------------------------
+// Trimitem prin API-ul HTTP al Brevo (nu prin SMTP!) — Railway blochează
+// traficul SMTP ieșit (porturile 465/587) pe planurile Free/Trial/Hobby, ceea
+// ce făcea ca trimiterea prin nodemailer să rămână agățată la infinit fără
+// nicio eroare vizibilă. API-ul e peste HTTPS normal, deci nu e blocat.
+// Variabile de mediu necesare: BREVO_API_KEY (din Brevo → SMTP & API → API
+// Keys, NU cheia SMTP) și EMAIL_FROM (adresa de expeditor — de obicei
+// adresa cu care te-ai înregistrat pe Brevo, care e verificată automat).
+function emailApiConfigured() {
+  return Boolean(process.env.BREVO_API_KEY && process.env.EMAIL_FROM);
+}
+
+// intro = propoziția care apare deasupra codului, adaptată la context (email
+// de confirmare la setarea parolei, vs. cod de resetare parolă uitată etc).
+async function sendCodeEmail(to, code, { subject, intro }) {
+  const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      "content-type": "application/json",
+      "api-key": process.env.BREVO_API_KEY,
+    },
+    body: JSON.stringify({
+      sender: { email: process.env.EMAIL_FROM, name: "Moldova RP" },
+      to: [{ email: to }],
+      subject,
+      textContent: `${intro} ${code}\n\nCodul expiră în 15 minute. Dacă nu ai cerut tu asta, ignoră acest email.`,
+      htmlContent: `<p>${intro}</p>
+           <p style="font-size:28px;font-weight:bold;letter-spacing:4px">${code}</p>
+           <p>Codul expiră în 15 minute. Dacă nu ai cerut tu asta, ignoră acest email.</p>`,
+    }),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`Brevo API a răspuns cu ${res.status}: ${body.slice(0, 300)}`);
+  }
+}
+
+function sendVerificationEmail(to, code) {
+  return sendCodeEmail(to, code, {
+    subject: `Codul tău de confirmare: ${code}`,
+    intro: "Codul tău de confirmare pentru contul de pe moldovarp.md este:",
+  });
+}
+
+function sendResetCodeEmail(to, code) {
+  return sendCodeEmail(to, code, {
+    subject: `Codul tău de resetare a parolei: ${code}`,
+    intro: "Cineva (probabil tu) a cerut resetarea parolei pentru contul de pe moldovarp.md. Codul tău este:",
+  });
+}
+
+function generateVerifyCode() {
+  return String(Math.floor(100000 + Math.random() * 900000)); // 6 cifre, 100000-999999
+}
+
+// Auto-service, în DOI PAȘI — cerut explicit, ca simpla deținere a unui cont
+// (chiar și prin Discord plafonat la "player", mai sus) să nu fie de-ajuns
+// ca să-ți pui o parolă pe un email pe care nu-l deții cu adevărat:
+//
+// Pasul 1 (acest endpoint): primește email+parolă, dar NU le salvează încă
+// pe cont — le ține "în așteptare" (pending_email/pending_password_hash) și
+// trimite un cod de 6 cifre pe emailul dat. Dacă emailul e deja folosit de
+// ALT cont, refuzăm aici (altfel am da acces la parola altcuiva, aparent).
+// Apelat a doua oară (ex: codul a expirat), pur și simplu suprascrie cererea
+// în așteptare și retrimite un cod nou — funcționează și ca "retrimite codul".
+//
+// Pasul 2 (endpoint-ul de mai jos, /confirm): abia după codul corect, emailul
+// și parola devin reale pe cont. Până atunci, contul rămâne exact cum era
+// (fără parolă utilizabilă), deci accesul de admin tot nu se poate obține
+// decât prin login.html cu email+parolă, DUPĂ confirmare.
+app.post("/api/auth/set-password", auth, asyncRoute(async (req, res) => {
+  const { email, password } = req.body;
+  const cleanEmail = (email || "").trim().toLowerCase();
+  if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail))
+    return res.status(400).json({ error: "Email invalid." });
+  if (!password || password.length < 8)
+    return res.status(400).json({ error: "Parola trebuie să aibă minimum 8 caractere." });
+  if (!emailApiConfigured())
+    return res.status(503).json({ error: "Trimiterea de email-uri nu este configurată încă pe server." });
+
+  const existing = await pool.query("SELECT id FROM users WHERE email=$1 AND id<>$2", [cleanEmail, req.user.sub]);
+  if (existing.rows[0]) return res.status(409).json({ error: "Acest email este deja folosit de alt cont." });
+
+  const hash = await bcrypt.hash(password, 12);
+  const code = generateVerifyCode();
+  await pool.query(
+    `UPDATE users SET pending_email=$1, pending_password_hash=$2,
+            email_verify_code=$3, email_verify_expires=NOW() + INTERVAL '15 minutes', updated_at=NOW()
+     WHERE id=$4`,
+    [cleanEmail, hash, code, req.user.sub]
+  );
+
+  try {
+    await sendVerificationEmail(cleanEmail, code);
+  } catch (e) {
+    console.error("Trimiterea emailului de confirmare a eșuat:", e.message);
+    return res.status(502).json({ error: "Nu am putut trimite emailul de confirmare. Încearcă din nou." });
+  }
+
+  res.json({ ok: true, message: "Cod trimis pe email." });
+}));
+
+app.post("/api/auth/set-password/confirm", auth, asyncRoute(async (req, res) => {
+  const { code } = req.body;
+  const { rows } = await pool.query(
+    `SELECT pending_email, pending_password_hash, email_verify_code, email_verify_expires
+     FROM users WHERE id=$1`, [req.user.sub]
+  );
+  const row = rows[0];
+  if (!row || !row.pending_email || !row.email_verify_code)
+    return res.status(400).json({ error: "Nu există nicio confirmare în așteptare — cere din nou codul." });
+  if (new Date(row.email_verify_expires) < new Date())
+    return res.status(400).json({ error: "Codul a expirat. Cere unul nou." });
+  if (String(code || "").trim() !== row.email_verify_code)
+    return res.status(400).json({ error: "Cod incorect." });
+
+  await pool.query(
+    `UPDATE users SET email=$1, password_hash=$2,
+            pending_email=NULL, pending_password_hash=NULL, email_verify_code=NULL, email_verify_expires=NULL,
+            updated_at=NOW()
+     WHERE id=$3`,
+    [row.pending_email, row.pending_password_hash, req.user.sub]
+  );
+  await logAction(req.user.sub, "auth.set_password", "user", req.user.sub, null, req.ip);
+  res.json({ ok: true });
+}));
+
+// ---------------------------------------------------------------------------
+// "Am uitat parola" — cod de 6 cifre pe email, apoi parolă nouă
+// ---------------------------------------------------------------------------
+// Merge DOAR pentru conturi care au deja un email+parolă reale (adică au
+// trecut prin înregistrare directă sau prin "Setează parola" de mai sus) —
+// un cont creat doar prin Discord nu are un email verificat de care să ne
+// putem folosi aici, deci îl tratăm la fel ca "email inexistent".
+//
+// Ca să nu dăm de gol cine are cont pe site (enumerare de emailuri), acest
+// endpoint răspunde mereu cu același mesaj de succes, indiferent dacă
+// emailul există sau nu — codul chiar pleacă doar dacă există un cont
+// potrivit, dar cel care întreabă nu poate distinge cele două cazuri.
+app.post("/api/auth/forgot-password", asyncRoute(async (req, res) => {
+  const cleanEmail = (req.body.email || "").trim().toLowerCase();
+  const genericOk = { ok: true, message: "Dacă adresa există în baza noastră de date, a fost trimis un cod pe email." };
+  if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) return res.json(genericOk);
+  if (!emailApiConfigured())
+    return res.status(503).json({ error: "Trimiterea de email-uri nu este configurată încă pe server." });
+
+  const { rows } = await pool.query(
+    "SELECT id FROM users WHERE email=$1 AND password_hash IS NOT NULL", [cleanEmail]
+  );
+  const user = rows[0];
+  if (!user) return res.json(genericOk);
+
+  const code = generateVerifyCode();
+  await pool.query(
+    `UPDATE users SET reset_password_code=$1, reset_password_expires=NOW() + INTERVAL '15 minutes', updated_at=NOW()
+     WHERE id=$2`,
+    [code, user.id]
+  );
+  try {
+    await sendResetCodeEmail(cleanEmail, code);
+  } catch (e) {
+    console.error("Trimiterea emailului de resetare a eșuat:", e.message);
+    // Tot răspuns generic — nu vrem să confirmăm existența contului prin
+    // diferența dintre "a mers" și "n-a mers să trimită".
+  }
+  res.json(genericOk);
+}));
+
+app.post("/api/auth/reset-password/confirm", asyncRoute(async (req, res) => {
+  const cleanEmail = (req.body.email || "").trim().toLowerCase();
+  const { code, password } = req.body;
+  if (!password || password.length < 8)
+    return res.status(400).json({ error: "Parola trebuie să aibă minimum 8 caractere." });
+
+  const { rows } = await pool.query(
+    "SELECT id, reset_password_code, reset_password_expires FROM users WHERE email=$1", [cleanEmail]
+  );
+  const user = rows[0];
+  if (!user || !user.reset_password_code)
+    return res.status(400).json({ error: "Cod invalid sau expirat. Cere unul nou." });
+  if (new Date(user.reset_password_expires) < new Date())
+    return res.status(400).json({ error: "Codul a expirat. Cere unul nou." });
+  if (String(code || "").trim() !== user.reset_password_code)
+    return res.status(400).json({ error: "Cod incorect." });
+
+  const hash = await bcrypt.hash(password, 12);
+  await pool.query(
+    `UPDATE users SET password_hash=$1, reset_password_code=NULL, reset_password_expires=NULL, updated_at=NOW()
+     WHERE id=$2`,
+    [hash, user.id]
+  );
+  await logAction(user.id, "auth.reset_password", "user", user.id, null, req.ip);
+  res.json({ ok: true });
+}));
+
+// ---------------------------------------------------------------------------
 // Discord OAuth login (v0.5)
 // ---------------------------------------------------------------------------
 
@@ -584,11 +1637,20 @@ app.get("/api/auth/discord/callback", asyncRoute(async (req, res) => {
       await logAction(user.id, "auth.discord_signup", "user", user.id, { discordId: profile.id }, req.ip);
     }
 
-    const roleRow = await pool.query(
-      "SELECT r.name AS role_name FROM users u JOIN roles r ON r.id = u.role_id WHERE u.id = $1",
-      [user.id]
-    );
-    const token = signUser({ id: user.id, username: user.username, role_name: roleRow.rows[0].role_name });
+    // SECURITATE (cerut explicit): un login prin Discord acordă în acest
+    // token MEREU doar rolul de jucător obișnuit, INDIFERENT ce rol are
+    // contul cu adevărat în baza de date. Motivul: dacă cineva fură contul
+    // de Discord al unui admin, autentificarea prin OAuth de mai sus tot ar
+    // reuși (Discord confirmă identitatea corect) — dar tokenul rezultat nu
+    // va avea niciodată voie să treacă de requireRole(...) pe rutele de
+    // admin, pentru că verificarea aia se uită STRICT la rolul din acest
+    // token (vezi funcția requireRole), nu la rolul din baza de date. Adminii
+    // trebuie să folosească întotdeauna email+parolă (/api/auth/login) ca
+    // să primească tokenul cu rolul lor real. Vezi și /api/me, care separă
+    // explicit rolul EFECTIV al sesiunii (din token) de rolul contului din
+    // baza de date, ca dashboard-ul să poată totuși recunoaște un admin fără
+    // parolă încă și să-i ceară să-și seteze una.
+    const token = signUser({ id: user.id, username: user.username, role_name: 'player' });
     await logAction(user.id, "auth.discord_login", "user", user.id, null, req.ip);
 
     res.redirect(`/auth-callback.html#token=${encodeURIComponent(token)}`);
@@ -600,7 +1662,7 @@ app.get("/api/auth/discord/callback", asyncRoute(async (req, res) => {
 
 app.get("/api/me", auth, asyncRoute(async (req, res) => {
   const { rows } = await pool.query(
-    `SELECT u.id,u.username,u.email,r.name role,
+    `SELECT u.id,u.username,u.email,r.name db_role,(u.password_hash IS NOT NULL) has_password,
             u.discord_id, u.discord_username, u.discord_avatar,
             p.id player_id,p.game_id,p.display_name,p.playtime_minutes,p.status,
             f.id faction_id, f.name faction_name, fr.id rank_id, fr.name rank_name
@@ -613,7 +1675,15 @@ app.get("/api/me", auth, asyncRoute(async (req, res) => {
      LIMIT 1`, [req.user.sub]
   );
   if (!rows[0]) return res.status(404).json({ error: "Cont inexistent." });
-  res.json(rows[0]);
+  const row = rows[0];
+  // "role" e rolul EFECTIV al sesiunii curente (vine din token — pentru un
+  // login prin Discord e mereu "player", vezi /api/auth/discord/callback),
+  // NU neapărat rolul contului din baza de date — acesta din urmă rămâne
+  // disponibil separat ca "dbRole", exact ca dashboard-ul să poată recunoaște
+  // "acest cont e de admin, dar sesiunea asta (prin Discord) nu are voie să
+  // acționeze ca admin" și să arate un buton de "Setează parolă" în loc să
+  // pretindă pur și simplu că userul n-are rang.
+  res.json({ ...row, role: req.user.role, dbRole: row.db_role, hasPassword: row.has_password });
 }));
 
 app.get("/api/regulations", asyncRoute(async (_req, res) => {
@@ -640,7 +1710,7 @@ app.get("/api/factions", asyncRoute(async (_req, res) => {
 
 app.get("/api/announcements", asyncRoute(async (_req, res) => {
   const { rows } = await pool.query(
-    `SELECT a.id,a.title,a.content,a.category,a.image_url,a.published_at,u.username author
+    `SELECT a.id,a.title,a.content,a.category,a.image_url,a.video_url,a.published_at,u.username author
      FROM announcements a LEFT JOIN users u ON u.id=a.author_id
      WHERE a.is_published=true ORDER BY a.published_at DESC LIMIT 30`
   );
@@ -758,7 +1828,7 @@ const VALID_ROLES = ["player", "moderator", "admin", "co-fondator", "owner"];
 app.get("/api/admin/users", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (_req, res) => {
   const { rows } = await pool.query(
     `SELECT u.id, u.username, u.email, u.discord_id, u.discord_username, u.discord_avatar,
-            u.is_active, u.created_at, r.name AS role
+            u.is_active, u.created_at, r.name AS role, (u.password_hash IS NOT NULL) AS has_password
      FROM users u
      JOIN roles r ON r.id = u.role_id
      ORDER BY u.created_at DESC`
@@ -1359,13 +2429,13 @@ app.get("/api/admin/announcements/:id", auth, requireRole(...MOD_ROLES), asyncRo
 }));
 
 app.post("/api/admin/announcements", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
-  const { title, content, category, is_published, image_url } = req.body;
+  const { title, content, category, is_published, image_url, video_url } = req.body;
   if (!title || !content)
     return res.status(400).json({ error: "Titlu și conținut sunt obligatorii." });
   const { rows } = await pool.query(
-    `INSERT INTO announcements(title, content, category, author_id, is_published, image_url)
-     VALUES($1,$2,$3,$4,$5,$6) RETURNING *`,
-    [title.trim(), content, category?.trim() || "General", req.user.sub, is_published ?? true, image_url?.trim() || null]
+    `INSERT INTO announcements(title, content, category, author_id, is_published, image_url, video_url)
+     VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+    [title.trim(), content, category?.trim() || "General", req.user.sub, is_published ?? true, image_url?.trim() || null, video_url?.trim() || null]
   );
   await logAction(req.user.sub, "announcement.create", "announcement", rows[0].id, { title }, req.ip);
   if (rows[0].is_published) notifyDiscordAnnouncement({ ...rows[0], author: req.user.username });
@@ -1374,7 +2444,7 @@ app.post("/api/admin/announcements", auth, requireRole(...ADMIN_ROLES), asyncRou
 
 app.put("/api/admin/announcements/:id", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
   const { id } = req.params;
-  const { title, content, category, is_published, image_url } = req.body;
+  const { title, content, category, is_published, image_url, video_url } = req.body;
   const before = await pool.query("SELECT is_published FROM announcements WHERE id=$1", [id]);
   if (!before.rows[0]) return res.status(404).json({ error: "Anunțul nu există." });
   const wasPublished = before.rows[0].is_published;
@@ -1385,9 +2455,10 @@ app.put("/api/admin/announcements/:id", auth, requireRole(...ADMIN_ROLES), async
        content = COALESCE($2, content),
        category = COALESCE($3, category),
        is_published = COALESCE($4, is_published),
-       image_url = COALESCE($5, image_url)
-     WHERE id = $6 RETURNING *`,
-    [title || null, content || null, category?.trim() || null, is_published ?? null, image_url?.trim() || null, id]
+       image_url = COALESCE($5, image_url),
+       video_url = COALESCE($6, video_url)
+     WHERE id = $7 RETURNING *`,
+    [title || null, content || null, category?.trim() || null, is_published ?? null, image_url?.trim() || null, video_url?.trim() || null, id]
   );
   if (!rows[0]) return res.status(404).json({ error: "Anunțul nu există." });
   await logAction(req.user.sub, "announcement.update", "announcement", id, req.body, req.ip);

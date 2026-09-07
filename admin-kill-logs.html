@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Kill Logs — Admin Moldova RP</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="admin.css"></head>
+<body>
+<aside class="side"><a class="brand" href="index.html"><img src="assets/logo.png" alt=""><b>MOLDOVA<span>RP</span></b></a><p>ADMINISTRAȚIE</p><a href="admin.html">▦ Dashboard</a><a href="admin-utilizatori.html">👤 Utilizatori</a><a href="admin-jucatori.html">♙ Jucători</a><a href="admin-financiar.html">◆ Facțiuni</a><a href="admin-sanctiuni.html">⚠ Sancțiuni</a><a>▤ Reclamații</a><a>⚖ CK</a><a href="admin-regulamente.html">📚 Regulamente</a><a href="admin-continut.html">📝 Conținut pagini</a><a href="admin-anunturi.html">◉ Anunțuri</a><a href="admin-tichete.html">🎫 Tichete</a><a href="admin-loguri.html">🗂 Loguri</a><a class="sel" href="admin-kill-logs.html">🔪 Kill Logs</a><a>⌁ Audit Logs</a><a href="admin-txadmin.html" id="nav-txadmin">🖥 txAdmin</a><a class="back" href="dashboard.html">← Contul meu</a><a class="back" href="index.html">← Site public</a></aside>
+<main>
+<header><div><small>PANEL ADMINISTRATIV</small><h1>Kill Logs</h1></div><a class="admin" href="dashboard.html" title="Înapoi la contul meu" style="text-decoration:none"><span id="admin-name">…</span> <i></i></a></header>
+
+<p class="muted" style="margin:-10px 0 18px">
+  Cine pe cine a ucis, și ce s-a luat din inventarul victimei imediat după (jaf de cadavru, în primele 3 minute de la moarte).
+  Cine a luat itemele nu e neapărat ucigașul — poate fi oricine ajunge primul la cadavru, de-aia arătăm explicit numele lui.
+  Mortile fără eveniment de joc cunoscut (server care nu trimite ucigașul) sunt detectate automat prin verificarea periodică a vieții jucătorilor — marcate „detectat automat”, fără ucigaș cunoscut.
+  Istoricul este păstrat timp de <strong>30 de zile</strong> — după acest interval, înregistrările sunt șterse automat.
+</p>
+
+<section class="tablebox">
+  <div class="title">
+    <h2>Kill-uri recente</h2>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <input id="f-player" class="filter-select" placeholder="Filtrează după victimă..." autocomplete="off" style="min-width:180px">
+      <button id="refresh-btn" class="btn-ghost" type="button">Reîmprospătează</button>
+    </div>
+  </div>
+  <p class="muted" id="offline-note" style="margin:0 22px 16px" hidden>Serverul de joc nu răspunde momentan — lista poate fi incompletă.</p>
+  <table id="kills-table"><thead><tr><th>VICTIMĂ</th><th>UCIGAȘ</th><th>CAUZĂ</th><th>JAF DUPĂ MOARTE</th><th>DATA</th></tr></thead>
+  <tbody id="list-body"><tr><td colspan="5">Se încarcă…</td></tr></tbody></table>
+  <div id="pagination" style="padding:16px 22px;display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap"></div>
+</section>
+
+</main>
+<script src="auth-client.js"></script>
+<script src="player-profile-modal.js"></script>
+<script>
+const escapeHtml = s => (s ?? '').toString()
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
+function truncate(value, max) {
+  const s = (value ?? '').toString();
+  return s.length > max ? s.slice(0, max) + '…' : s;
+}
+
+function fmtDate(d) { return new Date(d).toLocaleString('ro-RO'); }
+
+// Numele unui jucător real (nu username-ul de staff al unui admin — acela
+// nu are neapărat legătură cu vreun personaj din joc, deci nu-l facem
+// clickabil ca să nu deschidem un profil gol/derutant) — buton, nu link,
+// ca să rămână accesibil de la tastatură și fără să navigheze nicăieri.
+function playerButton(name) {
+  return `<button type="button" class="player-link" data-player="${escapeHtml(name)}">${escapeHtml(name)}</button>`;
+}
+
+function formatKiller(k) {
+  if (k.adminKill) {
+    return `<strong>admin ${escapeHtml(k.adminKill.staff || 'necunoscut')}</strong> <span class="muted">(comandă din panoul de admin)</span>`;
+  }
+  if (k.killer) return `<strong>${playerButton(k.killer)}</strong>`;
+  if (k.detectedBy === 'health') {
+    return '<span class="muted">necunoscut — detectat automat (fără ucigaș cunoscut)</span>';
+  }
+  return '<span class="muted">necunoscut</span>';
+}
+
+// Fiecare item luat, ca un "pill" separat, într-un container care se
+// întinde pe lățime (flex-wrap) — NU mai trunchiem șirul la un număr fix de
+// caractere ca înainte (tăia lista la vreo 6-7 iteme, chiar dacă mai
+// erau — raportat explicit de staff). Fără trunchiere de caractere, nici
+// riscul vechi de a rupe un tag HTML la mijloc (motivul pentru care fusese
+// lăsat așa inițial) nu mai există.
+function formatLoot(looted) {
+  if (!looted || !looted.length) return '<span class="muted">—</span>';
+  const items = looted.map(l =>
+    `<span class="pill off" style="margin:0;white-space:nowrap">${escapeHtml((l.count ? l.count + 'x ' : '') + (l.item || 'un item'))} → ${escapeHtml(l.to || 'necunoscut')}</span>`
+  );
+  return `<div style="display:flex;flex-wrap:wrap;gap:4px;max-width:340px">${items.join('')}</div>`;
+}
+
+function rowsHtml(kills) {
+  return kills.map(k => `
+      <tr>
+        <td><strong>${k.victim ? playerButton(k.victim) : 'necunoscut'}</strong>${k.job ? ` <span class="muted">· job: ${escapeHtml(k.job)}</span>` : ''}${k.victimRpName ? `<br><span class="muted" style="font-size:11px">${escapeHtml(k.victimRpName)}</span>` : ''}</td>
+        <td>${formatKiller(k)}</td>
+        <td>${k.cause ? escapeHtml(truncate(String(k.cause), 100)) : '<span class="muted">—</span>'}</td>
+        <td>${formatLoot(k.looted)}</td>
+        <td>${fmtDate(k.at)}</td>
+      </tr>`).join('');
+}
+
+// Delegare de evenimente pe tot tabelul (nu pe fiecare buton individual) —
+// rândurile se re-randează des (reîmprospătare automată la 60s, filtrare,
+// "încarcă mai vechi"), deci un singur listener pus o dată, la încărcare,
+// e mai simplu și mai sigur decât să re-legăm listenere de fiecare dată.
+document.getElementById('kills-table').addEventListener('click', (e) => {
+  const btn = e.target.closest('.player-link');
+  if (btn) window.openPlayerProfile(btn.dataset.player);
+});
+
+let debounceTimer = null;
+function scheduleReload() {
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(() => loadKills(1), 300);
+}
+
+// Paginare pe NUMĂR de pagină (1, 2, 3...), nu pe cursor "Încarcă mai vechi"
+// — cel vechi se dovedise nefiabil: cerea morțile ȘI transferurile de iteme
+// din același loc cu o limită comună, iar pe un server activ transferurile
+// (mult mai frecvente) "împingeau" morțile vechi în afara ferestrei, ceea
+// ce ducea, în cazuri reale, la reîncărcarea aceleiași pagini în loc să
+// avanseze (raportat explicit de staff). Acum backend-ul (vezi
+// /api/admin/kill-logs) paginează DOAR pe morți, deci fiecare pagină e
+// stabilă și predictibilă — și poți ajunge oricât de departe în istoric
+// (până la 30 de zile), nu doar câteva ore, util la anchete/tichete.
+let currentPage = 1;
+let currentTotalPages = null;
+
+function renderPagination(page, totalPages) {
+  const el = document.getElementById('pagination');
+  if (!totalPages || totalPages <= 1) { el.innerHTML = ''; return; }
+
+  // Fereastră de pagini vizibile în jurul celei curente (±2), plus mereu
+  // prima și ultima — cu "…" între, ca să nu umplem ecranul cu sute de
+  // butoane pe un istoric lung de 30 de zile.
+  const pages = new Set([1, totalPages]);
+  for (let p = page - 2; p <= page + 2; p++) if (p >= 1 && p <= totalPages) pages.add(p);
+  const sorted = [...pages].sort((a, b) => a - b);
+
+  let html = `<button type="button" class="btn-ghost" data-page="${page - 1}" ${page <= 1 ? 'disabled' : ''}>‹ Precedenta</button>`;
+  let prev = 0;
+  for (const p of sorted) {
+    if (p - prev > 1) html += `<span class="muted" style="padding:0 4px">…</span>`;
+    html += `<button type="button" class="btn-ghost${p === page ? ' active' : ''}" data-page="${p}" ${p === page ? 'style="background:var(--orange);color:#000;border-color:var(--orange)"' : ''}>${p}</button>`;
+    prev = p;
+  }
+  html += `<button type="button" class="btn-ghost" data-page="${page + 1}" ${page >= totalPages ? 'disabled' : ''}>Următoarea ›</button>`;
+  el.innerHTML = html;
+  el.querySelectorAll('button[data-page]').forEach(btn => {
+    btn.addEventListener('click', () => loadKills(Number(btn.dataset.page)));
+  });
+}
+
+async function loadKills(page) {
+  currentPage = page || currentPage || 1;
+  const tbody = document.getElementById('list-body');
+  const offlineNote = document.getElementById('offline-note');
+  const player = document.getElementById('f-player').value.trim();
+  const qs = new URLSearchParams();
+  if (player) qs.set('player', player);
+  qs.set('page', String(currentPage));
+  qs.set('pageSize', '20');
+  try {
+    const res = await apiFetch(`/api/admin/kill-logs?${qs.toString()}`);
+    if (!res.ok) throw new Error();
+    const d = await res.json();
+    offlineNote.hidden = d.online !== false;
+    currentPage = d.page || currentPage;
+    currentTotalPages = d.totalPages || null;
+    if (!d.kills || !d.kills.length) {
+      tbody.innerHTML = `<tr><td colspan="5">${currentPage > 1 ? 'Nicio moarte pe această pagină.' : 'Nicio moarte găsită.'}</td></tr>`;
+    } else {
+      tbody.innerHTML = rowsHtml(d.kills);
+    }
+    renderPagination(currentPage, currentTotalPages);
+  } catch {
+    tbody.innerHTML = '<tr><td colspan="5">Nu am putut încărca kill logs.</td></tr>';
+  }
+}
+
+document.getElementById('f-player').addEventListener('input', scheduleReload);
+document.getElementById('refresh-btn').addEventListener('click', () => loadKills(currentPage));
+
+(async () => {
+  const me = await requireRole('moderator', 'admin', 'co-fondator', 'owner');
+  if (!me) return;
+  document.getElementById('admin-name').textContent = me.username;
+  loadKills(1);
+  // Reîmprospătarea automată nu trebuie să te tragă înapoi la pagina 1 dacă
+  // răsfoiești istoricul — rulează doar cât timp ești chiar pe pagina 1.
+  setInterval(() => { if (currentPage === 1) loadKills(1); }, 60000);
+})();
+</script>
+</body></html>

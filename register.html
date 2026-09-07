@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Înregistrare — Moldova RP</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="auth.css"></head>
+<body><div class="auth"><div class="brand"><img src="assets/logo.png" alt=""><b>MOLDOVA<span>RP</span></b></div><div class="box"><p>PORTAL OFICIAL</p><h1>Creează cont</h1><form id="register-form" novalidate><label>Username</label><input id="username-input" name="username" placeholder="username" autocomplete="username" required minlength="3"><label>Email</label><input id="email-input" name="email" type="email" placeholder="tu@exemplu.com" autocomplete="email" required><label>Parolă</label><input id="password-input" name="password" type="password" placeholder="minim 8 caractere" autocomplete="new-password" required minlength="8"><label>Confirmă parola</label><input id="password2-input" name="password2" type="password" placeholder="••••••••" autocomplete="new-password" required minlength="8"><p id="register-error" class="error" hidden></p><p id="register-success" class="error" style="color:var(--green,#2e9e5b)" hidden></p><button type="submit" id="register-submit">Creează cont</button></form><div class="or"><span>sau</span></div><a class="discord" href="/api/auth/discord">Conectare cu Discord</a><small>Contul creat aici funcționează cu email/username + parolă din prima — cel mai sigur mod de a avea un cont de staff, pentru că nu depinde deloc de Discord.</small></div><a href="login.html">← Am deja cont, intru</a></div>
+<script src="auth-client.js"></script>
+<script>
+const form = document.getElementById('register-form');
+const errorBox = document.getElementById('register-error');
+const successBox = document.getElementById('register-success');
+const submitBtn = document.getElementById('register-submit');
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  errorBox.hidden = true;
+  successBox.hidden = true;
+
+  const username = document.getElementById('username-input').value.trim();
+  const email = document.getElementById('email-input').value.trim();
+  const password = document.getElementById('password-input').value;
+  const password2 = document.getElementById('password2-input').value;
+
+  if (password !== password2) {
+    errorBox.textContent = 'Parolele nu coincid.';
+    errorBox.hidden = false;
+    return;
+  }
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Se creează…';
+  try {
+    const res = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, email, password })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Nu am putut crea contul.');
+
+    // Contul e creat cu rang de jucător (implicit, din backend) — dacă
+    // trebuie să devină admin/staff, un fondator îi schimbă rangul din
+    // admin-utilizatori.html DUPĂ ce contul există. Nu autentificăm automat
+    // aici — îl trimitem la login, ca să confirme că parola chiar merge.
+    successBox.textContent = 'Cont creat! Te poți autentifica acum cu username/email și parola ta.';
+    successBox.hidden = false;
+    form.reset();
+  } catch (err) {
+    errorBox.textContent = err.message || 'Nu ne-am putut conecta la server.';
+    errorBox.hidden = false;
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Creează cont';
+  }
+});
+</script>
+</body></html>

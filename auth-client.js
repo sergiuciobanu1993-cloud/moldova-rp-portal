@@ -93,3 +93,48 @@ function wireLogout(selector) {
     });
   });
 }
+
+// Meniu mobil pentru panoul de admin. Sidebar-ul fix (.side) e complet ascuns
+// sub 600px lățime (vezi admin.css) — fără asta, staff-ul n-ar avea NICIO
+// cale să navigheze între paginile de admin de pe telefon. Centralizat aici
+// (auth-client.js e deja încărcat de toate cele 12 pagini de admin, ca să
+// verifice rolul), nu repetat în fiecare pagină. Pe pagini fără .side
+// (login/dashboard), nu face nimic.
+(function setupMobileSidebar() {
+  const side = document.querySelector(".side");
+  if (!side) return;
+
+  const toggle = document.createElement("button");
+  toggle.type = "button";
+  toggle.className = "side-toggle";
+  toggle.setAttribute("aria-label", "Deschide meniul");
+  toggle.setAttribute("aria-expanded", "false");
+  toggle.textContent = "☰";
+
+  const backdrop = document.createElement("div");
+  backdrop.className = "side-backdrop";
+
+  document.body.prepend(backdrop);
+  document.body.prepend(toggle);
+
+  function closeMenu() {
+    side.classList.remove("open");
+    backdrop.classList.remove("open");
+    toggle.setAttribute("aria-expanded", "false");
+  }
+  function openMenu() {
+    side.classList.add("open");
+    backdrop.classList.add("open");
+    toggle.setAttribute("aria-expanded", "true");
+  }
+
+  toggle.addEventListener("click", () => {
+    side.classList.contains("open") ? closeMenu() : openMenu();
+  });
+  backdrop.addEventListener("click", closeMenu);
+  // Un click pe orice link din sidebar închide sertarul — utilizatorul
+  // oricum navighează spre altă pagină, dar dacă e ancora curentă (fără
+  // link real / "#"), asta evită ca sertarul să rămână deschis peste noua
+  // pagină redată din cache-ul de navigare al telefonului (bfcache).
+  side.querySelectorAll("a").forEach(a => a.addEventListener("click", closeMenu));
+})();

@@ -91,6 +91,46 @@ async function run() {
         : `BOOTSTRAP_ADMIN is set to "${bootstrapAdmin}" but no matching user was found yet.`);
     }
 
+    // Rulează `fn` o singură dată, indiferent de câte ori se repetă deploy-ul,
+    // folosind tabela seed_flags ca "bifă" permanentă (vezi comentariul din
+    // database/schema.sql). Spre deosebire de PAGE_BLOCKS mai sus (care
+    // reînsămânțează rândurile lipsă din page_blocks la fiecare deploy),
+    // aici bifa rămâne pusă chiar dacă rândul creat de `fn` e șters ulterior
+    // manual din admin — deci e potrivit pentru lucruri de tipul "un anunț
+    // trimis o dată", nu pentru conținut permanent editabil.
+    async function seedOnce(key, fn) {
+      const { rowCount } = await client.query(
+        "INSERT INTO seed_flags(key) VALUES ($1) ON CONFLICT (key) DO NOTHING",
+        [key]
+      );
+      if (rowCount === 0) {
+        console.log(`seed_flags: "${key}" deja aplicat — se sare peste.`);
+        return;
+      }
+      await fn();
+      console.log(`seed_flags: "${key}" aplicat acum.`);
+    }
+
+    // 06.09.2026 — anunț automat pentru lansarea (viitoare) a VIP Shop-ului.
+    // Poate fi editat sau șters oricând din Admin → Anunțuri ca orice alt
+    // anunț — odată creat aici, un redeploy ulterior nu-l mai recreează
+    // (vezi seedOnce mai sus), deci o ștergere manuală rămâne definitivă.
+    await seedOnce("announcement_vip_shop_2026_09_06", async () => {
+      await client.query(
+        `INSERT INTO announcements(title, content, category, is_published, image_url, video_url)
+         VALUES ($1, $2, $3, true, $4, NULL)`,
+        [
+          "🎁 VIP Shop — vine în curând!",
+          "Pregătim un magazin nou pentru comunitate: VIP Shop.\n\n" +
+          "Vei putea deschide cutii cu recompense — de la vehicule și obiecte exclusive, până la resurse utile — în trei categorii: Rare, Epic și Legendară.\n\n" +
+          "Am pregătit deja o pagină cu toate detaliile și imaginile reale ale celor 3 cutii: https://moldovarp.md/vip-shop-curand.html\n\n" +
+          "Rămâi pe fază — anunțăm data exactă de lansare tot aici, la Anunțuri!",
+          "VIP SHOP",
+          "/assets/vip-shop-teaser.webp",
+        ]
+      );
+    });
+
     console.log("Database init complete.");
   } finally {
     await client.end();

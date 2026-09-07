@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Dashboard — Moldova RP</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="dashboard.css"></head>
 <body>
-<header><a class="brand" href="index.html"><img src="assets/logo.png" alt="">MOLDOVA<span>RP</span></a><nav><a href="index.html">Acasă</a><a href="index.html#regulamente">Regulamente</a><a href="tichete.html">Tichete</a><a href="#profil">Profil</a></nav><a class="logout" href="login.html" id="logout-link">Deconectare</a></header>
+<header><a class="brand" href="index.html"><img src="assets/logo.png" alt="">MOLDOVA<span>RP</span></a><nav id="dash-nav"><a href="index.html">Acasă</a><a href="index.html#regulamente">Regulamente</a><a href="tichete.html">Tichete</a><a href="vip-shop.html" id="vipshop-nav-link" hidden>VIP Shop</a><a href="#profil">Profil</a></nav><button class="menu-toggle" id="dash-menu-toggle" type="button" aria-label="Deschide meniul" aria-expanded="false">☰</button><a class="logout" href="login.html" id="logout-link">Deconectare</a></header>
 <main>
 <section class="welcome"><div><p>PORTAL JUCĂTOR</p><h1>Bun venit, <span id="welcome-name">…</span></h1><small>Acesta este centrul tău Moldova RP.</small></div><div class="status"><i></i> SERVER ONLINE</div></section>
 <section class="stats"><article><small>ID JUCĂTOR</small><strong id="stat-id">—</strong></article><article><small>ORE JUCATE</small><strong id="stat-playtime">—</strong></article><article><small>FACȚIUNE</small><strong id="stat-faction">—</strong></article><article><small>RANK</small><strong id="stat-rank">—</strong></article></section>
@@ -12,10 +12,106 @@
 <div class="event"><b>20 AUG</b><div><strong>Autentificare</strong><small>Conectare reușită din portal.</small></div></div></section>
 <aside class="panel" id="profil"><div class="head"><h2>Profil</h2><span>Public</span></div><div class="profile"><div class="avatar" id="profile-avatar">--</div><div><strong id="profile-name">…</strong><small id="profile-id">—</small></div></div><a class="wide" href="index.html">Vezi comunitatea →</a></aside>
 </div>
-<section class="quick"><h2>Acces rapid</h2><div class="quickgrid"><a href="index.html#regulamente">📚 <strong>Regulamente</strong><small>Toate regulamentele oficiale</small></a><a href="index.html#factiuni">◆ <strong>Facțiuni</strong><small>Organizații și rank-uri</small></a><a href="tichete.html">🎫 <strong>Tichete</strong><small>Raportează probleme sau reclamații</small></a><a href="admin.html" id="admin-link" hidden>⚙ <strong>Admin Panel</strong><small>Vizibil doar pentru moderator/admin/owner</small></a></div></section>
+<section class="panel" id="set-password-panel" style="margin-top:20px;border-color:var(--warn,#b45309)" hidden>
+  <div class="head"><h2>⚠ Contul tău de staff nu are parolă</h2></div>
+  <div style="padding:0 0 4px">
+    <p class="muted" style="margin:0 0 14px">
+      Contul tău are rangul <strong id="set-password-role">—</strong>, dar te-ai autentificat doar prin Discord.
+      Din motive de securitate, un login prin Discord acordă acum DOAR accesul de jucător obișnuit — chiar dacă
+      cineva ți-ar sparge contul de Discord, tot n-ar putea intra ca admin pe site. Ca să-ți poți folosi rangul,
+      pune-ți un email real și o parolă — îți trimitem un cod de confirmare pe acel email, ca să fim siguri că
+      e chiar al tău, și abia după ce introduci codul devin valabile.
+    </p>
+    <form id="set-password-form" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+      <div><label style="display:block;font-size:11px;color:var(--muted);margin-bottom:4px">Email</label>
+        <input id="set-password-email" type="email" required autocomplete="email" class="filter-select"></div>
+      <div><label style="display:block;font-size:11px;color:var(--muted);margin-bottom:4px">Parolă nouă (minim 8 caractere)</label>
+        <input id="set-password-input" type="password" required minlength="8" autocomplete="new-password" class="filter-select"></div>
+      <div><label style="display:block;font-size:11px;color:var(--muted);margin-bottom:4px">Confirmă parola</label>
+        <input id="set-password-confirm" type="password" required minlength="8" autocomplete="new-password" class="filter-select"></div>
+      <button type="submit">Trimite codul de confirmare</button>
+    </form>
+    <p id="set-password-msg" class="muted" style="margin:10px 0 0" hidden></p>
+
+    <form id="confirm-code-form" hidden style="gap:10px;flex-wrap:wrap;align-items:flex-end;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)">
+      <div><label style="display:block;font-size:11px;color:var(--muted);margin-bottom:4px">Codul din email (6 cifre)</label>
+        <input id="confirm-code-input" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code" class="filter-select" style="letter-spacing:4px;font-size:18px;width:120px"></div>
+      <button type="submit">Confirmă codul</button>
+      <button type="button" id="resend-code-btn" class="btn-ghost">Retrimite codul</button>
+    </form>
+    <p id="confirm-code-msg" class="muted" style="margin:10px 0 0" hidden></p>
+  </div>
+</section>
+<section class="panel" id="profile-extra" style="margin-top:20px">
+  <div class="head"><h2>Profilul meu</h2><span id="profile-extra-status" class="muted"></span></div>
+  <div id="profile-extra-body"><p class="muted" style="margin:0">Se încarcă…</p></div>
+</section>
+
+<section class="quick"><h2>Acces rapid</h2><div class="quickgrid"><a href="index.html#regulamente">📚 <strong>Regulamente</strong><small>Toate regulamentele oficiale</small></a><a href="index.html#factiuni">◆ <strong>Facțiuni</strong><small>Organizații și rank-uri</small></a><a href="tichete.html">🎫 <strong>Tichete</strong><small>Raportează probleme sau reclamații</small></a><a href="vip-shop.html" id="vipshop-grid-link" hidden>🎁 <strong>VIP Shop</strong><small>Cheltuiește coins pe o recompensă cu șansă</small></a><a href="admin.html" id="admin-link" hidden>⚙ <strong>Admin Panel</strong><small>Vizibil doar pentru moderator/admin/owner</small></a></div></section>
 </main>
 <script src="auth-client.js"></script>
 <script>
+function fmtMoney(n) { return '$' + Number(n || 0).toLocaleString('ro-RO'); }
+const escapeHtml = s => (s ?? '').toString()
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+function fmtDate(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+// „Profilul meu" — bani/vehicule live (dacă ești conectat la server chiar
+// acum) + sancțiunile proprii, din /api/me/profile (vezi backend/server.js).
+async function loadProfileExtra() {
+  const statusEl = document.getElementById('profile-extra-status');
+  const bodyEl = document.getElementById('profile-extra-body');
+  try {
+    const res = await apiFetch('/api/me/profile');
+    if (!res.ok) throw new Error();
+    const p = await res.json();
+
+    if (!p.hasGameProfile) {
+      statusEl.textContent = '';
+      bodyEl.innerHTML = '<p class="muted" style="margin:0">Profilul tău de joc nu e încă sincronizat cu site-ul — conectează-te pe server ca să apară aici.</p>';
+      return;
+    }
+
+    statusEl.textContent = p.online ? 'online acum' : 'offline';
+
+    // Live (online chiar acum) SAU, dacă nu ești online, ultima poză
+    // salvată automat de pe server (vezi syncPlayerSnapshots în backend) —
+    // etichetată clar cu data, ca să fie evident că nu e live. Doar dacă nu
+    // avem nici una, nici alta (cont nou, niciodată prins online încă de
+    // când există acest sync) arătăm mesajul "nu ești conectat".
+    const src = p.online && p.live ? p.live : p.lastKnown;
+    const moneyBlock = src ? `
+      <div class="stats" style="margin:0 0 18px">
+        <article><small>CASH</small><strong>${fmtMoney(src.cash)}</strong></article>
+        <article><small>BANCĂ</small><strong>${fmtMoney(src.bank)}</strong></article>
+        <article><small>BANI MURDARI</small><strong>${src.blackMoney == null ? '—' : fmtMoney(src.blackMoney)}</strong></article>
+        <article><small>JOB</small><strong style="font-size:15px">${escapeHtml(src.jobLabel || src.job || '—')}</strong></article>
+      </div>
+      <p style="margin:0 0 6px"><small style="color:var(--muted)">VEHICULE</small><br>${
+        (src.vehicles && src.vehicles.length)
+          ? src.vehicles.map(v => `<span class="pill info" style="margin:3px 4px 0 0;display:inline-block">${escapeHtml(v.name ? `${v.name} (${v.plate})` : (v.plate || '?'))}</span>`).join('')
+          : '<span class="muted">Niciun vehicul.</span>'
+      }</p>
+      ${!p.online ? `<p class="muted" style="margin:0 0 18px;font-size:11px">Ultima dată văzut pe server: ${fmtDate(p.lastKnown.syncedAt)}. Nu ești conectat acum, deci ar putea să nu mai fie exact la secundă.</p>` : `<p style="margin:0 0 18px"></p>`}
+    ` : `<p class="muted" style="margin:0 0 18px">Nu ești conectat la server acum, și încă nu avem nicio poză salvată din ultima dată — bani/vehicule vor apărea aici după prima conectare.</p>`;
+    const live = moneyBlock;
+
+    const sanctions = (p.punishments && p.punishments.length) ? `
+      <small style="color:var(--muted);display:block;margin-bottom:8px">SANCȚIUNILE MELE</small>
+      <div class="thread">${p.punishments.map(pu => `<div class="msg"><b>${escapeHtml(pu.type)}</b><span>${escapeHtml(pu.reason)}</span><small>${fmtDate(pu.created_at)}</small></div>`).join('')}</div>
+    ` : `<small style="color:var(--muted);display:block">Nicio sancțiune — așa să rămână! 🙂</small>`;
+
+    bodyEl.innerHTML = live + sanctions;
+  } catch {
+    statusEl.textContent = '';
+    bodyEl.innerHTML = '<p class="muted" style="margin:0">Nu am putut încărca profilul.</p>';
+  }
+}
+
 (async () => {
   if (!requireAuth()) return;
   try {
@@ -44,6 +140,31 @@
     if (['moderator', 'admin', 'co-fondator', 'owner'].includes(me.role)) {
       document.getElementById('admin-link').hidden = false;
     }
+
+    // TEMPORAR (06.09.2026): VIP Shop e ascuns din dashboard pentru jucătorii
+    // obișnuiți cât timp e încă în testare reală — cerut explicit. Ascuns nu
+    // doar vizual: rutele /api/vip-shop* sunt restricționate la fel de
+    // server.js (requireRole(...ADMIN_ROLES)), deci chiar dacă cineva ar bate
+    // link-ul manual tot nu ar putea deschide cutii. Scoateți if-ul de mai jos
+    // (link-urile rămân doar cu atributul hidden implicit, ca acum) când VIP
+    // Shop e gata de lansare publică.
+    if (['admin', 'co-fondator', 'owner'].includes(me.role)) {
+      document.getElementById('vipshop-nav-link').hidden = false;
+      document.getElementById('vipshop-grid-link').hidden = false;
+    }
+
+    // Cont de staff (rang real în baza de date) dar fără parolă încă —
+    // singura cale de a intra momentan e prin Discord, care de securitate
+    // dă mereu doar rolul de jucător (me.role, folosit mai sus pentru
+    // admin-link, rămâne "player" în acest caz — corect, contul chiar NU
+    // poate acționa ca admin acum). Arătăm formularul de setat parolă,
+    // bazat pe rangul REAL al contului (me.dbRole), separat de me.role.
+    if (me.dbRole && me.dbRole !== 'player' && !me.hasPassword) {
+      document.getElementById('set-password-role').textContent = me.dbRole;
+      document.getElementById('set-password-panel').hidden = false;
+    }
+
+    loadProfileExtra();
   } catch (err) {
     // apiFetch already clears the session and redirects on a genuine 401.
     // Anything else that lands here (network hiccup) should NOT log the
@@ -52,5 +173,98 @@
   }
 })();
 wireLogout('#logout-link');
+
+// Fluxul e în doi pași — cerut explicit, ca simpla deținere a sesiunii să nu
+// fie de-ajuns ca să pui orice email pe cont: (1) trimiți email+parolă, ni se
+// trimite un cod pe emailul ăla; (2) introduci codul, abia atunci contul
+// chiar primește emailul și parola alea. Ținem email+parola în memorie (nu în
+// DOM) cât timp aștepți codul, ca butonul "Retrimite codul" să poată cere din
+// nou fără să te pună să le retastezi.
+let pendingSetPassword = null;
+
+document.getElementById('set-password-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const msgEl = document.getElementById('set-password-msg');
+  const email = document.getElementById('set-password-email').value.trim();
+  const pw = document.getElementById('set-password-input').value;
+  const pw2 = document.getElementById('set-password-confirm').value;
+  msgEl.hidden = false;
+  if (pw !== pw2) { msgEl.textContent = 'Parolele nu coincid.'; return; }
+  if (pw.length < 8) { msgEl.textContent = 'Parola trebuie să aibă minimum 8 caractere.'; return; }
+  msgEl.textContent = 'Se trimite codul pe email…';
+  try {
+    const res = await apiFetch('/api/auth/set-password', {
+      method: 'POST',
+      body: JSON.stringify({ email, password: pw })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Nu am putut trimite codul.');
+    pendingSetPassword = { email, password: pw };
+    msgEl.textContent = `Am trimis un cod de 6 cifre pe ${email}. Introdu-l mai jos.`;
+    document.getElementById('set-password-form').querySelectorAll('input,button').forEach(el => el.disabled = true);
+    const confirmForm = document.getElementById('confirm-code-form');
+    confirmForm.hidden = false;
+    confirmForm.style.display = 'flex';
+    document.getElementById('confirm-code-input').focus();
+  } catch (err) {
+    msgEl.textContent = err.message || 'Eroare necunoscută.';
+  }
+});
+
+document.getElementById('confirm-code-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const msgEl = document.getElementById('confirm-code-msg');
+  const code = document.getElementById('confirm-code-input').value.trim();
+  msgEl.hidden = false;
+  msgEl.textContent = 'Se confirmă…';
+  try {
+    const res = await apiFetch('/api/auth/set-password/confirm', {
+      method: 'POST',
+      body: JSON.stringify({ code })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Cod incorect.');
+    msgEl.textContent = 'Confirmat! Ieși din cont și intră din nou cu email/username + parola nouă, ca să-ți primești rangul.';
+    document.getElementById('confirm-code-form').querySelectorAll('input,button').forEach(el => el.disabled = true);
+  } catch (err) {
+    msgEl.textContent = err.message || 'Eroare necunoscută.';
+  }
+});
+
+document.getElementById('resend-code-btn').addEventListener('click', async () => {
+  const msgEl = document.getElementById('confirm-code-msg');
+  if (!pendingSetPassword) return;
+  msgEl.hidden = false;
+  msgEl.textContent = 'Se retrimite codul…';
+  try {
+    const res = await apiFetch('/api/auth/set-password', {
+      method: 'POST',
+      body: JSON.stringify(pendingSetPassword)
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Nu am putut retrimite codul.');
+    msgEl.textContent = `Cod nou trimis pe ${pendingSetPassword.email}.`;
+  } catch (err) {
+    msgEl.textContent = err.message || 'Eroare necunoscută.';
+  }
+});
+
+// Meniu mobil: nav-ul de sus (Acasă/Regulamente/Tichete/Profil) e complet
+// ascuns sub 700px lățime (vezi dashboard.css) — fără buton de meniu, nu
+// exista NICIO cale sa ajungi la ele de pe telefon. Acelasi pattern simplu
+// ca pe index.html (vezi app.js).
+(function () {
+  const toggle = document.getElementById('dash-menu-toggle');
+  const nav = document.getElementById('dash-nav');
+  if (!toggle || !nav) return;
+  toggle.addEventListener('click', () => {
+    const open = nav.classList.toggle('open');
+    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+  nav.querySelectorAll('a').forEach(a => a.addEventListener('click', () => {
+    nav.classList.remove('open');
+    toggle.setAttribute('aria-expanded', 'false');
+  }));
+})();
 </script>
 </body></html>

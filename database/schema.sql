@@ -29,6 +29,31 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS discord_id VARCHAR(32) UNIQUE;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS discord_username VARCHAR(100);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS discord_avatar TEXT;
 
+-- Confirmare prin email la "Setează parola" (contul de staff creat inițial
+-- doar prin Discord) — cerut explicit: emailul și parola nu se salvează
+-- direct pe cont, stau "în așteptare" până jucătorul introduce codul de 6
+-- cifre primit pe email; abia atunci trec în email/password_hash de mai sus.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_email VARCHAR(160);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_password_hash TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verify_code VARCHAR(10);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verify_expires TIMESTAMPTZ;
+
+-- "Am uitat parola" — cod de 6 cifre trimis pe emailul contului (funcționează
+-- doar pentru conturi care au deja un email+parolă reale, nu pentru conturi
+-- doar-Discord, care nu au un email verificat de care să ne putem folosi).
+ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_password_code VARCHAR(10);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_password_expires TIMESTAMPTZ;
+
+-- Legătura cont de site <-> personaj din joc, pentru pagina "Cazuri" (coins).
+-- Site-ul se loghează cu Discord — nu are nicio legătură nativă, verificată,
+-- cu identifier-ul (licența) din joc. Populat DOAR prin comanda din joc
+-- "/leagacont" + codul de 6 cifre verificat de POST /api/cont/leaga-joc —
+-- niciodată introdus liber de utilizator (ar putea vedea/cheltui coins-urile
+-- altcuiva doar tastând un nume). game_identifier_name e strict informativ
+-- (afișat pe pagina de cont), NU folosit pentru nicio verificare de identitate.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS game_identifier VARCHAR(80);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS game_identifier_name VARCHAR(64);
+
 CREATE TABLE IF NOT EXISTS players (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID UNIQUE REFERENCES users(id) ON DELETE CASCADE,
@@ -40,6 +65,22 @@ CREATE TABLE IF NOT EXISTS players (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- "Ultima dată văzut" — o poză (snapshot) a banilor/jobului/vehiculelor unui
+-- jucător, salvată automat de backend din moldovarp-api la fiecare ~60s cât
+-- timp e online (vezi syncPlayerSnapshots în server.js). Scopul: profilul
+-- unui jucător (pagina "Profilul meu" / profilul din admin) să arate ceva
+-- relevant și când jucătorul e OFFLINE, nu doar "nu e conectat acum" — un
+-- portal "profesional" ține minte ultima stare cunoscută, nu doar live.
+-- last_synced_at = NULL înseamnă "nu am prins încă nicio poză" (cont nou,
+-- sau jucătorul nu a fost încă online de când există această coloană).
+ALTER TABLE players ADD COLUMN IF NOT EXISTS last_cash INTEGER;
+ALTER TABLE players ADD COLUMN IF NOT EXISTS last_bank INTEGER;
+ALTER TABLE players ADD COLUMN IF NOT EXISTS last_black_money INTEGER;
+ALTER TABLE players ADD COLUMN IF NOT EXISTS last_job VARCHAR(60);
+ALTER TABLE players ADD COLUMN IF NOT EXISTS last_job_label VARCHAR(100);
+ALTER TABLE players ADD COLUMN IF NOT EXISTS last_vehicles JSONB;
+ALTER TABLE players ADD COLUMN IF NOT EXISTS last_synced_at TIMESTAMPTZ;
 
 CREATE TABLE IF NOT EXISTS factions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -95,6 +136,11 @@ ALTER TABLE announcements ADD COLUMN IF NOT EXISTS category VARCHAR(40) NOT NULL
 -- anunțului, afișată pe card-ul de pe homepage și în embed-ul de Discord.
 -- NULL = fără imagine, nimic nu se afișează. Safe pe baze existente.
 ALTER TABLE announcements ADD COLUMN IF NOT EXISTS image_url TEXT;
+
+-- video_url — un link opțional (YouTube etc.) atașat anunțului. Afișat pe
+-- homepage ca buton "▶ Vezi videoclipul" sub titlu, doar cand e completat.
+-- NULL = fără video, butonul nu apare. Safe pe baze existente.
+ALTER TABLE announcements ADD COLUMN IF NOT EXISTS video_url TEXT;
 
 CREATE TABLE IF NOT EXISTS punishments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -211,6 +257,17 @@ CREATE TABLE IF NOT EXISTS page_blocks (
   UNIQUE(page, block_key)
 );
 CREATE INDEX IF NOT EXISTS idx_page_blocks_page ON page_blocks(page, sort_order);
+
+-- Marcaje pentru seed-uri "o singură dată" (ex: un anunț creat automat la
+-- primul deploy după ce a fost adăugat în scripts/init-db.js). Diferă de
+-- page_blocks (care ține conținut editabil permanent): aici doar reținem CĂ
+-- o anumită acțiune s-a întâmplat deja, ca să nu se repete la fiecare
+-- redeploy — inclusiv dacă rândul creat de ea (ex: anunțul) e ulterior șters
+-- manual din admin. O dată bifat un key, rămâne bifat definitiv.
+CREATE TABLE IF NOT EXISTS seed_flags (
+  key VARCHAR(120) PRIMARY KEY,
+  applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 
 INSERT INTO roles(name, description) VALUES
 ('player', 'Jucator standard'),

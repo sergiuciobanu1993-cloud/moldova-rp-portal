@@ -1,19 +1,23 @@
 <!doctype html>
 <html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Jucători — Admin Moldova RP</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="admin.css"></head>
 <body>
-<aside class="side"><a class="brand" href="index.html"><img src="assets/logo.png" alt=""><b>MOLDOVA<span>RP</span></b></a><p>ADMINISTRAȚIE</p><a href="admin.html">▦ Dashboard</a><a href="admin-utilizatori.html">👤 Utilizatori</a><a class="sel" href="admin-jucatori.html">♙ Jucători</a><a href="admin-financiar.html">◆ Facțiuni</a><a href="admin-sanctiuni.html">⚠ Sancțiuni</a><a>▤ Reclamații</a><a>⚖ CK</a><a href="admin-regulamente.html">📚 Regulamente</a><a href="admin-continut.html">📝 Conținut pagini</a><a href="admin-anunturi.html">◉ Anunțuri</a><a href="admin-tichete.html">🎫 Tichete</a><a href="admin-loguri.html">🗂 Loguri</a><a>⌁ Audit Logs</a><a href="admin-txadmin.html" id="nav-txadmin">🖥 txAdmin</a><a class="back" href="index.html">← Site public</a></aside>
+<aside class="side"><a class="brand" href="index.html"><img src="assets/logo.png" alt=""><b>MOLDOVA<span>RP</span></b></a><p>ADMINISTRAȚIE</p><a href="admin.html">▦ Dashboard</a><a href="admin-utilizatori.html">👤 Utilizatori</a><a class="sel" href="admin-jucatori.html">♙ Jucători</a><a href="admin-financiar.html">◆ Facțiuni</a><a href="admin-sanctiuni.html">⚠ Sancțiuni</a><a>▤ Reclamații</a><a>⚖ CK</a><a href="admin-regulamente.html">📚 Regulamente</a><a href="admin-continut.html">📝 Conținut pagini</a><a href="admin-anunturi.html">◉ Anunțuri</a><a href="admin-tichete.html">🎫 Tichete</a><a href="admin-loguri.html">🗂 Loguri</a><a href="admin-kill-logs.html">🔪 Kill Logs</a><a>⌁ Audit Logs</a><a href="admin-txadmin.html" id="nav-txadmin">🖥 txAdmin</a><a class="back" href="dashboard.html">← Contul meu</a><a class="back" href="index.html">← Site public</a></aside>
 <main>
-<header><div><small>PANEL ADMINISTRATIV</small><h1>Jucători online</h1></div><div class="admin"><span id="admin-name">…</span> <i></i></div></header>
+<header><div><small>PANEL ADMINISTRATIV</small><h1>Jucători online</h1></div><a class="admin" href="dashboard.html" title="Înapoi la contul meu" style="text-decoration:none"><span id="admin-name">…</span> <i></i></a></header>
 
 <p class="muted" id="status-note" style="margin:-10px 0 20px">Se încarcă…</p>
 
 <section class="tablebox">
   <div class="title">
     <h2>Detaliu jucători conectați acum</h2>
-    <button id="refresh-btn">↻ Actualizează</button>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <input id="f-player-search" class="filter-select" placeholder="Caută jucător (CFX sau nume personaj)..." autocomplete="off" style="min-width:220px">
+      <button id="refresh-btn">↻ Actualizează</button>
+    </div>
   </div>
   <table><thead><tr><th>JUCĂTOR</th><th>FACȚIUNE</th><th>CASH</th><th>BANCĂ</th><th>BANI MURDARI</th><th>VEHICULE</th></tr></thead>
   <tbody id="list-body"><tr><td colspan="6">Se încarcă…</td></tr></tbody></table>
+  <p class="muted" style="margin:0 22px 16px;font-size:11px">Apasă pe orice jucător din listă pentru profilul complet (bani, vehicule, sancțiuni, tichete, activitate, kill-uri).</p>
 </section>
 
 <section class="formbox" id="offline-help" hidden>
@@ -24,14 +28,70 @@
   </p>
 </section>
 
-<section class="formbox" id="scope-note" style="margin-top:18px">
-  <h2>Ce nu e (încă) inclus aici</h2>
-  <p class="muted" style="margin:0">
-    Casele și afacerile jucătorilor nu apar aici momentan — sunt gestionate de resurse separate
-    (0r-pixelhouse / qua_0r_house pentru case) ale căror tabele din baza de date nu le-am confirmat încă.
-    Trimite-mi schema lor (fișierul <code>database.sql</code> al resursei, sau un export din phpMyAdmin/HeidiSQL)
-    și le adaug în siguranță, fără riscul de a citi greșit datele.
+<section class="tablebox" style="margin-top:18px">
+  <div class="title">
+    <h2>Case deținute</h2>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <input id="f-house-owner" class="filter-select" placeholder="Filtrează după proprietar..." autocomplete="off" style="min-width:180px">
+      <button id="houses-refresh-btn" class="btn-ghost" type="button">Reîmprospătează</button>
+    </div>
+  </div>
+  <p class="muted" id="houses-offline-note" style="margin:0 22px 16px" hidden>Serverul de joc nu răspunde momentan — lista poate fi incompletă.</p>
+  <table><thead><tr><th>PROPRIETAR</th><th>CASĂ</th><th>LOCAȚIE</th><th>PREȚ</th><th>DE LA</th></tr></thead>
+  <tbody id="houses-body"><tr><td colspan="5">Se încarcă…</td></tr></tbody></table>
+</section>
+
+<section class="tablebox" style="margin-top:18px">
+  <div class="title">
+    <h2>Business-uri</h2>
+    <button id="businesses-refresh-btn" class="btn-ghost" type="button">Reîmprospătează</button>
+  </div>
+  <p class="muted" style="margin:0 22px 16px">
+    Din resursa business-urilor — coloana CREAT DE arată exact ce a reținut resursa la creare, nu neapărat numele
+    personajului (poate fi și un identificator, în funcție de cum a fost creat business-ul) — de-aia nu e clickabil.
   </p>
+  <p class="muted" id="businesses-offline-note" style="margin:0 22px 16px" hidden>Serverul de joc nu răspunde momentan — lista poate fi incompletă.</p>
+  <table><thead><tr><th>JOB</th><th>CREAT DE</th></tr></thead>
+  <tbody id="businesses-body"><tr><td colspan="2">Se încarcă…</td></tr></tbody></table>
+</section>
+
+<section class="tablebox" style="margin-top:18px">
+  <div class="title">
+    <h2>Benzinării</h2>
+  </div>
+  <p class="muted" style="margin:0 22px 16px">
+    Sistem separat de „Business-uri" de mai sus (descoperit ulterior) — are un identificator real de proprietar
+    (<code>user_id</code>), deci pe profilul unui jucător online potrivirea e exactă, nu ghicită după nume.
+  </p>
+  <table><thead><tr><th>STAȚIE</th><th>NUME</th><th>LOCAȚIE</th><th>PROPRIETAR (identificator)</th></tr></thead>
+  <tbody id="gas-stations-body"><tr><td colspan="4">Se încarcă…</td></tr></tbody></table>
+</section>
+
+<section class="tablebox" style="margin-top:18px">
+  <div class="title">
+    <h2>Magazine</h2>
+  </div>
+  <p class="muted" style="margin:0 22px 16px">
+    La fel ca benzinăriile — sistem separat, cu identificator real de proprietar.
+  </p>
+  <table><thead><tr><th>MAGAZIN</th><th>NUME</th><th>LOCAȚIE</th><th>PROPRIETAR (identificator)</th></tr></thead>
+  <tbody id="stores-body"><tr><td colspan="4">Se încarcă…</td></tr></tbody></table>
+</section>
+
+<section class="tablebox" style="margin-top:18px">
+  <div class="title">
+    <h2>Găști (op-crime)</h2>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <input id="f-gang-nick" class="filter-select" placeholder="Filtrează după poreclă..." autocomplete="off" style="min-width:180px">
+      <button id="gangs-refresh-btn" class="btn-ghost" type="button">Reîmprospătează</button>
+    </div>
+  </div>
+  <p class="muted" style="margin:0 22px 16px">
+    Jucătorul e identificat după porecla setată în op-crime — de obicei numele personajului, dar poate fi diferită dacă a fost schimbată manual.
+  </p>
+  <p class="muted" id="gangs-offline-note" style="margin:0 22px 16px" hidden>Serverul de joc nu răspunde momentan — lista poate fi incompletă.</p>
+  <table><thead><tr><th>JUCĂTOR</th><th>GAȘCĂ</th><th>RANG</th></tr></thead>
+  <tbody id="gangs-body"><tr><td colspan="3">Se încarcă…</td></tr></tbody></table>
 </section>
 
 <section class="tablebox" style="margin-top:18px">
@@ -50,9 +110,20 @@
 </section>
 
 </main>
+
 <script src="auth-client.js"></script>
+<script src="player-profile-modal.js"></script>
 <script>
 function fmtMoney(n) { return '$' + Number(n || 0).toLocaleString('ro-RO'); }
+
+const escapeHtml = s => (s ?? '').toString()
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
+function fmtDate(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
 
 function vehiclesHtml(vehicles) {
   if (!vehicles || !vehicles.length) return '<span class="muted">—</span>';
@@ -60,6 +131,43 @@ function vehiclesHtml(vehicles) {
     const label = v.name ? `${v.name} (${v.plate})` : (v.plate || '?');
     return `<span class="pill off" style="margin:2px">${label}</span>`;
   }).join(' ');
+}
+
+// Lista completă primită ultima dată de la server — ținută în memorie ca să
+// putem filtra instant (bara de căutare) fără să mai cerem datele din nou.
+let lastPlayersList = [];
+
+function renderPlayers(players) {
+  const tbody = document.getElementById('list-body');
+  tbody.innerHTML = players.length ? players.slice().sort((a, b) => a.name.localeCompare(b.name, 'ro')).map(p => `
+    <tr class="player-row" data-name="${escapeHtml(p.name)}" style="cursor:pointer">
+      <td>
+        <strong>${escapeHtml(p.serverName || p.name)}</strong><br>
+        <small style="color:var(--muted)">CFX: ${escapeHtml(p.name)} · ID server #${p.id}</small>
+        ${p.license ? `<br><small style="color:var(--muted)"><code>${escapeHtml(p.license)}</code></small>` : ''}
+      </td>
+      <td>${escapeHtml(p.jobLabel || p.job)}</td>
+      <td>${fmtMoney(p.cash)}</td>
+      <td>${fmtMoney(p.bank)}</td>
+      <td>${p.blackMoney == null ? '<span class="muted">—</span>' : fmtMoney(p.blackMoney)}</td>
+      <td>${vehiclesHtml(p.vehicles)}</td>
+    </tr>`).join('') : '<tr><td colspan="6">Niciun jucător online momentan.</td></tr>';
+  tbody.querySelectorAll('tr.player-row').forEach(tr => {
+    tr.addEventListener('click', () => window.openPlayerProfile(tr.dataset.name));
+  });
+}
+
+function applyPlayerSearch() {
+  const q = document.getElementById('f-player-search').value.trim().toLowerCase();
+  if (!q) { renderPlayers(lastPlayersList); return; }
+  const filtered = lastPlayersList.filter(p =>
+    (p.name || '').toLowerCase().includes(q) || (p.serverName || '').toLowerCase().includes(q));
+  const tbody = document.getElementById('list-body');
+  if (!filtered.length) {
+    tbody.innerHTML = '<tr><td colspan="6">Niciun jucător nu corespunde căutării.</td></tr>';
+    return;
+  }
+  renderPlayers(filtered);
 }
 
 async function loadPlayers(force) {
@@ -76,6 +184,7 @@ async function loadPlayers(force) {
     if (!d.online) {
       statusNote.textContent = 'Offline — resursa moldovarp-api nu e încă activă pe server.';
       offlineHelp.hidden = false;
+      lastPlayersList = [];
       tbody.innerHTML = '<tr><td colspan="6">Fără date live momentan.</td></tr>';
       return;
     }
@@ -85,15 +194,8 @@ async function loadPlayers(force) {
       ? `${d.players.length} jucători online — date posibil ușor întârziate.`
       : `${d.players.length} jucători online — date live.`;
 
-    tbody.innerHTML = d.players.length ? d.players.slice().sort((a, b) => a.name.localeCompare(b.name, 'ro')).map(p => `
-      <tr>
-        <td><strong>${p.name}</strong><br><small style="color:var(--muted)">ID server #${p.id}</small></td>
-        <td>${p.jobLabel || p.job}</td>
-        <td>${fmtMoney(p.cash)}</td>
-        <td>${fmtMoney(p.bank)}</td>
-        <td>${p.blackMoney == null ? '<span class="muted">—</span>' : fmtMoney(p.blackMoney)}</td>
-        <td>${vehiclesHtml(p.vehicles)}</td>
-      </tr>`).join('') : '<tr><td colspan="6">Niciun jucător online momentan.</td></tr>';
+    lastPlayersList = d.players || [];
+    applyPlayerSearch();
   } catch {
     statusNote.textContent = 'Nu am putut încărca datele.';
     tbody.innerHTML = '<tr><td colspan="6">Eroare la încărcare.</td></tr>';
@@ -103,6 +205,7 @@ async function loadPlayers(force) {
 }
 
 document.getElementById('refresh-btn').addEventListener('click', () => loadPlayers(true));
+document.getElementById('f-player-search').addEventListener('input', applyPlayerSearch);
 
 async function loadJobs() {
   const tbody = document.getElementById('jobs-body');
@@ -124,12 +227,149 @@ async function loadJobs() {
   }
 }
 
+// Numele proprietarului/porecla din op-crime — buton clickabil, la fel ca la
+// Kill Logs/Sancțiuni, ca să deschidă fereastra flotantă de profil.
+function assetPlayerButton(name) {
+  return `<button type="button" class="player-link" data-player="${escapeHtml(name)}">${escapeHtml(name)}</button>`;
+}
+
+let houseDebounce = null;
+function scheduleHousesReload() {
+  clearTimeout(houseDebounce);
+  houseDebounce = setTimeout(loadHouses, 300);
+}
+
+async function loadHouses() {
+  const tbody = document.getElementById('houses-body');
+  const offlineNote = document.getElementById('houses-offline-note');
+  const owner = document.getElementById('f-house-owner').value.trim();
+  try {
+    const qs = owner ? `?player=${encodeURIComponent(owner)}` : '';
+    const res = await apiFetch(`/api/admin/live/assets${qs}`);
+    if (!res.ok) throw new Error();
+    const d = await res.json();
+    offlineNote.hidden = d.online !== false;
+    const houses = d.houses || [];
+    tbody.innerHTML = houses.length ? houses.map(h => `
+      <tr>
+        <td><strong>${h.ownerName ? assetPlayerButton(h.ownerName) : '<span class="muted">necunoscut</span>'}</strong></td>
+        <td>${escapeHtml(h.label || 'Casă')} <span class="muted" style="font-size:11px">#${escapeHtml(h.houseId)}</span></td>
+        <td>${coordText(h.coord)}</td>
+        <td>${h.price != null ? fmtMoney(h.price) : '<span class="muted">—</span>'}</td>
+        <td>${fmtDate(h.updated_at || h.created_at)}</td>
+      </tr>`).join('') : '<tr><td colspan="5">Nicio casă găsită.</td></tr>';
+  } catch {
+    tbody.innerHTML = '<tr><td colspan="5">Nu am putut încărca casele.</td></tr>';
+  }
+}
+
+// Coordonatele (vezi comentariul din server.lua/GAS_STATION_COORDS) —
+// afișate ca text simplu "X, Y, Z"; folosite de admin ca să găsească rapid
+// locația pe hartă (F8 -> teleport la coordonate, în majoritatea panourilor
+// de admin ale serverelor de joc).
+function coordText(coord) {
+  if (!coord) return '<span class="muted">—</span>';
+  return `<code>${coord.x.toFixed(1)}, ${coord.y.toFixed(1)}, ${coord.z.toFixed(1)}</code>`;
+}
+
+// Benzinăriile și magazinele vin din același endpoint ca business-urile
+// (fetchAssets pe backend le întoarce pe toate trei odată) — o singură
+// cerere, trei tabele populate.
+async function loadBusinesses() {
+  const tbody = document.getElementById('businesses-body');
+  const offlineNote = document.getElementById('businesses-offline-note');
+  const gasBody = document.getElementById('gas-stations-body');
+  const storesBody = document.getElementById('stores-body');
+  try {
+    const res = await apiFetch('/api/admin/live/assets');
+    if (!res.ok) throw new Error();
+    const d = await res.json();
+    offlineNote.hidden = d.online !== false;
+
+    const businesses = d.businesses || [];
+    tbody.innerHTML = businesses.length ? businesses.map(b => `
+      <tr>
+        <td>${escapeHtml(b.jobLabel || b.job || '—')}</td>
+        <td>${b.creator ? escapeHtml(b.creator) : '<span class="muted">necunoscut</span>'}</td>
+      </tr>`).join('') : '<tr><td colspan="2">Niciun business găsit.</td></tr>';
+
+    const gasStations = d.gasStations || [];
+    gasBody.innerHTML = gasStations.length ? gasStations.map(g => `
+      <tr>
+        <td>${escapeHtml(g.stationId || '—')}</td>
+        <td>${g.name ? escapeHtml(g.name) : '<span class="muted">fără nume</span>'}</td>
+        <td>${coordText(g.coord)}</td>
+        <td>${g.ownerIdentifier ? `<code>${escapeHtml(g.ownerIdentifier)}</code>` : '<span class="muted">—</span>'}</td>
+      </tr>`).join('') : '<tr><td colspan="4">Nicio benzinărie găsită.</td></tr>';
+
+    const stores = d.stores || [];
+    storesBody.innerHTML = stores.length ? stores.map(s => `
+      <tr>
+        <td>${escapeHtml(s.stationId || '—')}</td>
+        <td>${s.name ? escapeHtml(s.name) : '<span class="muted">fără nume</span>'}</td>
+        <td>${coordText(s.coord)}</td>
+        <td>${s.ownerIdentifier ? `<code>${escapeHtml(s.ownerIdentifier)}</code>` : '<span class="muted">—</span>'}</td>
+      </tr>`).join('') : '<tr><td colspan="4">Niciun magazin găsit.</td></tr>';
+  } catch {
+    tbody.innerHTML = '<tr><td colspan="2">Nu am putut încărca business-urile.</td></tr>';
+    gasBody.innerHTML = '<tr><td colspan="4">Nu am putut încărca benzinăriile.</td></tr>';
+    storesBody.innerHTML = '<tr><td colspan="4">Nu am putut încărca magazinele.</td></tr>';
+  }
+}
+
+let gangDebounce = null;
+function scheduleGangsReload() {
+  clearTimeout(gangDebounce);
+  gangDebounce = setTimeout(loadGangs, 300);
+}
+
+async function loadGangs() {
+  const tbody = document.getElementById('gangs-body');
+  const offlineNote = document.getElementById('gangs-offline-note');
+  const nick = document.getElementById('f-gang-nick').value.trim();
+  try {
+    const qs = nick ? `?player=${encodeURIComponent(nick)}` : '';
+    const res = await apiFetch(`/api/admin/live/assets${qs}`);
+    if (!res.ok) throw new Error();
+    const d = await res.json();
+    offlineNote.hidden = d.online !== false;
+    const gangs = d.gangs || [];
+    tbody.innerHTML = gangs.length ? gangs.map(g => `
+      <tr>
+        <td><strong>${assetPlayerButton(g.nick)}</strong> ${g.isOwner ? '<span class="pill warn">LIDER</span>' : ''}</td>
+        <td>${escapeHtml(g.org)}</td>
+        <td>${escapeHtml(g.rank || '—')}</td>
+      </tr>`).join('') : '<tr><td colspan="3">Niciun membru găsit.</td></tr>';
+  } catch {
+    tbody.innerHTML = '<tr><td colspan="3">Nu am putut încărca găștile.</td></tr>';
+  }
+}
+
+// Delegare de evenimente — un singur listener per tabel (la fel ca la Kill
+// Logs), pentru că rândurile se re-randează des (filtrare, reîmprospătare).
+document.getElementById('houses-body').addEventListener('click', (e) => {
+  const btn = e.target.closest('.player-link');
+  if (btn) window.openPlayerProfile(btn.dataset.player);
+});
+document.getElementById('gangs-body').addEventListener('click', (e) => {
+  const btn = e.target.closest('.player-link');
+  if (btn) window.openPlayerProfile(btn.dataset.player);
+});
+document.getElementById('f-house-owner').addEventListener('input', scheduleHousesReload);
+document.getElementById('houses-refresh-btn').addEventListener('click', loadHouses);
+document.getElementById('businesses-refresh-btn').addEventListener('click', loadBusinesses);
+document.getElementById('f-gang-nick').addEventListener('input', scheduleGangsReload);
+document.getElementById('gangs-refresh-btn').addEventListener('click', loadGangs);
+
 (async () => {
   const me = await requireRole('admin', 'co-fondator', 'owner');
   if (!me) return;
   document.getElementById('admin-name').textContent = me.username;
   loadPlayers();
   loadJobs();
+  loadHouses();
+  loadBusinesses();
+  loadGangs();
   setInterval(loadPlayers, 30000);
 })();
 </script>

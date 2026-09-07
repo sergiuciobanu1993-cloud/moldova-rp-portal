@@ -1,9 +1,9 @@
 <!doctype html>
 <html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Utilizatori — Admin Moldova RP</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="admin.css"></head>
 <body>
-<aside class="side"><a class="brand" href="index.html"><img src="assets/logo.png" alt=""><b>MOLDOVA<span>RP</span></b></a><p>ADMINISTRAȚIE</p><a href="admin.html">▦ Dashboard</a><a class="sel" href="admin-utilizatori.html">👤 Utilizatori</a><a href="admin-jucatori.html">♙ Jucători</a><a href="admin-financiar.html">◆ Facțiuni</a><a href="admin-sanctiuni.html">⚠ Sancțiuni</a><a>▤ Reclamații</a><a>⚖ CK</a><a href="admin-regulamente.html">📚 Regulamente</a><a href="admin-continut.html">📝 Conținut pagini</a><a href="admin-anunturi.html">◉ Anunțuri</a><a href="admin-tichete.html">🎫 Tichete</a><a href="admin-loguri.html">🗂 Loguri</a><a>⌁ Audit Logs</a><a href="admin-txadmin.html" id="nav-txadmin">🖥 txAdmin</a><a class="back" href="index.html">← Site public</a></aside>
+<aside class="side"><a class="brand" href="index.html"><img src="assets/logo.png" alt=""><b>MOLDOVA<span>RP</span></b></a><p>ADMINISTRAȚIE</p><a href="admin.html">▦ Dashboard</a><a class="sel" href="admin-utilizatori.html">👤 Utilizatori</a><a href="admin-jucatori.html">♙ Jucători</a><a href="admin-financiar.html">◆ Facțiuni</a><a href="admin-sanctiuni.html">⚠ Sancțiuni</a><a>▤ Reclamații</a><a>⚖ CK</a><a href="admin-regulamente.html">📚 Regulamente</a><a href="admin-continut.html">📝 Conținut pagini</a><a href="admin-anunturi.html">◉ Anunțuri</a><a href="admin-tichete.html">🎫 Tichete</a><a href="admin-loguri.html">🗂 Loguri</a><a href="admin-kill-logs.html">🔪 Kill Logs</a><a>⌁ Audit Logs</a><a href="admin-txadmin.html" id="nav-txadmin">🖥 txAdmin</a><a class="back" href="dashboard.html">← Contul meu</a><a class="back" href="index.html">← Site public</a></aside>
 <main>
-<header><div><small>PANEL ADMINISTRATIV</small><h1>Utilizatori</h1></div><div class="admin"><span id="admin-name">…</span> <i></i></div></header>
+<header><div><small>PANEL ADMINISTRATIV</small><h1>Utilizatori</h1></div><a class="admin" href="dashboard.html" title="Înapoi la contul meu" style="text-decoration:none"><span id="admin-name">…</span> <i></i></a></header>
 
 <p class="muted" id="perm-note" style="margin:-10px 0 20px"></p>
 
@@ -12,8 +12,8 @@
     <h2>Toți utilizatorii înregistrați</h2>
     <span class="muted" id="count-note"></span>
   </div>
-  <table><thead><tr><th>UTILIZATOR</th><th>DISCORD</th><th>RANG</th><th>ÎNREGISTRAT</th><th>SCHIMBĂ RANG</th></tr></thead>
-  <tbody id="list-body"><tr><td colspan="5">Se încarcă…</td></tr></tbody></table>
+  <table><thead><tr><th>UTILIZATOR</th><th>DISCORD</th><th>PAROLĂ</th><th>RANG</th><th>ÎNREGISTRAT</th><th>SCHIMBĂ RANG</th></tr></thead>
+  <tbody id="list-body"><tr><td colspan="6">Se încarcă…</td></tr></tbody></table>
 </section>
 
 </main>
@@ -29,6 +29,19 @@ function roleSelectHtml(userId, currentRole) {
   return `<select class="filter-select" data-role-for="${userId}">
     ${ROLES_ORDER.map(r => `<option value="${r}" ${r === currentRole ? 'selected' : ''}>${ROLE_LABEL[r]}</option>`).join('')}
   </select>`;
+}
+
+// Un cont de STAFF (orice rang peste jucător) fără parolă setată încă poate
+// intra doar prin Discord — iar acel login, de securitate, dă mereu doar
+// rolul de jucător (vezi backend), deci acel admin practic NU își poate
+// folosi rangul până nu-și pune o parolă (o face singur, din dashboard).
+// Aici arătăm clar cui îi lipsește, ca fondatorul să știe cine mai are de
+// făcut asta — pentru un jucător normal, lipsa parolei e starea obișnuită,
+// nu un risc, deci nu o marcăm ca avertisment.
+function passwordPillHtml(u) {
+  if (u.has_password) return `<span class="pill on">PAROLĂ OK</span>`;
+  if (u.role === 'player') return `<span class="pill off">fără parolă</span>`;
+  return `<span class="pill warn">FĂRĂ PAROLĂ ⚠</span>`;
 }
 
 async function loadUsers(canEdit) {
@@ -47,10 +60,11 @@ async function loadUsers(canEdit) {
           ${u.email ? `<br><small style="color:var(--muted)">${u.email}</small>` : ''}
         </td>
         <td>${u.discord_username ? `<span class="pill info">CONECTAT</span>` : `<span class="pill off">FĂRĂ DISCORD</span>`}</td>
+        <td>${passwordPillHtml(u)}</td>
         <td><span class="pill ${ROLE_PILL[u.role] || 'off'}">${(ROLE_LABEL[u.role] || u.role).toUpperCase()}</span></td>
         <td>${fmtDate(u.created_at)}</td>
         <td>${canEdit ? roleSelectHtml(u.id, u.role) : '<span class="muted">doar fondatorul poate schimba</span>'}</td>
-      </tr>`).join('') : '<tr><td colspan="5">Niciun utilizator încă.</td></tr>';
+      </tr>`).join('') : '<tr><td colspan="6">Niciun utilizator încă.</td></tr>';
 
     if (canEdit) {
       tbody.querySelectorAll('[data-role-for]').forEach(sel => {

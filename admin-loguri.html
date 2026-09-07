@@ -7,7 +7,7 @@
 
 <p class="muted" style="margin:-10px 0 18px">
   Jurnal de activitate, din două surse: serverul de joc (chat/comenzi, conectări/deconectări, morți/kill-uri, bani, cumpărături/crafting/transfer de iteme din inventar) și panoul Luxu Admin (acțiuni de staff — kill, revive, dă/ia item etc.), trimise direct pe site prin webhook.
-  Banii arată doar <strong>diferența</strong> observată (cumpărare/vânzare/salariu etc.), nu neapărat exact ce anume s-a întâmplat.
+  Banii arată <strong>diferența</strong> observată (cumpărare/vânzare/salariu etc.) — pentru bancă (depunere/scoatere) și pentru torpedou/portbagaj sursa e acum <strong>confirmată</strong>, afișată clar fără cuvântul "posibil"; restul rămân presupuneri marcate ca atare.
   Istoricul este păstrat timp de <strong>30 de zile</strong> — după acest interval, înregistrările sunt șterse automat.
 </p>
 
@@ -24,6 +24,8 @@
         <option value="disconnect">Deconectări</option>
         <option value="death">Morți / Kill-uri</option>
         <option value="money">Bani</option>
+        <option value="money_vehicle_deposit">Bani puși în torpedou/portbagaj</option>
+        <option value="money_vehicle_withdraw">Bani scoși din torpedou/portbagaj</option>
         <option value="item_buy">Cumpărături</option>
         <option value="item_craft">Crafting</option>
         <option value="item_transfer">Transfer iteme</option>
@@ -48,6 +50,7 @@
 <script>
 const CATEGORY_LABEL = {
   chat: 'Chat', command: 'Comandă', connect: 'Conectare', disconnect: 'Deconectare', death: 'Moarte / Kill', money: 'Bani',
+  money_vehicle_deposit: 'Depus în torpedou/portbagaj', money_vehicle_withdraw: 'Scos din torpedou/portbagaj',
   item_buy: 'Cumpărare', item_craft: 'Crafting', item_transfer: 'Transfer item', item_obtained: 'Item obținut', item_drop: 'Aruncat pe jos',
   item_pickup: 'Ridicat de jos',
   vehicle_acquired: 'Vehicul nou',
@@ -55,6 +58,7 @@ const CATEGORY_LABEL = {
 };
 const CATEGORY_PILL = {
   chat: 'info', command: 'info', connect: 'on', disconnect: 'off', death: 'warn', money: 'warn',
+  money_vehicle_deposit: 'warn', money_vehicle_withdraw: 'warn',
   item_buy: 'info', item_craft: 'info', item_transfer: 'info', item_obtained: 'info', item_drop: 'warn',
   item_pickup: 'info',
   vehicle_acquired: 'info',
@@ -263,8 +267,13 @@ function formatDetailsBody(log, d) {
         : '';
       // Cea mai recentă cumpărare/craftare a aceluiași jucător, în fereastra
       // scurtă de dinainte de această verificare — o presupunere ("posibil"),
-      // nu o certitudine (vezi server.lua).
-      const source = d.possibleSource ? `<span class="muted"> · posibil: ${escapeHtml(d.possibleSource)}</span>` : '';
+      // nu o certitudine (vezi server.lua). Când avem însă o sursă CONFIRMATĂ
+      // (ex: evenimentul ESX de bancă, esx:setAccountMoney — vezi server.lua),
+      // o arătăm distinct, fără cuvântul "posibil" și fără stil "muted", ca
+      // să fie limpede că e sigură, nu o ghiceală.
+      const source = d.confirmedSource
+        ? ` · <strong>${escapeHtml(d.confirmedSource)}</strong>`
+        : (d.possibleSource ? `<span class="muted"> · posibil: ${escapeHtml(d.possibleSource)}</span>` : '');
       // Identificare sigura a jucatorului — cerut explicit de staff, pentru
       // ca numele din joc se pot schimba sau suprapune intre jucatori diferiti.
       // Licenta vine din coloana "identifier" a jurnalului (nu din "details"),
@@ -335,6 +344,22 @@ function formatDetailsBody(log, d) {
       }
       const parts = ['a ridicat de jos'];
       parts.push(`<strong>${escapeHtml((d.count ? d.count + 'x ' : '') + (d.item || 'un item'))}</strong>`);
+      return parts.join(' ');
+    }
+    // v1.28.0: bani puși/luați din torpedoul sau portbagajul unui vehicul —
+    // vezi server.lua (registerOxInventoryHooks, hook-ul swapItems). Placuta
+    // vehiculului vine din id-ul inventarului ox_inventory, best-effort — nu
+    // e garantat mereu prezentă.
+    case 'money_vehicle_deposit': {
+      const sum = (typeof d.count === 'number') ? fmtMoney(d.count).replace('+', '') : 'bani';
+      const parts = [`a pus <strong>${sum}</strong> în torpedou/portbagaj`];
+      if (d.vehicle) parts.push(`<span class="muted">(${escapeHtml(String(d.vehicle))})</span>`);
+      return parts.join(' ');
+    }
+    case 'money_vehicle_withdraw': {
+      const sum = (typeof d.count === 'number') ? fmtMoney(d.count).replace('+', '') : 'bani';
+      const parts = [`a scos <strong>${sum}</strong> din torpedou/portbagaj`];
+      if (d.vehicle) parts.push(`<span class="muted">(${escapeHtml(String(d.vehicle))})</span>`);
       return parts.join(' ');
     }
     case 'vehicle_acquired': {

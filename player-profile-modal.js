@@ -57,7 +57,16 @@ window.openPlayerProfile = (function () {
       if (typeof d.cashDelta === 'number' && d.cashDelta !== 0) parts.push(`cash ${fmtDelta(d.cashDelta)}`);
       if (typeof d.bankDelta === 'number' && d.bankDelta !== 0) parts.push(`bancă ${fmtDelta(d.bankDelta)}`);
       extra = parts.join(', ') || 'schimbare bani';
-      if (d.possibleSource) extra += ` <span class="muted">· posibil: ${escapeHtml(d.possibleSource)}</span>`;
+      // confirmedSource = sursă sigură (ex: eveniment ESX de bancă), arătată
+      // fără "posibil" — vezi server.lua/admin-loguri.html.
+      if (d.confirmedSource) extra += ` · <strong>${escapeHtml(d.confirmedSource)}</strong>`;
+      else if (d.possibleSource) extra += ` <span class="muted">· posibil: ${escapeHtml(d.possibleSource)}</span>`;
+    } else if (log.category === 'money_vehicle_deposit' || log.category === 'money_vehicle_withdraw') {
+      const verb = log.category === 'money_vehicle_deposit' ? 'a pus' : 'a scos';
+      const prep = log.category === 'money_vehicle_deposit' ? 'în' : 'din';
+      const sum = (typeof d.count === 'number') ? fmtDelta(d.count).replace('+', '') : 'bani';
+      extra = `${verb} <strong>${sum}</strong> ${prep} torpedou/portbagaj`;
+      if (d.vehicle) extra += ` <span class="muted">(${escapeHtml(String(d.vehicle))})</span>`;
     } else if (log.category === 'connect' || log.category === 'disconnect') {
       extra = log.category === 'connect' ? 's-a conectat' : `s-a deconectat${d.reason ? ` <span class="muted">(${escapeHtml(String(d.reason))})</span>` : ''}`;
     } else if (log.category === 'chat') {

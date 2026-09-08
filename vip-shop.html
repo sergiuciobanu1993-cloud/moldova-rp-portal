@@ -50,6 +50,19 @@
   <div id="pending-body"></div>
 </section>
 
+<section class="panel" id="history-panel" style="margin-top:20px" hidden>
+  <div class="head"><h2>📜 Istoricul tău</h2><span class="muted">Ce ai deschis și ce ai câștigat</span></div>
+  <div id="history-body"></div>
+</section>
+
+<section class="panel" id="log-panel" style="margin-top:20px" hidden>
+  <div class="head"><h2>🧾 Jurnal deschideri</h2><span class="muted">Cine a deschis ce — cel mai recent primul</span></div>
+  <p class="muted" style="margin:0 0 14px;font-size:12px">
+    Vizibil doar pentru staff, cât timp VIP Shop e în testare — util ca să vedem live cine a testat ce cutie și ce a picat, până punem pragurile finale.
+  </p>
+  <div id="log-body"></div>
+</section>
+
 <div id="link-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:50;align-items:center;justify-content:center">
   <div class="panel" style="max-width:420px;width:90%;padding:28px 24px">
     <h2 style="margin:0 0 10px">Leagă-ți contul de personajul din joc</h2>
@@ -186,6 +199,104 @@ function renderPending(pending) {
           <span class="muted">${fmtDate(p.created_at)}</span>
         </div>`).join('')}
     </div>`;
+}
+
+// Jurnalul TUTUROR deschiderilor (toți jucătorii, nu doar cel logat) — vezi
+// /api/vip-shop/log din backend, care citește direct din
+// moldovarp_case_openings prin ruta nouă a resursei Lua ("/cases/log",
+// v1.29.3+). Vizibil doar cât timp VIP Shop e restricționat la staff.
+function renderLog(log) {
+  const panel = document.getElementById('log-panel');
+  const body = document.getElementById('log-body');
+  if (!log || !log.length) { panel.hidden = true; return; }
+  panel.hidden = false;
+  body.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:8px">
+      ${log.map(entry => {
+        const data = entry.rewardData || {};
+        const thumb = (entry.rewardType === 'vehicle' && data.model)
+          ? `<img src="assets/vip-cars/${escapeHtml(data.model)}.png" alt="" loading="lazy" style="width:40px;height:22px;object-fit:contain;border-radius:3px;flex:none">`
+          : `<span style="width:18px;text-align:center;flex:none">${REWARD_ICON[entry.rewardType] || '🎁'}</span>`;
+        const claimedPill = entry.claimedAt
+          ? `<span class="pill" style="background:rgba(66,223,138,.15);color:var(--green);flex:none">Ridicat</span>`
+          : `<span class="pill warn" style="flex:none">În așteptare</span>`;
+        return `
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 14px;background:rgba(255,255,255,.04);border-radius:8px;flex-wrap:wrap">
+          <span style="display:flex;align-items:center;gap:8px;min-width:220px">
+            ${thumb}
+            <span>
+              <strong>${escapeHtml(entry.playerName || entry.identifier || 'necunoscut')}</strong>
+              <span class="muted"> · ${escapeHtml(entry.caseName || '')} · ${escapeHtml(entry.rewardLabel || '')}</span>
+            </span>
+          </span>
+          <span style="display:flex;align-items:center;gap:10px;flex:none">
+            <span class="muted">🪙 ${entry.priceCoins}</span>
+            ${claimedPill}
+            <span class="muted">${fmtDate(entry.createdAt)}</span>
+          </span>
+        </div>`;
+      }).join('')}
+    </div>`;
+}
+
+async function loadLog() {
+  try {
+    const res = await apiFetch('/api/vip-shop/log?limit=50');
+    if (!res.ok) { document.getElementById('log-panel').hidden = true; return; }
+    const d = await res.json();
+    renderLog(d.log || []);
+  } catch {
+    document.getElementById('log-panel').hidden = true;
+  }
+}
+
+// Istoricul PROPRIU al jucătorului logat (deschideri ridicate ȘI în
+// așteptare) — vezi /api/vip-shop/istoric din backend. Aceeași înfățișare ca
+// jurnalul de admin, dar fără coloana cu numele jucătorului (e evident a lui)
+// și populată doar cu propriile deschideri.
+function renderHistory(history) {
+  const panel = document.getElementById('history-panel');
+  const body = document.getElementById('history-body');
+  if (!history || !history.length) { panel.hidden = true; return; }
+  panel.hidden = false;
+  body.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:8px">
+      ${history.map(entry => {
+        const data = entry.rewardData || {};
+        const thumb = (entry.rewardType === 'vehicle' && data.model)
+          ? `<img src="assets/vip-cars/${escapeHtml(data.model)}.png" alt="" loading="lazy" style="width:40px;height:22px;object-fit:contain;border-radius:3px;flex:none">`
+          : `<span style="width:18px;text-align:center;flex:none">${REWARD_ICON[entry.rewardType] || '🎁'}</span>`;
+        const claimedPill = entry.claimedAt
+          ? `<span class="pill" style="background:rgba(66,223,138,.15);color:var(--green);flex:none">Ridicat</span>`
+          : `<span class="pill warn" style="flex:none">În așteptare</span>`;
+        return `
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 14px;background:rgba(255,255,255,.04);border-radius:8px;flex-wrap:wrap">
+          <span style="display:flex;align-items:center;gap:8px;min-width:220px">
+            ${thumb}
+            <span>
+              <strong>${escapeHtml(entry.rewardLabel || '')}</strong>
+              <span class="muted"> · ${escapeHtml(entry.caseName || '')}</span>
+            </span>
+          </span>
+          <span style="display:flex;align-items:center;gap:10px;flex:none">
+            <span class="muted">🪙 ${entry.priceCoins}</span>
+            ${claimedPill}
+            <span class="muted">${fmtDate(entry.createdAt)}</span>
+          </span>
+        </div>`;
+      }).join('')}
+    </div>`;
+}
+
+async function loadHistory() {
+  try {
+    const res = await apiFetch('/api/vip-shop/istoric?limit=30');
+    if (!res.ok) { document.getElementById('history-panel').hidden = true; return; }
+    const d = await res.json();
+    renderHistory(d.history || []);
+  } catch {
+    document.getElementById('history-panel').hidden = true;
+  }
 }
 
 let currentCoins = 0;
@@ -356,10 +467,16 @@ async function loadAll() {
     currentCoins = d.linked ? (d.coins || 0) : 0;
     renderCases(d.cases || [], currentCoins, !!d.linked);
     renderPending(d.linked ? d.pending : []);
+    if (d.linked) loadHistory(); else document.getElementById('history-panel').hidden = true;
   } catch {
     document.getElementById('cases-panel').hidden = false;
     document.getElementById('account-line').innerHTML = '<span class="muted">Nu am putut încărca pagina. Încearcă din nou mai târziu.</span>';
   }
+  // Jurnalul (admin) și istoricul propriu sunt cereri separate (nu blochează
+  // restul paginii dacă pică) — se reîncarcă de fiecare dată când loadAll()
+  // se apelează, deci și imediat după fiecare deschidere de cutie (vezi
+  // openCase() mai jos).
+  loadLog();
 }
 
 (async () => {

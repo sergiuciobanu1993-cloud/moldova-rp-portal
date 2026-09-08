@@ -740,6 +740,48 @@ async function postOpenCase({ identifier, playerName, caseId }) {
   }
 }
 
+// Jurnalul tuturor deschiderilor de cutii (vezi ruta "/cases/log" de mai jos
+// din moldovarp-api, v1.29.3+) — folosit doar de panoul de admin de pe site.
+async function fetchCaseOpeningsLog(limit) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const r = await fetch(`http://${FIVEM_ADDRESS}/moldovarp-api/cases/log?limit=${encodeURIComponent(limit)}`, {
+      headers: { "x-api-key": FIVEM_API_SECRET },
+      signal: controller.signal,
+    });
+    if (!r.ok) throw new Error(`moldovarp-api HTTP ${r.status}`);
+    const body = await r.json();
+    return { online: true, log: body.log || [] };
+  } catch {
+    return { online: false, log: [] };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+// Istoricul propriu al UNUI SINGUR jucător (vezi ruta "/cases/history" din
+// moldovarp-api, v1.29.4+) — folosit de secțiunea "Istoricul tău" de pe
+// pagina VIP Shop, spre deosebire de fetchCaseOpeningsLog() de mai sus (toți
+// jucătorii, doar pentru admin).
+async function fetchCaseHistory(identifier, limit) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const r = await fetch(`http://${FIVEM_ADDRESS}/moldovarp-api/cases/history?identifier=${encodeURIComponent(identifier)}&limit=${encodeURIComponent(limit)}`, {
+      headers: { "x-api-key": FIVEM_API_SECRET },
+      signal: controller.signal,
+    });
+    if (!r.ok) throw new Error(`moldovarp-api HTTP ${r.status}`);
+    const body = await r.json();
+    return { online: true, history: body.history || [] };
+  } catch {
+    return { online: false, history: [] };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 // Acțiunile de staff (Luxu), sursa separata (Postgres) folosita atat pentru
 // categoria "admin" din Loguri cat si pentru corelarile best-effort de mai
 // jos (kill/revive/item de admin etc.) si pentru Kill Logs.
@@ -1192,8 +1234,13 @@ app.get("/api/me/profile", auth, asyncRoute(async (req, res) => {
 // Shop-ul e încă în testare reală și nu trebuie să fie accesibil jucătorilor
 // obișnuiți. Legarea de cont există doar ca să poți deschide cutii, deci
 // merge sub aceeași restricție. Scoateți `requireRole(...ADMIN_ROLES)` de pe
-// toate cele 4 rute de mai jos (astea + /api/vip-shop + /api/vip-shop/deschide)
-// când VIP Shop e gata de lansare publică.
+// toate cele 5 rute de mai jos (astea + /api/vip-shop + /api/vip-shop/deschide
+// + /api/vip-shop/istoric) când VIP Shop e gata de lansare publică.
+//
+// IMPORTANT: /api/vip-shop/log (jurnalul TUTUROR jucătorilor, mai jos) NU e
+// în lista asta — rămâne restricționat la ADMIN_ROLES PERMANENT, cerut
+// explicit (08.09.2026): e un instrument de staff, nu un feature pentru
+// jucători, deci nu se deblochează odată cu restul.
 app.post("/api/cont/leaga-joc", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
   const code = String(req.body?.code || "").trim();
   if (!/^\d{6}$/.test(code)) return res.status(400).json({ error: "Codul trebuie să aibă 6 cifre." });
@@ -1262,6 +1309,37 @@ app.post("/api/vip-shop/deschide", auth, requireRole(...ADMIN_ROLES), asyncRoute
     return res.status(400).json({ error: messages[outcome.error] || "Nu am putut deschide recompensa." });
   }
   res.json({ ok: true, ...outcome.result });
+}));
+
+// Istoricul PROPRIU al jucătorului logat (deschideri ridicate ȘI în
+// așteptare) — ca să-și poată vedea singur ce a câștigat de-a lungul
+// timpului, nu doar recompensele încă neridicate (alea rămân în "pending",
+// de la /api/vip-shop de mai sus). Citit prin ruta nouă "/cases/history" din
+// moldovarp-api (v1.29.4). Face parte din grupul de rute care se
+// deblochează împreună la lansarea publică (vezi comentariul de mai sus) —
+// spre deosebire de /api/vip-shop/log (jurnalul tuturor), care rămâne
+// admin-only.
+app.get("/api/vip-shop/istoric", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+  const { rows } = await pool.query(`SELECT game_identifier FROM users WHERE id = $1`, [req.user.sub]);
+  const identifier = rows[0]?.game_identifier;
+  if (!identifier) return res.json({ online: true, history: [] });
+
+  const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 30, 1), 100);
+  const result = await fetchCaseHistory(identifier, limit);
+  res.json({ online: result.online, history: result.history });
+}));
+
+// Jurnalul TUTUROR deschiderilor de cutii (toți jucătorii, nu doar cel logat)
+// — cerut de staff ca să vadă cine ce a câștigat cât timp VIP Shop e încă în
+// testare, și rămâne restricționat la ADMIN_ROLES chiar și după ce restul
+// feature-ului devine public (vezi comentariul de mai sus — e un instrument
+// de staff, nu un feature pentru jucători). Citit direct din
+// moldovarp_case_openings de pe serverul de joc, prin ruta "/cases/log" din
+// moldovarp-api (v1.29.3) — NU e stocat nimic din asta pe site.
+app.get("/api/vip-shop/log", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+  const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
+  const result = await fetchCaseOpeningsLog(limit);
+  res.json({ online: result.online, log: result.log });
 }));
 
 // Webhook primit direct de la Luxu Admin (panoul lor cloud, tab "Webhooks"),

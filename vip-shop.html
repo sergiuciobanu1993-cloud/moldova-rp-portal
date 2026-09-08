@@ -154,11 +154,16 @@ function renderCases(cases, coins, linked) {
       <h3 style="margin:0 0 4px">${escapeHtml(c.name)}</h3>
       <p class="pill warn" style="margin:0 0 12px">🪙 ${c.price} coins</p>
       <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:14px">
-        ${c.pool.map(r => `
-          <div style="display:flex;justify-content:space-between;font-size:12px">
-            <span class="muted">${REWARD_ICON[r.type] || '🎁'} ${escapeHtml(r.label)}</span>
-            <span class="muted">${r.chancePercent}%</span>
-          </div>`).join('')}
+        ${c.pool.map(r => {
+          const thumb = (r.type === 'vehicle' && r.model)
+            ? `<img src="assets/vip-cars/${escapeHtml(r.model)}.png" alt="" loading="lazy" style="width:40px;height:22px;object-fit:contain;border-radius:3px;flex:none">`
+            : `<span style="width:18px;text-align:center;flex:none">${REWARD_ICON[r.type] || '🎁'}</span>`;
+          return `
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12px">
+            <span class="muted" style="display:flex;align-items:center;gap:6px">${thumb}${escapeHtml(r.label)}</span>
+            <span class="muted" style="flex:none">${r.chancePercent}%</span>
+          </div>`;
+        }).join('')}
       </div>
       <button type="button" class="btn-primary" data-case="${escapeHtml(c.id)}" style="width:100%" ${(linked && !canAfford) ? 'disabled' : ''}>
         ${label}
@@ -205,7 +210,12 @@ async function openCase(caseId) {
       closeBtn.hidden = false;
       return;
     }
-    spin.textContent = REWARD_ICON[d.reward.type] || '🎁';
+    const wonModel = d.reward.type === 'vehicle' && d.reward.data && d.reward.data.model;
+    if (wonModel) {
+      spin.innerHTML = `<img src="assets/vip-cars/${escapeHtml(wonModel)}.png" alt="" style="width:180px;max-width:80%;height:auto;border-radius:8px">`;
+    } else {
+      spin.textContent = REWARD_ICON[d.reward.type] || '🎁';
+    }
     title.textContent = 'Felicitări!';
     text.textContent = `Ai câștigat: ${d.reward.label}. Intră pe server și scrie /recompense ca să-l ridici.`;
     closeBtn.hidden = false;

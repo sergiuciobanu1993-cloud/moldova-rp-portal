@@ -1,5 +1,32 @@
 <!doctype html>
-<html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>VIP Shop — Moldova RP</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="dashboard.css"></head>
+<html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>VIP Shop — Moldova RP</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="dashboard.css">
+<style>
+:root{
+  --r-common:#9098a3;
+  --r-uncommon:#4b7bff;
+  --r-rare:#a13ee0;
+  --r-legendary-a:#eb4b4b;
+  --r-legendary-b:#ffb347;
+}
+.case-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+@media (max-width:720px){.case-grid{grid-template-columns:1fr}}
+.case-card{cursor:pointer;transition:border-color .15s,transform .15s}
+.case-card:hover,.case-card:focus-visible{border-color:var(--orange);transform:translateY(-2px)}
+.crate-frame{position:relative;height:120px;border-radius:9px;border:1px solid var(--line);background:var(--bg);display:flex;align-items:center;justify-content:center;overflow:hidden;margin-bottom:12px}
+.crate-frame img{width:100%;height:100%;object-fit:cover;object-position:center 40%;display:block}
+.case-card.unlocking .crate-frame::after{content:'';position:absolute;inset:0;background:radial-gradient(circle,rgba(255,255,255,.95),rgba(255,178,71,.4) 40%,transparent 72%);animation:unlockFlash .42s ease-out}
+@keyframes unlockFlash{0%{opacity:0}25%{opacity:1}100%{opacity:0}}
+.case-tier{display:block;font-size:10px;letter-spacing:.14em;text-transform:uppercase;font-weight:900;margin-bottom:4px}
+.case-tier.blue{color:var(--r-uncommon)}
+.case-tier.purple{color:var(--r-rare)}
+.case-tier.orange{color:var(--orange)}
+.odds-dot{width:8px;height:8px;border-radius:50%;flex:none;display:inline-block}
+.odds-dot.common{background:var(--r-common)}
+.odds-dot.uncommon{background:var(--r-uncommon)}
+.odds-dot.rare{background:var(--r-rare)}
+.odds-dot.legendary{background:linear-gradient(90deg,var(--r-legendary-a),var(--r-legendary-b));box-shadow:0 0 6px rgba(255,179,71,.7)}
+</style>
+</head>
 <body>
 <header><a class="brand" href="index.html"><img src="assets/logo.png" alt="">MOLDOVA<span>RP</span></a><nav id="dash-nav"><a href="index.html">Acasă</a><a href="dashboard.html">Dashboard</a><a href="tichete.html">Tichete</a><a href="vip-shop.html" style="color:var(--orange)">VIP Shop</a></nav><button class="menu-toggle" id="dash-menu-toggle" type="button" aria-label="Deschide meniul" aria-expanded="false">☰</button><a class="logout" href="login.html" id="logout-link">Deconectare</a></header>
 <main>
@@ -15,7 +42,7 @@
   <div class="head"><h2>Recompense disponibile</h2><span id="coins-balance" class="pill info">— coins</span></div>
   <p class="muted" id="account-line" style="margin:0 0 14px"></p>
   <p class="muted" id="cases-offline-note" style="margin:0 0 14px" hidden>Serverul de joc nu răspunde momentan — recompensele nu pot fi deschise chiar acum.</p>
-  <div id="cases-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px"></div>
+  <div id="cases-grid" class="case-grid"></div>
 </section>
 
 <section class="panel" id="pending-panel" style="margin-top:20px" hidden>
@@ -75,6 +102,19 @@ function fmtDate(iso) {
 }
 
 const REWARD_ICON = { cash: '💵', item: '🎒', vehicle: '🚗' };
+const CASE_IMG = { rare: 'assets/vip-cases/rare.webp', epic: 'assets/vip-cases/epic.webp', legendara: 'assets/vip-cases/legendara.webp' };
+const CASE_ACCENT = { rare: 'purple', epic: 'blue', legendara: 'orange' };
+const TIER_LABEL = { purple: 'Rare', blue: 'Epic', orange: 'Legendară' };
+
+// Culoarea buline-lor de raritate din listele de șanse — pe aceeași scală ca
+// linkul de test: cash-ul (cel mai mare procent) e "common", armele (1.5%,
+// acum cea mai rară categorie din orice cutie) ies "legendary".
+function rarityOf(pct) {
+  if (pct >= 15) return 'common';
+  if (pct >= 5) return 'uncommon';
+  if (pct >= 2) return 'rare';
+  return 'legendary';
+}
 
 // Codul de legare poate fi cerut din două locuri: linkul "leagă-ți contul" de
 // sub sold, sau direct din clicul pe o cutie cât timp contul nu e legat încă.
@@ -156,9 +196,10 @@ function poolRowsHtml(pool) {
     const thumb = (r.type === 'vehicle' && r.model)
       ? `<img src="assets/vip-cars/${escapeHtml(r.model)}.png" alt="" loading="lazy" style="width:40px;height:22px;object-fit:contain;border-radius:3px;flex:none">`
       : `<span style="width:18px;text-align:center;flex:none">${REWARD_ICON[r.type] || '🎁'}</span>`;
+    const dot = `<span class="odds-dot ${rarityOf(r.chancePercent)}"></span>`;
     return `
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12px">
-      <span class="muted" style="display:flex;align-items:center;gap:6px">${thumb}${escapeHtml(r.label)}</span>
+      <span class="muted" style="display:flex;align-items:center;gap:6px">${dot}${thumb}${escapeHtml(r.label)}</span>
       <span class="muted" style="flex:none">${r.chancePercent}%</span>
     </div>`;
   }).join('');
@@ -171,8 +212,13 @@ function renderCases(cases, coins, linked) {
   currentCasesById = {};
   cases.forEach(c => { currentCasesById[c.id] = c; });
   const grid = document.getElementById('cases-grid');
-  grid.innerHTML = cases.map(c => `
-    <div class="panel" data-case="${escapeHtml(c.id)}" style="padding:18px;cursor:pointer" tabindex="0" role="button" aria-haspopup="dialog">
+  grid.innerHTML = cases.map(c => {
+    const accent = CASE_ACCENT[c.id] || 'orange';
+    const img = CASE_IMG[c.id];
+    return `
+    <div class="panel case-card" data-case="${escapeHtml(c.id)}" style="padding:18px" tabindex="0" role="button" aria-haspopup="dialog">
+      ${img ? `<div class="crate-frame"><img src="${img}" alt="" loading="lazy"></div>` : ''}
+      <span class="case-tier ${accent}">${TIER_LABEL[accent] || ''}</span>
       <h3 style="margin:0 0 4px">${escapeHtml(c.name)}</h3>
       <p class="pill warn" style="margin:0 0 12px">🪙 ${c.price} coins</p>
       <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:14px">
@@ -180,9 +226,17 @@ function renderCases(cases, coins, linked) {
         ${c.pool.length > 3 ? `<p class="muted" style="margin:2px 0 0;font-size:12px">+ ${c.pool.length - 3} alte recompense…</p>` : ''}
       </div>
       <button type="button" class="btn-primary" data-case="${escapeHtml(c.id)}" style="width:100%">🔍 Vezi conținut &amp; șanse</button>
-    </div>`).join('');
+    </div>`;
+  }).join('');
   grid.querySelectorAll('[data-case]').forEach(el => {
-    el.addEventListener('click', () => openPreview(el.dataset.case));
+    el.addEventListener('click', () => {
+      const card = el.closest('.case-card');
+      if (card) {
+        card.classList.add('unlocking');
+        setTimeout(() => card.classList.remove('unlocking'), 450);
+      }
+      openPreview(el.dataset.case);
+    });
     el.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPreview(el.dataset.case); }
     });

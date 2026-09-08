@@ -102,6 +102,7 @@ function fmtDate(iso) {
 }
 
 const REWARD_ICON = { cash: '💵', item: '🎒', vehicle: '🚗' };
+const TEBEX_URL = 'https://moldovaroleplay.tebex.io';
 const CASE_IMG = { rare: 'assets/vip-cases/rare.webp', epic: 'assets/vip-cases/epic.webp', legendara: 'assets/vip-cases/legendara.webp' };
 const CASE_ACCENT = { rare: 'purple', epic: 'blue', legendara: 'orange' };
 const TIER_LABEL = { purple: 'Rare', blue: 'Epic', orange: 'Legendară' };
@@ -248,6 +249,10 @@ function renderCases(cases, coins, linked) {
 // cheltuiască vreun coin. Doar butonul "Deschide" din interiorul acestui
 // panou pornește efectiv deschiderea (și cheltuiala de coins).
 let previewCaseId = null;
+// true doar când contul E legat dar nu are destui coins — în cazul ăsta
+// butonul nu mai încearcă să deschidă cutia, ci trimite direct la Tebex ca
+// jucătorul să-și reîncarce soldul.
+let previewInsufficientFunds = false;
 
 function openPreview(caseId) {
   const c = currentCasesById[caseId];
@@ -256,13 +261,14 @@ function openPreview(caseId) {
   document.getElementById('preview-title').textContent = c.name;
   document.getElementById('preview-price').textContent = `🪙 ${c.price} coins`;
   document.getElementById('preview-pool').innerHTML = poolRowsHtml(c.pool);
-  // Cât timp contul nu e legat de personajul din joc, lăsăm butonul activ —
-  // apăsarea lui pornește fluxul de legare (vezi listener-ul de mai jos),
-  // nu are legătură cu soldul de coins.
+  // Cât timp contul nu e legat de personajul din joc, lăsăm butonul cu
+  // textul "Deschide" — apăsarea lui pornește fluxul de legare (vezi
+  // listener-ul de mai jos), nu are legătură cu soldul de coins.
   const canAfford = !accountLinked || currentCoins >= c.price;
+  previewInsufficientFunds = accountLinked && !canAfford;
   const openBtn = document.getElementById('preview-open-btn');
-  openBtn.disabled = !canAfford;
-  openBtn.textContent = canAfford ? 'Deschide' : 'Coins insuficienți';
+  openBtn.disabled = false;
+  openBtn.textContent = previewInsufficientFunds ? '🛒 Coins insuficienți — cumpără pe Tebex' : 'Deschide';
   document.getElementById('preview-overlay').style.display = 'flex';
 }
 function closePreview() {
@@ -276,6 +282,10 @@ document.getElementById('preview-overlay').addEventListener('click', (e) => {
 document.getElementById('preview-open-btn').addEventListener('click', () => {
   const caseId = previewCaseId;
   if (!caseId) return;
+  if (previewInsufficientFunds) {
+    window.open(TEBEX_URL, '_blank', 'noopener');
+    return;
+  }
   closePreview();
   if (!accountLinked) { openLinkOverlay(caseId); return; }
   openCase(caseId);

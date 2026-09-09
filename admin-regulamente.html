@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Regulamente — Admin Moldova RP</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="admin.css"></head>
+<body>
+<aside class="side"><a class="brand" href="index.html"><img src="assets/logo.png" alt=""><b>MOLDOVA<span>RP</span></b></a><p>ADMINISTRAȚIE</p><a href="admin.html">▦ Dashboard</a><a href="admin-utilizatori.html">👤 Utilizatori</a><a href="admin-jucatori.html">♙ Jucători</a><a href="admin-financiar.html">◆ Facțiuni</a><a href="admin-sanctiuni.html">⚠ Sancțiuni</a><a>▤ Reclamații</a><a>⚖ CK</a><a class="sel" href="admin-regulamente.html">📚 Regulamente</a><a href="admin-continut.html">📝 Conținut pagini</a><a href="admin-anunturi.html">◉ Anunțuri</a><a href="admin-tichete.html">🎫 Tichete</a><a href="vip-shop.html">🎁 VIP Shop</a><a href="admin-loguri.html">🗂 Loguri</a><a href="admin-kill-logs.html">🔪 Kill Logs</a><a>⌁ Audit Logs</a><a href="admin-txadmin.html" id="nav-txadmin">🖥 txAdmin</a><a class="back" href="dashboard.html">← Contul meu</a><a class="back" href="index.html">← Site public</a></aside>
+<main>
+<header><div><small>PANEL ADMINISTRATIV</small><h1>Regulamente</h1></div><a class="admin" href="dashboard.html" title="Înapoi la contul meu" style="text-decoration:none"><span id="admin-name">…</span> <i></i></a></header>
+
+<section class="tablebox">
+  <div class="title"><h2>Toate regulamentele</h2><button id="new-btn">+ Regulament nou</button></div>
+  <table><thead><tr><th>TITLU</th><th>CATEGORIE</th><th>VERSIUNE</th><th>STATUS</th><th>ACTUALIZAT</th><th></th></tr></thead>
+  <tbody id="list-body"><tr><td colspan="6">Se încarcă…</td></tr></tbody></table>
+</section>
+
+<div class="modal-overlay" id="form-overlay" hidden>
+  <section class="formbox modal-box" id="form-box">
+    <div class="modal-head">
+      <h2 id="form-title">Regulament nou</h2>
+      <button type="button" class="modal-close" id="modal-close-btn" aria-label="Închide">✕</button>
+    </div>
+    <form id="reg-form">
+      <input type="hidden" id="f-id">
+      <div class="formgrid">
+        <div class="field"><label>Titlu</label><input id="f-title" required></div>
+        <div class="field"><label>Categorie</label><input id="f-category" required placeholder="ex: Poliție"></div>
+        <div class="field"><label>Slug (URL)</label><input id="f-slug" placeholder="generat automat din titlu dacă e gol"></div>
+        <div class="field"><label>Versiune</label><input id="f-version" value="1.0"></div>
+        <div class="field wide"><label>Conținut</label><textarea id="f-content" class="textarea-lg" required placeholder="Textul complet al regulamentului..."></textarea></div>
+        <div class="field checkbox wide"><input type="checkbox" id="f-published" checked><label for="f-published">Publicat (vizibil pe site)</label></div>
+      </div>
+      <p class="formmsg" id="form-msg" hidden></p>
+      <div class="formactions">
+        <button type="submit" class="btn-primary" id="save-btn">Salvează</button>
+        <button type="button" class="btn-ghost" id="cancel-btn">Anulează</button>
+      </div>
+    </form>
+  </section>
+</div>
+
+</main>
+<script src="auth-client.js"></script>
+<script>
+let editingId = null;
+
+function slugify(text) {
+  return text.toString().normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
+function showForm(reg) {
+  document.getElementById('form-overlay').hidden = false;
+  document.body.classList.add('modal-open');
+  document.getElementById('form-msg').hidden = true;
+  editingId = reg ? reg.id : null;
+  document.getElementById('form-title').textContent = reg ? 'Editează regulament' : 'Regulament nou';
+  document.getElementById('f-id').value = reg ? reg.id : '';
+  document.getElementById('f-title').value = reg ? reg.title : '';
+  document.getElementById('f-category').value = reg ? reg.category : '';
+  document.getElementById('f-slug').value = reg ? reg.slug : '';
+  document.getElementById('f-version').value = reg ? reg.version : '1.0';
+  document.getElementById('f-content').value = reg ? reg.content : '';
+  document.getElementById('f-published').checked = reg ? reg.is_published : true;
+  document.getElementById('f-title').focus();
+}
+
+function hideForm() {
+  document.getElementById('form-overlay').hidden = true;
+  document.body.classList.remove('modal-open');
+  document.getElementById('reg-form').reset();
+  editingId = null;
+}
+
+// Închidere prin click pe fundal (nu și pe click în interiorul cardului) sau
+// prin tasta Escape — comod când lucrezi cu un text lung de regulament.
+document.getElementById('form-overlay').addEventListener('click', (e) => {
+  if (e.target.id === 'form-overlay') hideForm();
+});
+document.getElementById('modal-close-btn').addEventListener('click', hideForm);
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !document.getElementById('form-overlay').hidden) hideForm();
+});
+
+async function loadList() {
+  const tbody = document.getElementById('list-body');
+  try {
+    const res = await apiFetch('/api/admin/regulations');
+    if (!res.ok) throw new Error();
+    const items = await res.json();
+    tbody.innerHTML = items.length ? items.map(r => `
+      <tr>
+        <td>${r.title}</td>
+        <td>${r.category}</td>
+        <td>${r.version}</td>
+        <td><span class="pill ${r.is_published ? 'on' : 'off'}">${r.is_published ? 'PUBLICAT' : 'CIORNĂ'}</span></td>
+        <td>${new Date(r.updated_at).toLocaleDateString('ro-RO')}</td>
+        <td class="rowactions">
+          <button data-edit="${r.id}">Editează</button>
+          <button data-del="${r.id}" class="danger">Șterge</button>
+        </td>
+      </tr>`).join('') : '<tr><td colspan="6">Niciun regulament încă.</td></tr>';
+
+    tbody.querySelectorAll('[data-edit]').forEach(btn => btn.addEventListener('click', async () => {
+      const res = await apiFetch(`/api/admin/regulations/${btn.dataset.edit}`);
+      if (res.ok) showForm(await res.json());
+    }));
+    tbody.querySelectorAll('[data-del]').forEach(btn => btn.addEventListener('click', async () => {
+      if (!confirm('Ștergi definitiv acest regulament?')) return;
+      const res = await apiFetch(`/api/admin/regulations/${btn.dataset.del}`, { method: 'DELETE' });
+      if (res.ok || res.status === 204) loadList();
+    }));
+  } catch {
+    tbody.innerHTML = '<tr><td colspan="6">Nu am putut încărca regulamentele.</td></tr>';
+  }
+}
+
+document.getElementById('new-btn').addEventListener('click', () => showForm(null));
+document.getElementById('cancel-btn').addEventListener('click', hideForm);
+
+document.getElementById('reg-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const msg = document.getElementById('form-msg');
+  msg.hidden = true;
+  const title = document.getElementById('f-title').value.trim();
+  const body = {
+    title,
+    category: document.getElementById('f-category').value.trim(),
+    slug: document.getElementById('f-slug').value.trim() || slugify(title),
+    version: document.getElementById('f-version').value.trim() || '1.0',
+    content: document.getElementById('f-content').value,
+    is_published: document.getElementById('f-published').checked
+  };
+  try {
+    const res = await apiFetch(
+      editingId ? `/api/admin/regulations/${editingId}` : '/api/admin/regulations',
+      { method: editingId ? 'PUT' : 'POST', body: JSON.stringify(body) }
+    );
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Salvarea a eșuat.');
+    hideForm();
+    loadList();
+  } catch (err) {
+    msg.textContent = err.message;
+    msg.className = 'formmsg error';
+    msg.hidden = false;
+  }
+});
+
+(async () => {
+  const me = await requireRole('admin', 'co-fondator', 'owner');
+  if (!me) return;
+  document.getElementById('admin-name').textContent = me.username;
+  loadList();
+})();
+</script>
+</body></html>

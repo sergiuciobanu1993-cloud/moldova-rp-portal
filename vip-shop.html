@@ -1,0 +1,644 @@
+<!doctype html>
+<html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>VIP Shop — Moldova RP</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="dashboard.css">
+<style>
+:root{
+  --r-common:#9098a3;
+  --r-uncommon:#4b7bff;
+  --r-rare:#a13ee0;
+  --r-legendary-a:#eb4b4b;
+  --r-legendary-b:#ffb347;
+}
+.case-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+@media (max-width:720px){.case-grid{grid-template-columns:1fr}}
+.case-card{cursor:pointer;transition:border-color .15s,transform .15s}
+.case-card:hover,.case-card:focus-visible{border-color:var(--orange);transform:translateY(-2px)}
+.crate-frame{position:relative;height:120px;border-radius:9px;border:1px solid var(--line);background:var(--bg);display:flex;align-items:center;justify-content:center;overflow:hidden;margin-bottom:12px}
+.crate-frame img{width:100%;height:100%;object-fit:cover;object-position:center 40%;display:block}
+.case-card.unlocking .crate-frame::after{content:'';position:absolute;inset:0;background:radial-gradient(circle,rgba(255,255,255,.95),rgba(255,178,71,.4) 40%,transparent 72%);animation:unlockFlash .42s ease-out}
+@keyframes unlockFlash{0%{opacity:0}25%{opacity:1}100%{opacity:0}}
+.case-tier{display:block;font-size:10px;letter-spacing:.14em;text-transform:uppercase;font-weight:900;margin-bottom:4px}
+.case-tier.blue{color:var(--r-uncommon)}
+.case-tier.purple{color:var(--r-rare)}
+.case-tier.orange{color:var(--orange)}
+.odds-dot{width:8px;height:8px;border-radius:50%;flex:none;display:inline-block}
+.odds-dot.common{background:var(--r-common)}
+.odds-dot.uncommon{background:var(--r-uncommon)}
+.odds-dot.rare{background:var(--r-rare)}
+.odds-dot.legendary{background:linear-gradient(90deg,var(--r-legendary-a),var(--r-legendary-b));box-shadow:0 0 6px rgba(255,179,71,.7)}
+
+/* ---- derulatorul de deschidere ("reel"), stil CS:GO — la fel ca pe linkul
+   de test, doar că aici recompensa vine deja decisă de server (nu se alege
+   client-side): apelăm /api/vip-shop/deschide, apoi derulatorul se
+   construiește în jurul recompensei REALE și se oprește exact pe ea. ---- */
+.reveal-stage{position:relative;margin:4px 0 18px}
+.reveal-spotlight{position:absolute;left:50%;top:-30px;width:280px;height:140px;transform:translateX(-50%);background:radial-gradient(ellipse at 50% 0%,rgba(255,138,31,.16),transparent 70%);pointer-events:none;z-index:0}
+.reveal-frame{position:relative;border-radius:10px;border:1px solid var(--line);background:var(--bg);overflow:hidden;height:132px;z-index:1}
+.reveal-marker{position:absolute;left:50%;top:0;bottom:0;width:2px;transform:translateX(-50%);background:var(--orange);z-index:4;opacity:0;transition:opacity .3s ease;box-shadow:0 0 12px 1px rgba(255,138,31,.6)}
+.reveal-marker.active{opacity:1}
+.reveal-marker::before,.reveal-marker::after{content:'';position:absolute;left:50%;transform:translateX(-50%);width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent}
+.reveal-marker::before{top:-1px;border-top:7px solid var(--orange)}
+.reveal-marker::after{bottom:-1px;border-bottom:7px solid var(--orange)}
+.reveal-fade{position:absolute;top:0;bottom:0;width:70px;z-index:2;pointer-events:none}
+.reveal-fade.left{left:0;background:linear-gradient(90deg,var(--bg),transparent)}
+.reveal-fade.right{right:0;background:linear-gradient(270deg,var(--bg),transparent)}
+.reveal-flash{position:absolute;inset:0;z-index:3;pointer-events:none;background:radial-gradient(circle at 50% 50%,rgba(255,138,31,.55),transparent 65%);opacity:0}
+.reveal-flash.hit{animation:revealFlash .55s ease-out}
+@keyframes revealFlash{0%{opacity:0}12%{opacity:1}100%{opacity:0}}
+.reveal-track{position:absolute;top:0;bottom:0;left:0;display:flex;align-items:center;gap:10px;padding:0 10px;will-change:transform}
+.reel-tile{flex:none;width:118px;height:112px;border-radius:9px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:10px 8px;border:1px solid var(--line);position:relative;transform:scale(1);filter:brightness(1);transition:transform .12s ease,filter .12s ease,border-color .12s ease}
+.reel-tile[data-rarity="common"]{background:linear-gradient(155deg,rgba(144,152,163,.28),var(--panel) 62%)}
+.reel-tile[data-rarity="uncommon"]{background:linear-gradient(155deg,rgba(75,123,255,.3),var(--panel) 62%)}
+.reel-tile[data-rarity="rare"]{background:linear-gradient(155deg,rgba(161,62,224,.32),var(--panel) 62%)}
+.reel-tile[data-rarity="legendary"]{background:linear-gradient(155deg,rgba(255,179,71,.4),rgba(235,75,75,.22) 45%,var(--panel) 75%)}
+.reel-tile .tile-icon{width:32px;height:32px;display:flex;align-items:center;justify-content:center;font-size:24px;flex:none}
+.reel-tile .tile-icon.has-photo{width:88px;height:44px}
+.reel-tile .tile-icon.has-photo img{width:100%;height:100%;object-fit:contain;display:block}
+.reel-tile .tile-label{font-size:10px;text-align:center;line-height:1.25;color:var(--text);font-weight:800}
+.reel-tile.tick{transform:scale(1.08);filter:brightness(1.35);border-color:var(--orange)}
+.reel-tile.win-glow{border-color:var(--orange);box-shadow:0 0 0 1px var(--orange),0 0 22px rgba(255,138,31,.45);animation:revealWinPulse 1.1s ease-out .1s 2}
+@keyframes revealWinPulse{0%{box-shadow:0 0 0 1px var(--orange),0 0 0 rgba(255,138,31,0)}40%{box-shadow:0 0 0 1px var(--orange),0 0 30px rgba(255,138,31,.6)}100%{box-shadow:0 0 0 1px var(--orange),0 0 22px rgba(255,138,31,.45)}}
+#reveal-panel.shake{animation:revealShake .38s cubic-bezier(.36,.07,.19,.97)}
+@keyframes revealShake{10%,90%{transform:translateX(-1px)}20%,80%{transform:translateX(2px)}30%,50%,70%{transform:translateX(-4px)}40%,60%{transform:translateX(4px)}}
+</style>
+</head>
+<body>
+<header><a class="brand" href="index.html"><img src="assets/logo.png" alt="">MOLDOVA<span>RP</span></a><nav id="dash-nav"><a href="index.html">Acasă</a><a href="dashboard.html">Dashboard</a><a href="tichete.html">Tichete</a><a href="vip-shop.html" style="color:var(--orange)">VIP Shop</a></nav><button class="menu-toggle" id="dash-menu-toggle" type="button" aria-label="Deschide meniul" aria-expanded="false">☰</button><a class="logout" href="login.html" id="logout-link">Deconectare</a></header>
+<main>
+<section class="welcome"><div><p>MAGAZIN COINS</p><h1>VIP Shop</h1><small>Cheltuiește coins-urile deja cumpărate pe o recompensă cu șansă — se ridică din joc.</small></div></section>
+
+<p class="muted" style="margin:18px 0 24px">
+  Coins-urile se cumpără exact ca până acum: din joc, apasă <strong>„Cumpără coins"</strong> în meniul VIP, plătește pe Tebex,
+  apoi introdu ID-ul tranzacției acolo ca să-ți fie creditate. Pagina asta doar arată soldul și îți lasă să-l cheltui pe o recompensă —
+  nu schimbă nimic la cumpărarea coins-urilor în sine.
+</p>
+
+<section class="panel" id="cases-panel" hidden>
+  <div class="head"><h2>Recompense disponibile</h2><span id="coins-balance" class="pill info">— coins</span></div>
+  <p class="muted" id="account-line" style="margin:0 0 14px"></p>
+  <p class="muted" id="cases-offline-note" style="margin:0 0 14px" hidden>Serverul de joc nu răspunde momentan — recompensele nu pot fi deschise chiar acum.</p>
+  <div id="cases-grid" class="case-grid"></div>
+</section>
+
+<section class="panel" id="pending-panel" style="margin-top:20px" hidden>
+  <div class="head"><h2>🎁 Recompense în așteptare</h2><span class="muted">Ridică-le din joc</span></div>
+  <div id="pending-body"></div>
+</section>
+
+<section class="panel" id="history-panel" style="margin-top:20px" hidden>
+  <div class="head"><h2>📜 Istoricul tău</h2><span class="muted">Ce ai deschis și ce ai câștigat</span></div>
+  <div id="history-body"></div>
+</section>
+
+<section class="panel" id="log-panel" style="margin-top:20px" hidden>
+  <div class="head"><h2>🧾 Jurnal deschideri</h2><span class="muted">Cine a deschis ce — cel mai recent primul</span></div>
+  <p class="muted" style="margin:0 0 14px;font-size:12px">
+    Vizibil doar pentru staff, cât timp VIP Shop e în testare — util ca să vedem live cine a testat ce cutie și ce a picat, până punem pragurile finale.
+  </p>
+  <div id="log-body"></div>
+</section>
+
+<div id="link-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:50;align-items:center;justify-content:center">
+  <div class="panel" style="max-width:420px;width:90%;padding:28px 24px">
+    <h2 style="margin:0 0 10px">Leagă-ți contul de personajul din joc</h2>
+    <p class="muted" style="margin:0 0 14px">
+      Ca să nu poată nimeni să vadă sau să cheltuiască coins-urile altcuiva, contul de site trebuie legat o singură dată de
+      personajul tău din joc. Scrie în chat, în joc: <code>/leagacont</code> — primești un cod de 6 cifre, valabil 5 minute.
+      Introdu-l mai jos.
+    </p>
+    <form id="link-form" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+      <div><label style="display:block;font-size:11px;color:var(--muted);margin-bottom:4px">Cod (6 cifre)</label>
+        <input id="link-code-input" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code" class="filter-select" style="letter-spacing:4px;font-size:18px;width:120px"></div>
+      <button type="submit" class="btn-primary">Leagă contul</button>
+      <button type="button" class="btn-ghost" id="link-overlay-cancel">Anulează</button>
+    </form>
+    <p id="link-msg" class="muted" style="margin:10px 0 0" hidden></p>
+  </div>
+</div>
+
+<div id="reveal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:50;align-items:center;justify-content:center;padding:20px">
+  <div class="panel" id="reveal-panel" style="max-width:580px;width:100%;text-align:center;padding:28px 24px">
+    <h2 id="reveal-title" style="margin:0 0 4px">Se deschide…</h2>
+    <p id="reveal-text" class="muted" style="margin:0 0 16px;min-height:18px"></p>
+    <div class="reveal-stage">
+      <div class="reveal-spotlight"></div>
+      <div class="reveal-frame" id="reveal-frame">
+        <div class="reveal-fade left"></div>
+        <div class="reveal-fade right"></div>
+        <div class="reveal-flash" id="reveal-flash"></div>
+        <div class="reveal-marker" id="reveal-marker"></div>
+        <div class="reveal-track" id="reveal-track"></div>
+      </div>
+    </div>
+    <button type="button" class="btn-primary" id="reveal-close" hidden style="margin-top:18px">Am înțeles</button>
+  </div>
+</div>
+
+<div id="preview-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:50;align-items:center;justify-content:center;padding:20px">
+  <div class="panel" style="max-width:420px;width:100%;max-height:86vh;overflow-y:auto;padding:24px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:2px">
+      <h2 id="preview-title" style="margin:0">Cutie</h2>
+      <button type="button" class="btn-ghost" id="preview-close" aria-label="Închide" style="flex:none;padding:4px 10px">✕</button>
+    </div>
+    <p class="pill warn" id="preview-price" style="margin:6px 0 14px">🪙 — coins</p>
+    <p class="muted" style="margin:0 0 10px;font-size:13px">Ce poți câștiga din această cutie, cu șansa exactă pentru fiecare recompensă:</p>
+    <div id="preview-pool" style="display:flex;flex-direction:column;gap:7px;margin-bottom:18px"></div>
+    <button type="button" class="btn-primary" id="preview-open-btn" style="width:100%">Deschide</button>
+  </div>
+</div>
+
+</main>
+<script src="auth-client.js"></script>
+<script>
+const escapeHtml = s => (s ?? '').toString()
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+function fmtDate(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+const REWARD_ICON = { cash: '💵', item: '🎒', vehicle: '🚗' };
+const TEBEX_URL = 'https://moldovaroleplay.tebex.io';
+const CASE_IMG = { rare: 'assets/vip-cases/rare.webp', epic: 'assets/vip-cases/epic.webp', legendara: 'assets/vip-cases/legendara.webp' };
+const CASE_ACCENT = { rare: 'purple', epic: 'blue', legendara: 'orange' };
+const TIER_LABEL = { purple: 'Rare', blue: 'Epic', orange: 'Legendară' };
+
+// Culoarea buline-lor de raritate din listele de șanse — pe aceeași scală ca
+// linkul de test: cash-ul (cel mai mare procent) e "common", armele (1.5%,
+// acum cea mai rară categorie din orice cutie) ies "legendary".
+function rarityOf(pct) {
+  if (pct >= 15) return 'common';
+  if (pct >= 5) return 'uncommon';
+  if (pct >= 2) return 'rare';
+  return 'legendary';
+}
+
+// Codul de legare poate fi cerut din două locuri: linkul "leagă-ți contul" de
+// sub sold, sau direct din clicul pe o cutie cât timp contul nu e legat încă.
+// Ținem minte care caz a fost apăsat ca să-l deschidem automat imediat după
+// ce legarea reușește, fără ca jucătorul să mai dea click o dată.
+let pendingCaseAfterLink = null;
+
+function openLinkOverlay(caseId) {
+  pendingCaseAfterLink = caseId || null;
+  document.getElementById('link-msg').hidden = true;
+  document.getElementById('link-code-input').value = '';
+  document.getElementById('link-overlay').style.display = 'flex';
+  document.getElementById('link-code-input').focus();
+}
+function closeLinkOverlay() {
+  document.getElementById('link-overlay').style.display = 'none';
+  pendingCaseAfterLink = null;
+}
+document.getElementById('link-overlay-cancel').addEventListener('click', closeLinkOverlay);
+document.getElementById('link-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const msgEl = document.getElementById('link-msg');
+  const code = document.getElementById('link-code-input').value.trim();
+  msgEl.hidden = false;
+  msgEl.textContent = 'Se verifică…';
+  try {
+    const res = await apiFetch('/api/cont/leaga-joc', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code }) });
+    const d = await res.json();
+    if (!res.ok) { msgEl.textContent = d.error || 'Cod invalid.'; return; }
+    const caseToOpen = pendingCaseAfterLink;
+    pendingCaseAfterLink = null;
+    document.getElementById('link-overlay').style.display = 'none';
+    await loadAll();
+    if (caseToOpen) {
+      const c = currentCasesById[caseToOpen];
+      if (c && currentCoins >= c.price) openCase(caseToOpen);
+    }
+  } catch { msgEl.textContent = 'Eroare de rețea.'; }
+});
+
+function renderAccountLine(data) {
+  const el = document.getElementById('account-line');
+  if (data.linked) {
+    el.innerHTML = `Personaj legat: <strong>${escapeHtml(data.name || 'necunoscut')}</strong> · <a href="#" id="unlink-link">Dezleagă contul</a>`;
+    document.getElementById('unlink-link').addEventListener('click', async (e) => {
+      e.preventDefault();
+      if (!confirm('Sigur dezlegi contul de personajul din joc?')) return;
+      await apiFetch('/api/cont/dezleaga-joc', { method: 'POST' });
+      await loadAll();
+    });
+  } else {
+    el.innerHTML = `Cont nelegat de personajul din joc — <a href="#" id="link-link">leagă-l acum</a> (sau apasă direct „Deschide" pe o recompensă).`;
+    document.getElementById('link-link').addEventListener('click', (e) => { e.preventDefault(); openLinkOverlay(null); });
+  }
+}
+
+function renderPending(pending) {
+  const panel = document.getElementById('pending-panel');
+  const body = document.getElementById('pending-body');
+  if (!pending || !pending.length) { panel.hidden = true; return; }
+  panel.hidden = false;
+  body.innerHTML = `
+    <p class="muted" style="margin:0 0 12px">Intră pe server și scrie <code>/recompense</code> ca să le ridici.</p>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      ${pending.map(p => `
+        <div style="display:flex;justify-content:space-between;gap:10px;padding:10px 14px;background:rgba(255,255,255,.04);border-radius:8px">
+          <span>${REWARD_ICON[p.reward_type] || '🎁'} <strong>${escapeHtml(p.reward_label || p.reward_type)}</strong> <span class="muted">(${escapeHtml(p.case_name || '')})</span></span>
+          <span class="muted">${fmtDate(p.created_at)}</span>
+        </div>`).join('')}
+    </div>`;
+}
+
+// Jurnalul TUTUROR deschiderilor (toți jucătorii, nu doar cel logat) — vezi
+// /api/vip-shop/log din backend, care citește direct din
+// moldovarp_case_openings prin ruta nouă a resursei Lua ("/cases/log",
+// v1.29.3+). Vizibil doar cât timp VIP Shop e restricționat la staff.
+function renderLog(log) {
+  const panel = document.getElementById('log-panel');
+  const body = document.getElementById('log-body');
+  if (!log || !log.length) { panel.hidden = true; return; }
+  panel.hidden = false;
+  body.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:8px">
+      ${log.map(entry => {
+        const data = entry.rewardData || {};
+        const thumb = (entry.rewardType === 'vehicle' && data.model)
+          ? `<img src="assets/vip-cars/${escapeHtml(data.model)}.png" alt="" loading="lazy" style="width:40px;height:22px;object-fit:contain;border-radius:3px;flex:none">`
+          : `<span style="width:18px;text-align:center;flex:none">${REWARD_ICON[entry.rewardType] || '🎁'}</span>`;
+        const claimedPill = entry.claimedAt
+          ? `<span class="pill" style="background:rgba(66,223,138,.15);color:var(--green);flex:none">Ridicat</span>`
+          : `<span class="pill warn" style="flex:none">În așteptare</span>`;
+        return `
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 14px;background:rgba(255,255,255,.04);border-radius:8px;flex-wrap:wrap">
+          <span style="display:flex;align-items:center;gap:8px;min-width:220px">
+            ${thumb}
+            <span>
+              <strong>${escapeHtml(entry.playerName || entry.identifier || 'necunoscut')}</strong>
+              <span class="muted"> · ${escapeHtml(entry.caseName || '')} · ${escapeHtml(entry.rewardLabel || '')}</span>
+            </span>
+          </span>
+          <span style="display:flex;align-items:center;gap:10px;flex:none">
+            <span class="muted">🪙 ${entry.priceCoins}</span>
+            ${claimedPill}
+            <span class="muted">${fmtDate(entry.createdAt)}</span>
+          </span>
+        </div>`;
+      }).join('')}
+    </div>`;
+}
+
+async function loadLog() {
+  try {
+    const res = await apiFetch('/api/vip-shop/log?limit=50');
+    if (!res.ok) { document.getElementById('log-panel').hidden = true; return; }
+    const d = await res.json();
+    renderLog(d.log || []);
+  } catch {
+    document.getElementById('log-panel').hidden = true;
+  }
+}
+
+// Istoricul PROPRIU al jucătorului logat (deschideri ridicate ȘI în
+// așteptare) — vezi /api/vip-shop/istoric din backend. Aceeași înfățișare ca
+// jurnalul de admin, dar fără coloana cu numele jucătorului (e evident a lui)
+// și populată doar cu propriile deschideri.
+function renderHistory(history) {
+  const panel = document.getElementById('history-panel');
+  const body = document.getElementById('history-body');
+  if (!history || !history.length) { panel.hidden = true; return; }
+  panel.hidden = false;
+  body.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:8px">
+      ${history.map(entry => {
+        const data = entry.rewardData || {};
+        const thumb = (entry.rewardType === 'vehicle' && data.model)
+          ? `<img src="assets/vip-cars/${escapeHtml(data.model)}.png" alt="" loading="lazy" style="width:40px;height:22px;object-fit:contain;border-radius:3px;flex:none">`
+          : `<span style="width:18px;text-align:center;flex:none">${REWARD_ICON[entry.rewardType] || '🎁'}</span>`;
+        const claimedPill = entry.claimedAt
+          ? `<span class="pill" style="background:rgba(66,223,138,.15);color:var(--green);flex:none">Ridicat</span>`
+          : `<span class="pill warn" style="flex:none">În așteptare</span>`;
+        return `
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 14px;background:rgba(255,255,255,.04);border-radius:8px;flex-wrap:wrap">
+          <span style="display:flex;align-items:center;gap:8px;min-width:220px">
+            ${thumb}
+            <span>
+              <strong>${escapeHtml(entry.rewardLabel || '')}</strong>
+              <span class="muted"> · ${escapeHtml(entry.caseName || '')}</span>
+            </span>
+          </span>
+          <span style="display:flex;align-items:center;gap:10px;flex:none">
+            <span class="muted">🪙 ${entry.priceCoins}</span>
+            ${claimedPill}
+            <span class="muted">${fmtDate(entry.createdAt)}</span>
+          </span>
+        </div>`;
+      }).join('')}
+    </div>`;
+}
+
+async function loadHistory() {
+  try {
+    const res = await apiFetch('/api/vip-shop/istoric?limit=30');
+    if (!res.ok) { document.getElementById('history-panel').hidden = true; return; }
+    const d = await res.json();
+    renderHistory(d.history || []);
+  } catch {
+    document.getElementById('history-panel').hidden = true;
+  }
+}
+
+let currentCoins = 0;
+let currentCasesById = {};
+let accountLinked = false;
+
+function poolRowsHtml(pool) {
+  return pool.map(r => {
+    const thumb = (r.type === 'vehicle' && r.model)
+      ? `<img src="assets/vip-cars/${escapeHtml(r.model)}.png" alt="" loading="lazy" style="width:40px;height:22px;object-fit:contain;border-radius:3px;flex:none">`
+      : `<span style="width:18px;text-align:center;flex:none">${REWARD_ICON[r.type] || '🎁'}</span>`;
+    const dot = `<span class="odds-dot ${rarityOf(r.chancePercent)}"></span>`;
+    return `
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12px">
+      <span class="muted" style="display:flex;align-items:center;gap:6px">${dot}${thumb}${escapeHtml(r.label)}</span>
+      <span class="muted" style="flex:none">${r.chancePercent}%</span>
+    </div>`;
+  }).join('');
+}
+
+function renderCases(cases, coins, linked) {
+  const panel = document.getElementById('cases-panel');
+  panel.hidden = false;
+  document.getElementById('coins-balance').textContent = linked ? `🪙 ${coins} coins` : '🪙 — coins';
+  currentCasesById = {};
+  cases.forEach(c => { currentCasesById[c.id] = c; });
+  const grid = document.getElementById('cases-grid');
+  grid.innerHTML = cases.map(c => {
+    const accent = CASE_ACCENT[c.id] || 'orange';
+    const img = CASE_IMG[c.id];
+    return `
+    <div class="panel case-card" data-case="${escapeHtml(c.id)}" style="padding:18px" tabindex="0" role="button" aria-haspopup="dialog">
+      ${img ? `<div class="crate-frame"><img src="${img}" alt="" loading="lazy"></div>` : ''}
+      <span class="case-tier ${accent}">${TIER_LABEL[accent] || ''}</span>
+      <h3 style="margin:0 0 4px">${escapeHtml(c.name)}</h3>
+      <p class="pill warn" style="margin:0 0 12px">🪙 ${c.price} coins</p>
+      <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:14px">
+        ${poolRowsHtml(c.pool.slice(0, 3))}
+        ${c.pool.length > 3 ? `<p class="muted" style="margin:2px 0 0;font-size:12px">+ ${c.pool.length - 3} alte recompense…</p>` : ''}
+      </div>
+      <button type="button" class="btn-primary" data-case="${escapeHtml(c.id)}" style="width:100%">🔍 Vezi conținut &amp; șanse</button>
+    </div>`;
+  }).join('');
+  grid.querySelectorAll('[data-case]').forEach(el => {
+    el.addEventListener('click', () => {
+      const card = el.closest('.case-card');
+      if (card) {
+        card.classList.add('unlocking');
+        setTimeout(() => card.classList.remove('unlocking'), 450);
+      }
+      openPreview(el.dataset.case);
+    });
+    el.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPreview(el.dataset.case); }
+    });
+  });
+}
+
+// Previzualizare: click pe orice cutie deschide un panou cu toată lista de
+// recompense și șansa exactă pentru fiecare, ÎNAINTE ca jucătorul să
+// cheltuiască vreun coin. Doar butonul "Deschide" din interiorul acestui
+// panou pornește efectiv deschiderea (și cheltuiala de coins).
+let previewCaseId = null;
+// true doar când contul E legat dar nu are destui coins — în cazul ăsta
+// butonul nu mai încearcă să deschidă cutia, ci trimite direct la Tebex ca
+// jucătorul să-și reîncarce soldul.
+let previewInsufficientFunds = false;
+
+function openPreview(caseId) {
+  const c = currentCasesById[caseId];
+  if (!c) return;
+  previewCaseId = caseId;
+  document.getElementById('preview-title').textContent = c.name;
+  document.getElementById('preview-price').textContent = `🪙 ${c.price} coins`;
+  document.getElementById('preview-pool').innerHTML = poolRowsHtml(c.pool);
+  // Cât timp contul nu e legat de personajul din joc, lăsăm butonul cu
+  // textul "Deschide" — apăsarea lui pornește fluxul de legare (vezi
+  // listener-ul de mai jos), nu are legătură cu soldul de coins.
+  const canAfford = !accountLinked || currentCoins >= c.price;
+  previewInsufficientFunds = accountLinked && !canAfford;
+  const openBtn = document.getElementById('preview-open-btn');
+  openBtn.disabled = false;
+  openBtn.textContent = previewInsufficientFunds ? '🛒 Coins insuficienți — cumpără pe Tebex' : 'Deschide';
+  document.getElementById('preview-overlay').style.display = 'flex';
+}
+function closePreview() {
+  document.getElementById('preview-overlay').style.display = 'none';
+  previewCaseId = null;
+}
+document.getElementById('preview-close').addEventListener('click', closePreview);
+document.getElementById('preview-overlay').addEventListener('click', (e) => {
+  if (e.target.id === 'preview-overlay') closePreview();
+});
+document.getElementById('preview-open-btn').addEventListener('click', () => {
+  const caseId = previewCaseId;
+  if (!caseId) return;
+  if (previewInsufficientFunds) {
+    window.open(TEBEX_URL, '_blank', 'noopener');
+    return;
+  }
+  closePreview();
+  if (!accountLinked) { openLinkOverlay(caseId); return; }
+  openCase(caseId);
+});
+
+// ---- Derulatorul de deschidere ("reel"), stil CS:GO — la fel ca pe linkul
+// de test. Diferența față de test: acolo recompensa e aleasă client-side
+// (nu e conectată la nimic real); AICI recompensa e deja decisă de SERVER
+// (vezi openCase() mai jos, care apelează /api/vip-shop/deschide ÎNAINTE să
+// pornească derulatorul) — derulatorul doar se construiește în jurul
+// recompensei reale primite și se oprește exact pe ea. Tile-urile din jur
+// (umplutura derulatorului) sunt alese aleatoriu din pool-ul cutiei, doar
+// pentru efect vizual — nu influențează în niciun fel recompensa.
+const REEL_TILE_W = 118, REEL_GAP = 10, REEL_STEP = REEL_TILE_W + REEL_GAP;
+const REEL_LEN = 46, REEL_WIN_INDEX = 38;
+
+function reelWeightedFiller(pool) {
+  const total = pool.reduce((s, r) => s + (Number(r.chancePercent) || 0), 0) || 1;
+  let roll = Math.random() * total, acc = 0;
+  for (const r of pool) { acc += (Number(r.chancePercent) || 0); if (roll <= acc) return r; }
+  return pool[pool.length - 1];
+}
+
+function reelTileHtml(reward) {
+  const icon = (reward.type === 'vehicle' && reward.model)
+    ? `<div class="tile-icon has-photo"><img src="assets/vip-cars/${escapeHtml(reward.model)}.png" alt="" loading="lazy"></div>`
+    : `<div class="tile-icon">${REWARD_ICON[reward.type] || '🎁'}</div>`;
+  return `${icon}<div class="tile-label">${escapeHtml(reward.label)}</div>`;
+}
+
+function reelBuildTrack(track, winner, pool) {
+  track.innerHTML = '';
+  const positions = [];
+  for (let i = 0; i < REEL_LEN; i++) {
+    const reward = (i === REEL_WIN_INDEX) ? winner : reelWeightedFiller(pool);
+    const rarity = reward.rarity || rarityOf(Number(reward.chancePercent) || 0);
+    const el = document.createElement('div');
+    el.className = 'reel-tile';
+    el.dataset.rarity = rarity;
+    el.innerHTML = reelTileHtml(reward);
+    track.appendChild(el);
+    positions.push(i * REEL_STEP + REEL_TILE_W / 2 + 10);
+  }
+  return positions;
+}
+
+function reelEaseOutQuint(t) { return 1 - Math.pow(1 - t, 5); }
+function reelEaseInOutQuad(t) { return t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; }
+
+function reelAnimate(track, fromX, toX, duration, easeFn, onFrame, onDone) {
+  let start = null;
+  function step(ts) {
+    if (start === null) start = ts;
+    const t = Math.min(1, (ts - start) / duration);
+    const x = fromX + (toX - fromX) * easeFn(t);
+    track.style.transform = `translateX(${x}px)`;
+    if (onFrame) onFrame(x);
+    if (t < 1) requestAnimationFrame(step); else onDone();
+  }
+  requestAnimationFrame(step);
+}
+
+// Pornește derulatorul și rezolvă promisiunea abia când s-a oprit exact pe
+// "winner" (recompensa reală, deja acordată de server). Aceleași durate și
+// aceeași curbă de easing ca pe linkul de test, ca senzația să fie identică.
+function reelSpinTo(winner, pool) {
+  return new Promise((resolve) => {
+    const track = document.getElementById('reveal-track');
+    const frame = document.getElementById('reveal-frame');
+    const marker = document.getElementById('reveal-marker');
+    const flash = document.getElementById('reveal-flash');
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    const positions = reelBuildTrack(track, winner, pool);
+    track.style.transform = 'translateX(0px)';
+    marker.classList.add('active');
+
+    const center = frame.clientWidth / 2;
+    const jitter = (Math.random() - 0.5) * (REEL_TILE_W * 0.45);
+    const finalX = center - positions[REEL_WIN_INDEX] - jitter;
+    const overshoot = finalX - 22;
+
+    function finish() {
+      flash.classList.remove('hit'); void flash.offsetWidth; flash.classList.add('hit');
+      const panel = document.getElementById('reveal-panel');
+      panel.classList.remove('shake'); void panel.offsetWidth; panel.classList.add('shake');
+      const winTile = track.children[REEL_WIN_INDEX];
+      if (winTile) winTile.classList.add('win-glow');
+      resolve();
+    }
+
+    if (reduced) {
+      track.style.transform = `translateX(${finalX}px)`;
+      finish();
+      return;
+    }
+
+    let lastTick = -1;
+    function onFrame(x) {
+      const nearestIndex = Math.round((center - x - REEL_TILE_W / 2) / REEL_STEP);
+      if (nearestIndex !== lastTick && nearestIndex >= 0 && nearestIndex < REEL_LEN) {
+        lastTick = nearestIndex;
+        const el = track.children[nearestIndex];
+        if (el) { el.classList.add('tick'); setTimeout(() => el.classList.remove('tick'), 130); }
+      }
+    }
+    reelAnimate(track, 0, overshoot, 5000, reelEaseOutQuint, onFrame, () => {
+      reelAnimate(track, overshoot, finalX, 260, reelEaseInOutQuad, onFrame, finish);
+    });
+  });
+}
+
+async function openCase(caseId) {
+  const overlay = document.getElementById('reveal-overlay');
+  const title = document.getElementById('reveal-title');
+  const text = document.getElementById('reveal-text');
+  const closeBtn = document.getElementById('reveal-close');
+  const marker = document.getElementById('reveal-marker');
+  const track = document.getElementById('reveal-track');
+  const flash = document.getElementById('reveal-flash');
+
+  overlay.style.display = 'flex';
+  title.textContent = 'Se deschide…';
+  text.textContent = 'Se trimite cererea către server…';
+  closeBtn.hidden = true;
+  marker.classList.remove('active');
+  flash.classList.remove('hit');
+  track.innerHTML = '';
+  track.style.transform = 'translateX(0px)';
+
+  try {
+    const res = await apiFetch('/api/vip-shop/deschide', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ caseId }) });
+    const d = await res.json();
+    if (!res.ok) {
+      title.textContent = 'Nu am putut deschide recompensa';
+      text.textContent = d.error || 'Eroare necunoscută.';
+      closeBtn.hidden = false;
+      return;
+    }
+
+    // Recompensa e deja acordată de server în acest moment — derulatorul de
+    // mai jos e doar prezentare, nu mai poate schimba rezultatul. Căutăm
+    // intrarea corespunzătoare din pool-ul cutiei (după tip+etichetă) doar
+    // ca să-i aflăm procentul și, prin el, culoarea de raritate a tile-ului.
+    const c = currentCasesById[caseId];
+    const pool = (c && c.pool) || [];
+    const poolMatch = pool.find(r => r.type === d.reward.type && r.label === d.reward.label);
+    const wonModel = d.reward.type === 'vehicle' && d.reward.data && d.reward.data.model;
+    const winner = {
+      type: d.reward.type,
+      label: d.reward.label,
+      model: wonModel || undefined,
+      rarity: poolMatch ? rarityOf(Number(poolMatch.chancePercent) || 0) : 'common',
+    };
+
+    text.textContent = '';
+    await reelSpinTo(winner, pool.length ? pool : [winner]);
+
+    title.textContent = 'Felicitări!';
+    text.textContent = `Ai câștigat: ${d.reward.label}. Intră pe server și scrie /recompense ca să-l ridici.`;
+    closeBtn.hidden = false;
+    await loadAll();
+  } catch {
+    title.textContent = 'Eroare de rețea';
+    text.textContent = 'Încearcă din nou.';
+    closeBtn.hidden = false;
+  }
+}
+
+document.getElementById('reveal-close').addEventListener('click', () => {
+  document.getElementById('reveal-overlay').style.display = 'none';
+});
+
+async function loadAll() {
+  try {
+    const res = await apiFetch('/api/vip-shop');
+    if (!res.ok) throw new Error();
+    const d = await res.json();
+    document.getElementById('cases-offline-note').hidden = d.online !== false;
+    renderAccountLine(d);
+    accountLinked = !!d.linked;
+    currentCoins = d.linked ? (d.coins || 0) : 0;
+    renderCases(d.cases || [], currentCoins, !!d.linked);
+    renderPending(d.linked ? d.pending : []);
+    if (d.linked) loadHistory(); else document.getElementById('history-panel').hidden = true;
+  } catch {
+    document.getElementById('cases-panel').hidden = false;
+    document.getElementById('account-line').innerHTML = '<span class="muted">Nu am putut încărca pagina. Încearcă din nou mai târziu.</span>';
+  }
+  // Jurnalul (admin) și istoricul propriu sunt cereri separate (nu blochează
+  // restul paginii dacă pică) — se reîncarcă de fiecare dată când loadAll()
+  // se apelează, deci și imediat după fiecare deschidere de cutie (vezi
+  // openCase() mai jos).
+  loadLog();
+}
+
+(async () => {
+  if (!requireAuth()) return;
+  await loadAll();
+})();
+</script>
+</body></html>

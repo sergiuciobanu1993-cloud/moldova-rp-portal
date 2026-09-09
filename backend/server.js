@@ -782,6 +782,32 @@ async function fetchCaseHistory(identifier, limit) {
   }
 }
 
+// Cerere generică către rutele de administrare a VIP Shop-ului din
+// moldovarp-api ("/cases/admin..." — vezi server.lua v1.30.0), folosită de
+// toate rutele /api/admin/vip-shop/... de mai jos. Un singur helper în loc de
+// cate o funcție separată pentru fiecare operație (creare/editare/ștergere de
+// cutii și recompense) — toate au aceeași formă (metodă + cale + body opțional
+// -> JSON sau eroare).
+async function vipShopAdminRequest(method, path, body) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const r = await fetch(`http://${FIVEM_ADDRESS}/moldovarp-api${path}`, {
+      method,
+      headers: { "x-api-key": FIVEM_API_SECRET, "Content-Type": "application/json" },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
+    });
+    const parsed = await r.json().catch(() => ({}));
+    if (!r.ok) return { ok: false, status: r.status, error: parsed.error || "eroare" };
+    return { ok: true, data: parsed };
+  } catch {
+    return { ok: false, status: 503, error: "server_offline" };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 // Acțiunile de staff (Luxu), sursa separata (Postgres) folosita atat pentru
 // categoria "admin" din Loguri cat si pentru corelarile best-effort de mai
 // jos (kill/revive/item de admin etc.) si pentru Kill Logs.
@@ -1340,6 +1366,99 @@ app.get("/api/vip-shop/log", auth, requireRole(...ADMIN_ROLES), asyncRoute(async
   const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
   const result = await fetchCaseOpeningsLog(limit);
   res.json({ online: result.online, log: result.log });
+}));
+
+// Editor de cutii/recompense VIP Shop (09.09.2026, cerut explicit de staff)
+// — administratorii pot acum adăuga/edita/șterge cutii și recompense direct
+// din panoul de admin (admin-vip-shop.html), fără să mai fie nevoie să vină
+// aici de fiecare dată să cerem un update de resursă pe serverul de joc.
+// Toate rutele de mai jos doar transmit cererea către moldovarp-api
+// ("/cases/admin..." — vezi server.lua v1.30.0), care ține config-ul real în
+// MySQL, și loghează acțiunea în audit_logs (Postgres, al site-ului) — la fel
+// ca orice altă acțiune de admin (regulamente, anunțuri etc.). Rămâne
+// restricționat la ADMIN_ROLES, ca tot ce ține de VIP Shop momentan.
+const VIP_SHOP_ADMIN_ERRORS = {
+  nume_lipsa: "Numele cutiei este obligatoriu.",
+  date_lipsa: "Lipsesc date obligatorii.",
+  date_invalide: "Date invalide.",
+  item_lipsa: "Lipsește numele item-ului (obligatoriu pentru recompense de tip item).",
+  model_lipsa: "Lipsește modelul vehiculului (obligatoriu pentru recompense de tip vehicul).",
+  cutie_inexistenta: "Cutia nu există.",
+  metoda_neacceptata: "Metodă neacceptată.",
+  server_offline: "Serverul de joc nu răspunde momentan — încearcă din nou puțin mai târziu.",
+  internal_error: "Eroare internă pe serverul de joc.",
+};
+
+function vipShopAdminError(res, result) {
+  const message = VIP_SHOP_ADMIN_ERRORS[result.error] || "Nu am putut finaliza operația.";
+  return res.status(result.status && result.status >= 400 && result.status < 600 ? result.status : 400).json({ error: message });
+}
+
+app.get("/api/admin/vip-shop/cutii", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (_req, res) => {
+  const result = await vipShopAdminRequest("GET", "/cases/admin");
+  if (!result.ok) return vipShopAdminError(res, result);
+  res.json(result.data);
+}));
+
+app.post("/api/admin/vip-shop/cutii", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+  const { name, price, theme } = req.body || {};
+  if (!name || !String(name).trim()) return res.status(400).json({ error: "Numele cutiei este obligatoriu." });
+  const result = await vipShopAdminRequest("POST", "/cases/admin", { name: String(name).trim(), price: Number(price) || 0, theme });
+  if (!result.ok) return vipShopAdminError(res, result);
+  await logAction(req.user.sub, "vip_shop.case.create", "vip_shop_case", result.data?.id, { name, price, theme }, req.ip);
+  res.status(201).json(result.data);
+}));
+
+app.put("/api/admin/vip-shop/cutii/:id", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+  const { name, price, theme, active } = req.body || {};
+  if (!name || !String(name).trim()) return res.status(400).json({ error: "Numele cutiei este obligatoriu." });
+  const result = await vipShopAdminRequest("PUT", `/cases/admin/${encodeURIComponent(req.params.id)}`, {
+    name: String(name).trim(), price: Number(price) || 0, theme, active: active !== false,
+  });
+  if (!result.ok) return vipShopAdminError(res, result);
+  await logAction(req.user.sub, "vip_shop.case.update", "vip_shop_case", req.params.id, { name, price, theme, active }, req.ip);
+  res.json(result.data);
+}));
+
+app.delete("/api/admin/vip-shop/cutii/:id", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+  const result = await vipShopAdminRequest("DELETE", `/cases/admin/${encodeURIComponent(req.params.id)}`);
+  if (!result.ok) return vipShopAdminError(res, result);
+  await logAction(req.user.sub, "vip_shop.case.delete", "vip_shop_case", req.params.id, null, req.ip);
+  res.json(result.data);
+}));
+
+app.post("/api/admin/vip-shop/cutii/:id/recompense", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+  const { type, label, weight, amount, account, item, count, model } = req.body || {};
+  if (!type || !label || !String(label).trim()) return res.status(400).json({ error: "Tipul și eticheta recompensei sunt obligatorii." });
+  const result = await vipShopAdminRequest("POST", `/cases/admin/${encodeURIComponent(req.params.id)}/rewards`, {
+    type, label: String(label).trim(), weight: Number(weight) || 10, amount, account, item, count, model,
+  });
+  if (!result.ok) return vipShopAdminError(res, result);
+  await logAction(req.user.sub, "vip_shop.reward.create", "vip_shop_reward", result.data?.id, { caseId: req.params.id, type, label }, req.ip);
+  res.status(201).json(result.data);
+}));
+
+app.put("/api/admin/vip-shop/cutii/:id/recompense/:rewardId", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+  const { type, label, weight, amount, account, item, count, model } = req.body || {};
+  if (!type || !label || !String(label).trim()) return res.status(400).json({ error: "Tipul și eticheta recompensei sunt obligatorii." });
+  const result = await vipShopAdminRequest(
+    "PUT",
+    `/cases/admin/${encodeURIComponent(req.params.id)}/rewards/${encodeURIComponent(req.params.rewardId)}`,
+    { type, label: String(label).trim(), weight: Number(weight) || 10, amount, account, item, count, model }
+  );
+  if (!result.ok) return vipShopAdminError(res, result);
+  await logAction(req.user.sub, "vip_shop.reward.update", "vip_shop_reward", req.params.rewardId, { caseId: req.params.id, type, label }, req.ip);
+  res.json(result.data);
+}));
+
+app.delete("/api/admin/vip-shop/cutii/:id/recompense/:rewardId", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+  const result = await vipShopAdminRequest(
+    "DELETE",
+    `/cases/admin/${encodeURIComponent(req.params.id)}/rewards/${encodeURIComponent(req.params.rewardId)}`
+  );
+  if (!result.ok) return vipShopAdminError(res, result);
+  await logAction(req.user.sub, "vip_shop.reward.delete", "vip_shop_reward", req.params.rewardId, { caseId: req.params.id }, req.ip);
+  res.json(result.data);
 }));
 
 // Webhook primit direct de la Luxu Admin (panoul lor cloud, tab "Webhooks"),

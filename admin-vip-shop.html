@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Editor VIP Shop — Admin Moldova RP</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="admin.css">
+<style>
+  .vip-intro{color:var(--muted);font-size:12.5px;line-height:1.6;margin:0 0 20px;max-width:900px}
+  .vip-intro a{color:var(--orange)}
+  .case-block{background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);margin-bottom:18px;overflow:hidden}
+  .case-block.inactive{opacity:.62}
+  .case-block-head{display:flex;align-items:center;gap:16px;padding:18px 22px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+  .case-thumb{width:64px;height:36px;border-radius:8px;object-fit:cover;background:var(--bg);flex-shrink:0}
+  .case-block-titles{flex:1;min-width:180px}
+  .case-block-titles h3{margin:0 0 3px;font-size:15px}
+  .case-block-titles small{color:#666;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10px}
+  .case-block-actions{display:flex;gap:8px;flex-wrap:wrap}
+  .case-tier-badge{display:inline-block;padding:3px 9px;border-radius:999px;font-size:9px;font-weight:900;letter-spacing:.05em;margin-left:8px;vertical-align:1px}
+  .case-tier-badge.rare{background:rgba(163,120,255,.15);color:#b28dff;border:1px solid rgba(163,120,255,.3)}
+  .case-tier-badge.epic{background:rgba(120,170,255,.15);color:#7db2ff;border:1px solid rgba(120,170,255,.3)}
+  .case-tier-badge.legendara{background:rgba(255,179,71,.15);color:#ffb347;border:1px solid rgba(255,179,71,.3)}
+  .reward-detail{color:var(--muted);font-size:11px}
+  .add-reward-row{padding:14px 22px}
+  .percent-bar{display:inline-block;width:46px;height:5px;border-radius:3px;background:rgba(255,255,255,.08);overflow:hidden;vertical-align:1px;margin-right:7px}
+  .percent-bar i{display:block;height:100%;background:var(--orange)}
+  .type-fields{display:none}
+  .type-fields.on{display:contents}
+  .theme-preview{display:flex;gap:10px;margin-top:8px}
+  .theme-opt{flex:1;border:1px solid var(--line);border-radius:9px;padding:8px;text-align:center;cursor:pointer;transition:.15s ease;background:var(--bg)}
+  .theme-opt img{width:100%;border-radius:5px;display:block;margin-bottom:6px}
+  .theme-opt span{font-size:10px;font-weight:800;color:var(--muted)}
+  .theme-opt.sel{border-color:var(--orange);box-shadow:0 0 0 2px rgba(255,138,31,.18)}
+  .theme-opt.sel span{color:var(--orange)}
+  .theme-opt input{position:absolute;opacity:0;pointer-events:none}
+  .empty-note{padding:20px 22px;color:var(--muted);font-size:12px}
+</style>
+</head>
+<body>
+<aside class="side"><a class="brand" href="index.html"><img src="assets/logo.png" alt=""><b>MOLDOVA<span>RP</span></b></a><p>ADMINISTRAȚIE</p><a href="admin.html">▦ Dashboard</a><a href="admin-utilizatori.html">👤 Utilizatori</a><a href="admin-jucatori.html">♙ Jucători</a><a href="admin-financiar.html">◆ Facțiuni</a><a href="admin-sanctiuni.html">⚠ Sancțiuni</a><a>▤ Reclamații</a><a>⚖ CK</a><a href="admin-regulamente.html">📚 Regulamente</a><a href="admin-continut.html">📝 Conținut pagini</a><a href="admin-anunturi.html">◉ Anunțuri</a><a href="admin-tichete.html">🎫 Tichete</a><a href="vip-shop.html">🎁 VIP Shop</a><a class="sel" href="admin-vip-shop.html">🛠 Editor VIP Shop</a><a href="admin-loguri.html">🗂 Loguri</a><a href="admin-kill-logs.html">🔪 Kill Logs</a><a>⌁ Audit Logs</a><a href="admin-txadmin.html" id="nav-txadmin">🖥 txAdmin</a><a class="back" href="dashboard.html">← Contul meu</a><a class="back" href="index.html">← Site public</a></aside>
+<main>
+<header><div><small>PANEL ADMINISTRATIV</small><h1>Editor VIP Shop</h1></div><a class="admin" href="dashboard.html" title="Înapoi la contul meu" style="text-decoration:none"><span id="admin-name">…</span> <i></i></a></header>
+
+<p class="vip-intro">Aici adaugi, editezi sau ștergi cutiile și recompensele din <a href="vip-shop.html">VIP Shop</a> — direct de pe site, fără să mai fie nevoie de un update pe serverul de joc de fiecare dată. Șansa fiecărei recompense se calculează automat din „pondere" — valorile nu trebuie să însumeze 100, se normalizează singure (ex: dacă o recompensă are pondere 20 și toate din cutie însumează 1000, șansa ei afișată jucătorilor va fi 2%). O cutie dezactivată dispare din VIP Shop pentru jucători, dar rămâne salvată aici, gata de reactivat.</p>
+
+<div class="title" style="padding:0 0 16px"><h2>Cutii</h2><button id="new-case-btn">+ Cutie nouă</button></div>
+<div id="cases-list"><p class="muted">Se încarcă…</p></div>
+
+<!-- Modal cutie (creare/editare) -->
+<div class="modal-overlay" id="case-overlay" hidden>
+  <section class="formbox modal-box" style="width:min(560px,96vw)">
+    <div class="modal-head">
+      <h2 id="case-modal-title">Cutie nouă</h2>
+      <button type="button" class="modal-close" id="case-modal-close" aria-label="Închide">✕</button>
+    </div>
+    <form id="case-form">
+      <div class="formgrid">
+        <div class="field wide"><label>Nume cutie</label><input id="cf-name" required placeholder="ex: Cutie Mitică"></div>
+        <div class="field"><label>Preț (coins)</label><input id="cf-price" type="number" min="0" step="1" required></div>
+        <div class="field checkbox" id="cf-active-wrap" hidden><input type="checkbox" id="cf-active" checked><label for="cf-active">Activă (vizibilă pe site)</label></div>
+        <div class="field wide">
+          <label>Temă vizuală</label>
+          <div class="theme-preview" id="theme-preview"></div>
+        </div>
+      </div>
+      <p class="formmsg" id="case-form-msg" hidden></p>
+      <div class="formactions">
+        <button type="submit" class="btn-primary" id="case-save-btn">Salvează</button>
+        <button type="button" class="btn-ghost" id="case-cancel-btn">Anulează</button>
+      </div>
+    </form>
+  </section>
+</div>
+
+<!-- Modal recompensă (creare/editare) -->
+<div class="modal-overlay" id="reward-overlay" hidden>
+  <section class="formbox modal-box" style="width:min(560px,96vw)">
+    <div class="modal-head">
+      <h2 id="reward-modal-title">Recompensă nouă</h2>
+      <button type="button" class="modal-close" id="reward-modal-close" aria-label="Închide">✕</button>
+    </div>
+    <form id="reward-form">
+      <div class="formgrid">
+        <div class="field wide">
+          <label>Tip recompensă</label>
+          <select id="rf-type">
+            <option value="cash">💵 Bani</option>
+            <option value="item">🎒 Item (armă/obiect din ox_inventory)</option>
+            <option value="vehicle">🚗 Vehicul</option>
+          </select>
+        </div>
+        <div class="field wide"><label>Etichetă (ce vede jucătorul)</label><input id="rf-label" required placeholder="ex: $100.000 în bancă"></div>
+        <div class="field"><label>Pondere (determină șansa %)</label><input id="rf-weight" type="number" min="1" step="1" required value="10"></div>
+        <div class="field"><label>Șansă estimată</label><input id="rf-percent-preview" disabled placeholder="calculată automat"></div>
+
+        <div class="field rf-cash wide"><label>Sumă ($)</label><input id="rf-amount" type="number" min="0" step="1"></div>
+        <div class="field rf-cash wide">
+          <label>Cont</label>
+          <select id="rf-account"><option value="bank">Bancă (bank)</option><option value="black_money">Bani murdari (black_money)</option></select>
+        </div>
+
+        <div class="field rf-item wide"><label>Item (numele exact din ox_inventory)</label><input id="rf-item" placeholder="ex: WEAPON_AKVVSGOLD" list="known-items"></div>
+        <div class="field rf-item"><label>Cantitate</label><input id="rf-count" type="number" min="1" step="1" value="1"></div>
+
+        <div class="field rf-vehicle wide"><label>Model (spawn code exact)</label><input id="rf-model" placeholder="ex: 2019chiron" list="known-models"><p class="muted" style="margin:6px 0 0">Trebuie să fie exact numele modelului de pe server (litere mici) — altfel /recompense va eșua în joc la ridicare.</p></div>
+      </div>
+      <datalist id="known-items"></datalist>
+      <datalist id="known-models"></datalist>
+      <p class="formmsg" id="reward-form-msg" hidden></p>
+      <div class="formactions">
+        <button type="submit" class="btn-primary" id="reward-save-btn">Salvează</button>
+        <button type="button" class="btn-ghost" id="reward-cancel-btn">Anulează</button>
+      </div>
+    </form>
+  </section>
+</div>
+
+</main>
+<script src="auth-client.js"></script>
+<script>
+const THEMES = {
+  rare: { img: 'assets/vip-cases/rare.webp', label: 'Rare' },
+  epic: { img: 'assets/vip-cases/epic.webp', label: 'Epic' },
+  legendara: { img: 'assets/vip-cases/legendara.webp', label: 'Legendară' },
+};
+const TYPE_ICON = { cash: '💵', item: '🎒', vehicle: '🚗' };
+const ACCOUNT_LABEL = { bank: 'Bancă', black_money: 'Bani murdari' };
+
+const escapeHtml = s => (s ?? '').toString()
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
+let casesCache = [];
+let editingCaseId = null;   // null = formular de creare cutie
+let editingReward = null;   // { caseId, id } — null id = formular de creare recompensă
+let selectedTheme = 'rare';
+
+function computePercents(pool) {
+  const total = pool.reduce((s, r) => s + (Number(r.weight) || 0), 0);
+  return pool.map(r => ({ ...r, percent: total > 0 ? Math.round((Number(r.weight) || 0) / total * 10000) / 100 : 0 }));
+}
+
+function rewardDetailHtml(r) {
+  if (r.type === 'cash') return `$${Number(r.amount || 0).toLocaleString('ro-RO')} → ${escapeHtml(ACCOUNT_LABEL[r.account] || r.account || 'bank')}`;
+  if (r.type === 'item') return `${escapeHtml(r.item || '—')} × ${r.count || 1}`;
+  if (r.type === 'vehicle') return `model: ${escapeHtml(r.model || '—')}`;
+  return '';
+}
+
+function renderCases() {
+  const wrap = document.getElementById('cases-list');
+  if (!casesCache.length) {
+    wrap.innerHTML = '<p class="muted">Nicio cutie încă — apasă „+ Cutie nouă" ca să adaugi prima.</p>';
+    return;
+  }
+  wrap.innerHTML = casesCache.map(c => {
+    const theme = THEMES[c.theme] ? c.theme : 'rare';
+    const rows = computePercents(c.pool || []);
+    return `
+    <div class="case-block ${c.active ? '' : 'inactive'}">
+      <div class="case-block-head">
+        <img class="case-thumb" src="${THEMES[theme].img}" alt="">
+        <div class="case-block-titles">
+          <h3>${escapeHtml(c.name)}<span class="case-tier-badge ${theme}">${THEMES[theme].label}</span></h3>
+          <small>id: ${escapeHtml(c.id)} · 🪙 ${c.price} coins · ${c.active ? '<span style="color:var(--green)">activă</span>' : '<span style="color:#888">dezactivată</span>'}</small>
+        </div>
+        <div class="case-block-actions">
+          <button type="button" class="btn-ghost" data-edit-case="${escapeHtml(c.id)}">Editează cutia</button>
+          <button type="button" class="btn-ghost" data-toggle-case="${escapeHtml(c.id)}">${c.active ? 'Dezactivează' : 'Activează'}</button>
+          <button type="button" class="btn-ghost" data-del-case="${escapeHtml(c.id)}" style="color:#ff8a8a">Șterge cutia</button>
+        </div>
+      </div>
+      <table><thead><tr><th>ȘANSĂ</th><th>TIP</th><th>ETICHETĂ</th><th>DETALII</th><th></th></tr></thead>
+      <tbody>
+        ${rows.length ? rows.map(r => `
+          <tr>
+            <td><span class="percent-bar"><i style="width:${Math.min(100, r.percent)}%"></i></span>${r.percent}%</td>
+            <td>${TYPE_ICON[r.type] || ''} ${r.type}</td>
+            <td>${escapeHtml(r.label)}</td>
+            <td class="reward-detail">${rewardDetailHtml(r)}</td>
+            <td class="rowactions">
+              <button type="button" data-edit-reward="${r.id}" data-case="${escapeHtml(c.id)}">Editează</button>
+              <button type="button" class="danger" data-del-reward="${r.id}" data-case="${escapeHtml(c.id)}">Șterge</button>
+            </td>
+          </tr>`).join('') : '<tr><td colspan="5" class="muted">Nicio recompensă încă în această cutie.</td></tr>'}
+      </tbody></table>
+      <div class="add-reward-row"><button type="button" class="btn-ghost" data-add-reward="${escapeHtml(c.id)}">+ Adaugă recompensă</button></div>
+    </div>`;
+  }).join('');
+
+  wrap.querySelectorAll('[data-edit-case]').forEach(b => b.addEventListener('click', () => openCaseModal(b.dataset.editCase)));
+  wrap.querySelectorAll('[data-toggle-case]').forEach(b => b.addEventListener('click', () => toggleCaseActive(b.dataset.toggleCase)));
+  wrap.querySelectorAll('[data-del-case]').forEach(b => b.addEventListener('click', () => deleteCase(b.dataset.delCase)));
+  wrap.querySelectorAll('[data-add-reward]').forEach(b => b.addEventListener('click', () => openRewardModal(b.dataset.addReward, null)));
+  wrap.querySelectorAll('[data-edit-reward]').forEach(b => b.addEventListener('click', () => openRewardModal(b.dataset.case, b.dataset.editReward)));
+  wrap.querySelectorAll('[data-del-reward]').forEach(b => b.addEventListener('click', () => deleteReward(b.dataset.case, b.dataset.delReward)));
+}
+
+function populateKnownLists() {
+  const items = new Set(), models = new Set();
+  casesCache.forEach(c => (c.pool || []).forEach(r => {
+    if (r.type === 'item' && r.item) items.add(r.item);
+    if (r.type === 'vehicle' && r.model) models.add(r.model);
+  }));
+  document.getElementById('known-items').innerHTML = [...items].map(v => `<option value="${escapeHtml(v)}">`).join('');
+  document.getElementById('known-models').innerHTML = [...models].map(v => `<option value="${escapeHtml(v)}">`).join('');
+}
+
+async function loadCases() {
+  const wrap = document.getElementById('cases-list');
+  try {
+    const res = await apiFetch('/api/admin/vip-shop/cutii');
+    if (!res.ok) throw new Error();
+    const d = await res.json();
+    casesCache = d.cases || [];
+    renderCases();
+    populateKnownLists();
+  } catch {
+    wrap.innerHTML = '<p class="muted">Nu am putut încărca cutiile — serverul de joc nu răspunde momentan.</p>';
+  }
+}
+
+// ---------- Modal cutie ----------
+function renderThemePreview() {
+  const el = document.getElementById('theme-preview');
+  el.innerHTML = Object.keys(THEMES).map(key => `
+    <label class="theme-opt ${selectedTheme === key ? 'sel' : ''}" data-theme-opt="${key}">
+      <input type="radio" name="cf-theme" value="${key}" ${selectedTheme === key ? 'checked' : ''}>
+      <img src="${THEMES[key].img}" alt="">
+      <span>${THEMES[key].label}</span>
+    </label>`).join('');
+  el.querySelectorAll('[data-theme-opt]').forEach(label => label.addEventListener('click', () => {
+    selectedTheme = label.dataset.themeOpt;
+    renderThemePreview();
+  }));
+}
+
+function openCaseModal(caseId) {
+  editingCaseId = caseId || null;
+  const c = caseId ? casesCache.find(x => x.id === caseId) : null;
+  document.getElementById('case-modal-title').textContent = c ? `Editează — ${c.name}` : 'Cutie nouă';
+  document.getElementById('cf-name').value = c ? c.name : '';
+  document.getElementById('cf-price').value = c ? c.price : 15;
+  document.getElementById('cf-active-wrap').hidden = !c;
+  document.getElementById('cf-active').checked = c ? !!c.active : true;
+  selectedTheme = c ? (THEMES[c.theme] ? c.theme : 'rare') : 'rare';
+  renderThemePreview();
+  document.getElementById('case-form-msg').hidden = true;
+  document.getElementById('case-overlay').hidden = false;
+  document.body.classList.add('modal-open');
+}
+function closeCaseModal() {
+  document.getElementById('case-overlay').hidden = true;
+  document.body.classList.remove('modal-open');
+}
+
+async function toggleCaseActive(caseId) {
+  const c = casesCache.find(x => x.id === caseId);
+  if (!c) return;
+  try {
+    const res = await apiFetch(`/api/admin/vip-shop/cutii/${encodeURIComponent(caseId)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ name: c.name, price: c.price, theme: c.theme, active: !c.active }),
+    });
+    if (!res.ok) throw new Error();
+    loadCases();
+  } catch {
+    alert('Nu am putut schimba starea cutiei — serverul de joc nu răspunde momentan.');
+  }
+}
+
+async function deleteCase(caseId) {
+  const c = casesCache.find(x => x.id === caseId);
+  if (!confirm(`Ștergi definitiv cutia „${c ? c.name : caseId}" și toate recompensele ei? Nu poate fi anulat.`)) return;
+  try {
+    const res = await apiFetch(`/api/admin/vip-shop/cutii/${encodeURIComponent(caseId)}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error();
+    loadCases();
+  } catch {
+    alert('Nu am putut șterge cutia — serverul de joc nu răspunde momentan.');
+  }
+}
+
+document.getElementById('new-case-btn').addEventListener('click', () => openCaseModal(null));
+document.getElementById('case-modal-close').addEventListener('click', closeCaseModal);
+document.getElementById('case-cancel-btn').addEventListener('click', closeCaseModal);
+document.getElementById('case-overlay').addEventListener('click', (e) => { if (e.target.id === 'case-overlay') closeCaseModal(); });
+
+document.getElementById('case-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const msg = document.getElementById('case-form-msg');
+  msg.hidden = true;
+  const body = {
+    name: document.getElementById('cf-name').value.trim(),
+    price: Number(document.getElementById('cf-price').value) || 0,
+    theme: selectedTheme,
+    active: document.getElementById('cf-active').checked,
+  };
+  try {
+    const res = await apiFetch(
+      editingCaseId ? `/api/admin/vip-shop/cutii/${encodeURIComponent(editingCaseId)}` : '/api/admin/vip-shop/cutii',
+      { method: editingCaseId ? 'PUT' : 'POST', body: JSON.stringify(body) }
+    );
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Salvarea a eșuat.');
+    closeCaseModal();
+    loadCases();
+  } catch (err) {
+    msg.textContent = err.message;
+    msg.className = 'formmsg error';
+    msg.hidden = false;
+  }
+});
+
+// ---------- Modal recompensă ----------
+function updateRewardTypeFields() {
+  const type = document.getElementById('rf-type').value;
+  document.querySelectorAll('.rf-cash').forEach(el => el.style.display = type === 'cash' ? '' : 'none');
+  document.querySelectorAll('.rf-item').forEach(el => el.style.display = type === 'item' ? '' : 'none');
+  document.querySelectorAll('.rf-vehicle').forEach(el => el.style.display = type === 'vehicle' ? '' : 'none');
+}
+
+function updatePercentPreview() {
+  const caseId = editingReward?.caseId;
+  const c = casesCache.find(x => x.id === caseId);
+  if (!c) return;
+  const weight = Number(document.getElementById('rf-weight').value) || 0;
+  const others = (c.pool || []).filter(r => !editingReward.id || String(r.id) !== String(editingReward.id));
+  const total = others.reduce((s, r) => s + (Number(r.weight) || 0), 0) + weight;
+  const pct = total > 0 ? Math.round(weight / total * 10000) / 100 : 0;
+  document.getElementById('rf-percent-preview').value = `≈ ${pct}%`;
+}
+
+function openRewardModal(caseId, rewardId) {
+  editingReward = { caseId, id: rewardId || null };
+  const c = casesCache.find(x => x.id === caseId);
+  const r = (rewardId && c) ? (c.pool || []).find(x => String(x.id) === String(rewardId)) : null;
+  document.getElementById('reward-modal-title').textContent = r ? `Editează recompensă — ${c.name}` : `Recompensă nouă — ${c ? c.name : ''}`;
+  document.getElementById('rf-type').value = r ? r.type : 'cash';
+  document.getElementById('rf-label').value = r ? r.label : '';
+  document.getElementById('rf-weight').value = r ? r.weight : 10;
+  document.getElementById('rf-amount').value = r ? (r.amount || 0) : 0;
+  document.getElementById('rf-account').value = (r && r.account) || 'bank';
+  document.getElementById('rf-item').value = (r && r.item) || '';
+  document.getElementById('rf-count').value = r ? (r.count || 1) : 1;
+  document.getElementById('rf-model').value = (r && r.model) || '';
+  updateRewardTypeFields();
+  updatePercentPreview();
+  document.getElementById('reward-form-msg').hidden = true;
+  document.getElementById('reward-overlay').hidden = false;
+  document.body.classList.add('modal-open');
+}
+function closeRewardModal() {
+  document.getElementById('reward-overlay').hidden = true;
+  document.body.classList.remove('modal-open');
+}
+
+document.getElementById('rf-type').addEventListener('change', () => { updateRewardTypeFields(); updatePercentPreview(); });
+document.getElementById('rf-weight').addEventListener('input', updatePercentPreview);
+document.getElementById('reward-modal-close').addEventListener('click', closeRewardModal);
+document.getElementById('reward-cancel-btn').addEventListener('click', closeRewardModal);
+document.getElementById('reward-overlay').addEventListener('click', (e) => { if (e.target.id === 'reward-overlay') closeRewardModal(); });
+
+document.getElementById('reward-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const msg = document.getElementById('reward-form-msg');
+  msg.hidden = true;
+  const type = document.getElementById('rf-type').value;
+  const body = {
+    type,
+    label: document.getElementById('rf-label').value.trim(),
+    weight: Number(document.getElementById('rf-weight').value) || 1,
+    amount: Number(document.getElementById('rf-amount').value) || 0,
+    account: document.getElementById('rf-account').value,
+    item: document.getElementById('rf-item').value.trim(),
+    count: Number(document.getElementById('rf-count').value) || 1,
+    model: document.getElementById('rf-model').value.trim(),
+  };
+  if (type === 'item' && !body.item) { msg.textContent = 'Completează numele item-ului.'; msg.className = 'formmsg error'; msg.hidden = false; return; }
+  if (type === 'vehicle' && !body.model) { msg.textContent = 'Completează modelul vehiculului.'; msg.className = 'formmsg error'; msg.hidden = false; return; }
+  const caseId = editingReward.caseId;
+  const rewardId = editingReward.id;
+  try {
+    const res = await apiFetch(
+      rewardId
+        ? `/api/admin/vip-shop/cutii/${encodeURIComponent(caseId)}/recompense/${encodeURIComponent(rewardId)}`
+        : `/api/admin/vip-shop/cutii/${encodeURIComponent(caseId)}/recompense`,
+      { method: rewardId ? 'PUT' : 'POST', body: JSON.stringify(body) }
+    );
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Salvarea a eșuat.');
+    closeRewardModal();
+    loadCases();
+  } catch (err) {
+    msg.textContent = err.message;
+    msg.className = 'formmsg error';
+    msg.hidden = false;
+  }
+});
+
+async function deleteReward(caseId, rewardId) {
+  if (!confirm('Ștergi definitiv această recompensă din cutie?')) return;
+  try {
+    const res = await apiFetch(`/api/admin/vip-shop/cutii/${encodeURIComponent(caseId)}/recompense/${encodeURIComponent(rewardId)}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error();
+    loadCases();
+  } catch {
+    alert('Nu am putut șterge recompensa — serverul de joc nu răspunde momentan.');
+  }
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  if (!document.getElementById('case-overlay').hidden) closeCaseModal();
+  if (!document.getElementById('reward-overlay').hidden) closeRewardModal();
+});
+
+(async () => {
+  const me = await requireRole('admin', 'co-fondator', 'owner');
+  if (!me) return;
+  document.getElementById('admin-name').textContent = me.username;
+  loadCases();
+})();
+</script>
+</body></html>

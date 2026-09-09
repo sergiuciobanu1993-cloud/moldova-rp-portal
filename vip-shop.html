@@ -367,9 +367,15 @@ function renderCases(cases, coins, linked) {
   currentCasesById = {};
   cases.forEach(c => { currentCasesById[c.id] = c; });
   const grid = document.getElementById('cases-grid');
+  if (!cases.length) {
+    grid.innerHTML = `<p class="muted" style="grid-column:1/-1">Nicio cutie disponibilă momentan — revino puțin mai târziu.</p>`;
+    return;
+  }
   grid.innerHTML = cases.map(c => {
-    const accent = CASE_ACCENT[c.id] || 'orange';
-    const img = CASE_IMG[c.id];
+    // "theme" vine acum din API (server.lua v1.30.0) — nu mai ghicim după
+    // "id" (care poate fi orice, pentru cutii create din admin-vip-shop.html).
+    const accent = CASE_ACCENT[c.theme] || 'orange';
+    const img = CASE_IMG[c.theme];
     return `
     <div class="panel case-card" data-case="${escapeHtml(c.id)}" style="padding:18px" tabindex="0" role="button" aria-haspopup="dialog">
       ${img ? `<div class="crate-frame"><img src="${img}" alt="" loading="lazy"></div>` : ''}

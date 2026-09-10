@@ -12,26 +12,6 @@ const app = express();
 const port = Number(process.env.PORT || 3000);
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
-// DIAGNOSTIC TEMPORAR (10.09.2026) — GET /api/admin/vip-shop/cutii răspunde cu
-// 404 în producție deși ruta e înregistrată identic cu surorile ei care merg
-// (server.lua/Express confirmate corecte prin inspecție directă + agent
-// Railway cu acces la fișierul din container). Logăm bilanțul exact al
-// cererii ÎNAINTE de orice middleware, ca să vedem ce primește de fapt
-// Express (path brut, query, headers) data viitoare când se reproduce. DE
-// ȘTERS după ce găsim cauza.
-app.use((req, res, next) => {
-  if (req.path.includes("vip-shop") || req.path.includes("admin")) {
-    console.log("DIAG-REQ", JSON.stringify({
-      method: req.method,
-      url: req.url,
-      originalUrl: req.originalUrl,
-      path: req.path,
-      headers: req.headers,
-    }));
-  }
-  next();
-});
-
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors({ origin: process.env.CORS_ORIGIN?.split(",") || true }));
 app.use(express.json({ limit: "1mb" }));
@@ -728,8 +708,6 @@ async function fetchCasesList() {
     });
     if (!r.ok) throw new Error(`moldovarp-api HTTP ${r.status}`);
     const body = await r.json();
-    // DIAG TEMPORAR (10.09.2026) — vezi backend/server.js cap de fisier.
-    console.log("DIAG-CASES-THEMES", JSON.stringify((body.cases || []).map(c => ({ id: c.id, theme: c.theme }))));
     return { online: true, cases: body.cases || [] };
   } catch {
     return { online: false, cases: [] };
@@ -813,25 +791,17 @@ async function fetchCaseHistory(identifier, limit) {
 async function vipShopAdminRequest(method, path, body) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8000);
-  const targetUrl = `http://${FIVEM_ADDRESS}/moldovarp-api${path}`;
   try {
-    const r = await fetch(targetUrl, {
+    const r = await fetch(`http://${FIVEM_ADDRESS}/moldovarp-api${path}`, {
       method,
       headers: { "x-api-key": FIVEM_API_SECRET, "Content-Type": "application/json" },
       body: body !== undefined ? JSON.stringify(body) : undefined,
       signal: controller.signal,
     });
-    const rawText = await r.text();
-    let parsed = {};
-    try { parsed = rawText ? JSON.parse(rawText) : {}; } catch { /* keep {} */ }
-    // DIAG TEMPORAR (10.09.2026) — vezi backend/server.js cap de fisier.
-    console.log("DIAG-VIPSHOP-ADMIN", JSON.stringify({
-      method, targetUrl, httpStatus: r.status, ok: r.ok, rawTextPreview: rawText.slice(0, 300),
-    }));
+    const parsed = await r.json().catch(() => ({}));
     if (!r.ok) return { ok: false, status: r.status, error: parsed.error || "eroare" };
     return { ok: true, data: parsed };
-  } catch (e) {
-    console.log("DIAG-VIPSHOP-ADMIN-CATCH", JSON.stringify({ method, targetUrl, error: String(e && e.message || e) }));
+  } catch {
     return { ok: false, status: 503, error: "server_offline" };
   } finally {
     clearTimeout(timeout);
@@ -1360,6 +1330,8 @@ app.post("/api/vip-shop/deschide", auth, requireRole(...ADMIN_ROLES), asyncRoute
     const messages = {
       coins_insuficienti: "Nu ai suficienți coins pentru această recompensă.",
       caz_necunoscut: "Recompensa nu mai există.",
+      cutie_indisponibila: "Această cutie a fost dezactivată momentan de staff.",
+      cutie_fara_recompense: "Această cutie nu are recompense configurate momentan.",
       server_offline: "Serverul de joc nu răspunde momentan.",
     };
     return res.status(400).json({ error: messages[outcome.error] || "Nu am putut deschide recompensa." });
@@ -2811,19 +2783,6 @@ app.post("/api/admin/tickets/:id/replies", auth, requireRole(...MOD_ROLES), asyn
   await logAction(req.user.sub, "ticket.reply", "ticket", req.params.id, null, req.ip);
   res.status(201).json(rows[0]);
 }));
-
-// DIAGNOSTIC TEMPORAR (10.09.2026) — vezi comentariul de la începutul
-// fișierului. Prinde orice cerere care ajunge nematchuită până aici (adică
-// exact ce vede Express chiar înainte să trimită 404-ul default) — dacă
-// vedem un log DIAG-404 pentru /api/admin/vip-shop/cutii, înseamnă că ruta
-// chiar nu se potrivește din motive de string/normalizare; dacă NU vedem
-// niciun log (nici DIAG-REQ, nici DIAG-404) pentru cererea care totuși
-// primește 404 la client, înseamnă că răspunsul nu vine deloc din acest
-// proces Node. DE ȘTERS după ce găsim cauza.
-app.use((req, res) => {
-  console.log("DIAG-404", JSON.stringify({ method: req.method, url: req.url, path: req.path }));
-  res.status(404).json({ error: "not_found", path: req.originalUrl });
-});
 
 app.use((err, _req, res, _next) => {
   console.error(err);

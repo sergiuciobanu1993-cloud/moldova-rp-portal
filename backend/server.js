@@ -730,7 +730,11 @@ async function postOpenCase({ identifier, playerName, caseId }) {
       body: JSON.stringify({ identifier, playerName, caseId }),
       signal: controller.signal,
     });
-    const body = await r.json().catch(() => ({}));
+    const rawText = await r.text();
+    // DIAG TEMPORAR — de șters după ce găsim bug-ul cu "activează nu ține".
+    console.log("DIAG-VIPSHOP-OPEN-RAW", JSON.stringify({ caseId, httpStatus: r.status, rawText: rawText.slice(0, 400) }));
+    let body = {};
+    try { body = rawText ? JSON.parse(rawText) : {}; } catch { /* keep {} */ }
     if (!r.ok) return { ok: false, error: body.error || "eroare" };
     return { ok: true, result: body };
   } catch {
@@ -1330,6 +1334,8 @@ app.post("/api/vip-shop/deschide", auth, requireRole(...ADMIN_ROLES), asyncRoute
   if (!caseId) return res.status(400).json({ error: "Lipsește caseId." });
 
   const outcome = await postOpenCase({ identifier, playerName: rows[0].game_identifier_name, caseId });
+  // DIAG TEMPORAR — de șters după ce găsim bug-ul cu "activează nu ține".
+  console.log("DIAG-VIPSHOP-DESCHIDE", JSON.stringify({ caseId, identifier, outcome }));
   if (!outcome.ok) {
     const messages = {
       coins_insuficienti: "Nu ai suficienți coins pentru această recompensă.",
@@ -1406,6 +1412,8 @@ app.get("/api/admin/vip-shop/cutii", auth, requireRole(...ADMIN_ROLES), asyncRou
   res.set("Cache-Control", "no-store");
   const result = await vipShopAdminRequest("GET", "/cases/admin");
   if (!result.ok) return vipShopAdminError(res, result);
+  // DIAG TEMPORAR — de șters după ce găsim bug-ul cu "activează nu ține".
+  console.log("DIAG-VIPSHOP-LIST", JSON.stringify((result.data?.cases || []).map(c => ({ id: c.id, active: c.active, typeofActive: typeof c.active }))));
   res.json(result.data);
 }));
 
@@ -1421,9 +1429,13 @@ app.post("/api/admin/vip-shop/cutii", auth, requireRole(...ADMIN_ROLES), asyncRo
 app.put("/api/admin/vip-shop/cutii/:id", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
   const { name, price, theme, active } = req.body || {};
   if (!name || !String(name).trim()) return res.status(400).json({ error: "Numele cutiei este obligatoriu." });
+  const sentActive = active !== false;
+  // DIAG TEMPORAR — de șters după ce găsim bug-ul cu "activează nu ține".
+  console.log("DIAG-VIPSHOP-PUT-SEND", JSON.stringify({ id: req.params.id, receivedActive: active, receivedType: typeof active, sentActive }));
   const result = await vipShopAdminRequest("PUT", `/cases/admin/${encodeURIComponent(req.params.id)}`, {
-    name: String(name).trim(), price: Number(price) || 0, theme, active: active !== false,
+    name: String(name).trim(), price: Number(price) || 0, theme, active: sentActive,
   });
+  console.log("DIAG-VIPSHOP-PUT-RESULT", JSON.stringify({ id: req.params.id, ok: result.ok, status: result.status, data: result.data, error: result.error }));
   if (!result.ok) return vipShopAdminError(res, result);
   await logAction(req.user.sub, "vip_shop.case.update", "vip_shop_case", req.params.id, { name, price, theme, active }, req.ip);
   res.json(result.data);

@@ -1260,18 +1260,15 @@ app.get("/api/me/profile", auth, asyncRoute(async (req, res) => {
 // fetchLinkVerify) — site-ul nu are cum să inventeze o legătură validă fără
 // codul real generat în joc, deci nu se poate lega contul altcuiva.
 //
-// TEMPORAR (06.09.2026): restricționat la ADMIN_ROLES, cerut explicit — VIP
-// Shop-ul e încă în testare reală și nu trebuie să fie accesibil jucătorilor
-// obișnuiți. Legarea de cont există doar ca să poți deschide cutii, deci
-// merge sub aceeași restricție. Scoateți `requireRole(...ADMIN_ROLES)` de pe
-// toate cele 5 rute de mai jos (astea + /api/vip-shop + /api/vip-shop/deschide
-// + /api/vip-shop/istoric) când VIP Shop e gata de lansare publică.
+// LANSAT PUBLIC (10.09.2026): VIP Shop nu mai e restricționat la staff —
+// legarea de cont există ca să poți deschide cutii, deci merge deblocat la
+// fel ca /api/vip-shop + /api/vip-shop/deschide + /api/vip-shop/istoric.
 //
-// IMPORTANT: /api/vip-shop/log (jurnalul TUTUROR jucătorilor, mai jos) NU e
-// în lista asta — rămâne restricționat la ADMIN_ROLES PERMANENT, cerut
-// explicit (08.09.2026): e un instrument de staff, nu un feature pentru
-// jucători, deci nu se deblochează odată cu restul.
-app.post("/api/cont/leaga-joc", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+// IMPORTANT: /api/vip-shop/log (jurnalul TUTUROR jucătorilor, mai jos) rămâne
+// restricționat la ADMIN_ROLES PERMANENT, cerut explicit (08.09.2026): e un
+// instrument de staff, nu un feature pentru jucători, deci nu se deblochează
+// odată cu restul. La fel și rutele de editor "/api/admin/vip-shop/cutii...".
+app.post("/api/cont/leaga-joc", auth, asyncRoute(async (req, res) => {
   const code = String(req.body?.code || "").trim();
   if (!/^\d{6}$/.test(code)) return res.status(400).json({ error: "Codul trebuie să aibă 6 cifre." });
   const result = await fetchLinkVerify(code);
@@ -1290,7 +1287,7 @@ app.post("/api/cont/leaga-joc", auth, requireRole(...ADMIN_ROLES), asyncRoute(as
   res.json({ ok: true, name: result.name || null });
 }));
 
-app.post("/api/cont/dezleaga-joc", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+app.post("/api/cont/dezleaga-joc", auth, asyncRoute(async (req, res) => {
   await pool.query(`UPDATE users SET game_identifier = NULL, game_identifier_name = NULL WHERE id = $1`, [req.user.sub]);
   res.json({ ok: true });
 }));
@@ -1301,7 +1298,7 @@ app.post("/api/cont/dezleaga-joc", auth, requireRole(...ADMIN_ROLES), asyncRoute
 // așteptare" necesită cont legat de joc — fără el răspundem "linked: false"
 // și lăsăm frontend-ul să ceară legarea abia când chiar încearcă să deschidă
 // o cutie (nu e o eroare, doar jucătorul nu a parcurs încă acel pas).
-app.get("/api/vip-shop", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+app.get("/api/vip-shop", auth, asyncRoute(async (req, res) => {
   // Fără cache — pagina trebuie să reflecte mereu starea curentă a cutiilor
   // (ex. o cutie dezactivată/activată chiar acum din admin), nu un răspuns
   // servit din cache-ul browserului pe baza unui ETag vechi.
@@ -1325,7 +1322,7 @@ app.get("/api/vip-shop", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (re
   });
 }));
 
-app.post("/api/vip-shop/deschide", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+app.post("/api/vip-shop/deschide", auth, asyncRoute(async (req, res) => {
   const { rows } = await pool.query(`SELECT game_identifier, game_identifier_name FROM users WHERE id = $1`, [req.user.sub]);
   const identifier = rows[0]?.game_identifier;
   if (!identifier) return res.status(400).json({ error: "Leagă-ți mai întâi contul de personajul din joc." });
@@ -1357,7 +1354,7 @@ app.post("/api/vip-shop/deschide", auth, requireRole(...ADMIN_ROLES), asyncRoute
 // deblochează împreună la lansarea publică (vezi comentariul de mai sus) —
 // spre deosebire de /api/vip-shop/log (jurnalul tuturor), care rămâne
 // admin-only.
-app.get("/api/vip-shop/istoric", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+app.get("/api/vip-shop/istoric", auth, asyncRoute(async (req, res) => {
   const { rows } = await pool.query(`SELECT game_identifier FROM users WHERE id = $1`, [req.user.sub]);
   const identifier = rows[0]?.game_identifier;
   if (!identifier) return res.json({ online: true, history: [] });
@@ -1388,7 +1385,9 @@ app.get("/api/vip-shop/log", auth, requireRole(...ADMIN_ROLES), asyncRoute(async
 // ("/cases/admin..." — vezi server.lua v1.30.0), care ține config-ul real în
 // MySQL, și loghează acțiunea în audit_logs (Postgres, al site-ului) — la fel
 // ca orice altă acțiune de admin (regulamente, anunțuri etc.). Rămâne
-// restricționat la ADMIN_ROLES, ca tot ce ține de VIP Shop momentan.
+// restricționat la ADMIN_ROLES PERMANENT — spre deosebire de rutele de mai
+// sus (deblocate pentru jucători la lansare, 10.09.2026), editorul de cutii/
+// recompense e un instrument de staff, nu un feature pentru jucători.
 const VIP_SHOP_ADMIN_ERRORS = {
   nume_lipsa: "Numele cutiei este obligatoriu.",
   date_lipsa: "Lipsesc date obligatorii.",

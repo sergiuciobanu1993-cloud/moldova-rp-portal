@@ -141,17 +141,11 @@ async function loadProfileExtra() {
       document.getElementById('admin-link').hidden = false;
     }
 
-    // TEMPORAR (06.09.2026): VIP Shop e ascuns din dashboard pentru jucătorii
-    // obișnuiți cât timp e încă în testare reală — cerut explicit. Ascuns nu
-    // doar vizual: rutele /api/vip-shop* sunt restricționate la fel de
-    // server.js (requireRole(...ADMIN_ROLES)), deci chiar dacă cineva ar bate
-    // link-ul manual tot nu ar putea deschide cutii. Scoateți if-ul de mai jos
-    // (link-urile rămân doar cu atributul hidden implicit, ca acum) când VIP
-    // Shop e gata de lansare publică.
-    if (['admin', 'co-fondator', 'owner'].includes(me.role)) {
-      document.getElementById('vipshop-nav-link').hidden = false;
-      document.getElementById('vipshop-grid-link').hidden = false;
-    }
+    // LANSAT PUBLIC (10.09.2026): VIP Shop e vizibil oricărui cont logat, nu
+    // doar staff-ului — rutele /api/vip-shop* nu mai sunt restricționate la
+    // ADMIN_ROLES în server.js (vezi comentariul de acolo).
+    document.getElementById('vipshop-nav-link').hidden = false;
+    document.getElementById('vipshop-grid-link').hidden = false;
 
     // Cont de staff (rang real în baza de date) dar fără parolă încă —
     // singura cale de a intra momentan e prin Discord, care de securitate

@@ -728,6 +728,8 @@ async function fetchCasesList() {
     });
     if (!r.ok) throw new Error(`moldovarp-api HTTP ${r.status}`);
     const body = await r.json();
+    // DIAG TEMPORAR (10.09.2026) — vezi backend/server.js cap de fisier.
+    console.log("DIAG-CASES-THEMES", JSON.stringify((body.cases || []).map(c => ({ id: c.id, theme: c.theme }))));
     return { online: true, cases: body.cases || [] };
   } catch {
     return { online: false, cases: [] };
@@ -811,17 +813,25 @@ async function fetchCaseHistory(identifier, limit) {
 async function vipShopAdminRequest(method, path, body) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8000);
+  const targetUrl = `http://${FIVEM_ADDRESS}/moldovarp-api${path}`;
   try {
-    const r = await fetch(`http://${FIVEM_ADDRESS}/moldovarp-api${path}`, {
+    const r = await fetch(targetUrl, {
       method,
       headers: { "x-api-key": FIVEM_API_SECRET, "Content-Type": "application/json" },
       body: body !== undefined ? JSON.stringify(body) : undefined,
       signal: controller.signal,
     });
-    const parsed = await r.json().catch(() => ({}));
+    const rawText = await r.text();
+    let parsed = {};
+    try { parsed = rawText ? JSON.parse(rawText) : {}; } catch { /* keep {} */ }
+    // DIAG TEMPORAR (10.09.2026) — vezi backend/server.js cap de fisier.
+    console.log("DIAG-VIPSHOP-ADMIN", JSON.stringify({
+      method, targetUrl, httpStatus: r.status, ok: r.ok, rawTextPreview: rawText.slice(0, 300),
+    }));
     if (!r.ok) return { ok: false, status: r.status, error: parsed.error || "eroare" };
     return { ok: true, data: parsed };
-  } catch {
+  } catch (e) {
+    console.log("DIAG-VIPSHOP-ADMIN-CATCH", JSON.stringify({ method, targetUrl, error: String(e && e.message || e) }));
     return { ok: false, status: 503, error: "server_offline" };
   } finally {
     clearTimeout(timeout);

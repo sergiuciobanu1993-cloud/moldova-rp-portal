@@ -1298,6 +1298,10 @@ app.post("/api/cont/dezleaga-joc", auth, requireRole(...ADMIN_ROLES), asyncRoute
 // și lăsăm frontend-ul să ceară legarea abia când chiar încearcă să deschidă
 // o cutie (nu e o eroare, doar jucătorul nu a parcurs încă acel pas).
 app.get("/api/vip-shop", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+  // Fără cache — pagina trebuie să reflecte mereu starea curentă a cutiilor
+  // (ex. o cutie dezactivată/activată chiar acum din admin), nu un răspuns
+  // servit din cache-ul browserului pe baza unui ETag vechi.
+  res.set("Cache-Control", "no-store");
   const { rows } = await pool.query(`SELECT game_identifier, game_identifier_name FROM users WHERE id = $1`, [req.user.sub]);
   const identifier = rows[0]?.game_identifier;
 
@@ -1397,6 +1401,9 @@ function vipShopAdminError(res, result) {
 }
 
 app.get("/api/admin/vip-shop/cutii", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (_req, res) => {
+  // Idem — editorul de admin trebuie să vadă mereu starea reală, imediat
+  // după orice activare/dezactivare/editare, nu un 304 din cache-ul browserului.
+  res.set("Cache-Control", "no-store");
   const result = await vipShopAdminRequest("GET", "/cases/admin");
   if (!result.ok) return vipShopAdminError(res, result);
   res.json(result.data);

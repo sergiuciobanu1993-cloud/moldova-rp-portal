@@ -184,7 +184,7 @@ function renderCases() {
   }).join('');
 
   wrap.querySelectorAll('[data-edit-case]').forEach(b => b.addEventListener('click', () => openCaseModal(b.dataset.editCase)));
-  wrap.querySelectorAll('[data-toggle-case]').forEach(b => b.addEventListener('click', () => toggleCaseActive(b.dataset.toggleCase)));
+  wrap.querySelectorAll('[data-toggle-case]').forEach(b => b.addEventListener('click', () => toggleCaseActive(b.dataset.toggleCase, b)));
   wrap.querySelectorAll('[data-del-case]').forEach(b => b.addEventListener('click', () => deleteCase(b.dataset.delCase)));
   wrap.querySelectorAll('[data-add-reward]').forEach(b => b.addEventListener('click', () => openRewardModal(b.dataset.addReward, null)));
   wrap.querySelectorAll('[data-edit-reward]').forEach(b => b.addEventListener('click', () => openRewardModal(b.dataset.case, b.dataset.editReward)));
@@ -249,18 +249,26 @@ function closeCaseModal() {
   document.body.classList.remove('modal-open');
 }
 
-async function toggleCaseActive(caseId) {
+// "btn" (elementul pe care s-a dat click) e dezactivat cât timp cererea e în
+// zbor — fără asta, un al doilea click pe același buton ÎNAINTE ca lista să
+// se reîncarce cu starea nouă citește tot vechiul "c.active" din cache și
+// trimite din nou "!c.active", anulând efectiv primul click (activ -> inactiv
+// -> activ -> inactiv la două click-uri rapide, fix simptomul "am apăsat
+// activează dar nu merge" — cutia rămânea, per total, tot dezactivată).
+async function toggleCaseActive(caseId, btn) {
   const c = casesCache.find(x => x.id === caseId);
   if (!c) return;
+  if (btn) btn.disabled = true;
   try {
     const res = await apiFetch(`/api/admin/vip-shop/cutii/${encodeURIComponent(caseId)}`, {
       method: 'PUT',
       body: JSON.stringify({ name: c.name, price: c.price, theme: c.theme, active: !c.active }),
     });
     if (!res.ok) throw new Error();
-    loadCases();
+    await loadCases();
   } catch {
     alert('Nu am putut schimba starea cutiei — serverul de joc nu răspunde momentan.');
+    if (btn) btn.disabled = false;
   }
 }
 

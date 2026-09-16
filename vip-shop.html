@@ -41,6 +41,13 @@
 .btn-mrp:hover{background:linear-gradient(180deg,rgba(255,138,31,.26),rgba(255,138,31,.09));border-color:var(--orange);transform:translateY(-1px)}
 .btn-mrp .mrp-mark{flex:none;background:var(--orange);color:#0b0b0b;font-weight:950;font-size:9px;letter-spacing:.05em;padding:3px 6px;border-radius:5px}
 
+/* "+ N alte recompense…" — text ca oricare altul, dar clickabil: deschide
+   previzualizarea cu tot conținutul și șansele exacte ale cutiei. */
+.pool-more-link{display:block;background:none;border:0;padding:0;margin:2px 0 0;font:inherit;
+  font-size:12px;color:var(--muted);text-align:left;cursor:pointer;text-decoration:underline;
+  text-underline-offset:2px;text-decoration-color:rgba(146,151,157,.5)}
+.pool-more-link:hover{color:var(--orange);text-decoration-color:var(--orange)}
+
 /* ---- derulatorul de deschidere ("reel"), stil CS:GO — la fel ca pe linkul
    de test, doar că aici recompensa vine deja decisă de server (nu se alege
    client-side): apelăm /api/vip-shop/deschide, apoi derulatorul se
@@ -392,29 +399,42 @@ function renderCases(cases, coins, linked) {
     const accent = CASE_ACCENT[c.theme] || 'orange';
     const img = CASE_IMG[c.theme];
     return `
-    <div class="panel case-card" data-case="${escapeHtml(c.id)}" style="padding:18px" tabindex="0" role="button" aria-haspopup="dialog">
+    <div class="panel case-card" data-preview="${escapeHtml(c.id)}" style="padding:18px" tabindex="0" role="button" aria-haspopup="dialog">
       ${img ? `<div class="crate-frame"><img src="${img}" alt="" loading="lazy"></div>` : ''}
       <span class="case-tier ${accent}">${TIER_LABEL[accent] || ''}</span>
       <h3 style="margin:0 0 4px">${escapeHtml(c.name)}</h3>
       <p class="pill warn" style="margin:0 0 12px">🪙 ${c.price} coins</p>
       <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:14px">
         ${poolRowsHtml(c.pool.slice(0, 3))}
-        ${c.pool.length > 3 ? `<p class="muted" style="margin:2px 0 0;font-size:12px">+ ${c.pool.length - 3} alte recompense…</p>` : ''}
+        ${c.pool.length > 3 ? `<button type="button" class="pool-more-link" data-preview="${escapeHtml(c.id)}">+ ${c.pool.length - 3} alte recompense…</button>` : ''}
       </div>
-      <button type="button" class="btn-mrp" data-case="${escapeHtml(c.id)}"><span class="mrp-mark">MRP</span> Vezi conținut &amp; șanse</button>
+      <button type="button" class="btn-mrp" data-spin="${escapeHtml(c.id)}"><span class="mrp-mark">MRP</span> Învârte cutia</button>
     </div>`;
   }).join('');
-  grid.querySelectorAll('[data-case]').forEach(el => {
-    el.addEventListener('click', () => {
+  // Cardul (și "+ N alte recompense…" din interior) deschide previzualizarea
+  // cu conținutul și șansele exacte — informativ, nu cheltuiește nimic.
+  // Butonul MRP e separat: pornește direct învârtirea cutiei (vezi
+  // startOpenFlow mai jos), fără să mai treacă prin previzualizare — de
+  // aceea ambele opresc propagarea, ca un click pe buton să nu deschidă și
+  // previzualizarea cardului părinte, sau invers.
+  grid.querySelectorAll('[data-preview]').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
       const card = el.closest('.case-card');
       if (card) {
         card.classList.add('unlocking');
         setTimeout(() => card.classList.remove('unlocking'), 450);
       }
-      openPreview(el.dataset.case);
+      openPreview(el.dataset.preview);
     });
     el.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPreview(el.dataset.case); }
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPreview(el.dataset.preview); }
+    });
+  });
+  grid.querySelectorAll('[data-spin]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      startOpenFlow(btn.dataset.spin);
     });
   });
 }
@@ -457,14 +477,22 @@ document.getElementById('preview-overlay').addEventListener('click', (e) => {
 document.getElementById('preview-open-btn').addEventListener('click', () => {
   const caseId = previewCaseId;
   if (!caseId) return;
-  if (previewInsufficientFunds) {
-    window.open(TEBEX_URL, '_blank', 'noopener');
-    return;
-  }
   closePreview();
-  if (!accountLinked) { openLinkOverlay(caseId); return; }
-  openCase(caseId);
+  startOpenFlow(caseId);
 });
+
+// Punct unic de pornire a deschiderii unei cutii — folosit atât de butonul
+// "Deschide" din previzualizare, cât și de butonul MRP direct de pe cardul
+// cutiei (vezi renderCases() mai sus). Reface aceleași verificări ca
+// previzualizarea: cont nelegat -> cere legarea; coins insuficienți ->
+// trimite la Tebex; altfel pornește efectiv derulatorul.
+function startOpenFlow(caseId) {
+  const c = currentCasesById[caseId];
+  if (!c) return;
+  if (!accountLinked) { openLinkOverlay(caseId); return; }
+  if (currentCoins < c.price) { window.open(TEBEX_URL, '_blank', 'noopener'); return; }
+  openCase(caseId);
+}
 
 // ---- Derulatorul de deschidere ("reel"), stil CS:GO — la fel ca pe linkul
 // de test. Diferența față de test: acolo recompensa e aleasă client-side

@@ -11,7 +11,7 @@
   nav.open a{padding:13px 4px;border-top:1px solid var(--line)}
   nav.open a:first-child{border-top:0}
   .welcome{display:block}
-  .status{margin-top:20px;display:inline-block}
+  .status,.home-btn{margin-top:20px;display:inline-block}
   .stats{grid-template-columns:repeat(2,1fr)}
   .grid,.quickgrid{grid-template-columns:1fr}
 }

@@ -26,6 +26,21 @@
 .odds-dot.rare{background:var(--r-rare)}
 .odds-dot.legendary{background:linear-gradient(90deg,var(--r-legendary-a),var(--r-legendary-b));box-shadow:0 0 6px rgba(255,179,71,.7)}
 
+/* Buton "acasă" din antetul paginii — dus la pagina principală publică. */
+.home-btn{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);padding:10px 15px;border-radius:8px;color:var(--text);font-weight:800;font-size:12.5px;white-space:nowrap;transition:.15s ease}
+.home-btn:hover{border-color:var(--orange);color:var(--orange)}
+
+/* Buton personalizat Moldova RP pentru "Vezi conținut & șanse" — înlocuiește
+   btn-primary generic cu un stil propriu brand-ului (accent portocaliu în
+   degrade + eticheta "MRP"), ca să iasă în evidență pe cardul cutiei. */
+.btn-mrp{position:relative;width:100%;display:flex;align-items:center;justify-content:center;gap:8px;
+  background:linear-gradient(180deg,rgba(255,138,31,.16),rgba(255,138,31,.05));
+  border:1px solid rgba(255,138,31,.45);color:#fff;font-weight:800;font-size:12.5px;
+  letter-spacing:.01em;padding:11px 14px;border-radius:8px;cursor:pointer;font:inherit;
+  transition:background .15s ease,border-color .15s ease,transform .15s ease}
+.btn-mrp:hover{background:linear-gradient(180deg,rgba(255,138,31,.26),rgba(255,138,31,.09));border-color:var(--orange);transform:translateY(-1px)}
+.btn-mrp .mrp-mark{flex:none;background:var(--orange);color:#0b0b0b;font-weight:950;font-size:9px;letter-spacing:.05em;padding:3px 6px;border-radius:5px}
+
 /* ---- derulatorul de deschidere ("reel"), stil CS:GO — la fel ca pe linkul
    de test, doar că aici recompensa vine deja decisă de server (nu se alege
    client-side): apelăm /api/vip-shop/deschide, apoi derulatorul se
@@ -64,7 +79,7 @@
 <body>
 <header><a class="brand" href="index.html"><img src="assets/logo.png" alt="">MOLDOVA<span>RP</span></a><nav id="dash-nav"><a href="index.html">Acasă</a><a href="dashboard.html">Dashboard</a><a href="tichete.html">Tichete</a><a href="vip-shop.html" style="color:var(--orange)">VIP Shop</a></nav><button class="menu-toggle" id="dash-menu-toggle" type="button" aria-label="Deschide meniul" aria-expanded="false">☰</button><a class="logout" href="login.html" id="logout-link">Deconectare</a></header>
 <main>
-<section class="welcome"><div><p>MAGAZIN COINS</p><h1>VIP Shop</h1><small>Cheltuiește coins-urile deja cumpărate pe o recompensă cu șansă — se ridică din joc.</small></div></section>
+<section class="welcome"><div><p>MAGAZIN COINS</p><h1>VIP Shop</h1><small>Cheltuiește coins-urile deja cumpărate pe o recompensă cu șansă — se ridică din joc.</small></div><a class="home-btn" href="index.html">← Pagina principală</a></section>
 
 <p class="muted" style="margin:18px 0 24px">
   Coins-urile se cumpără exact ca până acum: din joc, apasă <strong>„Cumpără coins"</strong> în meniul VIP, plătește pe Tebex,
@@ -386,7 +401,7 @@ function renderCases(cases, coins, linked) {
         ${poolRowsHtml(c.pool.slice(0, 3))}
         ${c.pool.length > 3 ? `<p class="muted" style="margin:2px 0 0;font-size:12px">+ ${c.pool.length - 3} alte recompense…</p>` : ''}
       </div>
-      <button type="button" class="btn-primary" data-case="${escapeHtml(c.id)}" style="width:100%">🔍 Vezi conținut &amp; șanse</button>
+      <button type="button" class="btn-mrp" data-case="${escapeHtml(c.id)}"><span class="mrp-mark">MRP</span> Vezi conținut &amp; șanse</button>
     </div>`;
   }).join('');
   grid.querySelectorAll('[data-case]').forEach(el => {

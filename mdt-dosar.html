@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Dosar — MDT FIB</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="dashboard.css">
+<style>
+.case-no{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--orange);font-size:12px;font-weight:800;letter-spacing:.02em}
+.meta-row{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;color:var(--muted);font-size:12px;margin:10px 0 16px}
+.chip{display:inline-flex;align-items:center;gap:6px;background:var(--bg);border:1px solid var(--line);border-radius:999px;padding:5px 11px;font-size:11.5px}
+.chip.suspect{border-color:rgba(255,138,31,.35)}
+.chip.martor{border-color:rgba(120,170,255,.35)}
+.chip.victima{border-color:rgba(255,80,80,.35)}
+.desc{color:#d5d8db;line-height:1.7;white-space:pre-wrap;margin:0 0 4px}
+
+.mandat-card,.proba-card{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:10px}
+.mandat-card .top,.proba-card .top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.mandat-card strong,.proba-card strong{font-size:13.5px}
+.mandat-card small,.proba-card small{display:block;color:var(--muted);font-size:11px;margin-top:4px}
+.mandat-card p{color:#d5d8db;font-size:13px;margin:8px 0 0;white-space:pre-wrap}
+.mandat-actions{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+.mini-btn{background:transparent;border:1px solid var(--line);color:var(--text);border-radius:7px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;font:inherit}
+.mini-btn:hover{border-color:var(--orange);color:var(--orange)}
+.mini-btn.danger:hover{border-color:#ff5a5a;color:#ff8a8a}
+
+.proba-thumb{width:100%;max-width:260px;border-radius:8px;border:1px solid var(--line);margin-top:10px;display:block}
+.suspect-row{display:flex;gap:8px;margin-bottom:8px;align-items:center}
+.suspect-row input{flex:1}
+.suspect-row select{width:130px;flex:none}
+.icon-btn{background:transparent;border:1px solid var(--line);color:var(--muted);border-radius:8px;width:38px;height:38px;cursor:pointer;font-size:14px}
+.icon-btn:hover{border-color:#ff5a5a;color:#ff8a8a}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:700px){.two-col{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header><a class="brand" href="index.html"><img src="assets/logo.png" alt="">MOLDOVA<span>RP</span></a><nav><a href="index.html">Acasă</a><a href="dashboard.html">Dashboard</a><a href="mdt-fib.html">MDT FIB</a></nav><button class="menu-toggle" id="dash-menu-toggle" type="button" aria-label="Deschide meniul" aria-expanded="false">☰</button><a class="logout" href="login.html" id="logout-link">Deconectare</a></header>
+<main>
+<p><a href="mdt-fib.html" style="color:var(--muted);font-weight:700;font-size:13px">← Toate dosarele</a></p>
+
+<section class="panel" id="dosar-box" style="margin-top:16px"><p class="muted">Se încarcă…</p></section>
+
+<section class="panel" id="edit-box" style="margin-top:20px" hidden>
+  <div class="head"><h2>Editează dosarul</h2></div>
+  <form id="edit-form">
+    <div class="field"><label>Titlu / subiect</label><input id="e-title" required maxlength="200"></div>
+    <div class="two-col">
+      <div class="field"><label>Categorie</label>
+        <select id="e-category">
+          <option value="trafic_droguri">Trafic de droguri</option>
+          <option value="omor">Omor / tentativă de omor</option>
+          <option value="talharie">Tâlhărie</option>
+          <option value="santaj">Șantaj</option>
+          <option value="spalare_bani">Spălare de bani</option>
+          <option value="coruptie">Corupție</option>
+          <option value="altele">Altele</option>
+        </select>
+      </div>
+      <div class="field"><label>Status</label>
+        <select id="e-status">
+          <option value="deschis">Deschis</option>
+          <option value="in_lucru">În lucru</option>
+          <option value="la_parchet">La parchet</option>
+          <option value="inchis">Închis</option>
+          <option value="clasat">Clasat</option>
+        </select>
+      </div>
+    </div>
+    <div class="field"><label>Descriere</label><textarea id="e-description"></textarea></div>
+    <div class="field">
+      <label>Persoane implicate</label>
+      <div id="e-suspects"></div>
+      <button type="button" class="btn-ghost" id="e-suspect-add" style="font-size:12px;padding:8px 12px">+ Adaugă persoană</button>
+    </div>
+    <div class="field"><label>Agent responsabil</label><select id="e-assigned"><option value="">— neasignat —</option></select></div>
+    <p class="formmsg" id="edit-msg" hidden></p>
+    <div style="display:flex;gap:10px"><button type="submit" class="btn-primary">Salvează</button><button type="button" class="btn-ghost" id="edit-cancel">Anulează</button></div>
+  </form>
+</section>
+
+<section class="panel" style="margin-top:20px">
+  <div class="head"><h2>📄 Mandate</h2></div>
+  <div id="mandat-list"><p class="muted">Se încarcă…</p></div>
+  <form id="mandat-form" style="margin-top:16px;border-top:1px solid var(--line);padding-top:16px">
+    <div class="two-col">
+      <div class="field"><label>Tip mandat</label>
+        <select id="m-type">
+          <option value="perchezitie">Percheziție</option>
+          <option value="arestare">Arestare</option>
+          <option value="aducere">Aducere</option>
+        </select>
+      </div>
+      <div class="field"><label>Persoană / adresă vizată</label><input id="m-target" required maxlength="120" placeholder="ex: Ion Popescu sau Str. Centrală nr. 12"></div>
+    </div>
+    <div class="field"><label>Detalii / motiv</label><textarea id="m-details" placeholder="Motivul emiterii, ce se caută, temeiul legal..."></textarea></div>
+    <div class="field"><label>Expiră la (opțional)</label><input id="m-expires" type="datetime-local"></div>
+    <p class="formmsg" id="mandat-msg" hidden></p>
+    <button type="submit" class="btn-primary">Emite mandatul</button>
+  </form>
+</section>
+
+<section class="panel" style="margin-top:20px">
+  <div class="head"><h2>📎 Probe</h2></div>
+  <div id="proba-list"><p class="muted">Se încarcă…</p></div>
+  <form id="proba-form" style="margin-top:16px;border-top:1px solid var(--line);padding-top:16px">
+    <div class="field"><label>Etichetă</label><input id="p-label" required maxlength="160" placeholder="ex: Poză armă găsită la percheziție"></div>
+    <div class="field"><label>Link extern (opțional)</label><input id="p-url" type="url" placeholder="https://streamable.com/... sau link Discord/imgur"></div>
+    <div class="field"><label>Sau încarcă o poză (opțional, max 6MB — PNG/JPEG/WEBP)</label><input id="p-file" type="file" accept="image/png,image/jpeg,image/webp"></div>
+    <p class="formmsg" id="proba-msg" hidden></p>
+    <button type="submit" class="btn-primary">Adaugă proba</button>
+  </form>
+</section>
+</main>
+<script src="auth-client.js"></script>
+<script>
+const CATEGORY_LABEL = { trafic_droguri: 'Trafic de droguri', omor: 'Omor / tentativă de omor', talharie: 'Tâlhărie', santaj: 'Șantaj', spalare_bani: 'Spălare de bani', coruptie: 'Corupție', altele: 'Altele' };
+const STATUS_LABEL = { deschis: 'DESCHIS', in_lucru: 'ÎN LUCRU', la_parchet: 'LA PARCHET', inchis: 'ÎNCHIS', clasat: 'CLASAT' };
+const STATUS_PILL = { deschis: 'warn', in_lucru: 'info', la_parchet: 'info', inchis: 'off', clasat: 'off' };
+const ROLE_LABEL = { suspect: 'Suspect', martor: 'Martor', victima: 'Victimă' };
+const MANDAT_TYPE_LABEL = { perchezitie: 'Percheziție', arestare: 'Arestare', aducere: 'Aducere' };
+const MANDAT_TYPE_ICON = { perchezitie: '🔍', arestare: '🚨', aducere: '📞' };
+const MANDAT_STATUS_LABEL = { activ: 'ACTIV', executat: 'EXECUTAT', expirat: 'EXPIRAT', anulat: 'ANULAT' };
+const MANDAT_STATUS_PILL = { activ: 'warn', executat: 'on', expirat: 'off', anulat: 'off' };
+
+const escapeHtml = s => (s ?? '').toString()
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+function fmtDate(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+const dosarId = new URLSearchParams(window.location.search).get('id');
+let currentDosar = null;
+
+function suspectRow(containerParent, name = '', role = 'suspect') {
+  const row = document.createElement('div');
+  row.className = 'suspect-row';
+  row.innerHTML = `
+    <input placeholder="Nume personaj" class="s-name" value="${escapeHtml(name)}">
+    <select class="s-role">
+      ${Object.entries(ROLE_LABEL).map(([v, l]) => `<option value="${v}" ${v === role ? 'selected' : ''}>${l}</option>`).join('')}
+    </select>
+    <button type="button" class="icon-btn s-remove" aria-label="Șterge">✕</button>`;
+  row.querySelector('.s-remove').addEventListener('click', () => row.remove());
+  containerParent.appendChild(row);
+}
+document.getElementById('e-suspect-add').addEventListener('click', () => suspectRow(document.getElementById('e-suspects')));
+
+function readSuspects(containerId) {
+  return Array.from(document.querySelectorAll(`#${containerId} .suspect-row`)).map(row => ({
+    name: row.querySelector('.s-name').value.trim(),
+    role: row.querySelector('.s-role').value,
+  })).filter(s => s.name);
+}
+
+async function loadAgents(selectId, selectedId) {
+  try {
+    const res = await apiFetch('/api/mdt/agenti');
+    if (!res.ok) return;
+    const agents = await res.json();
+    const sel = document.getElementById(selectId);
+    agents.forEach(a => {
+      const opt = document.createElement('option');
+      opt.value = a.id;
+      opt.textContent = a.display_name || a.username;
+      if (a.id === selectedId) opt.selected = true;
+      sel.appendChild(opt);
+    });
+  } catch {}
+}
+
+function renderDosar(d) {
+  currentDosar = d;
+  const suspectsHtml = (d.suspects || []).length
+    ? d.suspects.map(s => `<span class="chip ${s.role}">${ROLE_LABEL[s.role] || s.role}: ${escapeHtml(s.name)}</span>`).join('')
+    : '<span class="muted">Nicio persoană înregistrată încă.</span>';
+  document.getElementById('dosar-box').innerHTML = `
+    <div class="head">
+      <div><span class="case-no">${d.case_number}</span><h2 style="margin:4px 0 0">${escapeHtml(d.title)}</h2></div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span class="pill ${STATUS_PILL[d.status] || 'off'}">${STATUS_LABEL[d.status] || d.status}</span>
+        <button type="button" class="btn-ghost" id="edit-open-btn">Editează</button>
+      </div>
+    </div>
+    <div class="meta-row">
+      <span>${CATEGORY_LABEL[d.category] || d.category}</span>
+      <span>·</span>
+      <span>deschis ${fmtDate(d.created_at)} de ${escapeHtml(d.created_by_name || '—')}</span>
+      <span>·</span>
+      <span>responsabil: ${escapeHtml(d.assigned_to_name || 'neasignat')}</span>
+    </div>
+    <div style="margin-bottom:14px">${suspectsHtml}</div>
+    <p class="desc">${escapeHtml(d.description) || '<span class="muted">Fără descriere.</span>'}</p>
+  `;
+  document.getElementById('edit-open-btn').addEventListener('click', openEdit);
+}
+
+function openEdit() {
+  const d = currentDosar;
+  document.getElementById('e-title').value = d.title;
+  document.getElementById('e-category').value = d.category;
+  document.getElementById('e-status').value = d.status;
+  document.getElementById('e-description').value = d.description || '';
+  document.getElementById('e-suspects').innerHTML = '';
+  (d.suspects || []).forEach(s => suspectRow(document.getElementById('e-suspects'), s.name, s.role));
+  document.getElementById('e-assigned').innerHTML = '<option value="">— neasignat —</option>';
+  loadAgents('e-assigned', d.assigned_to);
+  document.getElementById('edit-box').hidden = false;
+  document.getElementById('edit-box').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+document.getElementById('edit-cancel').addEventListener('click', () => { document.getElementById('edit-box').hidden = true; });
+
+document.getElementById('edit-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const msg = document.getElementById('edit-msg');
+  msg.hidden = true;
+  const body = {
+    title: document.getElementById('e-title').value.trim(),
+    category: document.getElementById('e-category').value,
+    status: document.getElementById('e-status').value,
+    description: document.getElementById('e-description').value.trim(),
+    suspects: readSuspects('e-suspects'),
+    assigned_to: document.getElementById('e-assigned').value || null,
+  };
+  try {
+    const res = await apiFetch(`/api/mdt/dosare/${dosarId}`, { method: 'PUT', body: JSON.stringify(body) });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Salvarea a eșuat.');
+    document.getElementById('edit-box').hidden = true;
+    renderDosar(data);
+  } catch (err) {
+    msg.textContent = err.message;
+    msg.className = 'formmsg error';
+    msg.hidden = false;
+  }
+});
+
+function renderMandate(list) {
+  const box = document.getElementById('mandat-list');
+  box.innerHTML = list.length ? list.map(m => `
+    <div class="mandat-card">
+      <div class="top">
+        <div><strong>${MANDAT_TYPE_ICON[m.type] || '📄'} ${MANDAT_TYPE_LABEL[m.type] || m.type} — ${escapeHtml(m.target_name)}</strong>
+        <small>emis ${fmtDate(m.issued_at)} de ${escapeHtml(m.issued_by_name || '—')}${m.expires_at ? ' · expiră ' + fmtDate(m.expires_at) : ''}${m.executed_at ? ' · executat ' + fmtDate(m.executed_at) : ''}</small></div>
+        <span class="pill ${MANDAT_STATUS_PILL[m.status] || 'off'}">${MANDAT_STATUS_LABEL[m.status] || m.status}</span>
+      </div>
+      ${m.details ? `<p>${escapeHtml(m.details)}</p>` : ''}
+      ${m.status === 'activ' ? `
+        <div class="mandat-actions">
+          <button type="button" class="mini-btn" data-mandat-status="${m.id}:executat">Marchează executat</button>
+          <button type="button" class="mini-btn" data-mandat-status="${m.id}:expirat">Marchează expirat</button>
+          <button type="button" class="mini-btn danger" data-mandat-status="${m.id}:anulat">Anulează</button>
+        </div>` : ''}
+    </div>`).join('') : '<p class="muted">Niciun mandat emis încă pentru acest dosar.</p>';
+
+  box.querySelectorAll('[data-mandat-status]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const [id, status] = btn.dataset.mandatStatus.split(':');
+      try {
+        const res = await apiFetch(`/api/mdt/mandate/${id}`, { method: 'PUT', body: JSON.stringify({ status }) });
+        if (!res.ok) throw new Error();
+        loadMandate();
+      } catch {
+        alert('Nu am putut actualiza statusul mandatului.');
+      }
+    });
+  });
+}
+
+async function loadMandate() {
+  try {
+    const res = await apiFetch(`/api/mdt/dosare/${dosarId}`);
+    if (!res.ok) throw new Error();
+    const d = await res.json();
+    renderMandate(d.mandate);
+  } catch {
+    document.getElementById('mandat-list').innerHTML = '<p class="muted">Nu am putut încărca mandatele.</p>';
+  }
+}
+
+document.getElementById('mandat-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const msg = document.getElementById('mandat-msg');
+  msg.hidden = true;
+  const expiresRaw = document.getElementById('m-expires').value;
+  const body = {
+    type: document.getElementById('m-type').value,
+    target_name: document.getElementById('m-target').value.trim(),
+    details: document.getElementById('m-details').value.trim(),
+    expires_at: expiresRaw ? new Date(expiresRaw).toISOString() : null,
+  };
+  try {
+    const res = await apiFetch(`/api/mdt/dosare/${dosarId}/mandate`, { method: 'POST', body: JSON.stringify(body) });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Emiterea mandatului a eșuat.');
+    document.getElementById('mandat-form').reset();
+    await load();
+  } catch (err) {
+    msg.textContent = err.message;
+    msg.className = 'formmsg error';
+    msg.hidden = false;
+  }
+});
+
+// Fișierele de probă cer Authorization: Bearer, deci un <img src="..."> simplu
+// nu ar funcționa (browserul nu atașează headerul) — le încărcăm prin
+// fetch()+blob și punem rezultatul într-un object URL.
+async function loadAuthedImage(url, imgEl) {
+  try {
+    const res = await apiFetch(url);
+    if (!res.ok) return;
+    const blob = await res.blob();
+    imgEl.src = URL.createObjectURL(blob);
+  } catch {}
+}
+
+function renderProbe(list) {
+  const box = document.getElementById('proba-list');
+  box.innerHTML = list.length ? list.map(p => `
+    <div class="proba-card" data-proba-id="${p.id}">
+      <div class="top">
+        <div><strong>${escapeHtml(p.label)}</strong><small>adăugată ${fmtDate(p.created_at)} de ${escapeHtml(p.added_by_name || '—')}</small></div>
+        <button type="button" class="icon-btn" data-proba-delete="${p.id}" aria-label="Șterge">✕</button>
+      </div>
+      ${p.url ? `<p style="margin:8px 0 0"><a href="${escapeHtml(p.url)}" target="_blank" rel="noopener noreferrer" style="color:var(--orange);font-weight:800;font-size:12.5px">🔗 Deschide linkul</a></p>` : ''}
+      ${p.has_file ? `<img class="proba-thumb" alt="${escapeHtml(p.label)}" data-proba-img="${p.id}">` : ''}
+    </div>`).join('') : '<p class="muted">Nicio probă atașată încă.</p>';
+
+  box.querySelectorAll('[data-proba-img]').forEach(img => {
+    loadAuthedImage(`/api/mdt/probe/${img.dataset.probaImg}/fisier`, img);
+  });
+  box.querySelectorAll('[data-proba-delete]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('Ștergi această probă? Nu poate fi anulat.')) return;
+      try {
+        const res = await apiFetch(`/api/mdt/probe/${btn.dataset.probaDelete}`, { method: 'DELETE' });
+        if (!res.ok && res.status !== 204) throw new Error();
+        loadProbe();
+      } catch {
+        alert('Nu am putut șterge proba.');
+      }
+    });
+  });
+}
+
+async function loadProbe() {
+  try {
+    const res = await apiFetch(`/api/mdt/dosare/${dosarId}`);
+    if (!res.ok) throw new Error();
+    const d = await res.json();
+    renderProbe(d.probe);
+  } catch {
+    document.getElementById('proba-list').innerHTML = '<p class="muted">Nu am putut încărca probele.</p>';
+  }
+}
+
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+document.getElementById('proba-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const msg = document.getElementById('proba-msg');
+  msg.hidden = true;
+  const label = document.getElementById('p-label').value.trim();
+  const url = document.getElementById('p-url').value.trim();
+  const file = document.getElementById('p-file').files[0];
+
+  if (!url && !file) {
+    msg.textContent = 'Atașează un link sau o poză.';
+    msg.className = 'formmsg error';
+    msg.hidden = false;
+    return;
+  }
+  if (file && file.size > 6 * 1024 * 1024) {
+    msg.textContent = 'Fișierul este prea mare (limită 6MB).';
+    msg.className = 'formmsg error';
+    msg.hidden = false;
+    return;
+  }
+
+  const body = { label, url: url || null };
+  if (file) {
+    body.fileData = await fileToDataUrl(file);
+    body.fileName = file.name;
+    body.fileMime = file.type;
+  }
+
+  try {
+    const res = await apiFetch(`/api/mdt/dosare/${dosarId}/probe`, { method: 'POST', body: JSON.stringify(body) });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Adăugarea probei a eșuat.');
+    document.getElementById('proba-form').reset();
+    loadProbe();
+  } catch (err) {
+    msg.textContent = err.message;
+    msg.className = 'formmsg error';
+    msg.hidden = false;
+  }
+});
+
+async function load() {
+  if (!dosarId) {
+    document.getElementById('dosar-box').innerHTML = '<p class="muted">Dosar negăsit.</p>';
+    return;
+  }
+  try {
+    const res = await apiFetch(`/api/mdt/dosare/${dosarId}`);
+    if (!res.ok) throw new Error();
+    const d = await res.json();
+    renderDosar(d);
+    renderMandate(d.mandate);
+    renderProbe(d.probe);
+  } catch {
+    document.getElementById('dosar-box').innerHTML = '<p class="muted">Acest dosar nu există sau nu ai acces la el.</p>';
+  }
+}
+
+(async () => {
+  if (!requireAuth()) return;
+  load();
+})();
+wireLogout('#logout-link');
+</script>
+</body></html>

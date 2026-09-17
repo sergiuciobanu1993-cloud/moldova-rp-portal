@@ -269,6 +269,67 @@ CREATE TABLE IF NOT EXISTS seed_flags (
   applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- === MDT FIB (17.09.2026) ===================================================
+-- Terminal de dosare pentru FIB: dosare de anchetă, mandate emise pe baza lor
+-- și probele atașate fiecărui dosar. Accesul e verificat în server.js prin
+-- requireFib() — membru al facțiunii FIB (faction_members, mai jos) SAU
+-- staff (MOD_ROLES) — nu printr-un rol nou în tabela roles.
+CREATE TABLE IF NOT EXISTS mdt_dosare (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  -- "seq" există DOAR ca să dea fiecărui dosar un număr scurt, lizibil în RP
+  -- (FIB-2026-0007, calculat în server.js din seq+anul lui created_at) — nu
+  -- e cheia primară (aia rămâne id, UUID, ca peste tot în schema asta).
+  seq SERIAL,
+  title VARCHAR(200) NOT NULL,
+  category VARCHAR(60) NOT NULL DEFAULT 'altele',
+  status VARCHAR(20) NOT NULL DEFAULT 'deschis',
+  description TEXT NOT NULL DEFAULT '',
+  -- Array JSON de {name, role}, role fiind 'suspect' | 'martor' | 'victima'.
+  -- Nu sunt legați de tabela players — majoritatea nu au cont de site, un
+  -- dosar trebuie să poată numi pe oricine din joc, nu doar conturi înscrise.
+  suspects JSONB NOT NULL DEFAULT '[]',
+  created_by UUID REFERENCES users(id),
+  assigned_to UUID REFERENCES users(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_mdt_dosare_status ON mdt_dosare(status);
+CREATE INDEX IF NOT EXISTS idx_mdt_dosare_created_at ON mdt_dosare(created_at DESC);
+
+CREATE TABLE IF NOT EXISTS mdt_mandate (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  dosar_id UUID NOT NULL REFERENCES mdt_dosare(id) ON DELETE CASCADE,
+  type VARCHAR(20) NOT NULL, -- 'perchezitie' | 'arestare' | 'aducere'
+  target_name VARCHAR(120) NOT NULL,
+  details TEXT NOT NULL DEFAULT '',
+  status VARCHAR(20) NOT NULL DEFAULT 'activ', -- activ | executat | expirat | anulat
+  issued_by UUID REFERENCES users(id),
+  issued_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at TIMESTAMPTZ,
+  executed_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_mdt_mandate_dosar ON mdt_mandate(dosar_id);
+
+-- O probă poate fi un link extern (Discord/Streamable/imgur — la fel ca la
+-- tickets.evidence_url) ȘI/SAU un fișier încărcat direct (poză), stocat ca
+-- bytea chiar în Postgres — proiectul ăsta n-are storage persistent separat
+-- pe Railway (vezi comentariul la tickets mai sus), deci baza de date rămâne
+-- singurul loc cu adevărat persistent. file_data e plafonat în server.js
+-- (MDT_MAX_FILE_BYTES), nu aici, ca să nu umfle nejustificat baza.
+CREATE TABLE IF NOT EXISTS mdt_probe (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  dosar_id UUID NOT NULL REFERENCES mdt_dosare(id) ON DELETE CASCADE,
+  label VARCHAR(160) NOT NULL,
+  url TEXT,
+  file_data BYTEA,
+  file_mime VARCHAR(60),
+  file_name VARCHAR(160),
+  added_by UUID REFERENCES users(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CHECK (url IS NOT NULL OR file_data IS NOT NULL)
+);
+CREATE INDEX IF NOT EXISTS idx_mdt_probe_dosar ON mdt_probe(dosar_id);
+
 INSERT INTO roles(name, description) VALUES
 ('player', 'Jucator standard'),
 ('moderator', 'Moderator'),
@@ -281,6 +342,7 @@ INSERT INTO factions(name, type, description) VALUES
 ('Poliție', 'legal', 'Organizație legală'),
 ('SMURD', 'legal', 'Serviciu medical'),
 ('Avocatură', 'legal', 'Serviciu juridic'),
+('FIB', 'legal', 'Biroul Federal de Investigații'),
 ('Sindicat', 'ilegal', 'Organizație ilegală'),
 ('Ganguri', 'ilegal', 'Organizații criminale'),
 ('Mafii', 'ilegal', 'Organizații criminale')

@@ -14,7 +14,11 @@ const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors({ origin: process.env.CORS_ORIGIN?.split(",") || true }));
-app.use(express.json({ limit: "1mb" }));
+// Limita a fost 1mb până la MDT FIB (17.09.2026) — probele încărcate direct
+// (poze, ca base64 în JSON, vezi /api/mdt/dosare/:id/probe mai jos) au nevoie
+// de mai mult spațiu. Fișierul propriu-zis rămâne plafonat mult sub atât
+// (MDT_MAX_FILE_BYTES), asta e doar limita brută a corpului cererii HTTP.
+app.use(express.json({ limit: "8mb" }));
 app.use(express.static(path.join(__dirname, "..")));
 
 const asyncRoute = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -731,8 +735,6 @@ async function postOpenCase({ identifier, playerName, caseId }) {
       signal: controller.signal,
     });
     const rawText = await r.text();
-    // DIAG TEMPORAR — de șters după ce găsim bug-ul cu "activează nu ține".
-    console.log("DIAG-VIPSHOP-OPEN-RAW", JSON.stringify({ caseId, httpStatus: r.status, rawText: rawText.slice(0, 400) }));
     let body = {};
     try { body = rawText ? JSON.parse(rawText) : {}; } catch { /* keep {} */ }
     if (!r.ok) return { ok: false, error: body.error || "eroare" };
@@ -1331,8 +1333,6 @@ app.post("/api/vip-shop/deschide", auth, asyncRoute(async (req, res) => {
   if (!caseId) return res.status(400).json({ error: "Lipsește caseId." });
 
   const outcome = await postOpenCase({ identifier, playerName: rows[0].game_identifier_name, caseId });
-  // DIAG TEMPORAR — de șters după ce găsim bug-ul cu "activează nu ține".
-  console.log("DIAG-VIPSHOP-DESCHIDE", JSON.stringify({ caseId, identifier, outcome }));
   if (!outcome.ok) {
     const messages = {
       coins_insuficienti: "Nu ai suficienți coins pentru această recompensă.",
@@ -1411,8 +1411,6 @@ app.get("/api/admin/vip-shop/cutii", auth, requireRole(...ADMIN_ROLES), asyncRou
   res.set("Cache-Control", "no-store");
   const result = await vipShopAdminRequest("GET", "/cases/admin");
   if (!result.ok) return vipShopAdminError(res, result);
-  // DIAG TEMPORAR — de șters după ce găsim bug-ul cu "activează nu ține".
-  console.log("DIAG-VIPSHOP-LIST", JSON.stringify((result.data?.cases || []).map(c => ({ id: c.id, active: c.active, typeofActive: typeof c.active }))));
   res.json(result.data);
 }));
 
@@ -1429,12 +1427,9 @@ app.put("/api/admin/vip-shop/cutii/:id", auth, requireRole(...ADMIN_ROLES), asyn
   const { name, price, theme, active } = req.body || {};
   if (!name || !String(name).trim()) return res.status(400).json({ error: "Numele cutiei este obligatoriu." });
   const sentActive = active !== false;
-  // DIAG TEMPORAR — de șters după ce găsim bug-ul cu "activează nu ține".
-  console.log("DIAG-VIPSHOP-PUT-SEND", JSON.stringify({ id: req.params.id, receivedActive: active, receivedType: typeof active, sentActive }));
   const result = await vipShopAdminRequest("PUT", `/cases/admin/${encodeURIComponent(req.params.id)}`, {
     name: String(name).trim(), price: Number(price) || 0, theme, active: sentActive,
   });
-  console.log("DIAG-VIPSHOP-PUT-RESULT", JSON.stringify({ id: req.params.id, ok: result.ok, status: result.status, data: result.data, error: result.error }));
   if (!result.ok) return vipShopAdminError(res, result);
   await logAction(req.user.sub, "vip_shop.case.update", "vip_shop_case", req.params.id, { name, price, theme, active }, req.ip);
   res.json(result.data);
@@ -2042,12 +2037,21 @@ app.get("/api/admin/audit-logs", auth, requireRole(...ADMIN_ROLES), asyncRoute(a
 
 const VALID_ROLES = ["player", "moderator", "admin", "co-fondator", "owner"];
 
+// player_id/faction_id/faction_name adăugate (17.09.2026) ca admin-utilizatori.html
+// să poată asigna direct o facțiune de site (ex: FIB, pentru acces la MDT) —
+// reutilizează /api/admin/players/:id/faction de mai jos, care lucrează cu
+// player_id, nu user_id (fiecare user are exact un rând în players, creat la
+// signup, vezi INSERT INTO players din fluxul de Discord OAuth).
 app.get("/api/admin/users", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (_req, res) => {
   const { rows } = await pool.query(
     `SELECT u.id, u.username, u.email, u.discord_id, u.discord_username, u.discord_avatar,
-            u.is_active, u.created_at, r.name AS role, (u.password_hash IS NOT NULL) AS has_password
+            u.is_active, u.created_at, r.name AS role, (u.password_hash IS NOT NULL) AS has_password,
+            p.id AS player_id, f.id AS faction_id, f.name AS faction_name
      FROM users u
      JOIN roles r ON r.id = u.role_id
+     LEFT JOIN players p ON p.user_id = u.id
+     LEFT JOIN faction_members fm ON fm.player_id = p.id
+     LEFT JOIN factions f ON f.id = fm.faction_id
      ORDER BY u.created_at DESC`
   );
   res.json(rows);
@@ -2348,6 +2352,263 @@ app.delete("/api/admin/factions/ranks/:rankId", auth, requireRole(...ADMIN_ROLES
   const { rowCount } = await pool.query("DELETE FROM faction_ranks WHERE id = $1", [rankId]);
   if (!rowCount) return res.status(404).json({ error: "Rank-ul nu există." });
   await logAction(req.user.sub, "faction_rank.delete", "faction_rank", rankId, null, req.ip);
+  res.status(204).end();
+}));
+
+// ---------------------------------------------------------------------------
+// MDT FIB — dosare de anchetă, mandate și probe (17.09.2026)
+// ---------------------------------------------------------------------------
+// Acces: oricine e membru al facțiunii FIB — asignată din admin-jucatori.html
+// exact ca orice altă facțiune (vezi /api/admin/players/:id/faction mai sus)
+// — SAU staff-ul site-ului (MOD_ROLES), care vede/gestionează tot pentru
+// moderare. NU e un rol nou de site: verificăm apartenența reală la
+// facțiune (players -> faction_members -> factions), la fel cum am fi
+// verificat orice altă facțiune, nu un rând separat în tabela roles.
+async function isFibMember(userId) {
+  const { rows } = await pool.query(
+    `SELECT 1 FROM players p
+     JOIN faction_members fm ON fm.player_id = p.id
+     JOIN factions f ON f.id = fm.faction_id
+     WHERE p.user_id = $1 AND f.name = 'FIB'
+     LIMIT 1`,
+    [userId]
+  );
+  return rows.length > 0;
+}
+
+async function requireFib(req, res, next) {
+  if (MOD_ROLES.includes(req.user.role)) return next();
+  if (await isFibMember(req.user.sub)) return next();
+  res.status(403).json({ error: "Acces permis doar membrilor FIB." });
+}
+
+// "Am acces?" — folosit de dashboard ca să arate/ascundă linkul spre MDT,
+// fără să oblige fiecare pagină să repete verificarea de mai sus doar ca să
+// decidă dacă afișează un buton.
+app.get("/api/mdt/acces", auth, asyncRoute(async (req, res) => {
+  const access = MOD_ROLES.includes(req.user.role) || await isFibMember(req.user.sub);
+  res.json({ access });
+}));
+
+const MDT_MANDAT_TYPES = ["perchezitie", "arestare", "aducere"];
+const MDT_DOSAR_STATUSES = ["deschis", "in_lucru", "la_parchet", "inchis", "clasat"];
+const MDT_MANDAT_STATUSES = ["activ", "executat", "expirat", "anulat"];
+const MDT_SUSPECT_ROLES = ["suspect", "martor", "victima"];
+
+// Limită proprie pentru fiecare fișier de probă (poză) încărcat ca base64 —
+// separată de limita globală a corpului cererii (express.json, mai sus),
+// ca baza de date (unde chiar se stochează bytes-ii, n-avem storage
+// persistent separat pe Railway) să rămână rezonabilă.
+const MDT_MAX_FILE_BYTES = 6 * 1024 * 1024;
+const MDT_ALLOWED_MIME = ["image/png", "image/jpeg", "image/webp"];
+
+function cleanSuspectsInput(suspects) {
+  return Array.isArray(suspects)
+    ? suspects
+        .filter(s => s && s.name && s.name.trim())
+        .map(s => ({
+          name: s.name.trim().slice(0, 120),
+          role: MDT_SUSPECT_ROLES.includes(s.role) ? s.role : "suspect",
+        }))
+    : [];
+}
+
+// case_number ("FIB-2026-0007") e generat aici, nu stocat — "seq" e doar un
+// SERIAL global, monoton crescător, care există exclusiv ca să dea dosarelor
+// un număr de referință scurt și lizibil (util în RP: scris pe mandate,
+// citit pe radio etc.), fără bătăi de cap cu coloane generate din
+// TIMESTAMPTZ (to_char pe timestamptz nu e IMMUTABLE în Postgres, deci n-ar
+// putea fi o coloană GENERATED).
+function mapDosarRow(row) {
+  const year = new Date(row.created_at).getFullYear();
+  return { ...row, case_number: `FIB-${year}-${String(row.seq).padStart(4, "0")}` };
+}
+
+app.get("/api/mdt/agenti", auth, requireFib, asyncRoute(async (_req, res) => {
+  const { rows } = await pool.query(
+    `SELECT u.id, u.username, p.display_name
+     FROM users u
+     JOIN players p ON p.user_id = u.id
+     JOIN faction_members fm ON fm.player_id = p.id
+     JOIN factions f ON f.id = fm.faction_id
+     WHERE f.name = 'FIB'
+     ORDER BY p.display_name`
+  );
+  res.json(rows);
+}));
+
+app.get("/api/mdt/dosare", auth, requireFib, asyncRoute(async (req, res) => {
+  const { status, q } = req.query;
+  const clauses = [];
+  const params = [];
+  if (status && MDT_DOSAR_STATUSES.includes(status)) {
+    params.push(status);
+    clauses.push(`d.status = $${params.length}`);
+  }
+  if (q && q.trim()) {
+    params.push(`%${q.trim()}%`);
+    clauses.push(`(d.title ILIKE $${params.length} OR d.description ILIKE $${params.length} OR d.suspects::text ILIKE $${params.length})`);
+  }
+  const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+  const { rows } = await pool.query(
+    `SELECT d.*, cb.username AS created_by_name, ab.username AS assigned_to_name,
+            (SELECT COUNT(*) FROM mdt_mandate m WHERE m.dosar_id = d.id AND m.status = 'activ') AS mandate_active,
+            (SELECT COUNT(*) FROM mdt_probe pr WHERE pr.dosar_id = d.id) AS probe_count
+     FROM mdt_dosare d
+     LEFT JOIN users cb ON cb.id = d.created_by
+     LEFT JOIN users ab ON ab.id = d.assigned_to
+     ${where}
+     ORDER BY d.created_at DESC
+     LIMIT 300`,
+    params
+  );
+  res.json(rows.map(mapDosarRow));
+}));
+
+app.post("/api/mdt/dosare", auth, requireFib, asyncRoute(async (req, res) => {
+  const { title, category, description, suspects, assigned_to } = req.body;
+  if (!title || !title.trim()) return res.status(400).json({ error: "Titlul dosarului este obligatoriu." });
+  const { rows } = await pool.query(
+    `INSERT INTO mdt_dosare(title, category, description, suspects, created_by, assigned_to)
+     VALUES($1,$2,$3,$4,$5,$6) RETURNING *`,
+    [title.trim(), (category || "altele").trim(), (description || "").trim(), JSON.stringify(cleanSuspectsInput(suspects)), req.user.sub, assigned_to || null]
+  );
+  await logAction(req.user.sub, "mdt.dosar.create", "mdt_dosar", rows[0].id, { title: title.trim() }, req.ip);
+  res.status(201).json(mapDosarRow(rows[0]));
+}));
+
+app.get("/api/mdt/dosare/:id", auth, requireFib, asyncRoute(async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT d.*, cb.username AS created_by_name, ab.username AS assigned_to_name
+     FROM mdt_dosare d
+     LEFT JOIN users cb ON cb.id = d.created_by
+     LEFT JOIN users ab ON ab.id = d.assigned_to
+     WHERE d.id = $1`,
+    [req.params.id]
+  );
+  if (!rows[0]) return res.status(404).json({ error: "Dosarul nu există." });
+
+  const [mandate, probe] = await Promise.all([
+    pool.query(
+      `SELECT m.*, u.username AS issued_by_name FROM mdt_mandate m
+       LEFT JOIN users u ON u.id = m.issued_by
+       WHERE m.dosar_id = $1 ORDER BY m.issued_at DESC`,
+      [req.params.id]
+    ),
+    pool.query(
+      `SELECT p.id, p.dosar_id, p.label, p.url, p.file_name, p.file_mime,
+              (p.file_data IS NOT NULL) AS has_file, p.added_by, p.created_at, u.username AS added_by_name
+       FROM mdt_probe p
+       LEFT JOIN users u ON u.id = p.added_by
+       WHERE p.dosar_id = $1 ORDER BY p.created_at DESC`,
+      [req.params.id]
+    ),
+  ]);
+
+  res.json({ ...mapDosarRow(rows[0]), mandate: mandate.rows, probe: probe.rows });
+}));
+
+app.put("/api/mdt/dosare/:id", auth, requireFib, asyncRoute(async (req, res) => {
+  const { title, category, status, description, suspects, assigned_to } = req.body;
+  if (!title || !title.trim()) return res.status(400).json({ error: "Titlul dosarului este obligatoriu." });
+  if (status && !MDT_DOSAR_STATUSES.includes(status)) return res.status(400).json({ error: "Status invalid." });
+  const { rows } = await pool.query(
+    `UPDATE mdt_dosare SET title=$1, category=$2, status=$3, description=$4, suspects=$5, assigned_to=$6, updated_at=NOW()
+     WHERE id=$7 RETURNING *`,
+    [title.trim(), (category || "altele").trim(), status || "deschis", (description || "").trim(), JSON.stringify(cleanSuspectsInput(suspects)), assigned_to || null, req.params.id]
+  );
+  if (!rows[0]) return res.status(404).json({ error: "Dosarul nu există." });
+  await logAction(req.user.sub, "mdt.dosar.update", "mdt_dosar", req.params.id, { title: title.trim(), status }, req.ip);
+  res.json(mapDosarRow(rows[0]));
+}));
+
+app.delete("/api/mdt/dosare/:id", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+  const { rowCount } = await pool.query("DELETE FROM mdt_dosare WHERE id=$1", [req.params.id]);
+  if (!rowCount) return res.status(404).json({ error: "Dosarul nu există." });
+  await logAction(req.user.sub, "mdt.dosar.delete", "mdt_dosar", req.params.id, null, req.ip);
+  res.status(204).end();
+}));
+
+app.post("/api/mdt/dosare/:id/mandate", auth, requireFib, asyncRoute(async (req, res) => {
+  const { type, target_name, details, expires_at } = req.body;
+  if (!MDT_MANDAT_TYPES.includes(type)) return res.status(400).json({ error: "Tip de mandat invalid." });
+  if (!target_name || !target_name.trim()) return res.status(400).json({ error: "Persoana/adresa vizată este obligatorie." });
+  const dosar = await pool.query("SELECT id FROM mdt_dosare WHERE id=$1", [req.params.id]);
+  if (!dosar.rows[0]) return res.status(404).json({ error: "Dosarul nu există." });
+  const { rows } = await pool.query(
+    `INSERT INTO mdt_mandate(dosar_id, type, target_name, details, issued_by, expires_at)
+     VALUES($1,$2,$3,$4,$5,$6) RETURNING *`,
+    [req.params.id, type, target_name.trim(), (details || "").trim(), req.user.sub, expires_at || null]
+  );
+  await logAction(req.user.sub, "mdt.mandat.create", "mdt_mandat", rows[0].id, { dosar_id: req.params.id, type, target_name: target_name.trim() }, req.ip);
+  res.status(201).json(rows[0]);
+}));
+
+app.put("/api/mdt/mandate/:id", auth, requireFib, asyncRoute(async (req, res) => {
+  const { status } = req.body;
+  if (!MDT_MANDAT_STATUSES.includes(status)) return res.status(400).json({ error: "Status invalid." });
+  const { rows } = await pool.query(
+    `UPDATE mdt_mandate SET status=$1, executed_at=${status === "executat" ? "NOW()" : "executed_at"} WHERE id=$2 RETURNING *`,
+    [status, req.params.id]
+  );
+  if (!rows[0]) return res.status(404).json({ error: "Mandatul nu există." });
+  await logAction(req.user.sub, "mdt.mandat.update", "mdt_mandat", req.params.id, { status }, req.ip);
+  res.json(rows[0]);
+}));
+
+app.delete("/api/mdt/mandate/:id", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+  const { rowCount } = await pool.query("DELETE FROM mdt_mandate WHERE id=$1", [req.params.id]);
+  if (!rowCount) return res.status(404).json({ error: "Mandatul nu există." });
+  await logAction(req.user.sub, "mdt.mandat.delete", "mdt_mandat", req.params.id, null, req.ip);
+  res.status(204).end();
+}));
+
+// Proba poate fi un link extern (Discord/Streamable/imgur — la fel ca la
+// tichete) ȘI/SAU un fișier încărcat direct (poză), trimis ca base64 în
+// JSON. fileData poate veni ca data-URL brut ("data:image/png;base64,...")
+// direct din <input type="file"> + FileReader — prefixul e tăiat mai jos.
+app.post("/api/mdt/dosare/:id/probe", auth, requireFib, asyncRoute(async (req, res) => {
+  const { label, url, fileData, fileName, fileMime } = req.body;
+  if (!label || !label.trim()) return res.status(400).json({ error: "Eticheta probei este obligatorie." });
+  const cleanUrl = url && url.trim() ? url.trim() : null;
+
+  let buffer = null;
+  if (fileData) {
+    if (!MDT_ALLOWED_MIME.includes(fileMime)) return res.status(400).json({ error: "Doar imagini PNG, JPEG sau WEBP sunt acceptate." });
+    buffer = Buffer.from(String(fileData).replace(/^data:[^,]+,/, ""), "base64");
+    if (buffer.length > MDT_MAX_FILE_BYTES) return res.status(400).json({ error: "Fișierul este prea mare (limită 6MB)." });
+  }
+  if (!cleanUrl && !buffer) return res.status(400).json({ error: "Atașează un link sau un fișier." });
+
+  const dosar = await pool.query("SELECT id FROM mdt_dosare WHERE id=$1", [req.params.id]);
+  if (!dosar.rows[0]) return res.status(404).json({ error: "Dosarul nu există." });
+
+  const { rows } = await pool.query(
+    `INSERT INTO mdt_probe(dosar_id, label, url, file_data, file_mime, file_name, added_by)
+     VALUES($1,$2,$3,$4,$5,$6,$7)
+     RETURNING id, dosar_id, label, url, file_name, file_mime, (file_data IS NOT NULL) AS has_file, added_by, created_at`,
+    [req.params.id, label.trim(), cleanUrl, buffer, buffer ? fileMime : null, buffer ? String(fileName || "proba").slice(0, 160) : null, req.user.sub]
+  );
+  await logAction(req.user.sub, "mdt.proba.create", "mdt_proba", rows[0].id, { dosar_id: req.params.id, label: label.trim() }, req.ip);
+  res.status(201).json(rows[0]);
+}));
+
+// Fișierul propriu-zis al unei probe — servit separat de restul JSON-ului
+// (ar fi absurd de mare inclus la fiecare GET pe dosar). Necesită totuși
+// Authorization: Bearer ca orice altă rută MDT, deci frontend-ul îl încarcă
+// prin fetch()+blob (vezi mdt-dosar.html), nu direct într-un <img src>.
+app.get("/api/mdt/probe/:id/fisier", auth, requireFib, asyncRoute(async (req, res) => {
+  const { rows } = await pool.query("SELECT file_data, file_mime, file_name FROM mdt_probe WHERE id=$1", [req.params.id]);
+  if (!rows[0] || !rows[0].file_data) return res.status(404).end();
+  res.set("Content-Type", rows[0].file_mime || "application/octet-stream");
+  res.set("Content-Disposition", `inline; filename="${(rows[0].file_name || "proba").replace(/"/g, "")}"`);
+  res.send(rows[0].file_data);
+}));
+
+app.delete("/api/mdt/probe/:id", auth, requireFib, asyncRoute(async (req, res) => {
+  const { rowCount } = await pool.query("DELETE FROM mdt_probe WHERE id=$1", [req.params.id]);
+  if (!rowCount) return res.status(404).json({ error: "Proba nu există." });
+  await logAction(req.user.sub, "mdt.proba.delete", "mdt_proba", req.params.id, null, req.ip);
   res.status(204).end();
 }));
 

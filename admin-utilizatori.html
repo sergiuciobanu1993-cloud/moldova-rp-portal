@@ -12,8 +12,12 @@
     <h2>Toți utilizatorii înregistrați</h2>
     <span class="muted" id="count-note"></span>
   </div>
-  <table><thead><tr><th>UTILIZATOR</th><th>DISCORD</th><th>PAROLĂ</th><th>RANG</th><th>ÎNREGISTRAT</th><th>SCHIMBĂ RANG</th></tr></thead>
-  <tbody id="list-body"><tr><td colspan="6">Se încarcă…</td></tr></tbody></table>
+  <table><thead><tr><th>UTILIZATOR</th><th>DISCORD</th><th>PAROLĂ</th><th>RANG</th><th>ÎNREGISTRAT</th><th>SCHIMBĂ RANG</th><th>FACȚIUNE</th></tr></thead>
+  <tbody id="list-body"><tr><td colspan="7">Se încarcă…</td></tr></tbody></table>
+  <p class="muted" style="margin:12px 22px 16px;font-size:11px">
+    Facțiunea de aici e cea de pe SITE (folosită de pagini precum MDT FIB, care se deblochează pentru membrii facțiunii „FIB")
+    — separată de jobul din joc, afișat pe pagina „Jucători".
+  </p>
 </section>
 
 </main>
@@ -28,6 +32,26 @@ function fmtDate(d) { return new Date(d).toLocaleDateString('ro-RO'); }
 function roleSelectHtml(userId, currentRole) {
   return `<select class="filter-select" data-role-for="${userId}">
     ${ROLES_ORDER.map(r => `<option value="${r}" ${r === currentRole ? 'selected' : ''}>${ROLE_LABEL[r]}</option>`).join('')}
+  </select>`;
+}
+
+// Lista de facțiuni ale site-ului (Poliție, FIB, Sindicat...) — încărcată o
+// singură dată, nu per rând. Populată de scripts/init-db.js din
+// database/schema.sql (INSERT INTO factions...), plus orice altă facțiune
+// adăugată manual direct în baza de date.
+let siteFactions = [];
+async function loadSiteFactions() {
+  try {
+    const res = await apiFetch('/api/factions');
+    if (res.ok) siteFactions = await res.json();
+  } catch {}
+}
+
+function factionSelectHtml(u) {
+  if (!u.player_id) return '<span class="muted">fără profil de jucător</span>';
+  return `<select class="filter-select" data-faction-for="${u.player_id}">
+    <option value="">— fără facțiune —</option>
+    ${siteFactions.map(f => `<option value="${f.id}" ${f.id === u.faction_id ? 'selected' : ''}>${f.name}</option>`).join('')}
   </select>`;
 }
 
@@ -64,7 +88,8 @@ async function loadUsers(canEdit) {
         <td><span class="pill ${ROLE_PILL[u.role] || 'off'}">${(ROLE_LABEL[u.role] || u.role).toUpperCase()}</span></td>
         <td>${fmtDate(u.created_at)}</td>
         <td>${canEdit ? roleSelectHtml(u.id, u.role) : '<span class="muted">doar fondatorul poate schimba</span>'}</td>
-      </tr>`).join('') : '<tr><td colspan="6">Niciun utilizator încă.</td></tr>';
+        <td>${factionSelectHtml(u)}</td>
+      </tr>`).join('') : '<tr><td colspan="7">Niciun utilizator încă.</td></tr>';
 
     if (canEdit) {
       tbody.querySelectorAll('[data-role-for]').forEach(sel => {
@@ -86,8 +111,31 @@ async function loadUsers(canEdit) {
         });
       });
     }
+
+    // Facțiunea de site se poate schimba de orice admin/co-fondator/owner (nu
+    // doar fondator) — endpoint-ul din backend (/api/admin/players/:id/faction)
+    // e restricționat la ADMIN_ROLES, la fel ca restul acestei pagini, nu la
+    // owner ca schimbarea de rang de mai sus.
+    tbody.querySelectorAll('[data-faction-for]').forEach(sel => {
+      sel.addEventListener('change', async () => {
+        const playerId = sel.dataset.factionFor;
+        const factionId = sel.value;
+        sel.disabled = true;
+        try {
+          const res = factionId
+            ? await apiFetch(`/api/admin/players/${playerId}/faction`, { method: 'POST', body: JSON.stringify({ faction_id: factionId }) })
+            : await apiFetch(`/api/admin/players/${playerId}/faction`, { method: 'DELETE' });
+          if (!res.ok) throw new Error();
+        } catch {
+          alert('Nu am putut schimba facțiunea. Încearcă din nou.');
+        } finally {
+          sel.disabled = false;
+          loadUsers(canEdit);
+        }
+      });
+    });
   } catch {
-    tbody.innerHTML = '<tr><td colspan="5">Nu am putut încărca lista de utilizatori.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7">Nu am putut încărca lista de utilizatori.</td></tr>';
   }
 }
 
@@ -99,6 +147,7 @@ async function loadUsers(canEdit) {
   document.getElementById('perm-note').textContent = canEdit
     ? 'Poți schimba rangul oricărui utilizator (Jucător / Moderator / Administrator / Co-fondator / Fondator).'
     : 'Poți vedea lista, dar doar fondatorul poate schimba rangul unui utilizator.';
+  await loadSiteFactions();
   loadUsers(canEdit);
 })();
 </script>

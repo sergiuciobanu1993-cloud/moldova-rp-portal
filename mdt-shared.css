@@ -1,0 +1,39 @@
+/* Stiluri comune pentru toate paginile MDT FIB (mdt-fib, mdt-dosar,
+   mdt-rapoarte, mdt-raport) — etichete, liste libere ("chips"), editorul de
+   descriere cu formatare Markdown și secțiunea de rapoarte legate. Separat
+   de dashboard.css ca să nu umflăm fișierul folosit de tot restul site-ului
+   cu reguli specifice doar MDT-ului. */
+
+.chip-list{display:flex;flex-wrap:wrap;gap:6px;min-height:20px}
+.chip-item{display:inline-flex;align-items:center;gap:6px;background:var(--bg);border:1px solid var(--line);border-radius:999px;padding:5px 6px 5px 11px;font-size:12px}
+.chip-item button{background:transparent;border:0;color:var(--muted);cursor:pointer;font-size:11px;width:18px;height:18px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center}
+.chip-item button:hover{background:rgba(255,80,80,.15);color:#ff8a8a}
+
+.md-toolbar{display:flex;gap:2px;flex-wrap:wrap;border:1px solid var(--line);border-bottom:0;border-radius:8px 8px 0 0;background:var(--bg);padding:6px}
+.md-toolbar button{background:transparent;border:0;color:var(--text);width:30px;height:28px;border-radius:6px;cursor:pointer;font-size:13px;font:inherit}
+.md-toolbar button:hover{background:var(--panel)}
+.md-toolbar button.active{background:rgba(255,138,31,.18);color:var(--orange)}
+.md-textarea{width:100%;min-height:220px;padding:12px 13px;border:1px solid var(--line);border-top:0;background:var(--bg);color:var(--text);border-radius:0 0 8px 8px;font:13px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;resize:vertical;outline:0}
+.md-textarea:focus{border-color:var(--orange)}
+.md-preview{min-height:220px;padding:14px 16px;border:1px solid var(--line);border-top:0;border-radius:0 0 8px 8px;background:var(--bg);color:#d5d8db;line-height:1.7;overflow-wrap:anywhere}
+.md-preview h1,.md-preview h2,.md-preview h3,.md-preview h4,.md-preview h5,.md-preview h6{color:var(--text);margin:14px 0 8px}
+.md-preview h1:first-child,.md-preview h2:first-child{margin-top:0}
+.md-preview p{margin:0 0 10px}
+.md-preview strong{color:#fff}
+.md-preview blockquote{margin:0 0 10px;padding:8px 14px;border-left:3px solid var(--orange);background:rgba(255,138,31,.06);color:var(--muted)}
+.md-preview ul,.md-preview ol{margin:0 0 10px;padding-left:22px}
+.md-preview code{background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-size:12px}
+.md-preview hr{border:0;border-top:1px solid var(--line);margin:14px 0}
+.md-preview img{max-width:100%;border-radius:8px;display:block;margin:8px 0}
+.md-preview a{color:var(--orange)}
+
+.linked-item{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 12px;background:var(--bg);border:1px solid var(--line);border-radius:8px;margin-bottom:6px}
+.linked-item a{color:var(--text);font-weight:700;font-size:12.5px}
+.linked-item a:hover{color:var(--orange)}
+.report-search-dropdown{position:absolute;left:0;right:0;top:100%;margin-top:4px;background:var(--panel);border:1px solid var(--line);border-radius:8px;z-index:10;overflow:hidden;max-height:220px;overflow-y:auto}
+.report-search-item{display:block;width:100%;text-align:left;background:transparent;border:0;color:var(--text);padding:9px 12px;font-size:12.5px;cursor:pointer;font:inherit}
+.report-search-item:hover{background:var(--bg);color:var(--orange)}
+
+.pill.priority-scazuta{background:rgba(255,255,255,.08);color:#888}
+.pill.priority-medie{background:rgba(255,138,31,.15);color:var(--orange)}
+.pill.priority-inalta{background:rgba(255,80,80,.15);color:#ff8a8a}

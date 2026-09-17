@@ -2393,6 +2393,8 @@ app.get("/api/mdt/acces", auth, asyncRoute(async (req, res) => {
 const MDT_MANDAT_TYPES = ["perchezitie", "arestare", "aducere"];
 const MDT_DOSAR_STATUSES = ["deschis", "in_lucru", "la_parchet", "inchis", "clasat"];
 const MDT_MANDAT_STATUSES = ["activ", "executat", "expirat", "anulat"];
+const MDT_MANDAT_PRIORITIES = ["scazuta", "medie", "inalta"];
+const MDT_RAPORT_TYPES = ["agresiune", "talharie", "spargere", "furt", "altele"];
 const MDT_SUSPECT_ROLES = ["suspect", "martor", "victima"];
 
 // Limită proprie pentru fiecare fișier de probă (poză) încărcat ca base64 —
@@ -2413,15 +2415,32 @@ function cleanSuspectsInput(suspects) {
     : [];
 }
 
-// case_number ("FIB-2026-0007") e generat aici, nu stocat — "seq" e doar un
-// SERIAL global, monoton crescător, care există exclusiv ca să dea dosarelor
-// un număr de referință scurt și lizibil (util în RP: scris pe mandate,
-// citit pe radio etc.), fără bătăi de cap cu coloane generate din
-// TIMESTAMPTZ (to_char pe timestamptz nu e IMMUTABLE în Postgres, deci n-ar
-// putea fi o coloană GENERATED).
+// Liste libere scrise de mână (etichete, polițiști/civili/suspecți/vehicule/
+// arme implicate) — nu sunt legate de alte tabele (players, vehicule reale
+// din joc etc.), doar text simplu, la fel ca "target_name" la mandate.
+function cleanStringList(list, maxLen = 120, maxItems = 30) {
+  if (!Array.isArray(list)) return [];
+  return list
+    .map(v => String(v ?? "").trim())
+    .filter(Boolean)
+    .slice(0, maxItems)
+    .map(v => v.slice(0, maxLen));
+}
+
+// case_number ("FIB-2026-0007") / report_number ("RAP-2026-0007") sunt
+// generate aici, nu stocate — "seq" e doar un SERIAL global, monoton
+// crescător, care există exclusiv ca să dea dosarelor/rapoartelor un număr
+// de referință scurt și lizibil (util în RP: scris pe mandate, citit pe
+// radio etc.), fără bătăi de cap cu coloane generate din TIMESTAMPTZ
+// (to_char pe timestamptz nu e IMMUTABLE în Postgres, deci n-ar putea fi o
+// coloană GENERATED).
 function mapDosarRow(row) {
   const year = new Date(row.created_at).getFullYear();
   return { ...row, case_number: `FIB-${year}-${String(row.seq).padStart(4, "0")}` };
+}
+function mapRaportRow(row) {
+  const year = new Date(row.created_at).getFullYear();
+  return { ...row, report_number: `RAP-${year}-${String(row.seq).padStart(4, "0")}` };
 }
 
 app.get("/api/mdt/agenti", auth, requireFib, asyncRoute(async (_req, res) => {
@@ -2466,12 +2485,17 @@ app.get("/api/mdt/dosare", auth, requireFib, asyncRoute(async (req, res) => {
 }));
 
 app.post("/api/mdt/dosare", auth, requireFib, asyncRoute(async (req, res) => {
-  const { title, category, description, suspects, assigned_to } = req.body;
+  const { title, category, description, suspects, assigned_to, tags, vehicles_involved, weapons_involved, officers_involved } = req.body;
   if (!title || !title.trim()) return res.status(400).json({ error: "Titlul dosarului este obligatoriu." });
   const { rows } = await pool.query(
-    `INSERT INTO mdt_dosare(title, category, description, suspects, created_by, assigned_to)
-     VALUES($1,$2,$3,$4,$5,$6) RETURNING *`,
-    [title.trim(), (category || "altele").trim(), (description || "").trim(), JSON.stringify(cleanSuspectsInput(suspects)), req.user.sub, assigned_to || null]
+    `INSERT INTO mdt_dosare(title, category, description, suspects, created_by, assigned_to, tags, vehicles_involved, weapons_involved, officers_involved)
+     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+    [
+      title.trim(), (category || "altele").trim(), (description || "").trim(), JSON.stringify(cleanSuspectsInput(suspects)),
+      req.user.sub, assigned_to || null,
+      JSON.stringify(cleanStringList(tags, 40)), JSON.stringify(cleanStringList(vehicles_involved)),
+      JSON.stringify(cleanStringList(weapons_involved)), JSON.stringify(cleanStringList(officers_involved)),
+    ]
   );
   await logAction(req.user.sub, "mdt.dosar.create", "mdt_dosar", rows[0].id, { title: title.trim() }, req.ip);
   res.status(201).json(mapDosarRow(rows[0]));
@@ -2488,7 +2512,7 @@ app.get("/api/mdt/dosare/:id", auth, requireFib, asyncRoute(async (req, res) => 
   );
   if (!rows[0]) return res.status(404).json({ error: "Dosarul nu există." });
 
-  const [mandate, probe] = await Promise.all([
+  const [mandate, probe, dosarRapoarte] = await Promise.all([
     pool.query(
       `SELECT m.*, u.username AS issued_by_name FROM mdt_mandate m
        LEFT JOIN users u ON u.id = m.issued_by
@@ -2503,19 +2527,56 @@ app.get("/api/mdt/dosare/:id", auth, requireFib, asyncRoute(async (req, res) => 
        WHERE p.dosar_id = $1 ORDER BY p.created_at DESC`,
       [req.params.id]
     ),
+    pool.query(
+      `SELECT rp.id, rp.seq, rp.title, rp.type, rp.created_at
+       FROM mdt_dosar_rapoarte dr JOIN mdt_rapoarte rp ON rp.id = dr.raport_id
+       WHERE dr.dosar_id = $1 ORDER BY rp.created_at DESC`,
+      [req.params.id]
+    ),
   ]);
 
-  res.json({ ...mapDosarRow(rows[0]), mandate: mandate.rows, probe: probe.rows });
+  // Fiecare mandat își poate avea propriile rapoarte legate — o singură
+  // interogare suplimentară pentru toate mandatele dosarului ăsta deodată,
+  // nu una per mandat.
+  const mandateIds = mandate.rows.map(m => m.id);
+  let mandatRapoarte = [];
+  if (mandateIds.length) {
+    const r = await pool.query(
+      `SELECT mr.mandat_id, rp.id, rp.seq, rp.title, rp.type, rp.created_at
+       FROM mdt_mandat_rapoarte mr JOIN mdt_rapoarte rp ON rp.id = mr.raport_id
+       WHERE mr.mandat_id = ANY($1) ORDER BY rp.created_at DESC`,
+      [mandateIds]
+    );
+    mandatRapoarte = r.rows;
+  }
+  const mandateOut = mandate.rows.map(m => ({
+    ...m,
+    rapoarte: mandatRapoarte.filter(r => r.mandat_id === m.id).map(({ mandat_id, ...rest }) => mapRaportRow(rest)),
+  }));
+
+  res.json({
+    ...mapDosarRow(rows[0]),
+    mandate: mandateOut,
+    probe: probe.rows,
+    rapoarte: dosarRapoarte.rows.map(mapRaportRow),
+  });
 }));
 
 app.put("/api/mdt/dosare/:id", auth, requireFib, asyncRoute(async (req, res) => {
-  const { title, category, status, description, suspects, assigned_to } = req.body;
+  const { title, category, status, description, suspects, assigned_to, tags, vehicles_involved, weapons_involved, officers_involved } = req.body;
   if (!title || !title.trim()) return res.status(400).json({ error: "Titlul dosarului este obligatoriu." });
   if (status && !MDT_DOSAR_STATUSES.includes(status)) return res.status(400).json({ error: "Status invalid." });
   const { rows } = await pool.query(
-    `UPDATE mdt_dosare SET title=$1, category=$2, status=$3, description=$4, suspects=$5, assigned_to=$6, updated_at=NOW()
-     WHERE id=$7 RETURNING *`,
-    [title.trim(), (category || "altele").trim(), status || "deschis", (description || "").trim(), JSON.stringify(cleanSuspectsInput(suspects)), assigned_to || null, req.params.id]
+    `UPDATE mdt_dosare SET title=$1, category=$2, status=$3, description=$4, suspects=$5, assigned_to=$6,
+       tags=$7, vehicles_involved=$8, weapons_involved=$9, officers_involved=$10, updated_at=NOW()
+     WHERE id=$11 RETURNING *`,
+    [
+      title.trim(), (category || "altele").trim(), status || "deschis", (description || "").trim(), JSON.stringify(cleanSuspectsInput(suspects)),
+      assigned_to || null,
+      JSON.stringify(cleanStringList(tags, 40)), JSON.stringify(cleanStringList(vehicles_involved)),
+      JSON.stringify(cleanStringList(weapons_involved)), JSON.stringify(cleanStringList(officers_involved)),
+      req.params.id,
+    ]
   );
   if (!rows[0]) return res.status(404).json({ error: "Dosarul nu există." });
   await logAction(req.user.sub, "mdt.dosar.update", "mdt_dosar", req.params.id, { title: title.trim(), status }, req.ip);
@@ -2530,29 +2591,41 @@ app.delete("/api/mdt/dosare/:id", auth, requireRole(...ADMIN_ROLES), asyncRoute(
 }));
 
 app.post("/api/mdt/dosare/:id/mandate", auth, requireFib, asyncRoute(async (req, res) => {
-  const { type, target_name, details, expires_at } = req.body;
+  const { type, target_name, details, expires_at, tags, priority } = req.body;
   if (!MDT_MANDAT_TYPES.includes(type)) return res.status(400).json({ error: "Tip de mandat invalid." });
   if (!target_name || !target_name.trim()) return res.status(400).json({ error: "Persoana/adresa vizată este obligatorie." });
+  if (priority && !MDT_MANDAT_PRIORITIES.includes(priority)) return res.status(400).json({ error: "Prioritate invalidă." });
   const dosar = await pool.query("SELECT id FROM mdt_dosare WHERE id=$1", [req.params.id]);
   if (!dosar.rows[0]) return res.status(404).json({ error: "Dosarul nu există." });
   const { rows } = await pool.query(
-    `INSERT INTO mdt_mandate(dosar_id, type, target_name, details, issued_by, expires_at)
-     VALUES($1,$2,$3,$4,$5,$6) RETURNING *`,
-    [req.params.id, type, target_name.trim(), (details || "").trim(), req.user.sub, expires_at || null]
+    `INSERT INTO mdt_mandate(dosar_id, type, target_name, details, issued_by, expires_at, tags, priority)
+     VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+    [req.params.id, type, target_name.trim(), (details || "").trim(), req.user.sub, expires_at || null, JSON.stringify(cleanStringList(tags, 40)), priority || "medie"]
   );
   await logAction(req.user.sub, "mdt.mandat.create", "mdt_mandat", rows[0].id, { dosar_id: req.params.id, type, target_name: target_name.trim() }, req.ip);
   res.status(201).json(rows[0]);
 }));
 
+// Acceptă orice combinație de status/tags/priority — folosit atât pentru
+// schimbarea rapidă a statusului (butoanele din mdt-dosar.html), cât și
+// pentru o editare mai completă a mandatului, fără două rute separate.
 app.put("/api/mdt/mandate/:id", auth, requireFib, asyncRoute(async (req, res) => {
-  const { status } = req.body;
-  if (!MDT_MANDAT_STATUSES.includes(status)) return res.status(400).json({ error: "Status invalid." });
+  const { status, tags, priority } = req.body;
+  if (status && !MDT_MANDAT_STATUSES.includes(status)) return res.status(400).json({ error: "Status invalid." });
+  if (priority && !MDT_MANDAT_PRIORITIES.includes(priority)) return res.status(400).json({ error: "Prioritate invalidă." });
+  const current = await pool.query("SELECT status FROM mdt_mandate WHERE id=$1", [req.params.id]);
+  if (!current.rows[0]) return res.status(404).json({ error: "Mandatul nu există." });
+  const nextStatus = status || current.rows[0].status;
   const { rows } = await pool.query(
-    `UPDATE mdt_mandate SET status=$1, executed_at=${status === "executat" ? "NOW()" : "executed_at"} WHERE id=$2 RETURNING *`,
-    [status, req.params.id]
+    `UPDATE mdt_mandate SET
+       status=$1,
+       tags=COALESCE($2, tags),
+       priority=COALESCE($3, priority),
+       executed_at=${status === "executat" ? "NOW()" : "executed_at"}
+     WHERE id=$4 RETURNING *`,
+    [nextStatus, tags ? JSON.stringify(cleanStringList(tags, 40)) : null, priority || null, req.params.id]
   );
-  if (!rows[0]) return res.status(404).json({ error: "Mandatul nu există." });
-  await logAction(req.user.sub, "mdt.mandat.update", "mdt_mandat", req.params.id, { status }, req.ip);
+  await logAction(req.user.sub, "mdt.mandat.update", "mdt_mandat", req.params.id, { status: nextStatus, priority }, req.ip);
   res.json(rows[0]);
 }));
 
@@ -2609,6 +2682,145 @@ app.delete("/api/mdt/probe/:id", auth, requireFib, asyncRoute(async (req, res) =
   const { rowCount } = await pool.query("DELETE FROM mdt_probe WHERE id=$1", [req.params.id]);
   if (!rowCount) return res.status(404).json({ error: "Proba nu există." });
   await logAction(req.user.sub, "mdt.proba.delete", "mdt_proba", req.params.id, null, req.ip);
+  res.status(204).end();
+}));
+
+// Rapoarte (18.09.2026) — incidente punctuale, ca un proces verbal: separate
+// de dosare (un dosar e "ancheta mare", un raport e "un eveniment"), dar se
+// pot lega ulterior de unul sau mai multe dosare și/sau mandate (vezi rutele
+// de legare mai jos și tabelele mdt_dosar_rapoarte/mdt_mandat_rapoarte).
+app.get("/api/mdt/rapoarte", auth, requireFib, asyncRoute(async (req, res) => {
+  const { type, q } = req.query;
+  const clauses = [];
+  const params = [];
+  if (type && MDT_RAPORT_TYPES.includes(type)) {
+    params.push(type);
+    clauses.push(`r.type = $${params.length}`);
+  }
+  if (q && q.trim()) {
+    params.push(`%${q.trim()}%`);
+    clauses.push(`(r.title ILIKE $${params.length} OR r.description ILIKE $${params.length})`);
+  }
+  const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+  const { rows } = await pool.query(
+    `SELECT r.*, cb.username AS created_by_name
+     FROM mdt_rapoarte r
+     LEFT JOIN users cb ON cb.id = r.created_by
+     ${where}
+     ORDER BY r.created_at DESC
+     LIMIT 300`,
+    params
+  );
+  res.json(rows.map(mapRaportRow));
+}));
+
+app.post("/api/mdt/rapoarte", auth, requireFib, asyncRoute(async (req, res) => {
+  const { title, type, description, tags, officers_involved, civilians_involved, suspects_involved, weapons_involved } = req.body;
+  if (!title || !title.trim()) return res.status(400).json({ error: "Titlul raportului este obligatoriu." });
+  const { rows } = await pool.query(
+    `INSERT INTO mdt_rapoarte(title, type, description, tags, officers_involved, civilians_involved, suspects_involved, weapons_involved, created_by)
+     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+    [
+      title.trim(), MDT_RAPORT_TYPES.includes(type) ? type : "altele", (description || "").trim(),
+      JSON.stringify(cleanStringList(tags, 40)), JSON.stringify(cleanStringList(officers_involved)),
+      JSON.stringify(cleanStringList(civilians_involved)), JSON.stringify(cleanStringList(suspects_involved)),
+      JSON.stringify(cleanStringList(weapons_involved)), req.user.sub,
+    ]
+  );
+  await logAction(req.user.sub, "mdt.raport.create", "mdt_raport", rows[0].id, { title: title.trim() }, req.ip);
+  res.status(201).json(mapRaportRow(rows[0]));
+}));
+
+app.get("/api/mdt/rapoarte/:id", auth, requireFib, asyncRoute(async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT r.*, cb.username AS created_by_name FROM mdt_rapoarte r
+     LEFT JOIN users cb ON cb.id = r.created_by WHERE r.id = $1`,
+    [req.params.id]
+  );
+  if (!rows[0]) return res.status(404).json({ error: "Raportul nu există." });
+
+  const [dosare, mandate] = await Promise.all([
+    pool.query(
+      `SELECT d.id, d.seq, d.title, d.status, d.created_at FROM mdt_dosar_rapoarte dr
+       JOIN mdt_dosare d ON d.id = dr.dosar_id WHERE dr.raport_id = $1 ORDER BY d.created_at DESC`,
+      [req.params.id]
+    ),
+    pool.query(
+      `SELECT m.id, m.type, m.target_name, m.status, m.dosar_id FROM mdt_mandat_rapoarte mr
+       JOIN mdt_mandate m ON m.id = mr.mandat_id WHERE mr.raport_id = $1 ORDER BY m.issued_at DESC`,
+      [req.params.id]
+    ),
+  ]);
+
+  res.json({ ...mapRaportRow(rows[0]), dosare: dosare.rows.map(mapDosarRow), mandate: mandate.rows });
+}));
+
+app.put("/api/mdt/rapoarte/:id", auth, requireFib, asyncRoute(async (req, res) => {
+  const { title, type, description, tags, officers_involved, civilians_involved, suspects_involved, weapons_involved } = req.body;
+  if (!title || !title.trim()) return res.status(400).json({ error: "Titlul raportului este obligatoriu." });
+  const { rows } = await pool.query(
+    `UPDATE mdt_rapoarte SET title=$1, type=$2, description=$3, tags=$4, officers_involved=$5,
+       civilians_involved=$6, suspects_involved=$7, weapons_involved=$8, updated_at=NOW()
+     WHERE id=$9 RETURNING *`,
+    [
+      title.trim(), MDT_RAPORT_TYPES.includes(type) ? type : "altele", (description || "").trim(),
+      JSON.stringify(cleanStringList(tags, 40)), JSON.stringify(cleanStringList(officers_involved)),
+      JSON.stringify(cleanStringList(civilians_involved)), JSON.stringify(cleanStringList(suspects_involved)),
+      JSON.stringify(cleanStringList(weapons_involved)), req.params.id,
+    ]
+  );
+  if (!rows[0]) return res.status(404).json({ error: "Raportul nu există." });
+  await logAction(req.user.sub, "mdt.raport.update", "mdt_raport", req.params.id, { title: title.trim() }, req.ip);
+  res.json(mapRaportRow(rows[0]));
+}));
+
+app.delete("/api/mdt/rapoarte/:id", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+  const { rowCount } = await pool.query("DELETE FROM mdt_rapoarte WHERE id=$1", [req.params.id]);
+  if (!rowCount) return res.status(404).json({ error: "Raportul nu există." });
+  await logAction(req.user.sub, "mdt.raport.delete", "mdt_raport", req.params.id, null, req.ip);
+  res.status(204).end();
+}));
+
+// Legarea unui raport existent de un dosar sau de un mandat — "Rapoarte
+// legate" din interfață. ON CONFLICT DO NOTHING: aceeași pereche nu poate fi
+// legată de două ori (cheia primară compusă de pe tabelele de legătură).
+app.post("/api/mdt/dosare/:id/rapoarte", auth, requireFib, asyncRoute(async (req, res) => {
+  const { raport_id } = req.body;
+  if (!raport_id) return res.status(400).json({ error: "raport_id este obligatoriu." });
+  try {
+    await pool.query(
+      "INSERT INTO mdt_dosar_rapoarte(dosar_id, raport_id) VALUES($1,$2) ON CONFLICT DO NOTHING",
+      [req.params.id, raport_id]
+    );
+    res.status(201).json({ ok: true });
+  } catch (e) {
+    if (e.code === "23503") return res.status(404).json({ error: "Dosarul sau raportul nu există." });
+    throw e;
+  }
+}));
+
+app.delete("/api/mdt/dosare/:id/rapoarte/:raportId", auth, requireFib, asyncRoute(async (req, res) => {
+  await pool.query("DELETE FROM mdt_dosar_rapoarte WHERE dosar_id=$1 AND raport_id=$2", [req.params.id, req.params.raportId]);
+  res.status(204).end();
+}));
+
+app.post("/api/mdt/mandate/:id/rapoarte", auth, requireFib, asyncRoute(async (req, res) => {
+  const { raport_id } = req.body;
+  if (!raport_id) return res.status(400).json({ error: "raport_id este obligatoriu." });
+  try {
+    await pool.query(
+      "INSERT INTO mdt_mandat_rapoarte(mandat_id, raport_id) VALUES($1,$2) ON CONFLICT DO NOTHING",
+      [req.params.id, raport_id]
+    );
+    res.status(201).json({ ok: true });
+  } catch (e) {
+    if (e.code === "23503") return res.status(404).json({ error: "Mandatul sau raportul nu există." });
+    throw e;
+  }
+}));
+
+app.delete("/api/mdt/mandate/:id/rapoarte/:raportId", auth, requireFib, asyncRoute(async (req, res) => {
+  await pool.query("DELETE FROM mdt_mandat_rapoarte WHERE mandat_id=$1 AND raport_id=$2", [req.params.id, req.params.raportId]);
   res.status(204).end();
 }));
 

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MDT FIB — Moldova RP</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="dashboard.css">
+<html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MDT FIB — Moldova RP</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="dashboard.css"><link rel="stylesheet" href="mdt-shared.css">
 <style>
 /* Buton "acasă" — la fel ca pe VIP Shop. */
 .home-btn{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);padding:10px 15px;border-radius:8px;color:var(--text);font-weight:800;font-size:12.5px;white-space:nowrap;transition:.15s ease}
@@ -27,7 +27,7 @@
 </style>
 </head>
 <body>
-<header><a class="brand" href="index.html"><img src="assets/logo.png" alt="">MOLDOVA<span>RP</span></a><nav><a href="index.html">Acasă</a><a href="dashboard.html">Dashboard</a><a href="tichete.html">Tichete</a><a href="mdt-fib.html" style="color:var(--orange)">MDT FIB</a></nav><button class="menu-toggle" id="dash-menu-toggle" type="button" aria-label="Deschide meniul" aria-expanded="false">☰</button><a class="logout" href="login.html" id="logout-link">Deconectare</a></header>
+<header><a class="brand" href="index.html"><img src="assets/logo.png" alt="">MOLDOVA<span>RP</span></a><nav><a href="index.html">Acasă</a><a href="dashboard.html">Dashboard</a><a href="mdt-fib.html" style="color:var(--orange)">Dosare</a><a href="mdt-rapoarte.html">Rapoarte</a></nav><button class="menu-toggle" id="dash-menu-toggle" type="button" aria-label="Deschide meniul" aria-expanded="false">☰</button><a class="logout" href="login.html" id="logout-link">Deconectare</a></header>
 <main>
 <section class="welcome"><div><p>BIROUL FEDERAL DE INVESTIGAȚII</p><h1>MDT FIB</h1><small>Dosare de anchetă, mandate și probe.</small></div><a class="home-btn" href="dashboard.html">← Dashboard</a></section>
 
@@ -72,7 +72,6 @@
           <option value="altele" selected>Altele</option>
         </select>
       </div>
-      <div class="field"><label>Descriere</label><textarea id="n-description" placeholder="Detalii despre anchetă..."></textarea></div>
       <div class="field">
         <label>Persoane implicate</label>
         <div id="n-suspects"></div>
@@ -81,6 +80,11 @@
       <div class="field"><label>Agent responsabil (opțional)</label>
         <select id="n-assigned"><option value="">— neasignat —</option></select>
       </div>
+      <div class="field"><label>Polițiști implicați</label><div id="n-officers"></div></div>
+      <div class="field"><label>Vehicule implicate</label><div id="n-vehicles"></div></div>
+      <div class="field"><label>Arme implicate</label><div id="n-weapons"></div></div>
+      <div class="field"><label>Etichete</label><div id="n-tags"></div></div>
+      <div class="field"><label>Descriere</label><div id="n-description"></div></div>
       <p class="formmsg" id="new-msg" hidden></p>
       <div style="display:flex;gap:10px"><button type="submit" class="btn-primary">Creează dosarul</button><button type="button" class="btn-ghost" id="new-cancel">Anulează</button></div>
     </form>
@@ -89,6 +93,7 @@
 
 </main>
 <script src="auth-client.js"></script>
+<script src="mdt-shared.js"></script>
 <script>
 const CATEGORY_LABEL = { trafic_droguri: 'Trafic de droguri', omor: 'Omor / tentativă de omor', talharie: 'Tâlhărie', santaj: 'Șantaj', spalare_bani: 'Spălare de bani', coruptie: 'Corupție', altele: 'Altele' };
 const STATUS_LABEL = { deschis: 'DESCHIS', in_lucru: 'ÎN LUCRU', la_parchet: 'LA PARCHET', inchis: 'ÎNCHIS', clasat: 'CLASAT' };
@@ -139,12 +144,13 @@ async function loadAgents(selectId) {
 
 function dosarRowHtml(d) {
   const suspectNames = (d.suspects || []).map(s => s.name).join(', ') || 'fără persoane înregistrate';
+  const tagsHtml = (d.tags || []).length ? ' · ' + d.tags.map(t => escapeHtml(t)).join(', ') : '';
   return `
     <a class="dosar-row" href="mdt-dosar.html?id=${d.id}">
       <div class="main">
         <span class="case-no">${d.case_number}</span>
         <strong>${escapeHtml(d.title)}</strong>
-        <small>${CATEGORY_LABEL[d.category] || d.category} · ${escapeHtml(suspectNames)}</small>
+        <small>${CATEGORY_LABEL[d.category] || d.category} · ${escapeHtml(suspectNames)}${tagsHtml}</small>
       </div>
       <div class="side">
         ${Number(d.mandate_active) > 0 ? `<span class="badge-count">📄 ${d.mandate_active}</span>` : ''}
@@ -178,8 +184,15 @@ document.getElementById('f-search').addEventListener('input', () => {
   searchTimer = setTimeout(loadDosare, 300);
 });
 
+let newOfficersWidget, newVehiclesWidget, newWeaponsWidget, newTagsWidget, newDescEditor;
+
 function showNew() {
   document.getElementById('new-overlay').style.display = 'flex';
+  newOfficersWidget = MDT.createChipInput(document.getElementById('n-officers'), [], 'nume agent...');
+  newVehiclesWidget = MDT.createChipInput(document.getElementById('n-vehicles'), [], 'ex: Sultan RS - ABC123...');
+  newWeaponsWidget = MDT.createChipInput(document.getElementById('n-weapons'), [], 'ex: Pistol...');
+  newTagsWidget = MDT.createChipInput(document.getElementById('n-tags'), [], 'ex: prioritar...');
+  newDescEditor = MDT.createMarkdownEditor(document.getElementById('n-description'), MDT.TEMPLATES.dosar);
 }
 function hideNew() {
   document.getElementById('new-overlay').style.display = 'none';
@@ -198,9 +211,13 @@ document.getElementById('new-form').addEventListener('submit', async (e) => {
   const body = {
     title: document.getElementById('n-title').value.trim(),
     category: document.getElementById('n-category').value,
-    description: document.getElementById('n-description').value.trim(),
+    description: newDescEditor.getValue().trim(),
     suspects: readSuspects('n-suspects'),
     assigned_to: document.getElementById('n-assigned').value || null,
+    officers_involved: newOfficersWidget.getValues(),
+    vehicles_involved: newVehiclesWidget.getValues(),
+    weapons_involved: newWeaponsWidget.getValues(),
+    tags: newTagsWidget.getValues(),
   };
   try {
     const res = await apiFetch('/api/mdt/dosare', { method: 'POST', body: JSON.stringify(body) });

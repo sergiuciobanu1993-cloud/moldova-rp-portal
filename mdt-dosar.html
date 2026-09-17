@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Dosar — MDT FIB</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="dashboard.css">
+<html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Dosar — MDT FIB</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="dashboard.css"><link rel="stylesheet" href="mdt-shared.css">
 <style>
 .case-no{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--orange);font-size:12px;font-weight:800;letter-spacing:.02em}
 .meta-row{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;color:var(--muted);font-size:12px;margin:10px 0 16px}
@@ -30,7 +30,7 @@
 </style>
 </head>
 <body>
-<header><a class="brand" href="index.html"><img src="assets/logo.png" alt="">MOLDOVA<span>RP</span></a><nav><a href="index.html">Acasă</a><a href="dashboard.html">Dashboard</a><a href="mdt-fib.html">MDT FIB</a></nav><button class="menu-toggle" id="dash-menu-toggle" type="button" aria-label="Deschide meniul" aria-expanded="false">☰</button><a class="logout" href="login.html" id="logout-link">Deconectare</a></header>
+<header><a class="brand" href="index.html"><img src="assets/logo.png" alt="">MOLDOVA<span>RP</span></a><nav><a href="index.html">Acasă</a><a href="dashboard.html">Dashboard</a><a href="mdt-fib.html">Dosare</a><a href="mdt-rapoarte.html">Rapoarte</a></nav><button class="menu-toggle" id="dash-menu-toggle" type="button" aria-label="Deschide meniul" aria-expanded="false">☰</button><a class="logout" href="login.html" id="logout-link">Deconectare</a></header>
 <main>
 <p><a href="mdt-fib.html" style="color:var(--muted);font-weight:700;font-size:13px">← Toate dosarele</a></p>
 
@@ -62,16 +62,25 @@
         </select>
       </div>
     </div>
-    <div class="field"><label>Descriere</label><textarea id="e-description"></textarea></div>
     <div class="field">
       <label>Persoane implicate</label>
       <div id="e-suspects"></div>
       <button type="button" class="btn-ghost" id="e-suspect-add" style="font-size:12px;padding:8px 12px">+ Adaugă persoană</button>
     </div>
     <div class="field"><label>Agent responsabil</label><select id="e-assigned"><option value="">— neasignat —</option></select></div>
+    <div class="field"><label>Polițiști implicați</label><div id="e-officers"></div></div>
+    <div class="field"><label>Vehicule implicate</label><div id="e-vehicles"></div></div>
+    <div class="field"><label>Arme implicate</label><div id="e-weapons"></div></div>
+    <div class="field"><label>Etichete</label><div id="e-tags"></div></div>
+    <div class="field"><label>Descriere</label><div id="e-description"></div></div>
     <p class="formmsg" id="edit-msg" hidden></p>
     <div style="display:flex;gap:10px"><button type="submit" class="btn-primary">Salvează</button><button type="button" class="btn-ghost" id="edit-cancel">Anulează</button></div>
   </form>
+</section>
+
+<section class="panel" style="margin-top:20px">
+  <div class="head"><h2>🔗 Rapoarte legate</h2></div>
+  <div id="dosar-rapoarte-linker"></div>
 </section>
 
 <section class="panel" style="margin-top:20px">
@@ -88,8 +97,18 @@
       </div>
       <div class="field"><label>Persoană / adresă vizată</label><input id="m-target" required maxlength="120" placeholder="ex: Ion Popescu sau Str. Centrală nr. 12"></div>
     </div>
-    <div class="field"><label>Detalii / motiv</label><textarea id="m-details" placeholder="Motivul emiterii, ce se caută, temeiul legal..."></textarea></div>
-    <div class="field"><label>Expiră la (opțional)</label><input id="m-expires" type="datetime-local"></div>
+    <div class="two-col">
+      <div class="field"><label>Prioritate</label>
+        <select id="m-priority">
+          <option value="scazuta">Scăzută</option>
+          <option value="medie" selected>Medie</option>
+          <option value="inalta">Înaltă</option>
+        </select>
+      </div>
+      <div class="field"><label>Expiră la (opțional)</label><input id="m-expires" type="datetime-local"></div>
+    </div>
+    <div class="field"><label>Etichete</label><div id="m-tags"></div></div>
+    <div class="field"><label>Detalii / motiv</label><div id="m-details"></div></div>
     <p class="formmsg" id="mandat-msg" hidden></p>
     <button type="submit" class="btn-primary">Emite mandatul</button>
   </form>
@@ -108,6 +127,7 @@
 </section>
 </main>
 <script src="auth-client.js"></script>
+<script src="mdt-shared.js"></script>
 <script>
 const CATEGORY_LABEL = { trafic_droguri: 'Trafic de droguri', omor: 'Omor / tentativă de omor', talharie: 'Tâlhărie', santaj: 'Șantaj', spalare_bani: 'Spălare de bani', coruptie: 'Corupție', altele: 'Altele' };
 const STATUS_LABEL = { deschis: 'DESCHIS', in_lucru: 'ÎN LUCRU', la_parchet: 'LA PARCHET', inchis: 'ÎNCHIS', clasat: 'CLASAT' };
@@ -117,10 +137,18 @@ const MANDAT_TYPE_LABEL = { perchezitie: 'Percheziție', arestare: 'Arestare', a
 const MANDAT_TYPE_ICON = { perchezitie: '🔍', arestare: '🚨', aducere: '📞' };
 const MANDAT_STATUS_LABEL = { activ: 'ACTIV', executat: 'EXECUTAT', expirat: 'EXPIRAT', anulat: 'ANULAT' };
 const MANDAT_STATUS_PILL = { activ: 'warn', executat: 'on', expirat: 'off', anulat: 'off' };
+const MANDAT_PRIORITY_LABEL = { scazuta: 'Scăzută', medie: 'Medie', inalta: 'Înaltă' };
 
 const escapeHtml = s => (s ?? '').toString()
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
+function chipsHtml(items, emptyText) {
+  return (items || []).length
+    ? `<div style="display:flex;flex-wrap:wrap;gap:6px">${items.map(v => `<span class="chip">${escapeHtml(v)}</span>`).join('')}</div>`
+    : `<span class="muted" style="font-size:12px">${emptyText}</span>`;
+}
+
 function fmtDate(iso) {
   if (!iso) return '—';
   return new Date(iso).toLocaleString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -187,21 +215,32 @@ function renderDosar(d) {
       <span>responsabil: ${escapeHtml(d.assigned_to_name || 'neasignat')}</span>
     </div>
     <div style="margin-bottom:14px">${suspectsHtml}</div>
-    <p class="desc">${escapeHtml(d.description) || '<span class="muted">Fără descriere.</span>'}</p>
+    <div class="field" style="margin-bottom:10px"><label>Polițiști implicați</label>${chipsHtml(d.officers_involved, 'niciunul înregistrat')}</div>
+    <div class="field" style="margin-bottom:10px"><label>Vehicule implicate</label>${chipsHtml(d.vehicles_involved, 'niciunul înregistrat')}</div>
+    <div class="field" style="margin-bottom:10px"><label>Arme implicate</label>${chipsHtml(d.weapons_involved, 'niciuna înregistrată')}</div>
+    <div class="field" style="margin-bottom:14px"><label>Etichete</label>${chipsHtml(d.tags, 'nicio etichetă')}</div>
+    <div class="md-preview" style="border:1px solid var(--line);border-radius:8px">${MDT.mdToHtml(d.description || '') || '<p class="muted">Fără descriere.</p>'}</div>
   `;
   document.getElementById('edit-open-btn').addEventListener('click', openEdit);
+  MDT.createReportLinker(document.getElementById('dosar-rapoarte-linker'), 'dosar', dosarId, d.rapoarte || []);
 }
+
+let editOfficersWidget, editVehiclesWidget, editWeaponsWidget, editTagsWidget, editDescEditor;
 
 function openEdit() {
   const d = currentDosar;
   document.getElementById('e-title').value = d.title;
   document.getElementById('e-category').value = d.category;
   document.getElementById('e-status').value = d.status;
-  document.getElementById('e-description').value = d.description || '';
   document.getElementById('e-suspects').innerHTML = '';
   (d.suspects || []).forEach(s => suspectRow(document.getElementById('e-suspects'), s.name, s.role));
   document.getElementById('e-assigned').innerHTML = '<option value="">— neasignat —</option>';
   loadAgents('e-assigned', d.assigned_to);
+  editOfficersWidget = MDT.createChipInput(document.getElementById('e-officers'), d.officers_involved || [], 'nume agent...');
+  editVehiclesWidget = MDT.createChipInput(document.getElementById('e-vehicles'), d.vehicles_involved || [], 'ex: Sultan RS - ABC123...');
+  editWeaponsWidget = MDT.createChipInput(document.getElementById('e-weapons'), d.weapons_involved || [], 'ex: Pistol...');
+  editTagsWidget = MDT.createChipInput(document.getElementById('e-tags'), d.tags || [], 'ex: prioritar...');
+  editDescEditor = MDT.createMarkdownEditor(document.getElementById('e-description'), d.description || '');
   document.getElementById('edit-box').hidden = false;
   document.getElementById('edit-box').scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
@@ -215,16 +254,22 @@ document.getElementById('edit-form').addEventListener('submit', async (e) => {
     title: document.getElementById('e-title').value.trim(),
     category: document.getElementById('e-category').value,
     status: document.getElementById('e-status').value,
-    description: document.getElementById('e-description').value.trim(),
+    description: editDescEditor.getValue().trim(),
     suspects: readSuspects('e-suspects'),
     assigned_to: document.getElementById('e-assigned').value || null,
+    officers_involved: editOfficersWidget.getValues(),
+    vehicles_involved: editVehiclesWidget.getValues(),
+    weapons_involved: editWeaponsWidget.getValues(),
+    tags: editTagsWidget.getValues(),
   };
   try {
     const res = await apiFetch(`/api/mdt/dosare/${dosarId}`, { method: 'PUT', body: JSON.stringify(body) });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Salvarea a eșuat.');
     document.getElementById('edit-box').hidden = true;
-    renderDosar(data);
+    // PUT întoarce doar rândul de bază (fără mandate/probe/rapoarte
+    // agregate) — reîncărcăm tot dosarul ca să nu pierdem panourile alea.
+    await load();
   } catch (err) {
     msg.textContent = err.message;
     msg.className = 'formmsg error';
@@ -239,15 +284,23 @@ function renderMandate(list) {
       <div class="top">
         <div><strong>${MANDAT_TYPE_ICON[m.type] || '📄'} ${MANDAT_TYPE_LABEL[m.type] || m.type} — ${escapeHtml(m.target_name)}</strong>
         <small>emis ${fmtDate(m.issued_at)} de ${escapeHtml(m.issued_by_name || '—')}${m.expires_at ? ' · expiră ' + fmtDate(m.expires_at) : ''}${m.executed_at ? ' · executat ' + fmtDate(m.executed_at) : ''}</small></div>
-        <span class="pill ${MANDAT_STATUS_PILL[m.status] || 'off'}">${MANDAT_STATUS_LABEL[m.status] || m.status}</span>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
+          <span class="pill priority-${m.priority || 'medie'}">${MANDAT_PRIORITY_LABEL[m.priority] || 'Medie'}</span>
+          <span class="pill ${MANDAT_STATUS_PILL[m.status] || 'off'}">${MANDAT_STATUS_LABEL[m.status] || m.status}</span>
+        </div>
       </div>
-      ${m.details ? `<p>${escapeHtml(m.details)}</p>` : ''}
+      ${(m.tags || []).length ? `<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px">${m.tags.map(t => `<span class="chip">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
+      ${m.details ? `<div class="md-preview" style="border:1px solid var(--line);border-radius:8px;margin-top:10px;min-height:0;padding:12px 14px">${MDT.mdToHtml(m.details)}</div>` : ''}
       ${m.status === 'activ' ? `
         <div class="mandat-actions">
           <button type="button" class="mini-btn" data-mandat-status="${m.id}:executat">Marchează executat</button>
           <button type="button" class="mini-btn" data-mandat-status="${m.id}:expirat">Marchează expirat</button>
           <button type="button" class="mini-btn danger" data-mandat-status="${m.id}:anulat">Anulează</button>
         </div>` : ''}
+      <div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px">
+        <label style="display:block;color:var(--muted);font-size:11px;font-weight:800;margin-bottom:6px">RAPOARTE LEGATE</label>
+        <div id="mandat-rapoarte-${m.id}"></div>
+      </div>
     </div>`).join('') : '<p class="muted">Niciun mandat emis încă pentru acest dosar.</p>';
 
   box.querySelectorAll('[data-mandat-status]').forEach(btn => {
@@ -262,6 +315,11 @@ function renderMandate(list) {
       }
     });
   });
+
+  list.forEach(m => {
+    const el = document.getElementById(`mandat-rapoarte-${m.id}`);
+    if (el) MDT.createReportLinker(el, 'mandat', m.id, m.rapoarte || []);
+  });
 }
 
 async function loadMandate() {
@@ -275,6 +333,17 @@ async function loadMandate() {
   }
 }
 
+// Formularul de mandat e permanent pe pagină (nu într-un overlay ca la
+// dosar nou), deci widget-urile astea se creează o singură dată la
+// încărcarea paginii și se refac după fiecare emitere reușită, ca să pornim
+// din nou de la șablon gol.
+let mandatDetailsEditor, mandatTagsWidget;
+function resetMandatWidgets() {
+  mandatDetailsEditor = MDT.createMarkdownEditor(document.getElementById('m-details'), MDT.TEMPLATES.mandat);
+  mandatTagsWidget = MDT.createChipInput(document.getElementById('m-tags'), [], 'ex: prioritar...');
+}
+resetMandatWidgets();
+
 document.getElementById('mandat-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const msg = document.getElementById('mandat-msg');
@@ -283,7 +352,9 @@ document.getElementById('mandat-form').addEventListener('submit', async (e) => {
   const body = {
     type: document.getElementById('m-type').value,
     target_name: document.getElementById('m-target').value.trim(),
-    details: document.getElementById('m-details').value.trim(),
+    details: mandatDetailsEditor.getValue().trim(),
+    priority: document.getElementById('m-priority').value,
+    tags: mandatTagsWidget.getValues(),
     expires_at: expiresRaw ? new Date(expiresRaw).toISOString() : null,
   };
   try {
@@ -291,6 +362,7 @@ document.getElementById('mandat-form').addEventListener('submit', async (e) => {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Emiterea mandatului a eșuat.');
     document.getElementById('mandat-form').reset();
+    resetMandatWidgets();
     await load();
   } catch (err) {
     msg.textContent = err.message;

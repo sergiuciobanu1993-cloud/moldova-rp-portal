@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rapoarte — MDT FIB</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="dashboard.css"><link rel="stylesheet" href="mdt-shared.css">
+<style>
+.home-btn{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);padding:10px 15px;border-radius:8px;color:var(--text);font-weight:800;font-size:12.5px;white-space:nowrap;transition:.15s ease}
+.home-btn:hover{border-color:var(--orange);color:var(--orange)}
+
+.filters{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:18px}
+.filters .field{margin-bottom:0;min-width:180px}
+.filters .field.grow{flex:1;min-width:220px}
+
+.raport-row{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:16px 18px;background:var(--panel);border:1px solid var(--line);border-radius:12px}
+.raport-row:hover{border-color:rgba(255,138,31,.4)}
+.raport-row .main{min-width:0}
+.raport-row .case-no{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--orange);font-size:11px;font-weight:800;letter-spacing:.02em}
+.raport-row strong{display:block;font-size:14px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.raport-row small{display:block;color:var(--muted);font-size:11px;margin-top:4px}
+.raport-row .side{display:flex;align-items:center;gap:10px;flex:none}
+</style>
+</head>
+<body>
+<header><a class="brand" href="index.html"><img src="assets/logo.png" alt="">MOLDOVA<span>RP</span></a><nav><a href="index.html">Acasă</a><a href="dashboard.html">Dashboard</a><a href="mdt-fib.html">Dosare</a><a href="mdt-rapoarte.html" style="color:var(--orange)">Rapoarte</a></nav><button class="menu-toggle" id="dash-menu-toggle" type="button" aria-label="Deschide meniul" aria-expanded="false">☰</button><a class="logout" href="login.html" id="logout-link">Deconectare</a></header>
+<main>
+<section class="welcome"><div><p>BIROUL FEDERAL DE INVESTIGAȚII</p><h1>Rapoarte</h1><small>Procese verbale de incident — pot fi legate ulterior de dosare și mandate.</small></div><a class="home-btn" href="dashboard.html">← Dashboard</a></section>
+
+<div id="denied-box" hidden style="margin-top:24px" class="panel">
+  <h2 style="margin:0 0 8px">Acces restricționat</h2>
+  <p class="muted" style="margin:0">Acest instrument este disponibil doar membrilor facțiunii FIB (asignați din administrare) sau staff-ului site-ului.</p>
+</div>
+
+<div id="mdt-box" hidden>
+  <section class="panel" style="margin-top:24px">
+    <div class="head"><h2>Rapoarte</h2><button class="btn-primary" id="new-btn">+ Raport nou</button></div>
+    <div class="filters">
+      <div class="field grow"><label>Căutare</label><input id="f-search" placeholder="titlu sau descriere..."></div>
+      <div class="field"><label>Tip</label>
+        <select id="f-type">
+          <option value="">Toate</option>
+          <option value="agresiune">Agresiune</option>
+          <option value="talharie">Tâlhărie</option>
+          <option value="spargere">Spargere</option>
+          <option value="furt">Furt</option>
+          <option value="altele">Altele</option>
+        </select>
+      </div>
+    </div>
+    <div class="ticket-list" id="raport-list"><p class="muted">Se încarcă…</p></div>
+  </section>
+</div>
+
+<div id="new-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:50;align-items:center;justify-content:center;padding:20px">
+  <div class="panel" style="max-width:560px;width:100%;max-height:88vh;overflow-y:auto;padding:26px">
+    <div class="head"><h2 style="margin:0">Raport nou</h2><button type="button" class="btn-ghost" id="new-close" aria-label="Închide" style="padding:4px 10px">✕</button></div>
+    <form id="new-form">
+      <div class="field"><label>Titlu</label><input id="n-title" required maxlength="200" placeholder="ex: Altercație la benzinăria de pe Șoseaua de Vest"></div>
+      <div class="field"><label>Tip</label>
+        <select id="n-type">
+          <option value="agresiune">Agresiune</option>
+          <option value="talharie">Tâlhărie</option>
+          <option value="spargere">Spargere</option>
+          <option value="furt">Furt</option>
+          <option value="altele" selected>Altele</option>
+        </select>
+      </div>
+      <div class="field"><label>Polițiști implicați</label><div id="n-officers"></div></div>
+      <div class="field"><label>Civili implicați</label><div id="n-civilians"></div></div>
+      <div class="field"><label>Suspecți implicați</label><div id="n-suspects"></div></div>
+      <div class="field"><label>Arme implicate</label><div id="n-weapons"></div></div>
+      <div class="field"><label>Etichete</label><div id="n-tags"></div></div>
+      <div class="field"><label>Descriere</label><div id="n-description"></div></div>
+      <p class="formmsg" id="new-msg" hidden></p>
+      <div style="display:flex;gap:10px"><button type="submit" class="btn-primary">Creează raportul</button><button type="button" class="btn-ghost" id="new-cancel">Anulează</button></div>
+    </form>
+  </div>
+</div>
+
+</main>
+<script src="auth-client.js"></script>
+<script src="mdt-shared.js"></script>
+<script>
+const TYPE_LABEL = { agresiune: 'Agresiune', talharie: 'Tâlhărie', spargere: 'Spargere', furt: 'Furt', altele: 'Altele' };
+
+const escapeHtml = s => (s ?? '').toString()
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
+function raportRowHtml(r) {
+  const tagsHtml = (r.tags || []).length ? ' · ' + r.tags.map(t => escapeHtml(t)).join(', ') : '';
+  return `
+    <a class="raport-row" href="mdt-raport.html?id=${r.id}">
+      <div class="main">
+        <span class="case-no">${MDT.raportNumber(r)}</span>
+        <strong>${escapeHtml(r.title)}</strong>
+        <small>${TYPE_LABEL[r.type] || r.type}${tagsHtml}</small>
+      </div>
+      <div class="side">
+        <span class="pill off">${new Date(r.created_at).toLocaleDateString('ro-RO')}</span>
+      </div>
+    </a>`;
+}
+
+let searchTimer = null;
+async function loadRapoarte() {
+  const list = document.getElementById('raport-list');
+  const type = document.getElementById('f-type').value;
+  const q = document.getElementById('f-search').value.trim();
+  const params = new URLSearchParams();
+  if (type) params.set('type', type);
+  if (q) params.set('q', q);
+  try {
+    const res = await apiFetch(`/api/mdt/rapoarte?${params.toString()}`);
+    if (!res.ok) throw new Error();
+    const items = await res.json();
+    list.innerHTML = items.length ? items.map(raportRowHtml).join('') : '<p class="muted">Niciun raport găsit.</p>';
+  } catch {
+    list.innerHTML = '<p class="muted">Nu am putut încărca rapoartele.</p>';
+  }
+}
+
+document.getElementById('f-type').addEventListener('change', loadRapoarte);
+document.getElementById('f-search').addEventListener('input', () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(loadRapoarte, 300);
+});
+
+let newOfficersWidget, newCiviliansWidget, newSuspectsWidget, newWeaponsWidget, newTagsWidget, newDescEditor;
+
+function showNew() {
+  document.getElementById('new-overlay').style.display = 'flex';
+  newOfficersWidget = MDT.createChipInput(document.getElementById('n-officers'), [], 'nume agent...');
+  newCiviliansWidget = MDT.createChipInput(document.getElementById('n-civilians'), [], 'nume civil...');
+  newSuspectsWidget = MDT.createChipInput(document.getElementById('n-suspects'), [], 'nume suspect...');
+  newWeaponsWidget = MDT.createChipInput(document.getElementById('n-weapons'), [], 'ex: Pistol...');
+  newTagsWidget = MDT.createChipInput(document.getElementById('n-tags'), [], 'ex: prioritar...');
+  newDescEditor = MDT.createMarkdownEditor(document.getElementById('n-description'), MDT.TEMPLATES.raport);
+}
+function hideNew() {
+  document.getElementById('new-overlay').style.display = 'none';
+  document.getElementById('new-form').reset();
+  document.getElementById('new-msg').hidden = true;
+}
+document.getElementById('new-btn').addEventListener('click', showNew);
+document.getElementById('new-close').addEventListener('click', hideNew);
+document.getElementById('new-cancel').addEventListener('click', hideNew);
+
+document.getElementById('new-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const msg = document.getElementById('new-msg');
+  msg.hidden = true;
+  const body = {
+    title: document.getElementById('n-title').value.trim(),
+    type: document.getElementById('n-type').value,
+    description: newDescEditor.getValue().trim(),
+    officers_involved: newOfficersWidget.getValues(),
+    civilians_involved: newCiviliansWidget.getValues(),
+    suspects_involved: newSuspectsWidget.getValues(),
+    weapons_involved: newWeaponsWidget.getValues(),
+    tags: newTagsWidget.getValues(),
+  };
+  try {
+    const res = await apiFetch('/api/mdt/rapoarte', { method: 'POST', body: JSON.stringify(body) });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Crearea raportului a eșuat.');
+    window.location.href = `mdt-raport.html?id=${data.id}`;
+  } catch (err) {
+    msg.textContent = err.message;
+    msg.className = 'formmsg error';
+    msg.hidden = false;
+  }
+});
+
+(async () => {
+  if (!requireAuth()) return;
+  try {
+    const res = await apiFetch('/api/mdt/acces');
+    const data = await res.json();
+    if (!data.access) {
+      document.getElementById('denied-box').hidden = false;
+      return;
+    }
+  } catch {
+    document.getElementById('denied-box').hidden = false;
+    return;
+  }
+  document.getElementById('mdt-box').hidden = false;
+  loadRapoarte();
+})();
+wireLogout('#logout-link');
+</script>
+</body></html>

@@ -330,6 +330,53 @@ CREATE TABLE IF NOT EXISTS mdt_probe (
 );
 CREATE INDEX IF NOT EXISTS idx_mdt_probe_dosar ON mdt_probe(dosar_id);
 
+-- === MDT FIB — etichete, implicați și rapoarte (18.09.2026) =================
+-- Câmpuri noi cerute după ce clientul a arătat un alt MDT ca model: etichete
+-- + liste libere de persoane/obiecte implicate (scrise de mână, nu legate de
+-- alte tabele — la fel ca "target_name" la mandate) și o entitate nouă,
+-- separată, "Rapoarte" (incidente punctuale, ca un proces verbal), care se
+-- pot lega ulterior de unul sau mai multe dosare și/sau mandate.
+ALTER TABLE mdt_dosare ADD COLUMN IF NOT EXISTS tags JSONB NOT NULL DEFAULT '[]';
+ALTER TABLE mdt_dosare ADD COLUMN IF NOT EXISTS vehicles_involved JSONB NOT NULL DEFAULT '[]';
+ALTER TABLE mdt_dosare ADD COLUMN IF NOT EXISTS weapons_involved JSONB NOT NULL DEFAULT '[]';
+ALTER TABLE mdt_dosare ADD COLUMN IF NOT EXISTS officers_involved JSONB NOT NULL DEFAULT '[]';
+
+ALTER TABLE mdt_mandate ADD COLUMN IF NOT EXISTS tags JSONB NOT NULL DEFAULT '[]';
+-- 'scazuta' | 'medie' | 'inalta'
+ALTER TABLE mdt_mandate ADD COLUMN IF NOT EXISTS priority VARCHAR(10) NOT NULL DEFAULT 'medie';
+
+CREATE TABLE IF NOT EXISTS mdt_rapoarte (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  seq SERIAL, -- pentru report_number ("RAP-2026-0007"), calculat în server.js
+  title VARCHAR(200) NOT NULL,
+  type VARCHAR(20) NOT NULL DEFAULT 'altele', -- agresiune | talharie | spargere | furt | altele
+  description TEXT NOT NULL DEFAULT '',
+  tags JSONB NOT NULL DEFAULT '[]',
+  officers_involved JSONB NOT NULL DEFAULT '[]',
+  civilians_involved JSONB NOT NULL DEFAULT '[]',
+  suspects_involved JSONB NOT NULL DEFAULT '[]',
+  weapons_involved JSONB NOT NULL DEFAULT '[]',
+  created_by UUID REFERENCES users(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_mdt_rapoarte_created_at ON mdt_rapoarte(created_at DESC);
+
+-- Tabele de legătură many-to-many — un raport se poate lega de mai multe
+-- dosare și/sau mandate, iar un dosar/mandat poate avea mai multe rapoarte
+-- legate ("Rapoarte legate" + "Adaugă" din interfață).
+CREATE TABLE IF NOT EXISTS mdt_dosar_rapoarte (
+  dosar_id UUID REFERENCES mdt_dosare(id) ON DELETE CASCADE,
+  raport_id UUID REFERENCES mdt_rapoarte(id) ON DELETE CASCADE,
+  PRIMARY KEY(dosar_id, raport_id)
+);
+
+CREATE TABLE IF NOT EXISTS mdt_mandat_rapoarte (
+  mandat_id UUID REFERENCES mdt_mandate(id) ON DELETE CASCADE,
+  raport_id UUID REFERENCES mdt_rapoarte(id) ON DELETE CASCADE,
+  PRIMARY KEY(mandat_id, raport_id)
+);
+
 INSERT INTO roles(name, description) VALUES
 ('player', 'Jucator standard'),
 ('moderator', 'Moderator'),

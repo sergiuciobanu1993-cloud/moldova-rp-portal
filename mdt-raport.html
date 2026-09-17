@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Raport — MDT FIB</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="dashboard.css"><link rel="stylesheet" href="mdt-shared.css">
+<style>
+.case-no{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--orange);font-size:12px;font-weight:800;letter-spacing:.02em}
+.meta-row{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;color:var(--muted);font-size:12px;margin:10px 0 16px}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:700px){.two-col{grid-template-columns:1fr}}
+.linked-item small{display:block;color:var(--muted);font-size:11px;margin-top:2px}
+</style>
+</head>
+<body>
+<header><a class="brand" href="index.html"><img src="assets/logo.png" alt="">MOLDOVA<span>RP</span></a><nav><a href="index.html">Acasă</a><a href="dashboard.html">Dashboard</a><a href="mdt-fib.html">Dosare</a><a href="mdt-rapoarte.html" style="color:var(--orange)">Rapoarte</a></nav><button class="menu-toggle" id="dash-menu-toggle" type="button" aria-label="Deschide meniul" aria-expanded="false">☰</button><a class="logout" href="login.html" id="logout-link">Deconectare</a></header>
+<main>
+<p><a href="mdt-rapoarte.html" style="color:var(--muted);font-weight:700;font-size:13px">← Toate rapoartele</a></p>
+
+<section class="panel" id="raport-box" style="margin-top:16px"><p class="muted">Se încarcă…</p></section>
+
+<section class="panel" id="edit-box" style="margin-top:20px" hidden>
+  <div class="head"><h2>Editează raportul</h2></div>
+  <form id="edit-form">
+    <div class="field"><label>Titlu</label><input id="e-title" required maxlength="200"></div>
+    <div class="field"><label>Tip</label>
+      <select id="e-type">
+        <option value="agresiune">Agresiune</option>
+        <option value="talharie">Tâlhărie</option>
+        <option value="spargere">Spargere</option>
+        <option value="furt">Furt</option>
+        <option value="altele">Altele</option>
+      </select>
+    </div>
+    <div class="field"><label>Polițiști implicați</label><div id="e-officers"></div></div>
+    <div class="field"><label>Civili implicați</label><div id="e-civilians"></div></div>
+    <div class="field"><label>Suspecți implicați</label><div id="e-suspects"></div></div>
+    <div class="field"><label>Arme implicate</label><div id="e-weapons"></div></div>
+    <div class="field"><label>Etichete</label><div id="e-tags"></div></div>
+    <div class="field"><label>Descriere</label><div id="e-description"></div></div>
+    <p class="formmsg" id="edit-msg" hidden></p>
+    <div style="display:flex;gap:10px"><button type="submit" class="btn-primary">Salvează</button><button type="button" class="btn-ghost" id="edit-cancel">Anulează</button></div>
+  </form>
+</section>
+
+<section class="panel" style="margin-top:20px">
+  <div class="head"><h2>📁 Dosare legate</h2></div>
+  <div id="dosare-linked"><p class="muted">Se încarcă…</p></div>
+</section>
+
+<section class="panel" style="margin-top:20px">
+  <div class="head"><h2>📄 Mandate legate</h2></div>
+  <div id="mandate-linked"><p class="muted">Se încarcă…</p></div>
+</section>
+</main>
+<script src="auth-client.js"></script>
+<script src="mdt-shared.js"></script>
+<script>
+const TYPE_LABEL = { agresiune: 'Agresiune', talharie: 'Tâlhărie', spargere: 'Spargere', furt: 'Furt', altele: 'Altele' };
+const DOSAR_STATUS_LABEL = { deschis: 'DESCHIS', in_lucru: 'ÎN LUCRU', la_parchet: 'LA PARCHET', inchis: 'ÎNCHIS', clasat: 'CLASAT' };
+const DOSAR_STATUS_PILL = { deschis: 'warn', in_lucru: 'info', la_parchet: 'info', inchis: 'off', clasat: 'off' };
+const MANDAT_TYPE_LABEL = { perchezitie: 'Percheziție', arestare: 'Arestare', aducere: 'Aducere' };
+const MANDAT_STATUS_LABEL = { activ: 'ACTIV', executat: 'EXECUTAT', expirat: 'EXPIRAT', anulat: 'ANULAT' };
+const MANDAT_STATUS_PILL = { activ: 'warn', executat: 'on', expirat: 'off', anulat: 'off' };
+
+const escapeHtml = s => (s ?? '').toString()
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
+function chipsHtml(items, emptyText) {
+  return (items || []).length
+    ? `<div style="display:flex;flex-wrap:wrap;gap:6px">${items.map(v => `<span class="chip">${escapeHtml(v)}</span>`).join('')}</div>`
+    : `<span class="muted" style="font-size:12px">${emptyText}</span>`;
+}
+function fmtDate(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+const raportId = new URLSearchParams(window.location.search).get('id');
+let currentRaport = null;
+let editOfficersWidget, editCiviliansWidget, editSuspectsWidget, editWeaponsWidget, editTagsWidget, editDescEditor;
+
+function renderRaport(r) {
+  currentRaport = r;
+  document.getElementById('raport-box').innerHTML = `
+    <div class="head">
+      <div><span class="case-no">${MDT.raportNumber(r)}</span><h2 style="margin:4px 0 0">${escapeHtml(r.title)}</h2></div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span class="pill off">${TYPE_LABEL[r.type] || r.type}</span>
+        <button type="button" class="btn-ghost" id="edit-open-btn">Editează</button>
+      </div>
+    </div>
+    <div class="meta-row">
+      <span>întocmit ${fmtDate(r.created_at)} de ${escapeHtml(r.created_by_name || '—')}</span>
+    </div>
+    <div class="field" style="margin-bottom:10px"><label>Polițiști implicați</label>${chipsHtml(r.officers_involved, 'niciunul înregistrat')}</div>
+    <div class="field" style="margin-bottom:10px"><label>Civili implicați</label>${chipsHtml(r.civilians_involved, 'niciunul înregistrat')}</div>
+    <div class="field" style="margin-bottom:10px"><label>Suspecți implicați</label>${chipsHtml(r.suspects_involved, 'niciunul înregistrat')}</div>
+    <div class="field" style="margin-bottom:10px"><label>Arme implicate</label>${chipsHtml(r.weapons_involved, 'niciuna înregistrată')}</div>
+    <div class="field" style="margin-bottom:14px"><label>Etichete</label>${chipsHtml(r.tags, 'nicio etichetă')}</div>
+    <div class="md-preview" style="border:1px solid var(--line);border-radius:8px">${MDT.mdToHtml(r.description || '') || '<p class="muted">Fără descriere.</p>'}</div>
+  `;
+  document.getElementById('edit-open-btn').addEventListener('click', openEdit);
+}
+
+function openEdit() {
+  const r = currentRaport;
+  document.getElementById('e-title').value = r.title;
+  document.getElementById('e-type').value = r.type;
+  editOfficersWidget = MDT.createChipInput(document.getElementById('e-officers'), r.officers_involved || [], 'nume agent...');
+  editCiviliansWidget = MDT.createChipInput(document.getElementById('e-civilians'), r.civilians_involved || [], 'nume civil...');
+  editSuspectsWidget = MDT.createChipInput(document.getElementById('e-suspects'), r.suspects_involved || [], 'nume suspect...');
+  editWeaponsWidget = MDT.createChipInput(document.getElementById('e-weapons'), r.weapons_involved || [], 'ex: Pistol...');
+  editTagsWidget = MDT.createChipInput(document.getElementById('e-tags'), r.tags || [], 'ex: prioritar...');
+  editDescEditor = MDT.createMarkdownEditor(document.getElementById('e-description'), r.description || '');
+  document.getElementById('edit-box').hidden = false;
+  document.getElementById('edit-box').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+document.getElementById('edit-cancel').addEventListener('click', () => { document.getElementById('edit-box').hidden = true; });
+
+document.getElementById('edit-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const msg = document.getElementById('edit-msg');
+  msg.hidden = true;
+  const body = {
+    title: document.getElementById('e-title').value.trim(),
+    type: document.getElementById('e-type').value,
+    description: editDescEditor.getValue().trim(),
+    officers_involved: editOfficersWidget.getValues(),
+    civilians_involved: editCiviliansWidget.getValues(),
+    suspects_involved: editSuspectsWidget.getValues(),
+    weapons_involved: editWeaponsWidget.getValues(),
+    tags: editTagsWidget.getValues(),
+  };
+  try {
+    const res = await apiFetch(`/api/mdt/rapoarte/${raportId}`, { method: 'PUT', body: JSON.stringify(body) });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Salvarea a eșuat.');
+    document.getElementById('edit-box').hidden = true;
+    renderRaport(data);
+  } catch (err) {
+    msg.textContent = err.message;
+    msg.className = 'formmsg error';
+    msg.hidden = false;
+  }
+});
+
+function renderLinkedDosare(list) {
+  const box = document.getElementById('dosare-linked');
+  box.innerHTML = list.length ? list.map(d => `
+    <div class="linked-item">
+      <a href="mdt-dosar.html?id=${d.id}"><span class="case-no">${d.case_number}</span> ${escapeHtml(d.title)}</a>
+      <span class="pill ${DOSAR_STATUS_PILL[d.status] || 'off'}">${DOSAR_STATUS_LABEL[d.status] || d.status}</span>
+    </div>`).join('') : '<p class="muted" style="margin:0">Acest raport nu e legat de niciun dosar încă. Poți face asta din pagina dosarului, secțiunea „Rapoarte legate”.</p>';
+}
+
+function renderLinkedMandate(list) {
+  const box = document.getElementById('mandate-linked');
+  box.innerHTML = list.length ? list.map(m => `
+    <div class="linked-item">
+      <a href="mdt-dosar.html?id=${m.dosar_id}">${MANDAT_TYPE_LABEL[m.type] || m.type} — ${escapeHtml(m.target_name)}</a>
+      <span class="pill ${MANDAT_STATUS_PILL[m.status] || 'off'}">${MANDAT_STATUS_LABEL[m.status] || m.status}</span>
+    </div>`).join('') : '<p class="muted" style="margin:0">Acest raport nu e legat de niciun mandat încă. Poți face asta din pagina dosarului, secțiunea de mandate.</p>';
+}
+
+async function load() {
+  if (!raportId) {
+    document.getElementById('raport-box').innerHTML = '<p class="muted">Raport negăsit.</p>';
+    return;
+  }
+  try {
+    const res = await apiFetch(`/api/mdt/rapoarte/${raportId}`);
+    if (!res.ok) throw new Error();
+    const r = await res.json();
+    renderRaport(r);
+    renderLinkedDosare(r.dosare || []);
+    renderLinkedMandate(r.mandate || []);
+  } catch {
+    document.getElementById('raport-box').innerHTML = '<p class="muted">Acest raport nu există sau nu ai acces la el.</p>';
+  }
+}
+
+(async () => {
+  if (!requireAuth()) return;
+  load();
+})();
+wireLogout('#logout-link');
+</script>
+</body></html>

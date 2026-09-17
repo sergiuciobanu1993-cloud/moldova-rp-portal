@@ -218,6 +218,32 @@ window.MDT = (function () {
     };
   }
 
+  // Un link extern de probă poate fi o poză SAU un video (YouTube,
+  // Streamable, un fișier .mp4 direct de pe Discord CDN etc.) — proiectul nu
+  // are storage separat pentru fișiere video mari, deci uploadul rămâne doar
+  // pentru poze (vezi MDT_ALLOWED_MIME în server.js), iar pentru video mizăm
+  // pe linkuri externe cu un mic preview încorporat, ca să nu fie doar un
+  // link sec de deschis într-un tab nou. Întoarce null dacă linkul nu se
+  // potrivește cu niciun tipar cunoscut — atunci rămâne doar link-ul simplu.
+  function mediaEmbedHtml(url) {
+    if (!url) return null;
+    const box = 'style="width:100%;max-width:420px;aspect-ratio:16/9;border:0;border-radius:8px;margin-top:10px;display:block"';
+    let m;
+    if ((m = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/)([\w-]{6,})/i))) {
+      return `<iframe src="https://www.youtube.com/embed/${m[1]}" ${box} allowfullscreen loading="lazy"></iframe>`;
+    }
+    if ((m = url.match(/streamable\.com\/(?!e\/)([a-z0-9]+)/i))) {
+      return `<iframe src="https://streamable.com/e/${m[1]}" ${box} allowfullscreen loading="lazy"></iframe>`;
+    }
+    if (/\.(mp4|webm|mov|m4v)(\?.*)?$/i.test(url)) {
+      return `<video controls preload="metadata" style="width:100%;max-width:420px;border-radius:8px;margin-top:10px;display:block" src="${escapeHtml(url)}"></video>`;
+    }
+    if (/\.(png|jpe?g|webp|gif)(\?.*)?$/i.test(url)) {
+      return `<img src="${escapeHtml(url)}" alt="" style="max-width:100%;width:260px;border-radius:8px;border:1px solid var(--line);margin-top:10px;display:block">`;
+    }
+    return null;
+  }
+
   function reportLinkBaseUrl(kind, parentId) {
     return kind === 'dosar' ? `/api/mdt/dosare/${parentId}/rapoarte` : `/api/mdt/mandate/${parentId}/rapoarte`;
   }
@@ -306,5 +332,5 @@ window.MDT = (function () {
     return { getItems: () => items.slice() };
   }
 
-  return { escapeHtml, mdToHtml, TEMPLATES, createChipInput, createMarkdownEditor, createReportLinker, raportNumber };
+  return { escapeHtml, mdToHtml, TEMPLATES, createChipInput, createMarkdownEditor, createReportLinker, raportNumber, mediaEmbedHtml };
 })();

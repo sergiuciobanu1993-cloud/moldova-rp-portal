@@ -68,10 +68,14 @@
       <button type="button" class="btn-ghost" id="e-suspect-add" style="font-size:12px;padding:8px 12px">+ Adaugă persoană</button>
     </div>
     <div class="field"><label>Agent responsabil</label><select id="e-assigned"><option value="">— neasignat —</option></select></div>
-    <div class="field"><label>Polițiști implicați</label><div id="e-officers"></div></div>
-    <div class="field"><label>Vehicule implicate</label><div id="e-vehicles"></div></div>
-    <div class="field"><label>Arme implicate</label><div id="e-weapons"></div></div>
-    <div class="field"><label>Etichete</label><div id="e-tags"></div></div>
+    <div class="two-col">
+      <div class="field"><label>Polițiști implicați</label><div id="e-officers"></div></div>
+      <div class="field"><label>Vehicule implicate</label><div id="e-vehicles"></div></div>
+    </div>
+    <div class="two-col">
+      <div class="field"><label>Arme implicate</label><div id="e-weapons"></div></div>
+      <div class="field"><label>Etichete</label><div id="e-tags"></div></div>
+    </div>
     <div class="field"><label>Descriere</label><div id="e-description"></div></div>
     <p class="formmsg" id="edit-msg" hidden></p>
     <div style="display:flex;gap:10px"><button type="submit" class="btn-primary">Salvează</button><button type="button" class="btn-ghost" id="edit-cancel">Anulează</button></div>

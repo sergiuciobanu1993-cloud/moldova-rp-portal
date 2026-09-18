@@ -19,7 +19,20 @@ app.use(cors({ origin: process.env.CORS_ORIGIN?.split(",") || true }));
 // de mai mult spațiu. Fișierul propriu-zis rămâne plafonat mult sub atât
 // (MDT_MAX_FILE_BYTES), asta e doar limita brută a corpului cererii HTTP.
 app.use(express.json({ limit: "8mb" }));
-app.use(express.static(path.join(__dirname, "..")));
+// Fără asta, browserul putea ține în cache o pagină .html veche (care trimite
+// la rândul ei către un mdt-shared.css/js vechi, chiar dacă acelea AU un
+// "?v=" nou) — utilizatorul vedea update-uri de CSS/JS "că nu se aplică",
+// deși erau deja live pe server, doar că el încărca tot HTML-ul dintr-o
+// versiune cache-uită de-acum câteva request-uri. "no-cache" (nu "no-store")
+// tot lasă browserul să valideze cu un If-None-Match/304 quick, deci nu
+// costă un download complet la fiecare navigare, doar garantează că HTML-ul
+// e mereu proaspăt. CSS/JS/imaginile rămân cu comportamentul implicit al
+// express.static (cache normal, revalidare pe ETag).
+app.use(express.static(path.join(__dirname, ".."), {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith(".html")) res.set("Cache-Control", "no-cache");
+  },
+}));
 
 const asyncRoute = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 

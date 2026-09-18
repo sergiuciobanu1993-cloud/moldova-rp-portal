@@ -332,5 +332,43 @@ window.MDT = (function () {
     return { getItems: () => items.slice() };
   }
 
-  return { escapeHtml, mdToHtml, TEMPLATES, createChipInput, createMarkdownEditor, createReportLinker, raportNumber, mediaEmbedHtml };
+  // Export/printare: deschide o fereastră nouă, complet separată de tema
+  // închisă a site-ului (fundal alb, tipar de citit pe hârtie), scrie acolo
+  // documentul deja formatat și declanșează dialogul de printare al
+  // browserului — de acolo utilizatorul alege "Salvează ca PDF". Nu ținem
+  // fișiere generate pe server (proiectul n-are storage separat pe Railway),
+  // deci PDF-ul e mereu creat client-side, la cerere.
+  function printDocument(title, bodyHtml) {
+    const win = window.open('', '_blank');
+    if (!win) {
+      alert('Browserul a blocat fereastra de printare — permite pop-up-urile pentru acest site și încearcă din nou.');
+      return;
+    }
+    win.document.write(`<!doctype html>
+<html lang="ro"><head><meta charset="utf-8"><title>${escapeHtml(title)}</title>
+<style>
+  *{box-sizing:border-box}
+  body{font-family:Georgia,'Times New Roman',serif;color:#181818;max-width:760px;margin:36px auto;padding:0 24px 60px;line-height:1.65;font-size:14px}
+  h1{font-size:22px;margin:0 0 10px;font-family:Arial,Helvetica,sans-serif}
+  h2{font-size:12.5px;text-transform:uppercase;letter-spacing:.07em;color:#555;margin:26px 0 10px;border-top:1px solid #ddd;padding-top:16px;font-family:Arial,Helvetica,sans-serif}
+  .meta{color:#555;font-size:12px;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid #ddd}
+  .chip{display:inline-block;border:1px solid #999;border-radius:999px;padding:3px 11px;font-size:11px;margin:2px 5px 2px 0;font-family:Arial,Helvetica,sans-serif}
+  .tag{display:inline-block;border:1px solid #999;border-radius:5px;padding:2px 8px;font-size:10px;font-weight:700;margin-left:8px;vertical-align:middle;font-family:Arial,Helvetica,sans-serif}
+  .small{color:#777;font-size:11px;margin:2px 0 8px}
+  .mandat,.proba{border:1px solid #ddd;border-radius:8px;padding:14px 16px;margin-bottom:12px;break-inside:avoid}
+  blockquote{border-left:3px solid #999;margin:0;padding:2px 14px;color:#444}
+  code{background:#f2f2f2;padding:1px 5px;border-radius:4px;font-size:.92em}
+  img{max-width:100%;border-radius:6px;display:block;margin:10px 0}
+  a{color:#8a4b00}
+  ul,ol{padding-left:22px}
+  em{color:#777}
+  @media print{body{margin:0;padding:18px 22px}}
+</style></head>
+<body>${bodyHtml}
+<script>window.onload=function(){setTimeout(function(){window.print()},200)}<\/script>
+</body></html>`);
+    win.document.close();
+  }
+
+  return { escapeHtml, mdToHtml, TEMPLATES, createChipInput, createMarkdownEditor, createReportLinker, raportNumber, mediaEmbedHtml, printDocument };
 })();

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Dosar — MDT FIB</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="dashboard.css"><link rel="stylesheet" href="mdt-shared.css">
+<html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Dosar — MDT FIB</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="dashboard.css"><link rel="stylesheet" href="mdt-shared.css?v=2">
 <style>
 .case-no{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--orange);font-size:12px;font-weight:800;letter-spacing:.02em}
 .meta-row{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;color:var(--muted);font-size:12px;margin:10px 0 16px}
@@ -131,7 +131,7 @@
 </section>
 </main>
 <script src="auth-client.js"></script>
-<script src="mdt-shared.js"></script>
+<script src="mdt-shared.js?v=2"></script>
 <script>
 const CATEGORY_LABEL = { trafic_droguri: 'Trafic de droguri', omor: 'Omor / tentativă de omor', talharie: 'Tâlhărie', santaj: 'Șantaj', spalare_bani: 'Spălare de bani', coruptie: 'Corupție', altele: 'Altele' };
 const STATUS_LABEL = { deschis: 'DESCHIS', in_lucru: 'ÎN LUCRU', la_parchet: 'LA PARCHET', inchis: 'ÎNCHIS', clasat: 'CLASAT' };
@@ -208,6 +208,7 @@ function renderDosar(d) {
       <div><span class="case-no">${d.case_number}</span><h2 style="margin:4px 0 0">${escapeHtml(d.title)}</h2></div>
       <div style="display:flex;gap:8px;align-items:center">
         <span class="pill ${STATUS_PILL[d.status] || 'off'}">${STATUS_LABEL[d.status] || d.status}</span>
+        <button type="button" class="btn-ghost" id="export-btn">🖨️ Exportă</button>
         <button type="button" class="btn-ghost" id="edit-open-btn">Editează</button>
       </div>
     </div>
@@ -226,7 +227,96 @@ function renderDosar(d) {
     <div class="md-preview" style="border:1px solid var(--line);border-radius:8px;min-height:0">${MDT.mdToHtml(d.description || '') || '<p class="muted">Fără descriere.</p>'}</div>
   `;
   document.getElementById('edit-open-btn').addEventListener('click', openEdit);
+  document.getElementById('export-btn').addEventListener('click', exportDosar);
   MDT.createReportLinker(document.getElementById('dosar-rapoarte-linker'), 'dosar', dosarId, d.rapoarte || []);
+}
+
+// Exportul unui dosar/mandat nu produce un fișier ținut pe server (n-avem
+// storage separat) — reîncărcăm dosarul complet (ca să avem sigur cele mai
+// proaspete mandate/probe/rapoarte), transformăm probele-fișier în imagini
+// încorporate (data URL, la fel ca la previzualizarea din pagină) și
+// deschidem documentul gata formatat într-o fereastră nouă, de unde
+// utilizatorul apasă "Salvează ca PDF" din dialogul de printare.
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function exportDosar() {
+  const btn = document.getElementById('export-btn');
+  const original = btn.textContent;
+  btn.textContent = 'Se pregătește…';
+  btn.disabled = true;
+  try {
+    const res = await apiFetch(`/api/mdt/dosare/${dosarId}`);
+    if (!res.ok) throw new Error();
+    const d = await res.json();
+
+    const suspectsHtml = (d.suspects || []).length
+      ? d.suspects.map(s => `<span class="chip">${ROLE_LABEL[s.role] || s.role}: ${escapeHtml(s.name)}</span>`).join(' ')
+      : '<p><em>Nicio persoană înregistrată.</em></p>';
+    const chipsBlock = (label, items) => (items || []).length
+      ? `<p><strong>${label}:</strong> ${items.map(v => `<span class="chip">${escapeHtml(v)}</span>`).join(' ')}</p>` : '';
+
+    let probeHtml = '';
+    if ((d.probe || []).length) {
+      const parts = [];
+      for (const p of d.probe) {
+        let img = '';
+        if (p.has_file) {
+          try {
+            const r = await apiFetch(`/api/mdt/probe/${p.id}/fisier`);
+            if (r.ok) img = `<img src="${await blobToDataUrl(await r.blob())}" alt="${escapeHtml(p.label)}">`;
+          } catch {}
+        }
+        parts.push(`<div class="proba"><strong>${escapeHtml(p.label)}</strong>${p.url ? `<div class="small">🔗 <a href="${escapeHtml(p.url)}">${escapeHtml(p.url)}</a></div>` : ''}${img}</div>`);
+      }
+      probeHtml = `<h2>Probe</h2>${parts.join('')}`;
+    }
+
+    const mandateHtml = (d.mandate || []).length
+      ? `<h2>Mandate</h2>${d.mandate.map(m => `
+          <div class="mandat">
+            <strong>${MANDAT_TYPE_LABEL[m.type] || m.type} — ${escapeHtml(m.target_name)}</strong>
+            <span class="tag">${MANDAT_STATUS_LABEL[m.status] || m.status}</span>
+            <div class="small">emis ${fmtDate(m.issued_at)} de ${escapeHtml(m.issued_by_name || '—')}${m.expires_at ? ' · expiră ' + fmtDate(m.expires_at) : ''}${m.executed_at ? ' · executat ' + fmtDate(m.executed_at) : ''}</div>
+            ${(m.tags || []).length ? m.tags.map(t => `<span class="chip">${escapeHtml(t)}</span>`).join(' ') : ''}
+            ${MDT.mdToHtml(m.details || '')}
+          </div>`).join('')}`
+      : '';
+
+    const rapoarteHtml = (d.rapoarte || []).length
+      ? `<h2>Rapoarte legate</h2><ul>${d.rapoarte.map(r => `<li>${escapeHtml(MDT.raportNumber(r))} — ${escapeHtml(r.title)}</li>`).join('')}</ul>`
+      : '';
+
+    const html = `
+      <h1>${escapeHtml(d.case_number)} — ${escapeHtml(d.title)}</h1>
+      <div class="meta">
+        ${escapeHtml(CATEGORY_LABEL[d.category] || d.category)} · status: <strong>${STATUS_LABEL[d.status] || d.status}</strong><br>
+        deschis ${fmtDate(d.created_at)} de ${escapeHtml(d.created_by_name || '—')} · responsabil: ${escapeHtml(d.assigned_to_name || 'neasignat')}
+      </div>
+      <p>${suspectsHtml}</p>
+      ${chipsBlock('Polițiști implicați', d.officers_involved)}
+      ${chipsBlock('Vehicule implicate', d.vehicles_involved)}
+      ${chipsBlock('Arme implicate', d.weapons_involved)}
+      ${chipsBlock('Etichete', d.tags)}
+      <h2>Descriere</h2>
+      ${MDT.mdToHtml(d.description || '') || '<p><em>Fără descriere.</em></p>'}
+      ${mandateHtml}
+      ${probeHtml}
+      ${rapoarteHtml}
+    `;
+    MDT.printDocument(`${d.case_number} — ${d.title}`, html);
+  } catch {
+    alert('Nu am putut pregăti exportul dosarului.');
+  } finally {
+    btn.textContent = original;
+    btn.disabled = false;
+  }
 }
 
 let editOfficersWidget, editVehiclesWidget, editWeaponsWidget, editTagsWidget, editDescEditor;
@@ -281,7 +371,29 @@ document.getElementById('edit-form').addEventListener('submit', async (e) => {
   }
 });
 
+let mandateById = {};
+
+function exportMandat(id) {
+  const m = mandateById[id];
+  if (!m) return;
+  const d = currentDosar;
+  const html = `
+    <h1>${MANDAT_TYPE_ICON[m.type] || '📄'} MANDAT DE ${(MANDAT_TYPE_LABEL[m.type] || m.type).toUpperCase()}</h1>
+    <div class="meta">
+      Dosar: <strong>${d ? escapeHtml(d.case_number + ' — ' + d.title) : '—'}</strong><br>
+      Emis ${fmtDate(m.issued_at)} de ${escapeHtml(m.issued_by_name || '—')}${m.expires_at ? ' · expiră ' + fmtDate(m.expires_at) : ''}${m.executed_at ? ' · executat ' + fmtDate(m.executed_at) : ''}<br>
+      Status: <strong>${MANDAT_STATUS_LABEL[m.status] || m.status}</strong> · Prioritate: <strong>${MANDAT_PRIORITY_LABEL[m.priority] || 'Medie'}</strong>
+    </div>
+    <p><strong>Persoană / adresă vizată:</strong> ${escapeHtml(m.target_name)}</p>
+    ${(m.tags || []).length ? `<p>${m.tags.map(t => `<span class="chip">${escapeHtml(t)}</span>`).join(' ')}</p>` : ''}
+    <h2>Detalii / motiv</h2>
+    ${MDT.mdToHtml(m.details || '') || '<p><em>Fără detalii.</em></p>'}
+  `;
+  MDT.printDocument(`Mandat — ${m.target_name}`, html);
+}
+
 function renderMandate(list) {
+  mandateById = Object.fromEntries(list.map(m => [m.id, m]));
   const box = document.getElementById('mandat-list');
   box.innerHTML = list.length ? list.map(m => `
     <div class="mandat-card">
@@ -295,12 +407,13 @@ function renderMandate(list) {
       </div>
       ${(m.tags || []).length ? `<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px">${m.tags.map(t => `<span class="chip">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
       ${m.details ? `<div class="md-preview" style="border:1px solid var(--line);border-radius:8px;margin-top:10px;min-height:0;padding:12px 14px">${MDT.mdToHtml(m.details)}</div>` : ''}
-      ${m.status === 'activ' ? `
-        <div class="mandat-actions">
+      <div class="mandat-actions">
+        <button type="button" class="mini-btn" data-mandat-print="${m.id}">🖨️ Exportă</button>
+        ${m.status === 'activ' ? `
           <button type="button" class="mini-btn" data-mandat-status="${m.id}:executat">Marchează executat</button>
           <button type="button" class="mini-btn" data-mandat-status="${m.id}:expirat">Marchează expirat</button>
-          <button type="button" class="mini-btn danger" data-mandat-status="${m.id}:anulat">Anulează</button>
-        </div>` : ''}
+          <button type="button" class="mini-btn danger" data-mandat-status="${m.id}:anulat">Anulează</button>` : ''}
+      </div>
       <div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px">
         <label style="display:block;color:var(--muted);font-size:11px;font-weight:800;margin-bottom:6px">RAPOARTE LEGATE</label>
         <div id="mandat-rapoarte-${m.id}"></div>
@@ -318,6 +431,9 @@ function renderMandate(list) {
         alert('Nu am putut actualiza statusul mandatului.');
       }
     });
+  });
+  box.querySelectorAll('[data-mandat-print]').forEach(btn => {
+    btn.addEventListener('click', () => exportMandat(btn.dataset.mandatPrint));
   });
 
   list.forEach(m => {

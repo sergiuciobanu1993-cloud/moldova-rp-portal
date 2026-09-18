@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Raport — MDT FIB</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="dashboard.css"><link rel="stylesheet" href="mdt-shared.css">
+<html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Raport — MDT FIB</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="dashboard.css"><link rel="stylesheet" href="mdt-shared.css?v=2">
 <style>
 .case-no{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--orange);font-size:12px;font-weight:800;letter-spacing:.02em}
 .meta-row{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;color:var(--muted);font-size:12px;margin:10px 0 16px}
@@ -54,7 +54,7 @@
 </section>
 </main>
 <script src="auth-client.js"></script>
-<script src="mdt-shared.js"></script>
+<script src="mdt-shared.js?v=2"></script>
 <script>
 const TYPE_LABEL = { agresiune: 'Agresiune', talharie: 'Tâlhărie', spargere: 'Spargere', furt: 'Furt', altele: 'Altele' };
 const DOSAR_STATUS_LABEL = { deschis: 'DESCHIS', in_lucru: 'ÎN LUCRU', la_parchet: 'LA PARCHET', inchis: 'ÎNCHIS', clasat: 'CLASAT' };
@@ -88,6 +88,7 @@ function renderRaport(r) {
       <div><span class="case-no">${MDT.raportNumber(r)}</span><h2 style="margin:4px 0 0">${escapeHtml(r.title)}</h2></div>
       <div style="display:flex;gap:8px;align-items:center">
         <span class="pill off">${TYPE_LABEL[r.type] || r.type}</span>
+        <button type="button" class="btn-ghost" id="export-btn">🖨️ Exportă</button>
         <button type="button" class="btn-ghost" id="edit-open-btn">Editează</button>
       </div>
     </div>
@@ -102,6 +103,55 @@ function renderRaport(r) {
     <div class="md-preview" style="border:1px solid var(--line);border-radius:8px;min-height:0">${MDT.mdToHtml(r.description || '') || '<p class="muted">Fără descriere.</p>'}</div>
   `;
   document.getElementById('edit-open-btn').addEventListener('click', openEdit);
+  document.getElementById('export-btn').addEventListener('click', exportRaport);
+}
+
+// La fel ca la dosar — nu ținem PDF-uri pe server, reîncărcăm raportul
+// complet (cu dosare/mandate legate proaspete) și deschidem documentul
+// gata formatat într-o fereastră nouă, gata de "Salvează ca PDF".
+async function exportRaport() {
+  const btn = document.getElementById('export-btn');
+  const original = btn.textContent;
+  btn.textContent = 'Se pregătește…';
+  btn.disabled = true;
+  try {
+    const res = await apiFetch(`/api/mdt/rapoarte/${raportId}`);
+    if (!res.ok) throw new Error();
+    const r = await res.json();
+
+    const chipsBlock = (label, items) => (items || []).length
+      ? `<p><strong>${label}:</strong> ${items.map(v => `<span class="chip">${escapeHtml(v)}</span>`).join(' ')}</p>` : '';
+
+    const dosareHtml = (r.dosare || []).length
+      ? `<h2>Dosare legate</h2><ul>${r.dosare.map(d => `<li>${escapeHtml(d.case_number)} — ${escapeHtml(d.title)}</li>`).join('')}</ul>`
+      : '';
+    const mandateHtml = (r.mandate || []).length
+      ? `<h2>Mandate legate</h2><ul>${r.mandate.map(m => `<li>${MANDAT_TYPE_LABEL[m.type] || m.type} — ${escapeHtml(m.target_name)}</li>`).join('')}</ul>`
+      : '';
+
+    const html = `
+      <h1>${escapeHtml(MDT.raportNumber(r))} — ${escapeHtml(r.title)}</h1>
+      <div class="meta">
+        Tip: <strong>${escapeHtml(TYPE_LABEL[r.type] || r.type)}</strong><br>
+        întocmit ${fmtDate(r.created_at)} de ${escapeHtml(r.created_by_name || '—')}
+      </div>
+      ${chipsBlock('Polițiști implicați', r.officers_involved)}
+      ${chipsBlock('Civili implicați', r.civilians_involved)}
+      ${chipsBlock('Suspecți implicați', r.suspects_involved)}
+      ${chipsBlock('Arme implicate', r.weapons_involved)}
+      ${chipsBlock('Etichete', r.tags)}
+      <h2>Descriere</h2>
+      ${MDT.mdToHtml(r.description || '') || '<p><em>Fără descriere.</em></p>'}
+      ${dosareHtml}
+      ${mandateHtml}
+    `;
+    MDT.printDocument(`${MDT.raportNumber(r)} — ${r.title}`, html);
+  } catch {
+    alert('Nu am putut pregăti exportul raportului.');
+  } finally {
+    btn.textContent = original;
+    btn.disabled = false;
+  }
 }
 
 function openEdit() {

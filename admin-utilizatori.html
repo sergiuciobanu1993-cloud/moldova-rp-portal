@@ -12,8 +12,8 @@
     <h2>Toți utilizatorii înregistrați</h2>
     <span class="muted" id="count-note"></span>
   </div>
-  <table><thead><tr><th>UTILIZATOR</th><th>DISCORD</th><th>PAROLĂ</th><th>RANG</th><th>ÎNREGISTRAT</th><th>SCHIMBĂ RANG</th><th>FACȚIUNE</th></tr></thead>
-  <tbody id="list-body"><tr><td colspan="7">Se încarcă…</td></tr></tbody></table>
+  <table><thead><tr><th>UTILIZATOR</th><th>DISCORD</th><th>PAROLĂ</th><th>RANG</th><th>ÎNREGISTRAT</th><th>SCHIMBĂ RANG</th><th>FACȚIUNE</th><th>ACȚIUNI</th></tr></thead>
+  <tbody id="list-body"><tr><td colspan="8">Se încarcă…</td></tr></tbody></table>
   <p class="muted" style="margin:12px 22px 16px;font-size:11px">
     Facțiunea de aici e cea de pe SITE (folosită de pagini precum MDT FIB, care se deblochează pentru membrii facțiunii „FIB")
     — separată de jobul din joc, afișat pe pagina „Jucători".
@@ -68,7 +68,21 @@ function passwordPillHtml(u) {
   return `<span class="pill warn">FĂRĂ PAROLĂ ⚠</span>`;
 }
 
-async function loadUsers(canEdit) {
+// Dezactivarea e reversibilă (blochează doar login-ul, vezi is_active), deci
+// e deschisă oricărui admin/co-fondator/owner — ca schimbarea de facțiune de
+// mai sus. Ștergerea definitivă rămâne doar pentru fondator (canEdit), fiindcă
+// e ireversibilă. Niciuna dintre ele nu apare pe rândul propriului cont —
+// backend-ul le-ar respinge oricum, dar mai clar așa decât un buton care dă eroare.
+function actionsHtml(u, isSelf, canDelete) {
+  if (isSelf) return `<span class="muted">contul tău</span>`;
+  const toggleBtn = u.is_active
+    ? `<button data-deactivate-for="${u.id}">Dezactivează</button>`
+    : `<button data-activate-for="${u.id}">Activează</button>`;
+  const delBtn = canDelete ? `<button data-del-for="${u.id}" class="danger">Șterge</button>` : '';
+  return `<div class="rowactions">${toggleBtn}${delBtn}</div>`;
+}
+
+async function loadUsers(canEdit, me) {
   const tbody = document.getElementById('list-body');
   const countNote = document.getElementById('count-note');
   try {
@@ -85,11 +99,12 @@ async function loadUsers(canEdit) {
         </td>
         <td>${u.discord_username ? `<span class="pill info">CONECTAT</span>` : `<span class="pill off">FĂRĂ DISCORD</span>`}</td>
         <td>${passwordPillHtml(u)}</td>
-        <td><span class="pill ${ROLE_PILL[u.role] || 'off'}">${(ROLE_LABEL[u.role] || u.role).toUpperCase()}</span></td>
+        <td><span class="pill ${ROLE_PILL[u.role] || 'off'}">${(ROLE_LABEL[u.role] || u.role).toUpperCase()}</span>${u.is_active ? '' : ' <span class="pill warn">DEZACTIVAT</span>'}</td>
         <td>${fmtDate(u.created_at)}</td>
         <td>${canEdit ? roleSelectHtml(u.id, u.role) : '<span class="muted">doar fondatorul poate schimba</span>'}</td>
         <td>${factionSelectHtml(u)}</td>
-      </tr>`).join('') : '<tr><td colspan="7">Niciun utilizator încă.</td></tr>';
+        <td>${actionsHtml(u, u.id === me.id, canEdit)}</td>
+      </tr>`).join('') : '<tr><td colspan="8">Niciun utilizator încă.</td></tr>';
 
     if (canEdit) {
       tbody.querySelectorAll('[data-role-for]').forEach(sel => {
@@ -106,7 +121,7 @@ async function loadUsers(canEdit) {
             alert('Nu am putut schimba rangul. Încearcă din nou.');
           } finally {
             sel.disabled = false;
-            loadUsers(canEdit);
+            loadUsers(canEdit, me);
           }
         });
       });
@@ -130,12 +145,47 @@ async function loadUsers(canEdit) {
           alert('Nu am putut schimba facțiunea. Încearcă din nou.');
         } finally {
           sel.disabled = false;
-          loadUsers(canEdit);
+          loadUsers(canEdit, me);
+        }
+      });
+    });
+
+    tbody.querySelectorAll('[data-deactivate-for],[data-activate-for]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const userId = btn.dataset.deactivateFor || btn.dataset.activateFor;
+        const activate = !!btn.dataset.activateFor;
+        if (!activate && !confirm('Sigur dezactivezi acest cont? Nu va mai putea intra pe site până îl reactivezi.')) return;
+        btn.disabled = true;
+        try {
+          const res = await apiFetch(`/api/admin/users/${userId}/active`, {
+            method: 'PUT', body: JSON.stringify({ is_active: activate })
+          });
+          if (!res.ok) throw new Error();
+        } catch {
+          alert('Nu am putut schimba starea contului. Încearcă din nou.');
+        } finally {
+          loadUsers(canEdit, me);
+        }
+      });
+    });
+
+    tbody.querySelectorAll('[data-del-for]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const userId = btn.dataset.delFor;
+        if (!confirm('Ștergi definitiv acest cont? Acțiunea nu poate fi anulată — contul de jucător și eventualele tichete de suport deschise de el se șterg odată cu el.')) return;
+        btn.disabled = true;
+        try {
+          const res = await apiFetch(`/api/admin/users/${userId}`, { method: 'DELETE' });
+          if (!res.ok) throw new Error();
+        } catch {
+          alert('Nu am putut șterge contul. Încearcă din nou.');
+        } finally {
+          loadUsers(canEdit, me);
         }
       });
     });
   } catch {
-    tbody.innerHTML = '<tr><td colspan="7">Nu am putut încărca lista de utilizatori.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8">Nu am putut încărca lista de utilizatori.</td></tr>';
   }
 }
 
@@ -145,10 +195,10 @@ async function loadUsers(canEdit) {
   document.getElementById('admin-name').textContent = me.username;
   const canEdit = me.role === 'owner';
   document.getElementById('perm-note').textContent = canEdit
-    ? 'Poți schimba rangul oricărui utilizator (Jucător / Moderator / Administrator / Co-fondator / Fondator).'
-    : 'Poți vedea lista, dar doar fondatorul poate schimba rangul unui utilizator.';
+    ? 'Poți schimba rangul, dezactiva/activa sau șterge definitiv orice utilizator (în afară de contul tău).'
+    : 'Poți vedea lista și dezactiva/activa conturi. Doar fondatorul poate schimba rangul sau șterge definitiv un utilizator.';
   await loadSiteFactions();
-  loadUsers(canEdit);
+  loadUsers(canEdit, me);
 })();
 </script>
 </body></html>

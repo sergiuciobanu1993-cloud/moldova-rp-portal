@@ -377,6 +377,49 @@ CREATE TABLE IF NOT EXISTS mdt_mandat_rapoarte (
   PRIMARY KEY(mandat_id, raport_id)
 );
 
+-- === Utilizatori — ștergere definitivă + dezactivare rapidă (18.09.2026) ===
+-- Ștergerea unui cont din users trebuia să blocheze pe orice tabelă care îl
+-- referă fără ON DELETE (implicit RESTRICT în Postgres). Aici relaxăm acele
+-- constrângeri la ON DELETE SET NULL, ca ștergerea unui utilizator să nu mai
+-- pice din cauza unui anunț/sesizări/dosar etc. la care a fost doar
+-- autor/responsabil — rândul rămâne, doar legătura cu contul șters dispare.
+-- (players.user_id, tickets.user_id și audit_logs.actor_id sunt deja OK din
+-- schema inițială — CASCADE / SET NULL — și nu sunt atinse aici.)
+ALTER TABLE ticket_replies ALTER COLUMN author_id DROP NOT NULL;
+
+ALTER TABLE announcements DROP CONSTRAINT IF EXISTS announcements_author_id_fkey;
+ALTER TABLE announcements ADD CONSTRAINT announcements_author_id_fkey FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE SET NULL;
+
+ALTER TABLE punishments DROP CONSTRAINT IF EXISTS punishments_issued_by_fkey;
+ALTER TABLE punishments ADD CONSTRAINT punishments_issued_by_fkey FOREIGN KEY (issued_by) REFERENCES users(id) ON DELETE SET NULL;
+
+ALTER TABLE complaints DROP CONSTRAINT IF EXISTS complaints_assigned_to_fkey;
+ALTER TABLE complaints ADD CONSTRAINT complaints_assigned_to_fkey FOREIGN KEY (assigned_to) REFERENCES users(id) ON DELETE SET NULL;
+
+ALTER TABLE ck_requests DROP CONSTRAINT IF EXISTS ck_requests_decided_by_fkey;
+ALTER TABLE ck_requests ADD CONSTRAINT ck_requests_decided_by_fkey FOREIGN KEY (decided_by) REFERENCES users(id) ON DELETE SET NULL;
+
+ALTER TABLE tickets DROP CONSTRAINT IF EXISTS tickets_assigned_to_fkey;
+ALTER TABLE tickets ADD CONSTRAINT tickets_assigned_to_fkey FOREIGN KEY (assigned_to) REFERENCES users(id) ON DELETE SET NULL;
+
+ALTER TABLE ticket_replies DROP CONSTRAINT IF EXISTS ticket_replies_author_id_fkey;
+ALTER TABLE ticket_replies ADD CONSTRAINT ticket_replies_author_id_fkey FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE SET NULL;
+
+ALTER TABLE mdt_dosare DROP CONSTRAINT IF EXISTS mdt_dosare_created_by_fkey;
+ALTER TABLE mdt_dosare ADD CONSTRAINT mdt_dosare_created_by_fkey FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL;
+
+ALTER TABLE mdt_dosare DROP CONSTRAINT IF EXISTS mdt_dosare_assigned_to_fkey;
+ALTER TABLE mdt_dosare ADD CONSTRAINT mdt_dosare_assigned_to_fkey FOREIGN KEY (assigned_to) REFERENCES users(id) ON DELETE SET NULL;
+
+ALTER TABLE mdt_mandate DROP CONSTRAINT IF EXISTS mdt_mandate_issued_by_fkey;
+ALTER TABLE mdt_mandate ADD CONSTRAINT mdt_mandate_issued_by_fkey FOREIGN KEY (issued_by) REFERENCES users(id) ON DELETE SET NULL;
+
+ALTER TABLE mdt_probe DROP CONSTRAINT IF EXISTS mdt_probe_added_by_fkey;
+ALTER TABLE mdt_probe ADD CONSTRAINT mdt_probe_added_by_fkey FOREIGN KEY (added_by) REFERENCES users(id) ON DELETE SET NULL;
+
+ALTER TABLE mdt_rapoarte DROP CONSTRAINT IF EXISTS mdt_rapoarte_created_by_fkey;
+ALTER TABLE mdt_rapoarte ADD CONSTRAINT mdt_rapoarte_created_by_fkey FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL;
+
 INSERT INTO roles(name, description) VALUES
 ('player', 'Jucator standard'),
 ('moderator', 'Moderator'),

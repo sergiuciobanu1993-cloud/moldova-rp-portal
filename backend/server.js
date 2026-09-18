@@ -2089,6 +2089,46 @@ app.put("/api/admin/users/:id/role", auth, requireRole("owner"), asyncRoute(asyn
   res.json({ ...rows[0], role });
 }));
 
+// Dezactivare/reactivare cont (18.09.2026) — reversibilă, blochează login-ul
+// (vezi verificarea is_active din /api/auth/login) fără să șteargă nimic.
+// Deschisă oricărui admin/co-fondator/owner, ca faction-urile mai jos.
+app.put("/api/admin/users/:id/active", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+  const isActive = !!req.body.is_active;
+  if (req.params.id === req.user.sub && !isActive)
+    return res.status(400).json({ error: "Nu îți poți dezactiva propriul cont." });
+
+  const { rows } = await pool.query(
+    `UPDATE users SET is_active=$1, updated_at=NOW() WHERE id=$2
+     RETURNING id, username, discord_username, is_active`,
+    [isActive, req.params.id]
+  );
+  if (!rows[0]) return res.status(404).json({ error: "Utilizatorul nu există." });
+
+  await logAction(req.user.sub, isActive ? "user.activate" : "user.deactivate", "user", req.params.id, {}, req.ip);
+  res.json(rows[0]);
+}));
+
+// Ștergere definitivă cont (18.09.2026) — doar owner. Restricționată la owner
+// (nu tot ADMIN_ROLES) fiindcă e ireversibilă, spre deosebire de dezactivare.
+// FK-urile pe users(id) sunt ON DELETE SET NULL (istoric: anunțuri, sancțiuni,
+// dosare/mandate/rapoarte MDT etc. rămân, doar leagătura cu contul dispare) în
+// afară de players.user_id și tickets.user_id, care sunt CASCADE — deci contul
+// de jucător și eventualele tichete de suport deschise de acel user (+
+// răspunsurile la ele) se șterg odată cu el. Vezi migrarea din schema.sql.
+app.delete("/api/admin/users/:id", auth, requireRole("owner"), asyncRoute(async (req, res) => {
+  if (req.params.id === req.user.sub)
+    return res.status(400).json({ error: "Nu îți poți șterge propriul cont." });
+
+  const { rows } = await pool.query(
+    "DELETE FROM users WHERE id=$1 RETURNING id, username, discord_username",
+    [req.params.id]
+  );
+  if (!rows[0]) return res.status(404).json({ error: "Utilizatorul nu există." });
+
+  await logAction(req.user.sub, "user.delete", "user", req.params.id, { username: rows[0].username }, req.ip);
+  res.json({ ok: true });
+}));
+
 // ---------------------------------------------------------------------------
 // Players (v0.4)
 // ---------------------------------------------------------------------------

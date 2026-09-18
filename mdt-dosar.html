@@ -210,6 +210,7 @@ function renderDosar(d) {
         <span class="pill ${STATUS_PILL[d.status] || 'off'}">${STATUS_LABEL[d.status] || d.status}</span>
         <button type="button" class="btn-ghost" id="export-btn">🖨️ Exportă</button>
         <button type="button" class="btn-ghost" id="edit-open-btn">Editează</button>
+        <button type="button" class="btn-ghost" id="delete-dosar-btn" style="color:#ff8a8a;border-color:rgba(255,80,80,.4)">🗑️ Șterge</button>
       </div>
     </div>
     <div class="meta-row">
@@ -228,7 +229,19 @@ function renderDosar(d) {
   `;
   document.getElementById('edit-open-btn').addEventListener('click', openEdit);
   document.getElementById('export-btn').addEventListener('click', exportDosar);
+  document.getElementById('delete-dosar-btn').addEventListener('click', deleteDosar);
   MDT.createReportLinker(document.getElementById('dosar-rapoarte-linker'), 'dosar', dosarId, d.rapoarte || []);
+}
+
+async function deleteDosar() {
+  if (!confirm('Ștergi definitiv acest dosar, cu tot ce conține (mandate, probe, legături)? Nu poate fi anulat.')) return;
+  try {
+    const res = await apiFetch(`/api/mdt/dosare/${dosarId}`, { method: 'DELETE' });
+    if (!res.ok && res.status !== 204) throw new Error();
+    window.location.href = 'mdt-fib.html';
+  } catch {
+    alert('Nu am putut șterge dosarul.');
+  }
 }
 
 // Exportul unui dosar/mandat nu produce un fișier ținut pe server (n-avem
@@ -413,6 +426,7 @@ function renderMandate(list) {
           <button type="button" class="mini-btn" data-mandat-status="${m.id}:executat">Marchează executat</button>
           <button type="button" class="mini-btn" data-mandat-status="${m.id}:expirat">Marchează expirat</button>
           <button type="button" class="mini-btn danger" data-mandat-status="${m.id}:anulat">Anulează</button>` : ''}
+        <button type="button" class="mini-btn danger" data-mandat-delete="${m.id}">🗑️ Șterge</button>
       </div>
       <div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px">
         <label style="display:block;color:var(--muted);font-size:11px;font-weight:800;margin-bottom:6px">RAPOARTE LEGATE</label>
@@ -434,6 +448,18 @@ function renderMandate(list) {
   });
   box.querySelectorAll('[data-mandat-print]').forEach(btn => {
     btn.addEventListener('click', () => exportMandat(btn.dataset.mandatPrint));
+  });
+  box.querySelectorAll('[data-mandat-delete]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('Ștergi definitiv acest mandat? Nu poate fi anulat.')) return;
+      try {
+        const res = await apiFetch(`/api/mdt/mandate/${btn.dataset.mandatDelete}`, { method: 'DELETE' });
+        if (!res.ok && res.status !== 204) throw new Error();
+        loadMandate();
+      } catch {
+        alert('Nu am putut șterge mandatul.');
+      }
+    });
   });
 
   list.forEach(m => {

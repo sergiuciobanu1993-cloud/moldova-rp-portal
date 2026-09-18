@@ -2596,7 +2596,7 @@ app.put("/api/mdt/dosare/:id", auth, requireFib, asyncRoute(async (req, res) => 
   res.json(mapDosarRow(rows[0]));
 }));
 
-app.delete("/api/mdt/dosare/:id", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+app.delete("/api/mdt/dosare/:id", auth, requireFib, asyncRoute(async (req, res) => {
   const { rowCount } = await pool.query("DELETE FROM mdt_dosare WHERE id=$1", [req.params.id]);
   if (!rowCount) return res.status(404).json({ error: "Dosarul nu există." });
   await logAction(req.user.sub, "mdt.dosar.delete", "mdt_dosar", req.params.id, null, req.ip);
@@ -2642,7 +2642,7 @@ app.put("/api/mdt/mandate/:id", auth, requireFib, asyncRoute(async (req, res) =>
   res.json(rows[0]);
 }));
 
-app.delete("/api/mdt/mandate/:id", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+app.delete("/api/mdt/mandate/:id", auth, requireFib, asyncRoute(async (req, res) => {
   const { rowCount } = await pool.query("DELETE FROM mdt_mandate WHERE id=$1", [req.params.id]);
   if (!rowCount) return res.status(404).json({ error: "Mandatul nu există." });
   await logAction(req.user.sub, "mdt.mandat.delete", "mdt_mandat", req.params.id, null, req.ip);
@@ -2787,7 +2787,7 @@ app.put("/api/mdt/rapoarte/:id", auth, requireFib, asyncRoute(async (req, res) =
   res.json(mapRaportRow(rows[0]));
 }));
 
-app.delete("/api/mdt/rapoarte/:id", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+app.delete("/api/mdt/rapoarte/:id", auth, requireFib, asyncRoute(async (req, res) => {
   const { rowCount } = await pool.query("DELETE FROM mdt_rapoarte WHERE id=$1", [req.params.id]);
   if (!rowCount) return res.status(404).json({ error: "Raportul nu există." });
   await logAction(req.user.sub, "mdt.raport.delete", "mdt_raport", req.params.id, null, req.ip);

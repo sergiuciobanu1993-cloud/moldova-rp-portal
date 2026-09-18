@@ -90,6 +90,7 @@ function renderRaport(r) {
         <span class="pill off">${TYPE_LABEL[r.type] || r.type}</span>
         <button type="button" class="btn-ghost" id="export-btn">🖨️ Exportă</button>
         <button type="button" class="btn-ghost" id="edit-open-btn">Editează</button>
+        <button type="button" class="btn-ghost" id="delete-raport-btn" style="color:#ff8a8a;border-color:rgba(255,80,80,.4)">🗑️ Șterge</button>
       </div>
     </div>
     <div class="meta-row">
@@ -104,6 +105,18 @@ function renderRaport(r) {
   `;
   document.getElementById('edit-open-btn').addEventListener('click', openEdit);
   document.getElementById('export-btn').addEventListener('click', exportRaport);
+  document.getElementById('delete-raport-btn').addEventListener('click', deleteRaport);
+}
+
+async function deleteRaport() {
+  if (!confirm('Ștergi definitiv acest raport? Nu poate fi anulat.')) return;
+  try {
+    const res = await apiFetch(`/api/mdt/rapoarte/${raportId}`, { method: 'DELETE' });
+    if (!res.ok && res.status !== 204) throw new Error();
+    window.location.href = 'mdt-rapoarte.html';
+  } catch {
+    alert('Nu am putut șterge raportul.');
+  }
 }
 
 // La fel ca la dosar — nu ținem PDF-uri pe server, reîncărcăm raportul

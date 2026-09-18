@@ -99,7 +99,7 @@ function renderRaport(r) {
     <div class="field" style="margin-bottom:10px"><label>Suspecți implicați</label>${chipsHtml(r.suspects_involved, 'niciunul înregistrat')}</div>
     <div class="field" style="margin-bottom:10px"><label>Arme implicate</label>${chipsHtml(r.weapons_involved, 'niciuna înregistrată')}</div>
     <div class="field" style="margin-bottom:14px"><label>Etichete</label>${chipsHtml(r.tags, 'nicio etichetă')}</div>
-    <div class="md-preview" style="border:1px solid var(--line);border-radius:8px">${MDT.mdToHtml(r.description || '') || '<p class="muted">Fără descriere.</p>'}</div>
+    <div class="md-preview" style="border:1px solid var(--line);border-radius:8px;min-height:0">${MDT.mdToHtml(r.description || '') || '<p class="muted">Fără descriere.</p>'}</div>
   `;
   document.getElementById('edit-open-btn').addEventListener('click', openEdit);
 }

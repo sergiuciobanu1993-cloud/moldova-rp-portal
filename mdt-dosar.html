@@ -223,7 +223,7 @@ function renderDosar(d) {
     <div class="field" style="margin-bottom:10px"><label>Vehicule implicate</label>${chipsHtml(d.vehicles_involved, 'niciunul înregistrat')}</div>
     <div class="field" style="margin-bottom:10px"><label>Arme implicate</label>${chipsHtml(d.weapons_involved, 'niciuna înregistrată')}</div>
     <div class="field" style="margin-bottom:14px"><label>Etichete</label>${chipsHtml(d.tags, 'nicio etichetă')}</div>
-    <div class="md-preview" style="border:1px solid var(--line);border-radius:8px">${MDT.mdToHtml(d.description || '') || '<p class="muted">Fără descriere.</p>'}</div>
+    <div class="md-preview" style="border:1px solid var(--line);border-radius:8px;min-height:0">${MDT.mdToHtml(d.description || '') || '<p class="muted">Fără descriere.</p>'}</div>
   `;
   document.getElementById('edit-open-btn').addEventListener('click', openEdit);
   MDT.createReportLinker(document.getElementById('dosar-rapoarte-linker'), 'dosar', dosarId, d.rapoarte || []);

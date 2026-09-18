@@ -15,6 +15,13 @@
 .md-toolbar button.active{background:rgba(255,138,31,.18);color:var(--orange)}
 .md-textarea{width:100%;min-height:420px;padding:14px 16px;border:1px solid var(--line);border-top:0;background:var(--bg);color:var(--text);border-radius:0 0 8px 8px;font:13.5px/1.7 ui-monospace,SFMono-Regular,Menlo,monospace;resize:vertical;outline:0}
 .md-textarea:focus{border-color:var(--orange)}
+/* dashboard.css are o regulă globală ".field textarea{min-height:110px}" —
+   cum editorul nostru e mereu într-un .field, acea regulă (o clasă + un
+   element = specificitate 0,1,1) bate ".md-textarea" de mai sus (doar o
+   clasă = 0,1,0) și câștiga în tăcere, indiferent de ordinea din <head> sau
+   de orice "?v=" pus pe link-uri. Regula de mai jos (două clase = 0,2,0)
+   are specificitate mai mare decât a ei, deci acum câștigă cea corectă. */
+.field .md-textarea{min-height:420px}
 .md-preview{min-height:420px;padding:14px 16px;border:1px solid var(--line);border-top:0;border-radius:0 0 8px 8px;background:var(--bg);color:#d5d8db;line-height:1.7;overflow-wrap:anywhere}
 .md-preview h1,.md-preview h2,.md-preview h3,.md-preview h4,.md-preview h5,.md-preview h6{color:var(--text);margin:14px 0 8px}
 .md-preview h1:first-child,.md-preview h2:first-child{margin-top:0}

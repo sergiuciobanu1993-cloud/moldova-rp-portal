@@ -16,7 +16,7 @@
       <option value="closed">Închise</option>
     </select>
   </div>
-  <table><thead><tr><th>SUBIECT</th><th>JUCĂTOR</th><th>CATEGORIE</th><th>STATUS</th><th>ASIGNAT</th><th>ACTUALIZAT</th><th></th></tr></thead>
+  <table><thead><tr><th>SUBIECT</th><th>JUCĂTOR</th><th>CATEGORIE</th><th>STATUS</th><th>ASIGNAT</th><th>ACTUALIZAT</th><th>ACȚIUNI</th></tr></thead>
   <tbody id="list-body"><tr><td colspan="7">Se încarcă…</td></tr></tbody></table>
 </section>
 
@@ -30,8 +30,12 @@
     <span>·</span>
     <span id="detail-date"></span>
   </div>
+  <p id="detail-reported" hidden></p>
   <p id="detail-description" class="ticket-desc"></p>
   <p id="detail-evidence"></p>
+  <div class="rowactions" style="margin-bottom:16px">
+    <button type="button" id="detail-delete-btn" class="danger">Șterge tichetul</button>
+  </div>
 
   <div class="field" style="margin:16px 0">
     <label>Schimbă status</label>
@@ -81,10 +85,27 @@ async function loadList() {
         <td><span class="pill ${STATUS_PILL[t.status] || 'off'}">${STATUS_LABEL[t.status] || t.status}</span></td>
         <td>${t.assigned_username || '—'}</td>
         <td>${fmtDate(t.updated_at)}</td>
-        <td class="rowactions"><button data-open="${t.id}">Deschide</button></td>
+        <td class="rowactions">
+          <button data-open="${t.id}">Deschide</button>
+          <button data-del="${t.id}" class="danger">Șterge</button>
+        </td>
       </tr>`).join('') : '<tr><td colspan="7">Niciun tichet încă.</td></tr>';
 
     tbody.querySelectorAll('[data-open]').forEach(btn => btn.addEventListener('click', () => openTicket(btn.dataset.open)));
+    tbody.querySelectorAll('[data-del]').forEach(btn => btn.addEventListener('click', async () => {
+      if (!confirm('Ștergi definitiv acest tichet? Acțiunea nu poate fi anulată.')) return;
+      try {
+        const res = await apiFetch(`/api/admin/tickets/${btn.dataset.del}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error();
+        if (currentTicketId === btn.dataset.del) {
+          document.getElementById('detail-box').hidden = true;
+          currentTicketId = null;
+        }
+        loadList();
+      } catch {
+        alert('Nu am putut șterge tichetul. Încearcă din nou.');
+      }
+    }));
   } catch {
     tbody.innerHTML = '<tr><td colspan="7">Nu am putut încărca tichetele.</td></tr>';
   }
@@ -102,6 +123,13 @@ async function openTicket(id) {
   document.getElementById('detail-category').textContent = CATEGORY_LABEL[t.category] || t.category;
   document.getElementById('detail-submitted').textContent = `deschis de ${t.submitted_by}`;
   document.getElementById('detail-date').textContent = fmtDate(t.created_at);
+  const reportedEl = document.getElementById('detail-reported');
+  if (t.reported_player_name) {
+    reportedEl.innerHTML = `<span class="reported-pill">🎯 Tichet despre: ${t.reported_player_name}</span>`;
+    reportedEl.hidden = false;
+  } else {
+    reportedEl.hidden = true;
+  }
   document.getElementById('detail-description').textContent = t.description;
   document.getElementById('detail-evidence').innerHTML = t.evidence_url
     ? `<a href="${t.evidence_url}" target="_blank" rel="noopener noreferrer">🔗 Vezi dovada atașată</a>`
@@ -133,6 +161,20 @@ document.getElementById('detail-status-select').addEventListener('change', async
     method: 'PUT', body: JSON.stringify({ status: e.target.value })
   });
   loadList();
+});
+
+document.getElementById('detail-delete-btn').addEventListener('click', async () => {
+  if (!currentTicketId) return;
+  if (!confirm('Ștergi definitiv acest tichet? Acțiunea nu poate fi anulată.')) return;
+  try {
+    const res = await apiFetch(`/api/admin/tickets/${currentTicketId}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error();
+    document.getElementById('detail-box').hidden = true;
+    currentTicketId = null;
+    loadList();
+  } catch {
+    alert('Nu am putut șterge tichetul. Încearcă din nou.');
+  }
 });
 
 document.getElementById('reply-form').addEventListener('submit', async (e) => {

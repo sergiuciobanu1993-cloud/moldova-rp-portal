@@ -9,6 +9,7 @@
 .msg b{display:block;font-size:11px;color:var(--orange);margin-bottom:5px}
 .msg span{display:block;font-size:13px;color:var(--text);white-space:pre-wrap}
 .msg small{display:block;color:#666;font-size:10px;margin-top:6px}
+.reported-pill{display:inline-flex;align-items:center;gap:6px;background:rgba(255,80,80,.1);border:1px solid rgba(255,80,80,.3);color:#ff8a8a;padding:4px 10px;border-radius:999px;font-size:11px;font-weight:800}
 .muted{color:var(--muted);font-size:12px}.formmsg{margin:12px 0 0;padding:10px 12px;border-radius:8px;font-size:12px;font-weight:700}.formmsg.error{background:rgba(255,80,80,.1);border:1px solid rgba(255,80,80,.35);color:#ff8a8a}.formmsg.ok{background:rgba(66,223,138,.1);border:1px solid rgba(66,223,138,.35);color:var(--green)}
 
 /* Fereastră flotantă (modal) pentru formulare cu conținut lung — ex: editarea

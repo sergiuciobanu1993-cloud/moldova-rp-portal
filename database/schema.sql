@@ -420,6 +420,17 @@ ALTER TABLE mdt_probe ADD CONSTRAINT mdt_probe_added_by_fkey FOREIGN KEY (added_
 ALTER TABLE mdt_rapoarte DROP CONSTRAINT IF EXISTS mdt_rapoarte_created_by_fkey;
 ALTER TABLE mdt_rapoarte ADD CONSTRAINT mdt_rapoarte_created_by_fkey FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL;
 
+-- === Tichete — reclamații publice + jucător reclamat (18.09.2026) ===
+-- Tichetele de categoria "reclamatie" (reclamație jucător) devin vizibile ca
+-- pe un forum, pentru orice utilizator logat — nu doar pentru autor + staff,
+-- ca restul categoriilor (general/bug/ban_appeal), care rămân private.
+-- reported_player_id leagă structurat tichetul de jucătorul reclamat (ales
+-- dintr-o căutare în formular), ca staff-ul/comunitatea să știe exact despre
+-- cine e vorba, nu doar din text liber în descriere.
+ALTER TABLE tickets ADD COLUMN IF NOT EXISTS reported_player_id UUID REFERENCES players(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_tickets_reported_player ON tickets(reported_player_id);
+CREATE INDEX IF NOT EXISTS idx_tickets_category ON tickets(category);
+
 INSERT INTO roles(name, description) VALUES
 ('player', 'Jucator standard'),
 ('moderator', 'Moderator'),

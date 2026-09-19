@@ -305,33 +305,55 @@ async function syncPlayerSnapshots() {
   try {
     const detail = await fetchPlayersDetail();
     if (!detail.online || !detail.players.length) return;
+
+    // (19.09.2026, optimizare resurse) Înainte, acest tur trimitea câte un
+    // UPDATE separat pentru FIECARE jucător online — cu zeci de jucători pe
+    // server, asta însemna zeci de round-trip-uri către baza de date, la
+    // fiecare 60 de secunde, non-stop, indiferent dacă cineva naviga pe site
+    // sau nu. Acum construim un singur UPDATE ... FROM (VALUES ...), care
+    // actualizează toți jucătorii online într-o singură interogare — aceeași
+    // treabă, o singură rundă la DB în loc de N.
+    const values = [];
+    const params = [];
+    let i = 0;
     for (const pl of detail.players) {
       const name = (pl.name || "").toString().trim();
       if (!name) continue;
-      await pool.query(
-        `UPDATE players SET
-           last_cash = $1, last_bank = $2, last_black_money = $3,
-           last_job = $4, last_job_label = $5, last_vehicles = $6,
-           last_synced_at = NOW()
-         WHERE display_name ILIKE $7`,
-        [
-          // last_cash/last_bank/last_black_money sunt INTEGER — jocul poate
-          // trimite valori cu zecimale (ex: bani murdari calculați ca procent,
-          // 333112.75), ceea ce Postgres refuză direct la INSERT/UPDATE cu
-          // "invalid input syntax for type integer". Rotunjim aici, nu
-          // schimbăm coloana la NUMERIC, pentru că banii din joc sunt oricum
-          // afișați ca sumă întreagă peste tot pe site (fmtMoney) — nu pierdem
-          // nimic relevant vizual.
-          Number.isFinite(pl.cash) ? Math.round(pl.cash) : null,
-          Number.isFinite(pl.bank) ? Math.round(pl.bank) : null,
-          Number.isFinite(pl.blackMoney) ? Math.round(pl.blackMoney) : null,
-          pl.job || null,
-          pl.jobLabel || null,
-          JSON.stringify(pl.vehicles || []),
-          name,
-        ]
+      params.push(
+        // last_cash/last_bank/last_black_money sunt INTEGER — jocul poate
+        // trimite valori cu zecimale (ex: bani murdari calculați ca procent,
+        // 333112.75), ceea ce Postgres refuză direct la INSERT/UPDATE cu
+        // "invalid input syntax for type integer". Rotunjim aici, nu
+        // schimbăm coloana la NUMERIC, pentru că banii din joc sunt oricum
+        // afișați ca sumă întreagă peste tot pe site (fmtMoney) — nu pierdem
+        // nimic relevant vizual.
+        Number.isFinite(pl.cash) ? Math.round(pl.cash) : null,
+        Number.isFinite(pl.bank) ? Math.round(pl.bank) : null,
+        Number.isFinite(pl.blackMoney) ? Math.round(pl.blackMoney) : null,
+        pl.job || null,
+        pl.jobLabel || null,
+        JSON.stringify(pl.vehicles || []),
+        name
       );
+      // Tipurile sunt indicate explicit (::int, ::text, ::jsonb) pentru că, cu
+      // valori NULL pe primul rând, Postgres nu poate deduce singur tipul
+      // coloanei din VALUES și ar refuza interogarea.
+      values.push(
+        `($${i + 1}::int,$${i + 2}::int,$${i + 3}::int,$${i + 4}::text,$${i + 5}::text,$${i + 6}::jsonb,$${i + 7}::text)`
+      );
+      i += 7;
     }
+    if (!values.length) return;
+
+    await pool.query(
+      `UPDATE players AS p SET
+         last_cash = v.cash, last_bank = v.bank, last_black_money = v.black_money,
+         last_job = v.job, last_job_label = v.job_label, last_vehicles = v.vehicles,
+         last_synced_at = NOW()
+       FROM (VALUES ${values.join(",")}) AS v(cash, bank, black_money, job, job_label, vehicles, display_name)
+       WHERE p.display_name ILIKE v.display_name`,
+      params
+    );
   } catch (err) {
     console.error("syncPlayerSnapshots a eșuat (ignorat, reîncercăm la următorul tur):", err.message);
   }

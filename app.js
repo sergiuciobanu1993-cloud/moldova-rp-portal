@@ -218,11 +218,16 @@ if (factionGrid) {
   })();
 })();
 
-// Ultimele anunțuri, publicate de admin din panoul de administrare (vezi
-// /api/announcements — public, întoarce doar cele cu is_published=true).
-// Guarded: doar homepage are #news-list.
+// Ultimele anunțuri + Actualizări server, publicate de admin din panoul de
+// administrare (vezi /api/announcements — public, întoarce doar cele cu
+// is_published=true). Cele două liste vin din același API: un anunț cu
+// categoria "Actualizare" (setată din Admin → Anunțuri) trece în secțiunea
+// dedicată #updates-list (patch notes de server), nu în feed-ul general
+// #news-list, ca să nu apară de două ori pe aceeași pagină.
+// Guarded: doar homepage are #news-list/#updates-list.
 const newsList = document.getElementById('news-list');
-if (newsList) {
+const updatesList = document.getElementById('updates-list');
+if (newsList || updatesList) {
   const MONTHS_RO = ['IAN', 'FEB', 'MAR', 'APR', 'MAI', 'IUN', 'IUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
   const fmtNewsDate = d => {
     const date = new Date(d);
@@ -310,43 +315,53 @@ if (newsList) {
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !modalOverlay.hidden) closeModal(); });
   }
 
-  let currentItems = [];
-  newsList.addEventListener('click', (e) => {
-    const card = e.target.closest('[data-news-index]');
-    if (!card) return;
-    const item = currentItems[Number(card.dataset.newsIndex)];
-    if (item) openModal(item);
-  });
-  newsList.addEventListener('keydown', (e) => {
-    if (e.key !== 'Enter' && e.key !== ' ') return;
-    const card = e.target.closest('[data-news-index]');
-    if (!card) return;
-    e.preventDefault();
-    const item = currentItems[Number(card.dataset.newsIndex)];
-    if (item) openModal(item);
-  });
+  // Fiecare listă (anunțuri / actualizări) are propriul set de itemi curenți
+  // pentru click-to-open, ca să nu se încurce indexul unei cărți din
+  // #news-list cu cel dintr-o carte din #updates-list.
+  function wireNewsList(listEl) {
+    if (!listEl) return null;
+    let items = [];
+    const pick = (e) => {
+      const card = e.target.closest('[data-news-index]');
+      return card ? items[Number(card.dataset.newsIndex)] : null;
+    };
+    listEl.addEventListener('click', (e) => { const item = pick(e); if (item) openModal(item); });
+    listEl.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      const item = pick(e);
+      if (!item) return;
+      e.preventDefault();
+      openModal(item);
+    });
+    return {
+      render(list, emptyMessage) {
+        items = list;
+        listEl.innerHTML = list.length ? list.map((a, i) => `
+          <article class="news" data-news-index="${i}" tabindex="0" role="button" aria-label="Citește: ${escapeHtml(a.title)}">
+            <span class="news-date">${escapeHtml(fmtNewsDate(a.published_at))}</span>
+            <div>
+              ${a.image_url ? `<img class="news-img" src="${escapeHtml(a.image_url)}" alt="" loading="lazy" onerror="this.remove()">` : ''}
+              <span class="tag">${escapeHtml((a.category || 'General').toUpperCase())}</span>
+              <h3>${escapeHtml(a.title)}</h3>
+              <p>${escapeHtml(truncate(a.content, 160))}</p>
+              <span class="news-readmore">${a.video_url ? '▶ Are video · ' : ''}Citește tot →</span>
+            </div>
+          </article>`).join('') : `<div class="empty-state">${emptyMessage}</div>`;
+      }
+    };
+  }
+
+  const newsCtrl = wireNewsList(newsList);
+  const updatesCtrl = wireNewsList(updatesList);
+  const isUpdate = (a) => (a.category || '').trim().toLowerCase() === 'actualizare';
 
   const loadNews = async () => {
     try {
       const res = await fetch('/api/announcements');
       if (!res.ok) throw new Error();
       const items = await res.json();
-      if (!items.length) {
-        newsList.innerHTML = '<div class="empty-state">Niciun anunț publicat momentan.</div>';
-        return;
-      }
-      currentItems = items.slice(0, 6);
-      newsList.innerHTML = currentItems.map((a, i) => `
-        <article class="news" data-news-index="${i}" tabindex="0" role="button" aria-label="Citește anunțul: ${escapeHtml(a.title)}">
-          <span class="news-date">${escapeHtml(fmtNewsDate(a.published_at))}</span>
-          <div>
-            ${a.image_url ? `<img class="news-img" src="${escapeHtml(a.image_url)}" alt="" loading="lazy" onerror="this.remove()">` : ''}
-            <span class="tag">${escapeHtml((a.category || 'General').toUpperCase())}</span>
-            <h3>${escapeHtml(a.title)}</h3>
-            <p>${escapeHtml(truncate(a.content, 160))}</p>
-            <span class="news-readmore">${a.video_url ? '▶ Are video · ' : ''}Citește tot →</span>
-          </div>
-        </article>`).join('');
+      if (newsCtrl) newsCtrl.render(items.filter(a => !isUpdate(a)).slice(0, 6), 'Niciun anunț publicat momentan.');
+      if (updatesCtrl) updatesCtrl.render(items.filter(isUpdate).slice(0, 6), 'Nicio actualizare publicată momentan.');
     } catch {
       // Lasă lista anterioară (sau starea "Se încarcă…") dacă nu avem date.
     }

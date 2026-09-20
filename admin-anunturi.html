@@ -17,7 +17,18 @@
     <input type="hidden" id="f-id">
     <div class="formgrid">
       <div class="field wide"><label>Titlu</label><input id="f-title" required></div>
-      <div class="field"><label>Categorie (eticheta afișată)</label><input id="f-category" placeholder="ex: OFICIAL, REGULAMENT, COMUNITATE"></div>
+      <div class="field">
+        <label>Categorie (eticheta afișată)</label>
+        <input id="f-category" list="category-suggestions" placeholder="ex: OFICIAL, REGULAMENT, COMUNITATE, Actualizare">
+        <datalist id="category-suggestions">
+          <option value="OFICIAL"></option>
+          <option value="REGULAMENT"></option>
+          <option value="COMUNITATE"></option>
+          <option value="EVENIMENT"></option>
+          <option value="Actualizare"></option>
+        </datalist>
+        <small class="hint">Categoria <b>Actualizare</b> e specială — anunțul apare în secțiunea „Actualizări” de pe site (patch notes de server), separat de „Ultimele anunțuri”.</small>
+      </div>
       <div class="field wide"><label>Imagine (URL, opțional)</label><input id="f-image-url" placeholder="https://... — apare pe card-ul de pe site și în notificarea Discord"></div>
       <div class="field wide"><label>Video (URL YouTube, opțional)</label><input id="f-video-url" placeholder="https://youtu.be/... — apare ca buton „▶ Vezi videoclipul” pe card-ul de pe site"></div>
       <div class="field wide"><label>Conținut</label><textarea id="f-content" required placeholder="Textul anunțului..."></textarea></div>

@@ -23,10 +23,9 @@
       </select>
     </div>
     <div class="field player-search-wrap" id="e-reported-wrap" hidden>
-      <label>Jucător reclamat</label>
-      <input id="e-reported-search" type="text" placeholder="Caută după nume sau ID jucător..." autocomplete="off">
-      <div class="player-search-dropdown" id="e-reported-dropdown" hidden></div>
-      <small class="hint">Tichetul e public — orice utilizator îl poate citi, inclusiv jucătorul reclamat.</small>
+      <label>ID / nume jucător reclamat</label>
+      <input id="e-reported-label" type="text" maxlength="120" placeholder="ex: 292 sau numele exact din joc" autocomplete="off">
+      <small class="hint">Tichetul e public — orice utilizator îl poate citi, inclusiv jucătorul reclamat. Scrie ID-ul din joc (F10) sau numele exact — staff-ul identifică jucătorul din reclamație.</small>
     </div>
     <div class="field"><label>Descriere</label><textarea id="e-description" required></textarea></div>
     <div class="field"><label>Link dovadă (obligatoriu)</label><input id="e-evidence" type="url" required></div>
@@ -45,8 +44,6 @@ const STATUS_PILL = { open: 'warn', in_progress: 'info', resolved: 'on', closed:
 const CATEGORY_LABEL = { general: 'General', bug: 'Bug / problemă tehnică', reclamatie: 'Reclamație jucător', ban_appeal: 'Contestație sancțiune' };
 
 let currentTicket = null;
-let editReportedPlayerId = null;
-let editSearchTimer = null;
 
 function render(t) {
   currentTicket = t;
@@ -65,7 +62,7 @@ function render(t) {
       <span>·</span>
       <span>${new Date(t.created_at).toLocaleString('ro-RO')}</span>
     </div>
-    ${t.reported_player_name ? `<p><span class="reported-pill">🎯 Tichet despre: ${t.reported_player_name}</span></p>` : ''}
+    ${t.reported_display ? `<p><span class="reported-pill">🎯 Tichet despre: ${t.reported_display}</span></p>` : ''}
     <p class="ticket-desc">${t.description}</p>
     ${t.evidence_url ? `<p><a href="${t.evidence_url}" target="_blank" rel="noopener noreferrer" style="color:var(--orange);font-weight:800;font-size:13px">🔗 Dovadă atașată</a></p>` : ''}
     ${t.is_own ? `
@@ -131,42 +128,10 @@ function render(t) {
   });
 }
 
-function wirePlayerSearch(inputEl, dropdownEl, onPick) {
-  inputEl.addEventListener('input', () => {
-    onPick(null);
-    clearTimeout(editSearchTimer);
-    const q = inputEl.value.trim();
-    if (q.length < 2) { dropdownEl.hidden = true; return; }
-    editSearchTimer = setTimeout(async () => {
-      try {
-        const res = await apiFetch(`/api/players/search?q=${encodeURIComponent(q)}`);
-        const results = res.ok ? await res.json() : [];
-        dropdownEl.innerHTML = results.length
-          ? results.map(p => `<button type="button" class="player-search-item" data-pick="${p.id}" data-name="${p.display_name}">${p.display_name}${p.game_id ? ` (#${p.game_id})` : ''}</button>`).join('')
-          : '<div class="player-search-item muted">Niciun jucător găsit.</div>';
-        dropdownEl.hidden = false;
-        dropdownEl.querySelectorAll('[data-pick]').forEach(btn => btn.addEventListener('click', () => {
-          inputEl.value = btn.dataset.name;
-          dropdownEl.hidden = true;
-          onPick(btn.dataset.pick);
-        }));
-      } catch { dropdownEl.hidden = true; }
-    }, 250);
-  });
-  document.addEventListener('click', (e) => {
-    if (!inputEl.contains(e.target) && !dropdownEl.contains(e.target)) dropdownEl.hidden = true;
-  });
-}
-wirePlayerSearch(
-  document.getElementById('e-reported-search'),
-  document.getElementById('e-reported-dropdown'),
-  (id) => { editReportedPlayerId = id; }
-);
-
 document.getElementById('e-category').addEventListener('change', (e) => {
   const isReclamatie = e.target.value === 'reclamatie';
   document.getElementById('e-reported-wrap').hidden = !isReclamatie;
-  if (!isReclamatie) editReportedPlayerId = null;
+  if (!isReclamatie) document.getElementById('e-reported-label').value = '';
 });
 
 function openEdit(t) {
@@ -176,8 +141,7 @@ function openEdit(t) {
   document.getElementById('e-evidence').value = t.evidence_url || '';
   const isReclamatie = t.category === 'reclamatie';
   document.getElementById('e-reported-wrap').hidden = !isReclamatie;
-  document.getElementById('e-reported-search').value = t.reported_player_name || '';
-  editReportedPlayerId = t.reported_player_id || null;
+  document.getElementById('e-reported-label').value = t.reported_player_label || t.reported_display || '';
   document.getElementById('edit-box').hidden = false;
   document.getElementById('edit-box').scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
@@ -191,8 +155,9 @@ document.getElementById('edit-form').addEventListener('submit', async (e) => {
   const msg = document.getElementById('edit-msg');
   msg.hidden = true;
   const category = document.getElementById('e-category').value;
-  if (category === 'reclamatie' && !editReportedPlayerId) {
-    msg.textContent = 'Selectează jucătorul reclamat din lista de căutare.';
+  const reportedLabel = document.getElementById('e-reported-label').value.trim();
+  if (category === 'reclamatie' && !reportedLabel) {
+    msg.textContent = 'Scrie ID-ul sau numele jucătorului reclamat.';
     msg.className = 'formmsg error';
     msg.hidden = false;
     return;
@@ -202,7 +167,7 @@ document.getElementById('edit-form').addEventListener('submit', async (e) => {
     category,
     description: document.getElementById('e-description').value.trim(),
     evidence_url: document.getElementById('e-evidence').value.trim(),
-    reported_player_id: editReportedPlayerId
+    reported_player_label: reportedLabel
   };
   try {
     const res = await apiFetch(`/api/tickets/${currentTicket.id}`, { method: 'PUT', body: JSON.stringify(body) });

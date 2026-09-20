@@ -2003,9 +2003,9 @@ function validTicketFields(body, existingCategory) {
   return { subject, description, category, link };
 }
 
-// Căutare jucători pentru câmpul "jucător reclamat" din formularul de tichet
-// — deschisă oricărui utilizator logat (nu doar staff), spre deosebire de
-// /api/admin/players care e restricționată la MOD_ROLES.
+// Căutare jucători — folosită acum doar de staff (căutarea din formularul
+// public a fost înlocuită cu text liber, vezi mai jos); rămasă disponibilă
+// oricărui utilizator logat, nu doar staff.
 app.get("/api/players/search", auth, asyncRoute(async (req, res) => {
   const q = (req.query.q || "").trim();
   if (q.length < 2) return res.json([]);
@@ -2019,11 +2019,28 @@ app.get("/api/players/search", auth, asyncRoute(async (req, res) => {
   res.json(rows);
 }));
 
+// (20.09.2026) Reclamantul scrie ID-ul/numele jucătorului reclamat ca text
+// liber (reported_player_label) — nu mai trebuie să-l găsească într-o
+// căutare live, care bloca trimiterea când jucătorul nu era încă în baza
+// noastră de date. Încercăm totuși, best-effort, o potrivire exactă (ID
+// numeric sau nume exact) ca să legăm structurat tichetul de players — dacă
+// nu găsim nimic, tichetul se salvează oricum, cu textul scris de reclamant.
+async function resolveReportedPlayer(label) {
+  const text = (label || "").trim();
+  if (!text) return null;
+  const { rows } = await pool.query(
+    `SELECT id FROM players WHERE CAST(game_id AS TEXT) = $1 OR display_name ILIKE $1 LIMIT 1`,
+    [text]
+  );
+  return rows[0]?.id || null;
+}
+
 app.get("/api/tickets", auth, asyncRoute(async (req, res) => {
   const { rows } = await pool.query(
     `SELECT t.id,t.subject,t.category,t.status,t.evidence_url,t.created_at,t.updated_at,
             (t.user_id=$1) AS is_own, u.username submitted_by,
-            rp.id reported_player_id, rp.display_name reported_player_name
+            rp.id reported_player_id, t.reported_player_label,
+            COALESCE(rp.display_name, t.reported_player_label) reported_display
      FROM tickets t
      JOIN users u ON u.id = t.user_id
      LEFT JOIN players rp ON rp.id = t.reported_player_id
@@ -2038,19 +2055,19 @@ app.post("/api/tickets", auth, asyncRoute(async (req, res) => {
   const v = validTicketFields(req.body);
   if (v.error) return res.status(400).json({ error: v.error });
 
+  let reportedLabel = null;
   let reportedId = null;
   if (v.category === "reclamatie") {
-    if (!req.body.reported_player_id)
-      return res.status(400).json({ error: "Selectează jucătorul reclamat din listă." });
-    const p = await pool.query("SELECT id FROM players WHERE id=$1", [req.body.reported_player_id]);
-    if (!p.rows[0]) return res.status(400).json({ error: "Jucătorul reclamat nu a fost găsit." });
-    reportedId = p.rows[0].id;
+    reportedLabel = (req.body.reported_player_label || "").trim();
+    if (!reportedLabel)
+      return res.status(400).json({ error: "Scrie ID-ul sau numele jucătorului reclamat." });
+    reportedId = await resolveReportedPlayer(reportedLabel);
   }
 
   const { rows } = await pool.query(
-    `INSERT INTO tickets(user_id, subject, category, description, evidence_url, reported_player_id)
-     VALUES($1,$2,$3,$4,$5,$6) RETURNING *`,
-    [req.user.sub, v.subject, v.category, v.description, v.link, reportedId]
+    `INSERT INTO tickets(user_id, subject, category, description, evidence_url, reported_player_id, reported_player_label)
+     VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+    [req.user.sub, v.subject, v.category, v.description, v.link, reportedId, reportedLabel]
   );
   await logAction(req.user.sub, "ticket.create", "ticket", rows[0].id, { subject: v.subject }, req.ip);
   res.status(201).json(rows[0]);
@@ -2059,7 +2076,7 @@ app.post("/api/tickets", auth, asyncRoute(async (req, res) => {
 app.get("/api/tickets/:id", auth, asyncRoute(async (req, res) => {
   const { rows } = await pool.query(
     `SELECT t.*, (t.user_id=$2) AS is_own, u.username submitted_by,
-            rp.id reported_player_id, rp.display_name reported_player_name
+            rp.id reported_player_id, COALESCE(rp.display_name, t.reported_player_label) reported_display
      FROM tickets t
      JOIN users u ON u.id = t.user_id
      LEFT JOIN players rp ON rp.id = t.reported_player_id
@@ -2092,20 +2109,20 @@ app.put("/api/tickets/:id", auth, asyncRoute(async (req, res) => {
   const v = validTicketFields(req.body, existing.rows[0].category);
   if (v.error) return res.status(400).json({ error: v.error });
 
+  let reportedLabel = null;
   let reportedId = null;
   if (v.category === "reclamatie") {
-    if (!req.body.reported_player_id)
-      return res.status(400).json({ error: "Selectează jucătorul reclamat din listă." });
-    const p = await pool.query("SELECT id FROM players WHERE id=$1", [req.body.reported_player_id]);
-    if (!p.rows[0]) return res.status(400).json({ error: "Jucătorul reclamat nu a fost găsit." });
-    reportedId = p.rows[0].id;
+    reportedLabel = (req.body.reported_player_label || "").trim();
+    if (!reportedLabel)
+      return res.status(400).json({ error: "Scrie ID-ul sau numele jucătorului reclamat." });
+    reportedId = await resolveReportedPlayer(reportedLabel);
   }
 
   const { rows } = await pool.query(
     `UPDATE tickets SET subject=$1, category=$2, description=$3, evidence_url=$4,
-       reported_player_id=$5, updated_at=NOW()
-     WHERE id=$6 RETURNING *`,
-    [v.subject, v.category, v.description, v.link, reportedId, req.params.id]
+       reported_player_id=$5, reported_player_label=$6, updated_at=NOW()
+     WHERE id=$7 RETURNING *`,
+    [v.subject, v.category, v.description, v.link, reportedId, reportedLabel, req.params.id]
   );
   await logAction(req.user.sub, "ticket.edit", "ticket", req.params.id, { subject: v.subject }, req.ip);
   res.json(rows[0]);
@@ -3441,7 +3458,8 @@ app.put("/api/admin/content/:id", auth, requireRole(...ADMIN_ROLES), asyncRoute(
 app.get("/api/admin/tickets", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
   const status = req.query.status;
   const { rows } = await pool.query(
-    `SELECT t.*, u.username submitted_by, a.username assigned_username, rp.display_name reported_player_name
+    `SELECT t.*, u.username submitted_by, a.username assigned_username,
+            COALESCE(rp.display_name, t.reported_player_label) reported_display
      FROM tickets t
      JOIN users u ON u.id = t.user_id
      LEFT JOIN users a ON a.id = t.assigned_to
@@ -3455,7 +3473,8 @@ app.get("/api/admin/tickets", auth, requireRole(...MOD_ROLES), asyncRoute(async 
 
 app.get("/api/admin/tickets/:id", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
   const { rows } = await pool.query(
-    `SELECT t.*, u.username submitted_by, a.username assigned_username, rp.display_name reported_player_name
+    `SELECT t.*, u.username submitted_by, a.username assigned_username,
+            COALESCE(rp.display_name, t.reported_player_label) reported_display
      FROM tickets t
      JOIN users u ON u.id = t.user_id
      LEFT JOIN users a ON a.id = t.assigned_to

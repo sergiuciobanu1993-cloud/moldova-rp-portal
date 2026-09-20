@@ -124,8 +124,8 @@ async function openTicket(id) {
   document.getElementById('detail-submitted').textContent = `deschis de ${t.submitted_by}`;
   document.getElementById('detail-date').textContent = fmtDate(t.created_at);
   const reportedEl = document.getElementById('detail-reported');
-  if (t.reported_player_name) {
-    reportedEl.innerHTML = `<span class="reported-pill">🎯 Tichet despre: ${t.reported_player_name}</span>`;
+  if (t.reported_display) {
+    reportedEl.innerHTML = `<span class="reported-pill">🎯 Tichet despre: ${t.reported_display}${!t.reported_player_id ? ' <small>(negăsit automat în baza de date — verifică manual)</small>' : ''}</span>`;
     reportedEl.hidden = false;
   } else {
     reportedEl.hidden = true;

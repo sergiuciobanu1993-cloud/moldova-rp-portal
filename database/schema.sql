@@ -431,6 +431,16 @@ ALTER TABLE tickets ADD COLUMN IF NOT EXISTS reported_player_id UUID REFERENCES 
 CREATE INDEX IF NOT EXISTS idx_tickets_reported_player ON tickets(reported_player_id);
 CREATE INDEX IF NOT EXISTS idx_tickets_category ON tickets(category);
 
+-- === Tichete — jucător reclamat prin text liber (20.09.2026) ===
+-- Căutarea live cerea o potrivire exactă în players (care nu exista mereu —
+-- ex. jucătorul reclamat prin ID-ul din joc, dacă nu a mai fost sincronizat),
+-- ceea ce bloca trimiterea tichetului cu "Niciun jucător găsit". Acum
+-- reclamantul scrie direct ID-ul/numele (reported_player_label), fără
+-- căutare obligatorie — staff-ul identifică jucătorul din reclamație.
+-- reported_player_id rămâne, dar acum e opțional: se completează doar dacă
+-- textul scris se potrivește exact cu un jucător existent (best-effort).
+ALTER TABLE tickets ADD COLUMN IF NOT EXISTS reported_player_label TEXT;
+
 INSERT INTO roles(name, description) VALUES
 ('player', 'Jucator standard'),
 ('moderator', 'Moderator'),

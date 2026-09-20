@@ -26,10 +26,9 @@
       </select>
     </div>
     <div class="field player-search-wrap" id="f-reported-wrap" hidden>
-      <label>Jucător reclamat</label>
-      <input id="f-reported-search" type="text" placeholder="Caută după nume sau ID jucător..." autocomplete="off">
-      <div class="player-search-dropdown" id="f-reported-dropdown" hidden></div>
-      <small class="hint">Tichetul devine public — orice utilizator îl poate citi, inclusiv jucătorul reclamat.</small>
+      <label>ID / nume jucător reclamat</label>
+      <input id="f-reported-label" type="text" maxlength="120" placeholder="ex: 292 sau numele exact din joc" autocomplete="off">
+      <small class="hint">Tichetul devine public — orice utilizator îl poate citi, inclusiv jucătorul reclamat. Scrie ID-ul din joc (F10) sau numele exact — staff-ul identifică jucătorul din reclamație.</small>
     </div>
     <div class="field"><label>Descriere</label><textarea id="f-description" required placeholder="Descrie situația cât mai detaliat: cine, ce, când, unde..."></textarea></div>
     <div class="field">
@@ -64,55 +63,12 @@ function hideForm() {
   document.getElementById('form-box').hidden = true;
   document.getElementById('ticket-form').reset();
   document.getElementById('f-reported-wrap').hidden = true;
-  reportedPlayerId = null;
 }
-
-// Câmpul "jucător reclamat" — căutare live (ca la MDT), apare doar pentru
-// categoria "reclamatie" și e obligatoriu pentru ea, ca tichetul public să
-// fie legat structurat de contul reclamat, nu doar de un nume scris liber.
-let reportedPlayerId = null;
-let reportedSearchTimer = null;
-
-function wirePlayerSearch(inputEl, dropdownEl, onPick) {
-  inputEl.addEventListener('input', () => {
-    onPick(null, '');
-    clearTimeout(reportedSearchTimer);
-    const q = inputEl.value.trim();
-    if (q.length < 2) { dropdownEl.hidden = true; return; }
-    reportedSearchTimer = setTimeout(async () => {
-      try {
-        const res = await apiFetch(`/api/players/search?q=${encodeURIComponent(q)}`);
-        const results = res.ok ? await res.json() : [];
-        dropdownEl.innerHTML = results.length
-          ? results.map(p => `<button type="button" class="player-search-item" data-pick="${p.id}" data-name="${p.display_name}">${p.display_name}${p.game_id ? ` (#${p.game_id})` : ''}</button>`).join('')
-          : '<div class="player-search-item muted">Niciun jucător găsit.</div>';
-        dropdownEl.hidden = false;
-        dropdownEl.querySelectorAll('[data-pick]').forEach(btn => btn.addEventListener('click', () => {
-          inputEl.value = btn.dataset.name;
-          dropdownEl.hidden = true;
-          onPick(btn.dataset.pick, btn.dataset.name);
-        }));
-      } catch { dropdownEl.hidden = true; }
-    }, 250);
-  });
-  document.addEventListener('click', (e) => {
-    if (!inputEl.contains(e.target) && !dropdownEl.contains(e.target)) dropdownEl.hidden = true;
-  });
-}
-
-wirePlayerSearch(
-  document.getElementById('f-reported-search'),
-  document.getElementById('f-reported-dropdown'),
-  (id) => { reportedPlayerId = id; }
-);
 
 document.getElementById('f-category').addEventListener('change', (e) => {
   const isReclamatie = e.target.value === 'reclamatie';
   document.getElementById('f-reported-wrap').hidden = !isReclamatie;
-  if (!isReclamatie) {
-    document.getElementById('f-reported-search').value = '';
-    reportedPlayerId = null;
-  }
+  if (!isReclamatie) document.getElementById('f-reported-label').value = '';
 });
 
 async function loadTickets() {
@@ -125,7 +81,7 @@ async function loadTickets() {
       <a class="ticket-row" href="tichet.html?id=${t.id}">
         <div>
           <strong>${t.subject}</strong>
-          <small>${CATEGORY_LABEL[t.category] || t.category} · ${t.is_own ? 'tichetul tău' : `deschis de ${t.submitted_by}`} · ${new Date(t.created_at).toLocaleDateString('ro-RO')}${t.reported_player_name ? ` · <span style="color:#ff8a8a">despre ${t.reported_player_name}</span>` : ''}</small>
+          <small>${CATEGORY_LABEL[t.category] || t.category} · ${t.is_own ? 'tichetul tău' : `deschis de ${t.submitted_by}`} · ${new Date(t.created_at).toLocaleDateString('ro-RO')}${t.reported_display ? ` · <span style="color:#ff8a8a">despre ${t.reported_display}</span>` : ''}</small>
         </div>
         <span class="pill ${STATUS_PILL[t.status] || 'off'}">${STATUS_LABEL[t.status] || t.status}</span>
       </a>`).join('') : '<p class="muted">Nu ai deschis niciun tichet și nicio reclamație publică nu există încă.</p>';
@@ -149,8 +105,9 @@ document.getElementById('ticket-form').addEventListener('submit', async (e) => {
     return;
   }
   const category = document.getElementById('f-category').value;
-  if (category === 'reclamatie' && !reportedPlayerId) {
-    msg.textContent = 'Selectează jucătorul reclamat din lista de căutare.';
+  const reportedLabel = document.getElementById('f-reported-label').value.trim();
+  if (category === 'reclamatie' && !reportedLabel) {
+    msg.textContent = 'Scrie ID-ul sau numele jucătorului reclamat.';
     msg.className = 'formmsg error';
     msg.hidden = false;
     return;
@@ -160,7 +117,7 @@ document.getElementById('ticket-form').addEventListener('submit', async (e) => {
     category,
     description: document.getElementById('f-description').value.trim(),
     evidence_url: evidence,
-    reported_player_id: reportedPlayerId
+    reported_player_label: reportedLabel
   };
   try {
     const res = await apiFetch('/api/tickets', { method: 'POST', body: JSON.stringify(body) });

@@ -3099,7 +3099,18 @@ app.delete("/api/admin/regulations/:id", auth, requireRole(...ADMIN_ROLES), asyn
 // webhook-ul nu e configurat, publicarea anunțului tot reușește — doar
 // notificarea eșuează silențios (logată în consolă, nu blocată/afișată userului).
 const DISCORD_ANNOUNCE_WEBHOOK = process.env.DISCORD_ANNOUNCE_WEBHOOK || "";
+// Webhook separat pentru categoria specială "Actualizare" (patch notes de
+// server/joc) — de obicei alt canal Discord decât anunțurile generale, ca să
+// nu se amestece. Dacă nu e setat, cade automat pe DISCORD_ANNOUNCE_WEBHOOK.
+const DISCORD_UPDATE_WEBHOOK = process.env.DISCORD_UPDATE_WEBHOOK || "";
 const SITE_URL = process.env.SITE_URL || "https://web-production-4fd88.up.railway.app";
+
+// Ține sincronizat cu filtrul de pe pagina publică (app.js) și cu
+// admin-actualizari.html: orice anunț cu această categorie e tratat ca
+// "actualizare" (patch notes), nu ca anunț obișnuit.
+function isUpdateCategory(category) {
+  return (category || "").toString().trim().toLowerCase() === "actualizare";
+}
 
 // Discord cere un URL absolut pentru imaginile din embed (nu acceptă căi
 // relative de genul "assets/poza.jpg", care merg perfect pe site-ul nostru
@@ -3153,6 +3164,51 @@ async function notifyDiscordAnnouncement(announcement) {
     if (!res.ok) console.error(`Discord webhook a răspuns cu ${res.status}: ${await res.text().catch(() => "")}`);
   } catch (err) {
     console.error("Trimiterea anunțului pe Discord a eșuat:", err.message);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+// La fel ca notifyDiscordAnnouncement, dar pentru categoria "Actualizare" —
+// trimite pe un webhook separat (canalul de patch notes), ca update-urile de
+// server/joc să nu apară în canalul general de anunțuri.
+async function notifyDiscordUpdate(announcement) {
+  const webhookUrl = DISCORD_UPDATE_WEBHOOK || DISCORD_ANNOUNCE_WEBHOOK;
+  if (!webhookUrl) return;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 6000);
+  try {
+    const embed = {
+      author: { name: "Moldova RP — Actualizări", icon_url: `${SITE_URL}/assets/logo.png` },
+      title: announcement.title,
+      description: announcement.content.length > 800
+        ? announcement.content.slice(0, 800).trim() + "…"
+        : announcement.content,
+      color: 0x3ba6ff,
+      thumbnail: { url: `${SITE_URL}/assets/logo.png` },
+      fields: [
+        { name: "Autor", value: announcement.author || "Administrație", inline: true },
+      ],
+      footer: { text: "Moldova RP Portal · vezi actualizarea completă pe site" },
+      url: `${SITE_URL}/index.html#actualizari`,
+      timestamp: new Date().toISOString(),
+    };
+    const absImageUrl = toAbsoluteUrl(announcement.image_url);
+    if (absImageUrl) embed.image = { url: absImageUrl };
+
+    const res = await fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      signal: controller.signal,
+      body: JSON.stringify({
+        content: "🆕 **Actualizare nouă pe Moldova RP!** @everyone",
+        allowed_mentions: { parse: ["everyone"] },
+        embeds: [embed],
+      }),
+    });
+    if (!res.ok) console.error(`Discord webhook (actualizare) a răspuns cu ${res.status}: ${await res.text().catch(() => "")}`);
+  } catch (err) {
+    console.error("Trimiterea actualizării pe Discord a eșuat:", err.message);
   } finally {
     clearTimeout(timeout);
   }
@@ -3300,7 +3356,10 @@ app.post("/api/admin/announcements", auth, requireRole(...ADMIN_ROLES), asyncRou
     [title.trim(), content, category?.trim() || "General", req.user.sub, is_published ?? true, image_url?.trim() || null, video_url?.trim() || null]
   );
   await logAction(req.user.sub, "announcement.create", "announcement", rows[0].id, { title }, req.ip);
-  if (rows[0].is_published) notifyDiscordAnnouncement({ ...rows[0], author: req.user.username });
+  if (rows[0].is_published) {
+    if (isUpdateCategory(rows[0].category)) notifyDiscordUpdate({ ...rows[0], author: req.user.username });
+    else notifyDiscordAnnouncement({ ...rows[0], author: req.user.username });
+  }
   res.status(201).json(rows[0]);
 }));
 
@@ -3326,7 +3385,10 @@ app.put("/api/admin/announcements/:id", auth, requireRole(...ADMIN_ROLES), async
   await logAction(req.user.sub, "announcement.update", "announcement", id, req.body, req.ip);
   // Notifică pe Discord doar când anunțul TREE de la ciornă la publicat —
   // nu la fiecare editare ulterioară a unuia deja publicat, ca să nu spamăm.
-  if (!wasPublished && rows[0].is_published) notifyDiscordAnnouncement({ ...rows[0], author: req.user.username });
+  if (!wasPublished && rows[0].is_published) {
+    if (isUpdateCategory(rows[0].category)) notifyDiscordUpdate({ ...rows[0], author: req.user.username });
+    else notifyDiscordAnnouncement({ ...rows[0], author: req.user.username });
+  }
   res.json(rows[0]);
 }));
 

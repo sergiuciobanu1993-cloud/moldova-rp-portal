@@ -1,37 +1,25 @@
 <!doctype html>
-<html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Anunțuri — Admin Moldova RP</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="admin.css"></head>
+<html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Actualizări — Admin Moldova RP</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="admin.css"></head>
 <body>
-<aside class="side"><a class="brand" href="index.html"><img src="assets/logo.png" alt=""><b>MOLDOVA<span>RP</span></b></a><p>ADMINISTRAȚIE</p><a href="admin.html">▦ Dashboard</a><a href="admin-utilizatori.html">👤 Utilizatori</a><a href="admin-jucatori.html">♙ Jucători</a><a href="admin-financiar.html">◆ Facțiuni</a><a href="admin-sanctiuni.html">⚠ Sancțiuni</a><a>▤ Reclamații</a><a>⚖ CK</a><a href="admin-regulamente.html">📚 Regulamente</a><a href="admin-continut.html">📝 Conținut pagini</a><a class="sel" href="admin-anunturi.html">◉ Anunțuri</a><a href="admin-actualizari.html">🆕 Actualizări</a><a href="admin-tichete.html">🎫 Tichete</a><a href="vip-shop.html">🎁 VIP Shop</a><a href="admin-vip-shop.html">🛠 Editor VIP Shop</a><a href="admin-loguri.html">🗂 Loguri</a><a href="admin-kill-logs.html">🔪 Kill Logs</a><a>⌁ Audit Logs</a><a href="admin-txadmin.html" id="nav-txadmin">🖥 txAdmin</a><a class="back" href="dashboard.html">← Contul meu</a><a class="back" href="index.html">← Site public</a></aside>
+<aside class="side"><a class="brand" href="index.html"><img src="assets/logo.png" alt=""><b>MOLDOVA<span>RP</span></b></a><p>ADMINISTRAȚIE</p><a href="admin.html">▦ Dashboard</a><a href="admin-utilizatori.html">👤 Utilizatori</a><a href="admin-jucatori.html">♙ Jucători</a><a href="admin-financiar.html">◆ Facțiuni</a><a href="admin-sanctiuni.html">⚠ Sancțiuni</a><a>▤ Reclamații</a><a>⚖ CK</a><a href="admin-regulamente.html">📚 Regulamente</a><a href="admin-continut.html">📝 Conținut pagini</a><a href="admin-anunturi.html">◉ Anunțuri</a><a class="sel" href="admin-actualizari.html">🆕 Actualizări</a><a href="admin-tichete.html">🎫 Tichete</a><a href="vip-shop.html">🎁 VIP Shop</a><a href="admin-vip-shop.html">🛠 Editor VIP Shop</a><a href="admin-loguri.html">🗂 Loguri</a><a href="admin-kill-logs.html">🔪 Kill Logs</a><a>⌁ Audit Logs</a><a href="admin-txadmin.html" id="nav-txadmin">🖥 txAdmin</a><a class="back" href="dashboard.html">← Contul meu</a><a class="back" href="index.html">← Site public</a></aside>
 <main>
-<header><div><small>PANEL ADMINISTRATIV</small><h1>Anunțuri</h1></div><a class="admin" href="dashboard.html" title="Înapoi la contul meu" style="text-decoration:none"><span id="admin-name">…</span> <i></i></a></header>
+<header><div><small>PANEL ADMINISTRATIV</small><h1>Actualizări</h1></div><a class="admin" href="dashboard.html" title="Înapoi la contul meu" style="text-decoration:none"><span id="admin-name">…</span> <i></i></a></header>
 
 <section class="tablebox">
-  <div class="title"><h2>Toate anunțurile</h2><button id="new-btn">+ Anunț nou</button></div>
+  <div class="title"><h2>Toate actualizările</h2><button id="new-btn">+ Actualizare nouă</button></div>
   <table><thead><tr><th>TITLU</th><th>AUTOR</th><th>STATUS</th><th>PUBLICAT</th><th></th></tr></thead>
   <tbody id="list-body"><tr><td colspan="5">Se încarcă…</td></tr></tbody></table>
 </section>
 
 <section class="formbox" id="form-box" hidden>
-  <h2 id="form-title">Anunț nou</h2>
+  <h2 id="form-title">Actualizare nouă</h2>
   <form id="ann-form">
     <input type="hidden" id="f-id">
     <div class="formgrid">
-      <div class="field wide"><label>Titlu</label><input id="f-title" required></div>
-      <div class="field">
-        <label>Categorie (eticheta afișată)</label>
-        <input id="f-category" list="category-suggestions" placeholder="ex: OFICIAL, REGULAMENT, COMUNITATE, Actualizare">
-        <datalist id="category-suggestions">
-          <option value="OFICIAL"></option>
-          <option value="REGULAMENT"></option>
-          <option value="COMUNITATE"></option>
-          <option value="EVENIMENT"></option>
-          <option value="Actualizare"></option>
-        </datalist>
-        <small class="hint">Categoria <b>Actualizare</b> e specială — anunțul apare în secțiunea „Actualizări” de pe site (patch notes de server), separat de „Ultimele anunțuri”.</small>
-      </div>
+      <div class="field wide"><label>Titlu</label><input id="f-title" required placeholder="ex: Update 1.4 — patch notes"></div>
       <div class="field wide"><label>Imagine (URL, opțional)</label><input id="f-image-url" placeholder="https://... — apare pe card-ul de pe site și în notificarea Discord"></div>
       <div class="field wide"><label>Video (URL YouTube, opțional)</label><input id="f-video-url" placeholder="https://youtu.be/... — apare ca buton „▶ Vezi videoclipul” pe card-ul de pe site"></div>
-      <div class="field wide"><label>Conținut</label><textarea id="f-content" required placeholder="Textul anunțului..."></textarea></div>
+      <div class="field wide"><label>Conținut</label><textarea id="f-content" required placeholder="Ce s-a schimbat în această actualizare..."></textarea></div>
       <div class="field checkbox wide"><input type="checkbox" id="f-published" checked><label for="f-published">Publicat (vizibil pe site)</label></div>
     </div>
     <p class="formmsg" id="form-msg" hidden></p>
@@ -45,6 +33,8 @@
 </main>
 <script src="auth-client.js"></script>
 <script>
+const UPDATE_CATEGORY = 'Actualizare';
+const isUpdateCategory = c => (c || '').toString().trim().toLowerCase() === 'actualizare';
 let editingId = null;
 const escapeHtml = s => (s ?? '').toString()
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -54,10 +44,9 @@ function showForm(ann) {
   document.getElementById('form-box').hidden = false;
   document.getElementById('form-msg').hidden = true;
   editingId = ann ? ann.id : null;
-  document.getElementById('form-title').textContent = ann ? 'Editează anunț' : 'Anunț nou';
+  document.getElementById('form-title').textContent = ann ? 'Editează actualizare' : 'Actualizare nouă';
   document.getElementById('f-id').value = ann ? ann.id : '';
   document.getElementById('f-title').value = ann ? ann.title : '';
-  document.getElementById('f-category').value = ann ? ann.category : '';
   document.getElementById('f-image-url').value = ann ? (ann.image_url || '') : '';
   document.getElementById('f-video-url').value = ann ? (ann.video_url || '') : '';
   document.getElementById('f-content').value = ann ? ann.content : '';
@@ -76,10 +65,11 @@ async function loadList() {
   try {
     const res = await apiFetch('/api/admin/announcements');
     if (!res.ok) throw new Error();
-    const items = await res.json();
+    const all = await res.json();
+    const items = all.filter(a => isUpdateCategory(a.category));
     tbody.innerHTML = items.length ? items.map(a => `
       <tr>
-        <td>${escapeHtml(a.title)}<br><small style="color:var(--muted)">${escapeHtml(a.category)}</small></td>
+        <td>${escapeHtml(a.title)}</td>
         <td>${escapeHtml(a.author) || 'Sistem'}</td>
         <td><span class="pill ${a.is_published ? 'on' : 'off'}">${a.is_published ? 'PUBLICAT' : 'CIORNĂ'}</span></td>
         <td>${new Date(a.published_at).toLocaleDateString('ro-RO')}</td>
@@ -87,19 +77,19 @@ async function loadList() {
           <button data-edit="${a.id}">Editează</button>
           <button data-del="${a.id}" class="danger">Șterge</button>
         </td>
-      </tr>`).join('') : '<tr><td colspan="5">Niciun anunț încă.</td></tr>';
+      </tr>`).join('') : '<tr><td colspan="5">Nicio actualizare încă.</td></tr>';
 
     tbody.querySelectorAll('[data-edit]').forEach(btn => btn.addEventListener('click', async () => {
       const res = await apiFetch(`/api/admin/announcements/${btn.dataset.edit}`);
       if (res.ok) showForm(await res.json());
     }));
     tbody.querySelectorAll('[data-del]').forEach(btn => btn.addEventListener('click', async () => {
-      if (!confirm('Ștergi definitiv acest anunț?')) return;
+      if (!confirm('Ștergi definitiv această actualizare?')) return;
       const res = await apiFetch(`/api/admin/announcements/${btn.dataset.del}`, { method: 'DELETE' });
       if (res.ok || res.status === 204) loadList();
     }));
   } catch {
-    tbody.innerHTML = '<tr><td colspan="5">Nu am putut încărca anunțurile.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5">Nu am putut încărca actualizările.</td></tr>';
   }
 }
 
@@ -112,7 +102,7 @@ document.getElementById('ann-form').addEventListener('submit', async (e) => {
   msg.hidden = true;
   const body = {
     title: document.getElementById('f-title').value.trim(),
-    category: document.getElementById('f-category').value.trim() || 'General',
+    category: UPDATE_CATEGORY,
     image_url: document.getElementById('f-image-url').value.trim() || null,
     video_url: document.getElementById('f-video-url').value.trim() || null,
     content: document.getElementById('f-content').value,

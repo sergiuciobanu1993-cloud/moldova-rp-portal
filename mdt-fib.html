@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MDT FIB — Moldova RP</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="dashboard.css"><link rel="stylesheet" href="mdt-shared.css?v=2">
+<html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MDT FIB — Moldova RP</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="dashboard.css"><link rel="stylesheet" href="mdt-shared.css?v=3">
 <style>
 /* Buton "acasă" — la fel ca pe VIP Shop. */
 .home-btn{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);padding:10px 15px;border-radius:8px;color:var(--text);font-weight:800;font-size:12.5px;white-space:nowrap;transition:.15s ease}
@@ -99,7 +99,7 @@
 
 </main>
 <script src="auth-client.js"></script>
-<script src="mdt-shared.js?v=2"></script>
+<script src="mdt-shared.js?v=3"></script>
 <script>
 const CATEGORY_LABEL = { trafic_droguri: 'Trafic de droguri', omor: 'Omor / tentativă de omor', talharie: 'Tâlhărie', santaj: 'Șantaj', spalare_bani: 'Spălare de bani', coruptie: 'Corupție', altele: 'Altele' };
 const STATUS_LABEL = { deschis: 'DESCHIS', in_lucru: 'ÎN LUCRU', la_parchet: 'LA PARCHET', inchis: 'ÎNCHIS', clasat: 'CLASAT' };
@@ -196,7 +196,7 @@ function showNew() {
   document.getElementById('new-overlay').style.display = 'flex';
   newOfficersWidget = MDT.createChipInput(document.getElementById('n-officers'), [], 'nume agent...');
   newVehiclesWidget = MDT.createChipInput(document.getElementById('n-vehicles'), [], 'ex: Sultan RS - ABC123...');
-  newWeaponsWidget = MDT.createChipInput(document.getElementById('n-weapons'), [], 'ex: Pistol...');
+  newWeaponsWidget = MDT.createChipInput(document.getElementById('n-weapons'), [], 'ex: Pistol...', { layout: 'list' });
   newTagsWidget = MDT.createChipInput(document.getElementById('n-tags'), [], 'ex: prioritar...');
   newDescEditor = MDT.createMarkdownEditor(document.getElementById('n-description'), MDT.TEMPLATES.dosar);
 }

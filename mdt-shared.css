@@ -9,6 +9,25 @@
 .chip-item button{background:transparent;border:0;color:var(--muted);cursor:pointer;font-size:11px;width:18px;height:18px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center}
 .chip-item button:hover{background:rgba(255,80,80,.15);color:#ff8a8a}
 
+/* Variantă "listă": un rând pe intrare, numerotat — pentru liste cu multe
+   intrări sau intrări lungi (ex. arme: serie + tip + note), unde pastilele
+   înghesuite una lângă alta (varianta de mai sus) deveneau ilizibile. */
+.chip-list--rows{flex-direction:column;align-items:stretch}
+.chip-item.chip-item--row{display:flex;align-items:flex-start;gap:10px;width:100%;border-radius:8px;padding:8px 10px}
+.chip-item--row .chip-item-num{flex-shrink:0;color:var(--muted);font-size:11px;margin-top:1px;min-width:16px}
+.chip-item--row .chip-item-text{flex:1;white-space:pre-wrap;word-break:break-word;line-height:1.5}
+.chip-item--row button{flex-shrink:0;margin-top:1px}
+
+/* .chip — pastila folosită la AFIȘAREA (read-only) unui raport/dosar salvat
+   (chipsHtml din mdt-raport.html/mdt-dosar.html), spre deosebire de
+   .chip-item de mai sus, folosită doar în formularul de editare. Lipsea din
+   CSS — intrările apăreau ca text simplu, fără nicio delimitare vizuală. */
+.chip{display:inline-flex;align-items:center;background:var(--bg);border:1px solid var(--line);border-radius:999px;padding:5px 11px;font-size:12px}
+.chip-list-view{display:flex;flex-wrap:wrap;gap:6px}
+.chip-list-view--rows{flex-direction:column;align-items:stretch}
+.chip-list-view--rows .chip{border-radius:8px;width:100%;align-items:flex-start;gap:8px;white-space:pre-wrap;word-break:break-word;line-height:1.5}
+.chip-list-view--rows .chip b{flex-shrink:0;color:var(--muted);font-weight:800;min-width:16px}
+
 .md-toolbar{display:flex;gap:2px;flex-wrap:wrap;border:1px solid var(--line);border-bottom:0;border-radius:8px 8px 0 0;background:var(--bg);padding:6px}
 .md-toolbar button{background:transparent;border:0;color:var(--text);width:30px;height:28px;border-radius:6px;cursor:pointer;font-size:13px;font:inherit}
 .md-toolbar button:hover{background:var(--panel)}

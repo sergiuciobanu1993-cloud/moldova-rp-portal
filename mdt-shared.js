@@ -116,33 +116,60 @@ window.MDT = (function () {
   // Listă liberă de text-uri scurte ("chips") — etichete, polițiști/civili/
   // suspecți implicați, vehicule, arme. containerEl e golit și populat cu
   // markup-ul complet; întoarce { getValues() }.
-  function createChipInput(containerEl, initialValues, placeholder) {
+  //
+  // options.layout: 'chips' (implicit) — pastile mici, una lângă alta, bune
+  // pentru nume/plăcuțe scurte. 'list' — un rând pe intrare, numerotat,
+  // pentru liste cu multe intrări sau intrări lungi (ex. arme, cu serie +
+  // tip + note), unde pastilele înghesuite deveneau ilizibile (20.09.2026).
+  //
+  // (20.09.2026) La lipire, dacă textul are mai multe linii (ex. o listă de
+  // arme copiată dintr-un raport, câte una pe rând), fiecare linie devine o
+  // intrare separată automat — înainte, tot blocul lipit intra ca UN SINGUR
+  // chip (text amestecat, greu de citit/șters individual).
+  function createChipInput(containerEl, initialValues, placeholder, options) {
     const values = Array.isArray(initialValues) ? initialValues.slice() : [];
+    const layout = options && options.layout === 'list' ? 'list' : 'chips';
     containerEl.innerHTML = `
-      <div class="chip-list"></div>
+      <div class="chip-list${layout === 'list' ? ' chip-list--rows' : ''}"></div>
       <div style="display:flex;gap:8px;margin-top:8px">
         <input type="text" class="filter-select chip-input-field" style="flex:1" placeholder="${escapeHtml(placeholder || 'scrie și apasă Enter')}">
         <button type="button" class="btn-ghost chip-add-btn" style="padding:8px 14px;font-size:12px">+ Adaugă</button>
-      </div>`;
+      </div>
+      ${layout === 'list' ? '<small class="muted" style="display:block;margin-top:6px;font-size:11px">Poți lipi mai multe deodată, câte una pe rând — se adaugă separat, automat.</small>' : ''}`;
     const listEl = containerEl.querySelector('.chip-list');
     const inputEl = containerEl.querySelector('.chip-input-field');
     const addBtn = containerEl.querySelector('.chip-add-btn');
 
     function render() {
-      listEl.innerHTML = values.length
-        ? values.map((v, i) => `<span class="chip-item">${escapeHtml(v)}<button type="button" data-chip-remove="${i}" aria-label="Șterge">✕</button></span>`).join('')
-        : '<span class="muted" style="font-size:12px">nimic adăugat</span>';
+      if (!values.length) {
+        listEl.innerHTML = '<span class="muted" style="font-size:12px">nimic adăugat</span>';
+        return;
+      }
+      listEl.innerHTML = values.map((v, i) => layout === 'list'
+        ? `<span class="chip-item chip-item--row"><b class="chip-item-num">${i + 1}.</b><span class="chip-item-text">${escapeHtml(v)}</span><button type="button" data-chip-remove="${i}" aria-label="Șterge">✕</button></span>`
+        : `<span class="chip-item">${escapeHtml(v)}<button type="button" data-chip-remove="${i}" aria-label="Șterge">✕</button></span>`
+      ).join('');
       listEl.querySelectorAll('[data-chip-remove]').forEach(btn => {
         btn.addEventListener('click', () => { values.splice(Number(btn.dataset.chipRemove), 1); render(); });
       });
     }
+    function addValues(raw) {
+      const lines = (raw || '').split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+      if (!lines.length) return false;
+      values.push(...lines);
+      render();
+      return true;
+    }
     function addFromInput() {
-      const v = inputEl.value.trim();
-      if (v) { values.push(v); inputEl.value = ''; render(); }
+      if (addValues(inputEl.value)) inputEl.value = '';
     }
     addBtn.addEventListener('click', addFromInput);
     inputEl.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') { e.preventDefault(); addFromInput(); }
+    });
+    inputEl.addEventListener('paste', (e) => {
+      const text = (e.clipboardData || window.clipboardData)?.getData('text') || '';
+      if (/\r?\n/.test(text)) { e.preventDefault(); addValues(text); }
     });
     render();
     return { getValues: () => values.slice() };

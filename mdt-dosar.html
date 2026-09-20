@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Dosar — MDT FIB</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="dashboard.css"><link rel="stylesheet" href="mdt-shared.css?v=2">
+<html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Dosar — MDT FIB</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="dashboard.css"><link rel="stylesheet" href="mdt-shared.css?v=3">
 <style>
 .case-no{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--orange);font-size:12px;font-weight:800;letter-spacing:.02em}
 .meta-row{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;color:var(--muted);font-size:12px;margin:10px 0 16px}
@@ -131,7 +131,7 @@
 </section>
 </main>
 <script src="auth-client.js"></script>
-<script src="mdt-shared.js?v=2"></script>
+<script src="mdt-shared.js?v=3"></script>
 <script>
 const CATEGORY_LABEL = { trafic_droguri: 'Trafic de droguri', omor: 'Omor / tentativă de omor', talharie: 'Tâlhărie', santaj: 'Șantaj', spalare_bani: 'Spălare de bani', coruptie: 'Corupție', altele: 'Altele' };
 const STATUS_LABEL = { deschis: 'DESCHIS', in_lucru: 'ÎN LUCRU', la_parchet: 'LA PARCHET', inchis: 'ÎNCHIS', clasat: 'CLASAT' };
@@ -147,10 +147,15 @@ const escapeHtml = s => (s ?? '').toString()
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
-function chipsHtml(items, emptyText) {
-  return (items || []).length
-    ? `<div style="display:flex;flex-wrap:wrap;gap:6px">${items.map(v => `<span class="chip">${escapeHtml(v)}</span>`).join('')}</div>`
-    : `<span class="muted" style="font-size:12px">${emptyText}</span>`;
+function chipsHtml(items, emptyText, layout) {
+  if (!(items || []).length) return `<span class="muted" style="font-size:12px">${emptyText}</span>`;
+  const rows = layout === 'list';
+  return `<div class="chip-list-view${rows ? ' chip-list-view--rows' : ''}">${
+    items.map((v, i) => rows
+      ? `<span class="chip"><b>${i + 1}.</b><span>${escapeHtml(v)}</span></span>`
+      : `<span class="chip">${escapeHtml(v)}</span>`
+    ).join('')
+  }</div>`;
 }
 
 function fmtDate(iso) {
@@ -223,7 +228,7 @@ function renderDosar(d) {
     <div style="margin-bottom:14px">${suspectsHtml}</div>
     <div class="field" style="margin-bottom:10px"><label>Polițiști implicați</label>${chipsHtml(d.officers_involved, 'niciunul înregistrat')}</div>
     <div class="field" style="margin-bottom:10px"><label>Vehicule implicate</label>${chipsHtml(d.vehicles_involved, 'niciunul înregistrat')}</div>
-    <div class="field" style="margin-bottom:10px"><label>Arme implicate</label>${chipsHtml(d.weapons_involved, 'niciuna înregistrată')}</div>
+    <div class="field" style="margin-bottom:10px"><label>Arme implicate</label>${chipsHtml(d.weapons_involved, 'niciuna înregistrată', 'list')}</div>
     <div class="field" style="margin-bottom:14px"><label>Etichete</label>${chipsHtml(d.tags, 'nicio etichetă')}</div>
     <div class="md-preview" style="border:1px solid var(--line);border-radius:8px;min-height:0">${MDT.mdToHtml(d.description || '') || '<p class="muted">Fără descriere.</p>'}</div>
   `;
@@ -272,8 +277,11 @@ async function exportDosar() {
     const suspectsHtml = (d.suspects || []).length
       ? d.suspects.map(s => `<span class="chip">${ROLE_LABEL[s.role] || s.role}: ${escapeHtml(s.name)}</span>`).join(' ')
       : '<p><em>Nicio persoană înregistrată.</em></p>';
-    const chipsBlock = (label, items) => (items || []).length
-      ? `<p><strong>${label}:</strong> ${items.map(v => `<span class="chip">${escapeHtml(v)}</span>`).join(' ')}</p>` : '';
+    const chipsBlock = (label, items, rows) => (items || []).length
+      ? (rows
+          ? `<p><strong>${label}:</strong></p><p>${items.map((v, i) => `${i + 1}. ${escapeHtml(v)}`).join('<br>')}</p>`
+          : `<p><strong>${label}:</strong> ${items.map(v => `<span class="chip">${escapeHtml(v)}</span>`).join(' ')}</p>`)
+      : '';
 
     let probeHtml = '';
     if ((d.probe || []).length) {
@@ -315,7 +323,7 @@ async function exportDosar() {
       <p>${suspectsHtml}</p>
       ${chipsBlock('Polițiști implicați', d.officers_involved)}
       ${chipsBlock('Vehicule implicate', d.vehicles_involved)}
-      ${chipsBlock('Arme implicate', d.weapons_involved)}
+      ${chipsBlock('Arme implicate', d.weapons_involved, true)}
       ${chipsBlock('Etichete', d.tags)}
       <h2>Descriere</h2>
       ${MDT.mdToHtml(d.description || '') || '<p><em>Fără descriere.</em></p>'}
@@ -345,7 +353,7 @@ function openEdit() {
   loadAgents('e-assigned', d.assigned_to);
   editOfficersWidget = MDT.createChipInput(document.getElementById('e-officers'), d.officers_involved || [], 'nume agent...');
   editVehiclesWidget = MDT.createChipInput(document.getElementById('e-vehicles'), d.vehicles_involved || [], 'ex: Sultan RS - ABC123...');
-  editWeaponsWidget = MDT.createChipInput(document.getElementById('e-weapons'), d.weapons_involved || [], 'ex: Pistol...');
+  editWeaponsWidget = MDT.createChipInput(document.getElementById('e-weapons'), d.weapons_involved || [], 'ex: Pistol...', { layout: 'list' });
   editTagsWidget = MDT.createChipInput(document.getElementById('e-tags'), d.tags || [], 'ex: prioritar...');
   editDescEditor = MDT.createMarkdownEditor(document.getElementById('e-description'), d.description || '');
   document.getElementById('edit-box').hidden = false;

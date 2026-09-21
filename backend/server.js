@@ -303,7 +303,16 @@ app.get("/api/admin/live/players", auth, requireRole(...ADMIN_ROLES), asyncRoute
 async function syncPlayerSnapshots() {
   if (!FIVEM_API_SECRET) return;
   try {
-    const detail = await fetchPlayersDetail();
+    // (21.09.2026, optimizare resurse) Înainte, acest tur chema
+    // fetchPlayersDetail() direct — o cerere NOU-NOUȚĂ către serverul de joc,
+    // complet separată de cache-ul de 20s de mai sus (getPlayersDetail),
+    // folosit de orice altă parte a site-ului (profil jucător, admin, etc).
+    // Rezultatul: dacă cineva se uita pe site exact în aceeași fereastră de
+    // 60s, resursa moldovarp-api primea DOUĂ cereri /players aproape
+    // simultan, în loc de una singură refolosită. Acum folosim aceeași
+    // funcție cu cache ca tot restul site-ului — o cerere reală la cel mult
+    // fiecare 20s, indiferent câte locuri din site au nevoie de date.
+    const detail = await getPlayersDetail();
     if (!detail.online || !detail.players.length) return;
 
     // (19.09.2026, optimizare resurse) Înainte, acest tur trimitea câte un

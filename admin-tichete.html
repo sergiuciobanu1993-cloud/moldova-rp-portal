@@ -37,14 +37,25 @@
     <button type="button" id="detail-delete-btn" class="danger">Șterge tichetul</button>
   </div>
 
-  <div class="field" style="margin:16px 0">
-    <label>Schimbă status</label>
-    <select id="detail-status-select">
-      <option value="open">Deschis</option>
-      <option value="in_progress">În lucru</option>
-      <option value="resolved">Rezolvat</option>
-      <option value="closed">Închis</option>
-    </select>
+  <div class="formgrid" style="margin:16px 0">
+    <div class="field">
+      <label>Schimbă status</label>
+      <select id="detail-status-select">
+        <option value="open">Deschis</option>
+        <option value="in_progress">În lucru</option>
+        <option value="resolved">Rezolvat</option>
+        <option value="closed">Închis</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Schimbă categorie</label>
+      <select id="detail-category-select">
+        <option value="general">General</option>
+        <option value="bug">Bug / problemă tehnică</option>
+        <option value="reclamatie">Reclamație jucător</option>
+        <option value="ban_appeal">Contestație sancțiune</option>
+      </select>
+    </div>
   </div>
 
   <div class="thread" id="detail-replies"></div>
@@ -135,6 +146,7 @@ async function openTicket(id) {
     ? `<a href="${t.evidence_url}" target="_blank" rel="noopener noreferrer">🔗 Vezi dovada atașată</a>`
     : '';
   document.getElementById('detail-status-select').value = t.status;
+  document.getElementById('detail-category-select').value = t.category;
 
   document.getElementById('detail-replies').innerHTML = t.replies.length
     ? t.replies.map(r => `
@@ -160,6 +172,15 @@ document.getElementById('detail-status-select').addEventListener('change', async
   await apiFetch(`/api/admin/tickets/${currentTicketId}`, {
     method: 'PUT', body: JSON.stringify({ status: e.target.value })
   });
+  loadList();
+});
+
+document.getElementById('detail-category-select').addEventListener('change', async (e) => {
+  if (!currentTicketId) return;
+  await apiFetch(`/api/admin/tickets/${currentTicketId}`, {
+    method: 'PUT', body: JSON.stringify({ category: e.target.value })
+  });
+  document.getElementById('detail-category').textContent = CATEGORY_LABEL[e.target.value] || e.target.value;
   loadList();
 });
 

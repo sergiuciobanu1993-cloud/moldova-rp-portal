@@ -3509,10 +3509,15 @@ app.get("/api/admin/tickets/:id", auth, requireRole(...MOD_ROLES), asyncRoute(as
 // până acum.
 app.put("/api/admin/tickets/:id", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
   const { id } = req.params;
-  const { status, assigned_to, subject, description, evidence_url } = req.body;
+  const { status, assigned_to, subject, description, evidence_url, category } = req.body;
   const allowedStatuses = ["open", "in_progress", "resolved", "closed"];
+  // (21.09.2026, cerut explicit) staff poate corecta și categoria unui tichet
+  // — de exemplu dacă jucătorul a ales-o greșit la creare — nu doar status.
+  const allowedCategories = ["general", "bug", "reclamatie", "ban_appeal"];
   if (status && !allowedStatuses.includes(status))
     return res.status(400).json({ error: "Status invalid." });
+  if (category && !allowedCategories.includes(category))
+    return res.status(400).json({ error: "Categorie invalidă." });
   if (evidence_url && !/^https?:\/\/\S+$/i.test(evidence_url.trim()))
     return res.status(400).json({ error: "Linkul trebuie să înceapă cu http:// sau https://." });
   const { rows } = await pool.query(
@@ -3522,9 +3527,10 @@ app.put("/api/admin/tickets/:id", auth, requireRole(...MOD_ROLES), asyncRoute(as
        subject = COALESCE($3, subject),
        description = COALESCE($4, description),
        evidence_url = COALESCE($5, evidence_url),
+       category = COALESCE($6, category),
        updated_at = NOW()
-     WHERE id = $6 RETURNING *`,
-    [status || null, assigned_to || null, subject?.trim() || null, description?.trim() || null, evidence_url?.trim() || null, id]
+     WHERE id = $7 RETURNING *`,
+    [status || null, assigned_to || null, subject?.trim() || null, description?.trim() || null, evidence_url?.trim() || null, category || null, id]
   );
   if (!rows[0]) return res.status(404).json({ error: "Tichetul nu există." });
   await logAction(req.user.sub, "ticket.update", "ticket", id, req.body, req.ip);

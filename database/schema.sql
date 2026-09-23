@@ -441,6 +441,39 @@ CREATE INDEX IF NOT EXISTS idx_tickets_category ON tickets(category);
 -- textul scris se potrivește exact cu un jucător existent (best-effort).
 ALTER TABLE tickets ADD COLUMN IF NOT EXISTS reported_player_label TEXT;
 
+-- === Loguri din Discord — bot propriu, citește canale (23.09.2026) ===
+-- Staff-ul are deja loguri detaliate (transferuri bancare, heist-uri,
+-- protecție exploit-uri) trimise în Discord prin ~185 de webhook-uri
+-- diferite, din scripturi variate — prea multe și, pe alocuri, closed-source,
+-- ca să le adăugăm câte un "al doilea webhook" spre site. Un bot Discord
+-- propriu (vezi pollDiscordLogs în backend/server.js) citește periodic
+-- mesajele noi din canalele la care are voie și le copiază aici, ca a treia
+-- sursă a paginii de Loguri (alături de jocul propriu-zis și Luxu Admin).
+CREATE TABLE IF NOT EXISTS discord_channel_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  message_id VARCHAR(32) NOT NULL UNIQUE,
+  channel_id VARCHAR(32) NOT NULL,
+  channel_name VARCHAR(120),
+  category_name VARCHAR(120),
+  author_name VARCHAR(120),
+  title VARCHAR(300),
+  fields JSONB,
+  content TEXT,
+  posted_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_discord_channel_logs_posted_at ON discord_channel_logs(posted_at DESC);
+CREATE INDEX IF NOT EXISTS idx_discord_channel_logs_channel ON discord_channel_logs(channel_id);
+
+-- Cursorul (ultimul mesaj citit) per canal — ca botul să continue exact de
+-- unde a rămas după un restart, fără să reimporte istoricul și fără să
+-- sară mesaje apărute cât timp serviciul era oprit.
+CREATE TABLE IF NOT EXISTS discord_log_cursors (
+  channel_id VARCHAR(32) PRIMARY KEY,
+  last_message_id VARCHAR(32) NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 INSERT INTO roles(name, description) VALUES
 ('player', 'Jucator standard'),
 ('moderator', 'Moderator'),

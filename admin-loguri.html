@@ -6,7 +6,7 @@
 <header><div><small>PANEL ADMINISTRATIV</small><h1>Loguri</h1></div><a class="admin" href="dashboard.html" title="Înapoi la contul meu" style="text-decoration:none"><span id="admin-name">…</span> <i></i></a></header>
 
 <p class="muted" style="margin:-10px 0 18px">
-  Jurnal de activitate, din două surse: serverul de joc (chat/comenzi, conectări/deconectări, morți/kill-uri, bani, cumpărături/crafting/transfer de iteme din inventar) și panoul Luxu Admin (acțiuni de staff — kill, revive, dă/ia item etc.), trimise direct pe site prin webhook.
+  Jurnal de activitate, din trei surse: serverul de joc (chat/comenzi, conectări/deconectări, morți/kill-uri, bani, cumpărături/crafting/transfer de iteme din inventar), panoul Luxu Admin (acțiuni de staff — kill, revive, dă/ia item etc.), trimise direct pe site prin webhook, și canalele de loguri din Discord (bancă/facturi, heist-uri, protecție exploit-uri etc.), citite automat de botul nostru.
   Banii arată <strong>diferența</strong> observată (cumpărare/vânzare/salariu etc.) — pentru bancă (depunere/scoatere) și pentru torpedou/portbagaj sursa e acum <strong>confirmată</strong>, afișată clar fără cuvântul "posibil"; restul rămân presupuneri marcate ca atare.
   Istoricul este păstrat timp de <strong>30 de zile</strong> — după acest interval, înregistrările sunt șterse automat.
 </p>
@@ -34,6 +34,7 @@
         <option value="item_pickup">Ridicat de jos</option>
         <option value="vehicle_acquired">Vehicul nou</option>
         <option value="admin">Acțiuni staff (Luxu)</option>
+        <option value="discord">Discord (bancă, heist, protecție exploit-uri...)</option>
       </select>
       <button id="refresh-btn" class="btn-ghost" type="button">Reîmprospătează</button>
     </div>
@@ -55,6 +56,7 @@ const CATEGORY_LABEL = {
   item_pickup: 'Ridicat de jos',
   vehicle_acquired: 'Vehicul nou',
   admin: 'Acțiune staff',
+  discord: 'Discord',
 };
 const CATEGORY_PILL = {
   chat: 'info', command: 'info', connect: 'on', disconnect: 'off', death: 'warn', money: 'warn',
@@ -63,6 +65,7 @@ const CATEGORY_PILL = {
   item_pickup: 'info',
   vehicle_acquired: 'info',
   admin: 'warn',
+  discord: 'info',
 };
 
 // Traducem cele mai comune actiuni de staff din Luxu Admin (kill, revive,
@@ -389,6 +392,22 @@ function formatDetailsBody(log, d) {
       if (d.reason) parts.push(`<span class="muted">(${escapeHtml(truncate(d.reason, 300))})</span>`);
       if (nice && d.action) parts.push(`<span class="muted">· acțiune brută: ${escapeHtml(truncate(d.action, 200))}</span>`);
       return parts.length ? parts.join(' ') : `<span class="muted">${escapeHtml(truncate(JSON.stringify(d.raw || {}), 300))}</span>`;
+    }
+    // Copiate din canalele Discord de loguri (bancă/facturi, heist-uri,
+    // protecție exploit-uri etc.) de botul nostru — vezi backend/server.js
+    // (pollDiscordLogs). "fields" e obiectul luat din embed-ul mesajului
+    // (Jucator/Detinator/Transferat/etc, exact cum apar în Discord).
+    case 'discord': {
+      const parts = [];
+      if (d.title) parts.push(`<strong>${escapeHtml(d.title)}</strong>`);
+      if (d.fields && Object.keys(d.fields).length) {
+        parts.push(Object.entries(d.fields).map(([k, v]) => `${escapeHtml(k)}: <strong>${escapeHtml(String(v))}</strong>`).join(' · '));
+      } else if (d.content) {
+        parts.push(escapeHtml(truncate(d.content, 300)));
+      }
+      const source = [d.channel ? `#${d.channel}` : null, d.category].filter(Boolean).join(' · ');
+      if (source) parts.push(`<span class="muted">(${escapeHtml(source)})</span>`);
+      return parts.length ? parts.join(' ') : '<span class="muted">—</span>';
     }
     default:
       return `<span class="muted">${escapeHtml(truncate(JSON.stringify(d), 300))}</span>`;

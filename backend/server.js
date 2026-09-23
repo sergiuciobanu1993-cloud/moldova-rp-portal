@@ -560,7 +560,9 @@ app.get("/api/admin/live/jobs", auth, requireRole(...ADMIN_ROLES), asyncRoute(as
 // Sancțiunile (moderator+) — e un instrument de investigație pentru staff,
 // nu date publice.
 const GAME_LOG_CATEGORIES = ["chat", "command", "connect", "disconnect", "death", "money", "money_vehicle_deposit", "money_vehicle_withdraw", "item_buy", "item_craft", "item_transfer", "item_obtained", "item_drop", "item_pickup", "vehicle_acquired"];
-const LOG_CATEGORIES = [...GAME_LOG_CATEGORIES, "admin"];
+// "discord" (23.09.2026) — a treia sursă, vezi botul de citit canale Discord
+// mai jos (pollDiscordLogs) și fetchDiscordLogsPage.
+const LOG_CATEGORIES = [...GAME_LOG_CATEGORIES, "admin", "discord"];
 
 // Cere loguri de joc de la moldovarp-api. `category` poate fi o singura
 // categorie sau mai multe separate prin virgula (resursa stie sa le
@@ -923,6 +925,58 @@ async function fetchStaffLogsPage({ player, page, pageSize }) {
   return { logs, total };
 }
 
+// A treia sursă a paginii de Loguri (23.09.2026, cerut explicit): mesajele
+// copiate din canalele Discord de loguri (bancă/facturi, heist-uri,
+// protecție exploit-uri etc.) de botul nostru — vezi pollDiscordLogs mai
+// jos, care le salvează în discord_channel_logs. Aceeași formă de rezultat
+// ca fetchStaffLogsPage, ca frontend-ul să le trateze la fel (o singură
+// categorie dedicată, paginată exact, nu amestecată cu logurile de joc).
+async function fetchDiscordLogsPage({ player, page, pageSize }) {
+  const conditions = [];
+  const params = [];
+  if (player) {
+    params.push(`%${player}%`);
+    conditions.push(`(author_name ILIKE $${params.length} OR title ILIKE $${params.length} OR channel_name ILIKE $${params.length} OR fields::text ILIKE $${params.length})`);
+  }
+  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+  const countRes = await pool.query(`SELECT COUNT(*)::int AS total FROM discord_channel_logs ${where}`, params);
+  const total = countRes.rows[0]?.total || 0;
+
+  const limitParams = [...params, pageSize, (page - 1) * pageSize];
+  const { rows } = await pool.query(
+    `SELECT channel_name, category_name, author_name, title, fields, content, posted_at
+     FROM discord_channel_logs ${where} ORDER BY posted_at DESC LIMIT $${limitParams.length - 1} OFFSET $${limitParams.length}`,
+    limitParams
+  );
+  const logs = rows.map(r => ({
+    category: "discord",
+    player: extractDiscordPlayer(r.fields) || r.author_name || r.channel_name || "necunoscut",
+    details: {
+      channel: r.channel_name,
+      category: r.category_name,
+      author: r.author_name,
+      title: r.title,
+      fields: r.fields,
+      content: r.content,
+    },
+    at: r.posted_at,
+  }));
+  return { logs, total };
+}
+
+// Best-effort: cautăm în câmpurile embed-ului unul care pare să fie despre
+// jucător ("Jucator"/"Player"), ca filtrul după jucător de pe pagina de
+// Loguri să funcționeze și pentru intrările din Discord, nu doar cele din
+// joc/Luxu. Dacă nu găsim un asemenea câmp, rândul tot apare — doar coloana
+// JUCĂTOR arată numele bot-ului/canalului în loc.
+function extractDiscordPlayer(fields) {
+  if (!fields || typeof fields !== "object") return null;
+  for (const [key, value] of Object.entries(fields)) {
+    if (/jucator|player/i.test(key)) return String(value).slice(0, 120);
+  }
+  return null;
+}
+
 // Corelare best-effort: cand un log de joc (item obtinut generic, moarte,
 // vehicul nou aparut) se intampla FOARTE aproape in timp de o actiune de
 // staff din Luxu care pare potrivita (dupa un cuvant-cheie in actiune/motiv)
@@ -974,6 +1028,14 @@ app.get("/api/admin/logs", auth, requireRole(...MOD_ROLES), asyncRoute(async (re
   // paginăm direct pe ea, cu total/totalPages proprii.
   if (category === "admin") {
     const { logs, total } = await fetchStaffLogsPage({ player, page, pageSize });
+    const totalPages = Math.max(1, Math.ceil((total || 0) / pageSize));
+    return res.json({ online: true, logs, page, pageSize, total, totalPages });
+  }
+
+  // La fel ca "admin" mai sus — sursă proprie (Postgres, botul de Discord),
+  // paginată separat, nu depinde de serverul de joc fiind online.
+  if (category === "discord") {
+    const { logs, total } = await fetchDiscordLogsPage({ player, page, pageSize });
     const totalPages = Math.max(1, Math.ceil((total || 0) / pageSize));
     return res.json({ online: true, logs, page, pageSize, total, totalPages });
   }
@@ -1561,6 +1623,200 @@ setInterval(() => {
   pool.query("DELETE FROM admin_action_logs WHERE created_at < NOW() - INTERVAL '30 days'")
     .catch(err => console.error("Curățarea admin_action_logs a eșuat:", err.message));
 }, 6 * 60 * 60 * 1000);
+
+// ---------------------------------------------------------------------------
+// Loguri din Discord — bot propriu, citește canale (23.09.2026, cerut
+// explicit). Staff-ul are deja loguri detaliate (transferuri bancare,
+// heist-uri, protecție exploit-uri) trimise în Discord prin ~185 de
+// webhook-uri diferite, provenind din scripturi variate — prea multe și, pe
+// alocuri, closed-source, ca să le adăugăm câte un "al doilea webhook" spre
+// site (ca la Luxu, mai sus). Soluția: UN bot Discord al nostru (cont
+// separat, token propriu — DISCORD_LOGS_BOT_TOKEN, cu voie DOAR să vadă
+// canalele de loguri, nicio permisiune de scris), care citește periodic
+// mesajele noi de-acolo și le copiază în discord_channel_logs — indiferent
+// ce script/webhook le-a trimis inițial în Discord.
+//
+// Canalele NU sunt hardcodate: citim toate canalele-text din server la care
+// botul chiar are acces (permisiunea se dă din Discord, per categorie —
+// vezi admin-loguri.html) — un canal nou de loguri, adăugat mai târziu, nu
+// cere nicio schimbare de cod, doar să i se dea botului voie să-l vadă.
+const DISCORD_LOGS_BOT_TOKEN = process.env.DISCORD_LOGS_BOT_TOKEN || "";
+const DISCORD_LOGS_GUILD_ID = process.env.DISCORD_LOGS_GUILD_ID || "";
+const DISCORD_API_BASE = "https://discord.com/api/v10";
+
+async function discordApiGet(path) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    return await fetch(`${DISCORD_API_BASE}${path}`, {
+      headers: { Authorization: `Bot ${DISCORD_LOGS_BOT_TOKEN}` },
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+let discordChannelMapCache = { channels: null, fetchedAt: 0 };
+const DISCORD_CHANNEL_MAP_TTL_MS = 10 * 60 * 1000;
+// Canale la care botul nu are acces (403/404) — le ținem minte ca să nu mai
+// încercăm la fiecare tur de 30s; dacă li se dă acces mai târziu, se
+// rezolvă la următorul restart al serviciului.
+const discordWarnedChannels = new Set();
+
+// Cursoarele (ultimul mesaj_id citit din fiecare canal) — încărcate o
+// singură dată din DB, apoi ținute în memorie; scrise înapoi doar când apar
+// mesaje noi, ca fiecare tur de polling să nu facă un SELECT per canal.
+let discordCursors = null;
+async function loadDiscordCursors() {
+  if (discordCursors) return discordCursors;
+  const { rows } = await pool.query("SELECT channel_id, last_message_id FROM discord_log_cursors");
+  discordCursors = new Map(rows.map(r => [r.channel_id, r.last_message_id]));
+  return discordCursors;
+}
+async function saveDiscordCursor(channelId, lastMessageId) {
+  discordCursors.set(channelId, lastMessageId);
+  await pool.query(
+    `INSERT INTO discord_log_cursors(channel_id, last_message_id, updated_at) VALUES ($1,$2,NOW())
+     ON CONFLICT (channel_id) DO UPDATE SET last_message_id=$2, updated_at=NOW()`,
+    [channelId, lastMessageId]
+  );
+}
+
+async function getDiscordChannelMap() {
+  const age = Date.now() - discordChannelMapCache.fetchedAt;
+  if (discordChannelMapCache.channels && age < DISCORD_CHANNEL_MAP_TTL_MS) return discordChannelMapCache.channels;
+
+  const res = await discordApiGet(`/guilds/${DISCORD_LOGS_GUILD_ID}/channels`);
+  if (!res.ok) {
+    console.error(`Discord logs: nu am putut lista canalele serverului (HTTP ${res.status}).`);
+    return discordChannelMapCache.channels || new Map();
+  }
+  const list = await res.json();
+  const byId = new Map(list.map(c => [c.id, c]));
+  const channels = new Map();
+  for (const c of list) {
+    // Tip 0 = text normal, 5 = anunțuri — singurele din care are sens să
+    // citim mesaje; categoriile (tip 4) și canalele vocale sunt sărite.
+    if (c.type !== 0 && c.type !== 5) continue;
+    const parent = c.parent_id ? byId.get(c.parent_id) : null;
+    channels.set(c.id, { id: c.id, name: c.name, categoryName: parent?.name || null });
+  }
+  discordChannelMapCache = { channels, fetchedAt: Date.now() };
+  return channels;
+}
+
+// ID-urile Discord (snowflake) sunt numere pe 64 de biți — un Number
+// obișnuit din JS și-ar pierde precizia, așa că le comparăm ca BigInt.
+function snowflakeGreater(a, b) {
+  if (!a) return false;
+  if (!b) return true;
+  return BigInt(a) > BigInt(b);
+}
+
+function parseDiscordEmbed(message) {
+  const embed = message.embeds && message.embeds[0];
+  if (!embed) return { title: null, fields: null, content: message.content || null };
+  const fields = {};
+  for (const f of embed.fields || []) {
+    if (f?.name) fields[String(f.name).slice(0, 120)] = String(f.value ?? "").slice(0, 500);
+  }
+  return {
+    title: embed.title || null,
+    fields: Object.keys(fields).length ? fields : null,
+    content: embed.description || message.content || null,
+  };
+}
+
+async function pollDiscordChannel(channelInfo) {
+  if (discordWarnedChannels.has(channelInfo.id)) return;
+
+  const cursors = await loadDiscordCursors();
+  let lastSeen = cursors.get(channelInfo.id) || null;
+
+  if (!lastSeen) {
+    // Prima dată când vedem acest canal: NU importăm tot istoricul (ar
+    // putea fi luni de mesaje, pe 185 de webhook-uri) — doar "ancorăm"
+    // cursorul la cel mai recent mesaj de acum; de-aici încolo citim doar
+    // ce e nou.
+    const res = await discordApiGet(`/channels/${channelInfo.id}/messages?limit=1`);
+    if (res.status === 403 || res.status === 404) {
+      discordWarnedChannels.add(channelInfo.id);
+      console.warn(`Discord logs: fără acces la #${channelInfo.name} (${channelInfo.id}) — sărim peste el (repornește serverul dacă i-ai dat voie între timp).`);
+      return;
+    }
+    if (!res.ok) { console.error(`Discord logs: eroare HTTP ${res.status} la ancorarea #${channelInfo.name}.`); return; }
+    const messages = await res.json();
+    if (messages.length) await saveDiscordCursor(channelInfo.id, messages[0].id);
+    return;
+  }
+
+  // Recuperăm TOATE mesajele noi, nu doar primele 100 — dacă un canal a
+  // fost foarte activ între două tururi, continuăm în buclă până ne prindem
+  // din urmă (limită de siguranță: max 2000 mesaje/tur/canal).
+  for (let guard = 0; guard < 20; guard++) {
+    const res = await discordApiGet(`/channels/${channelInfo.id}/messages?after=${encodeURIComponent(lastSeen)}&limit=100`);
+    if (res.status === 403 || res.status === 404) {
+      discordWarnedChannels.add(channelInfo.id);
+      console.warn(`Discord logs: fără acces la #${channelInfo.name} (${channelInfo.id}) — sărim peste el (repornește serverul dacă i-ai dat voie între timp).`);
+      return;
+    }
+    if (res.status === 429) { console.warn(`Discord logs: rate-limited pe #${channelInfo.name} — reîncercăm la următorul tur.`); return; }
+    if (!res.ok) { console.error(`Discord logs: eroare HTTP ${res.status} pe #${channelInfo.name}.`); return; }
+
+    const messages = await res.json();
+    if (!messages.length) return;
+
+    // Discord întoarce mereu cele mai noi mesaje primele — le procesăm de
+    // la cel mai vechi la cel mai nou, ca ordinea din baza noastră de date
+    // să urmeze ordinea reală din Discord.
+    const ordered = [...messages].reverse();
+    for (const msg of ordered) {
+      const { title, fields, content } = parseDiscordEmbed(msg);
+      await pool.query(
+        `INSERT INTO discord_channel_logs
+           (message_id, channel_id, channel_name, category_name, author_name, title, fields, content, posted_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+         ON CONFLICT (message_id) DO NOTHING`,
+        [
+          msg.id, channelInfo.id, channelInfo.name, channelInfo.categoryName,
+          msg.author?.username || null, title, fields ? JSON.stringify(fields) : null, content, msg.timestamp,
+        ]
+      );
+      if (snowflakeGreater(msg.id, lastSeen)) lastSeen = msg.id;
+    }
+    await saveDiscordCursor(channelInfo.id, lastSeen);
+    if (messages.length < 100) return; // ne-am prins din urmă
+  }
+}
+
+async function pollDiscordLogs() {
+  if (!DISCORD_LOGS_BOT_TOKEN || !DISCORD_LOGS_GUILD_ID) return;
+  const channels = await getDiscordChannelMap();
+  for (const channelInfo of channels.values()) {
+    try {
+      await pollDiscordChannel(channelInfo);
+    } catch (err) {
+      console.error(`Discord logs: eroare la #${channelInfo.name}:`, err.message);
+    }
+    // Pauză mică între canale, ca să nu trimitem toate cererile deodată
+    // către Discord (rate limits per-rută, plus un buget global comun).
+    await new Promise(r => setTimeout(r, 150));
+  }
+}
+
+if (DISCORD_LOGS_BOT_TOKEN && DISCORD_LOGS_GUILD_ID) {
+  setInterval(() => pollDiscordLogs().catch(err => console.error("pollDiscordLogs a eșuat:", err.message)), 30_000);
+  pollDiscordLogs().catch(err => console.error("pollDiscordLogs (prima rulare) a eșuat:", err.message));
+
+  // Aceeași politică de păstrare ca restul Logurilor — 30 de zile.
+  setInterval(() => {
+    pool.query("DELETE FROM discord_channel_logs WHERE posted_at < NOW() - INTERVAL '30 days'")
+      .catch(err => console.error("Curățarea discord_channel_logs a eșuat:", err.message));
+  }, 6 * 60 * 60 * 1000);
+} else {
+  console.log("Discord logs: DISCORD_LOGS_BOT_TOKEN/DISCORD_LOGS_GUILD_ID lipsesc — botul de citit loguri e dezactivat.");
+}
 
 // URL-ul panoului txAdmin al serverului de joc — NU e hardcodat în fișierele
 // statice (oricine ar putea deschide admin-txadmin.html și vedea sursa),

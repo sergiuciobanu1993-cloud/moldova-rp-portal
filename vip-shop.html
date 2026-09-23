@@ -162,7 +162,7 @@
       <button type="button" class="btn-ghost" id="preview-close" aria-label="Închide" style="flex:none;padding:4px 10px">✕</button>
     </div>
     <p class="pill warn" id="preview-price" style="margin:6px 0 14px">🪙 — coins</p>
-    <p class="muted" style="margin:0 0 10px;font-size:13px">Ce poți câștiga din această cutie, cu șansa exactă pentru fiecare recompensă:</p>
+    <p class="muted" style="margin:0 0 10px;font-size:13px">Ce poți câștiga din această cutie:</p>
     <div id="preview-pool" style="display:flex;flex-direction:column;gap:7px;margin-bottom:18px"></div>
     <button type="button" class="btn-primary" id="preview-open-btn" style="width:100%">Deschide</button>
   </div>
@@ -368,6 +368,11 @@ let currentCoins = 0;
 let currentCasesById = {};
 let accountLinked = false;
 
+// (23.09.2026, cerut explicit) NU mai arătăm procentul exact al șansei
+// jucătorilor — doar punctul colorat rămâne, ca indiciu vizual de raritate
+// (comun/rar/legendar), fără cifra exactă. chancePercent tot vine din API și
+// e folosit mai jos, intern, la simularea vizuală a rotiței (pickWeighted) și
+// la clasificarea de raritate — doar afișarea cifrei a fost scoasă.
 function poolRowsHtml(pool) {
   return pool.map(r => {
     const thumb = (r.type === 'vehicle' && r.model)
@@ -375,9 +380,8 @@ function poolRowsHtml(pool) {
       : `<span style="width:18px;text-align:center;flex:none">${REWARD_ICON[r.type] || '🎁'}</span>`;
     const dot = `<span class="odds-dot ${rarityOf(r.chancePercent)}"></span>`;
     return `
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12px">
+    <div style="display:flex;align-items:center;gap:8px;font-size:12px">
       <span class="muted" style="display:flex;align-items:center;gap:6px">${dot}${thumb}${escapeHtml(r.label)}</span>
-      <span class="muted" style="flex:none">${r.chancePercent}%</span>
     </div>`;
   }).join('');
 }

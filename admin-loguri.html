@@ -117,6 +117,32 @@ function truncate(value, max) {
   return s.length > max ? s.slice(0, max) + '…' : s;
 }
 
+// Botul de loguri Discord aduce mesaje "brute" (fără embed) de la zeci de
+// scripturi diferite, fiecare cu formatarea lui — de multe ori markdown de
+// Discord (### Secțiune, **bold**) scris direct în conținut. Fără curățare,
+// "###" și "**" apăreau ca text literal, iar liniile noi erau înghițite de
+// HTML (totul într-un singur rând lipit). Randăm minimal, fără librărie:
+// liniile "### ..." devin un mic subtitlu, "**text**" devine bold, iar
+// liniile noi chiar se văd. Sursele au adesea "**" nepereche (bug de
+// formatare în scriptul original) — un "**" rămas fără pereche e scos, nu
+// lăsat ca text brut pe pagină.
+function formatDiscordContent(value, max) {
+  const escaped = escapeHtml(truncate(value, max));
+  // "**" nepereche (bug frecvent in scripturile sursa, ex: "**ID:** **3" —
+  // al doilea "**" nu se mai inchide) sunt tratate PE RAND, nu pe tot
+  // textul deodata — altfel un singur "**" ramas fara pereche pe primul
+  // rand "inghite" restul continutului intr-un singur <strong> urias, pana
+  // gaseste urmatorul "**" nepotrivit, de multe randuri mai incolo.
+  const boldPair = /\*\*([^*]+?)\*\*/g;
+  return escaped.split('\n').map(line => {
+    const heading = line.match(/^#{1,6}\s*(.+)$/);
+    const text = (heading ? heading[1] : line).replace(boldPair, '<strong>$1</strong>');
+    return heading
+      ? `<span class="muted" style="text-transform:uppercase;font-size:11px;letter-spacing:.03em">${text}</span>`
+      : text;
+  }).join('<br>');
+}
+
 function fmtDate(d) { return new Date(d).toLocaleString('ro-RO'); }
 function fmtMoney(n) { return (n > 0 ? '+' : '') + n.toLocaleString('ro-RO') + '$'; }
 
@@ -403,7 +429,7 @@ function formatDetailsBody(log, d) {
       if (d.fields && Object.keys(d.fields).length) {
         parts.push(Object.entries(d.fields).map(([k, v]) => `${escapeHtml(k)}: <strong>${escapeHtml(String(v))}</strong>`).join(' · '));
       } else if (d.content) {
-        parts.push(escapeHtml(truncate(d.content, 300)));
+        parts.push(formatDiscordContent(d.content, 300));
       }
       const source = [d.channel ? `#${d.channel}` : null, d.category].filter(Boolean).join(' · ');
       if (source) parts.push(`<span class="muted">(${escapeHtml(source)})</span>`);

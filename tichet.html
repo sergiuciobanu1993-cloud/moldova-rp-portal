@@ -25,7 +25,8 @@
     <div class="field player-search-wrap" id="e-reported-wrap" hidden>
       <label>ID / nume jucător reclamat</label>
       <input id="e-reported-label" type="text" maxlength="120" placeholder="ex: 292 sau numele exact din joc" autocomplete="off">
-      <small class="hint">Tichetul e public — orice utilizator îl poate citi, inclusiv jucătorul reclamat. Scrie ID-ul din joc (F10) sau numele exact — staff-ul identifică jucătorul din reclamație.</small>
+      <div class="player-search-dropdown" id="e-reported-dropdown" hidden></div>
+      <small class="hint">Tichetul e public — orice utilizator îl poate citi, inclusiv jucătorul reclamat. Scrie ID-ul din joc (F10) sau numele exact — staff-ul identifică jucătorul din reclamație. Pe măsură ce scrii, îți arătăm mai jos jucătorii găsiți, ca să confirmi că e cel corect.</small>
     </div>
     <div class="field"><label>Descriere</label><textarea id="e-description" required></textarea></div>
     <div class="field"><label>Link dovadă (obligatoriu)</label><input id="e-evidence" type="url" required></div>
@@ -133,6 +134,64 @@ document.getElementById('e-category').addEventListener('change', (e) => {
   document.getElementById('e-reported-wrap').hidden = !isReclamatie;
   if (!isReclamatie) document.getElementById('e-reported-label').value = '';
 });
+
+// (24.09.2026) Vezi tichete.html pentru explicatia completa — aceeasi
+// confirmare vizuala live (nume gasit dupa ID/nume) si aici, la editare.
+function wireReportedPlayerSearch(inputId, dropdownId) {
+  const input = document.getElementById(inputId);
+  const dropdown = document.getElementById(dropdownId);
+  if (!input || !dropdown) return;
+  let debounceTimer = null;
+
+  function closeDropdown() {
+    dropdown.hidden = true;
+    dropdown.innerHTML = '';
+  }
+
+  function renderResults(players, query) {
+    dropdown.innerHTML = '';
+    if (!players.length) {
+      const empty = document.createElement('div');
+      empty.className = 'player-search-item muted';
+      empty.textContent = `Niciun jucător găsit cu „${query}" — poți totuși salva, staff-ul identifică manual.`;
+      dropdown.appendChild(empty);
+      dropdown.hidden = false;
+      return;
+    }
+    players.forEach(p => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'player-search-item';
+      btn.textContent = p.display_name + (p.game_id != null ? ` (ID: ${p.game_id})` : '');
+      btn.addEventListener('click', () => {
+        input.value = (p.game_id != null ? String(p.game_id) : p.display_name);
+        closeDropdown();
+        input.focus();
+      });
+      dropdown.appendChild(btn);
+    });
+    dropdown.hidden = false;
+  }
+
+  input.addEventListener('input', () => {
+    const q = input.value.trim();
+    clearTimeout(debounceTimer);
+    if (q.length < 2) { closeDropdown(); return; }
+    debounceTimer = setTimeout(async () => {
+      try {
+        const res = await apiFetch('/api/players/search?q=' + encodeURIComponent(q));
+        if (!res.ok) { closeDropdown(); return; }
+        renderResults(await res.json(), q);
+      } catch { closeDropdown(); }
+    }, 300);
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!dropdown.hidden && !dropdown.contains(e.target) && e.target !== input) closeDropdown();
+  });
+  input.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDropdown(); });
+}
+wireReportedPlayerSearch('e-reported-label', 'e-reported-dropdown');
 
 function openEdit(t) {
   document.getElementById('e-subject').value = t.subject;

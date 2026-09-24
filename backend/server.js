@@ -371,11 +371,22 @@ async function syncPlayerSnapshots() {
     }
     if (!values.length) return;
 
+    // playtime_minutes (24.09.2026) — coloana exista în schema.sql încă de
+    // la început (DEFAULT 0), dar nimic n-o actualiza vreodată nicăieri în
+    // cod, nici aici, nici în moldovarp-api — de-aia arăta mereu "0h" pentru
+    // toată lumea, indiferent cât timp chiar jucase cineva. Acest tur rulează
+    // exact la 60s (vezi setInterval mai jos) și găsește toți jucătorii
+    // online CHIAR ACUM — +1 minut per tur, per jucător online, e o
+    // aproximare rezonabilă (±1 minut), fără nevoie de o urmărire separată
+    // de sesiuni (conectare/deconectare) în joc. IMPORTANT: nu putem
+    // recupera orele jucate ÎNAINTE de acest update — informația aia n-a
+    // fost păstrată nicăieri până acum, deci toată lumea pornește de la ora
+    // curentă înainte, nu de la ora reală de joc acumulată în timp.
     await pool.query(
       `UPDATE players AS p SET
          last_cash = v.cash, last_bank = v.bank, last_black_money = v.black_money,
          last_job = v.job, last_job_label = v.job_label, last_vehicles = v.vehicles,
-         last_synced_at = NOW()
+         last_synced_at = NOW(), playtime_minutes = p.playtime_minutes + 1
        FROM (VALUES ${values.join(",")}) AS v(cash, bank, black_money, job, job_label, vehicles, display_name)
        WHERE p.display_name ILIKE v.display_name`,
       params

@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Dashboard — Moldova RP</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="dashboard.css"></head>
 <body>
-<header><a class="brand" href="index.html"><img src="assets/logo.png" alt="">MOLDOVA<span>RP</span></a><nav id="dash-nav"><a href="index.html">Acasă</a><a href="index.html#regulamente">Regulamente</a><a href="tichete.html">Tichete</a><a href="vip-shop.html" id="vipshop-nav-link" hidden>VIP Shop</a><a href="mdt-fib.html" id="mdt-nav-link" hidden>MDT FIB</a><a href="#profil">Profil</a></nav><button class="menu-toggle" id="dash-menu-toggle" type="button" aria-label="Deschide meniul" aria-expanded="false">☰</button><a class="logout" href="login.html" id="logout-link">Deconectare</a></header>
+<header><a class="brand" href="index.html"><img src="assets/logo.png" alt="">MOLDOVA<span>RP</span></a><nav id="dash-nav"><a href="index.html">Acasă</a><a href="index.html#regulamente">Regulamente</a><a href="tichete.html">Tichete</a><a href="vip-shop.html" id="vipshop-nav-link" hidden>VIP Shop</a><a href="mdt-fib.html" id="mdt-nav-link" hidden>MDT FIB</a><a href="#profil">Profil</a></nav><div id="notif-wrap" style="position:relative;margin-left:auto"><button type="button" id="notif-bell" class="btn-ghost" style="position:relative;padding:9px 12px" aria-haspopup="true" aria-expanded="false" aria-label="Notificări">🔔<span id="notif-badge" class="pill warn" style="position:absolute;top:-7px;right:-7px;padding:1px 6px" hidden>0</span></button><div id="notif-dropdown" class="player-search-dropdown" style="width:320px;right:0;left:auto" hidden></div></div><button class="menu-toggle" id="dash-menu-toggle" type="button" aria-label="Deschide meniul" aria-expanded="false">☰</button><a class="logout" href="login.html" id="logout-link">Deconectare</a></header>
 <main>
 <section class="welcome"><div><p>PORTAL JUCĂTOR</p><h1>Bun venit, <span id="welcome-name">…</span></h1><small>Acesta este centrul tău Moldova RP.</small></div><div class="status"><i></i> SERVER ONLINE</div></section>
 <section class="stats"><article><small>ID JUCĂTOR</small><strong id="stat-id">—</strong></article><article><small>ORE JUCATE</small><strong id="stat-playtime">—</strong></article><article><small>FACȚIUNE</small><strong id="stat-faction">—</strong></article><article><small>RANK</small><strong id="stat-rank">—</strong></article></section>
@@ -60,6 +60,72 @@ function fmtDate(iso) {
   return new Date(iso).toLocaleString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
+// Case/business-uri/benzinării-magazine/gașcă — aceleași date pe care
+// backend-ul (buildPlayerProfile) le trimite deja la /api/admin/player-profile
+// pentru staff (vezi player-profile-modal.js, propertyHtml) — aici doar
+// pentru PROPRIUL cont, pe stilul vizual al acestei pagini (pill-uri +
+// .thread/.msg, dashboard.css nu are stil de <table>). gasStations/stores
+// (v1.27.0) și houses/gang funcționează doar cât jucătorul e online, la fel
+// ca în panoul de admin — dacă lipsesc și ești offline, nu înseamnă sigur
+// că nu ai nimic, doar că nu putem verifica chiar acum.
+function propertyBlock(p) {
+  const coordText = c => (c && typeof c.x === 'number') ? `${c.x.toFixed(1)}, ${c.y.toFixed(1)}, ${c.z.toFixed(1)}` : null;
+
+  const houses = (p.houses || []).map(h => `
+    <div class="msg"><b>${escapeHtml(h.label || 'Casă')} <span class="muted" style="font-weight:400">#${escapeHtml(String(h.houseId ?? ''))}</span></b>
+      <span>${[coordText(h.coord) ? `Locație: ${coordText(h.coord)}` : null, h.price != null ? fmtMoney(h.price) : null].filter(Boolean).join(' · ')}</span>
+      <small>${fmtDate(h.updated_at || h.created_at)}</small></div>`).join('');
+  const housesBlock = houses
+    ? `<small style="color:var(--muted);display:block;margin:18px 0 8px">🏠 CASELE MELE</small><div class="thread">${houses}</div>` : '';
+
+  const businesses = (p.businesses || [])
+    .map(b => `<span class="pill info" style="margin:3px 4px 0 0;display:inline-block">${escapeHtml(b.jobLabel || b.job || 'business')}</span>`).join('');
+  const businessesBlock = businesses
+    ? `<small style="color:var(--muted);display:block;margin:18px 0 8px">🏢 BUSINESS-URI</small><p style="margin:0">${businesses}</p>` : '';
+
+  const stations = [
+    ...(p.gasStations || []).map(s => ({ ...s, kind: 'Benzinărie' })),
+    ...(p.stores || []).map(s => ({ ...s, kind: 'Magazin' })),
+  ];
+  const stationsHtml = stations.map(s => `<span class="pill ${s.role === 'proprietar' ? 'warn' : 'off'}" style="margin:3px 4px 0 0;display:inline-block">${escapeHtml(s.kind)}: ${escapeHtml(s.name || s.stationId || '?')}${s.role === 'proprietar' ? ' (proprietar)' : ''}</span>`).join('');
+  const stationsBlock = stationsHtml
+    ? `<small style="color:var(--muted);display:block;margin:18px 0 8px">⛽ BENZINĂRII &amp; MAGAZINE</small><p style="margin:0">${stationsHtml}</p>` : '';
+
+  const gangBlock = p.gang
+    ? `<small style="color:var(--muted);display:block;margin:18px 0 8px">🔫 GAȘCĂ (OP-CRIME)</small><p style="margin:0"><span class="pill ${p.gang.isOwner ? 'warn' : 'off'}">${p.gang.isOwner ? 'LIDER' : 'MEMBRU'}</span> <strong>${escapeHtml(p.gang.org)}</strong>${p.gang.rank ? ` <span class="muted">— ${escapeHtml(p.gang.rank)}</span>` : ''}</p>` : '';
+
+  return housesBlock + businessesBlock + stationsBlock + gangBlock;
+}
+
+// Activitate recentă proprie (chat/comenzi/bani/iteme/vehicule + acțiuni de
+// staff asupra ta) — p.recentActivity vine deja gata construit din backend
+// (fetchGameLogs+fetchStaffLogs combinate). Nu reluăm aici tot motorul de
+// formatare din admin-loguri.html (sute de linii, o categorie pe caz) — doar
+// un rezumat scurt, suficient ca jucătorul să recunoască evenimentul; pentru
+// detalii complete, staff-ul tot are pagina de Loguri din admin.
+function summarizeActivity(a) {
+  const labels = {
+    chat: 'Mesaj în chat', command: 'Comandă folosită', connect: 'Conectare pe server',
+    disconnect: 'Deconectare', death: 'Moarte', money_cash: 'Bani cash', money_bank: 'Bani bancă',
+    money_vehicle_deposit: 'Bani puși în torpedou/portbagaj', money_vehicle_withdraw: 'Bani scoși din torpedou/portbagaj',
+    item_obtained: 'Item obținut', item_buy: 'Cumpărătură', item_transfer: 'Transfer item',
+    item_craft: 'Crafting', item_drop: 'Item aruncat', vehicle_acquired: 'Vehicul nou',
+    admin: 'Acțiune de staff asupra ta',
+  };
+  const d = a.details || {};
+  const extra = d.message || d.reason || d.item || d.action || d.vehicle || null;
+  return { label: labels[a.category] || a.category, extra: extra ? String(extra).slice(0, 120) : null };
+}
+function activityBlock(p) {
+  const items = (p.recentActivity || []).slice(0, 10);
+  if (!items.length) return '';
+  const rows = items.map(a => {
+    const { label, extra } = summarizeActivity(a);
+    return `<div class="msg"><b>${escapeHtml(label)}</b>${extra ? `<span>${escapeHtml(extra)}</span>` : ''}<small>${fmtDate(a.at)}</small></div>`;
+  }).join('');
+  return `<small style="color:var(--muted);display:block;margin:18px 0 8px">ACTIVITATE RECENTĂ</small><div class="thread">${rows}</div>`;
+}
+
 // „Profilul meu" — bani/vehicule live (dacă ești conectat la server chiar
 // acum) + sancțiunile proprii, din /api/me/profile (vezi backend/server.js).
 async function loadProfileExtra() {
@@ -105,7 +171,7 @@ async function loadProfileExtra() {
       <div class="thread">${p.punishments.map(pu => `<div class="msg"><b>${escapeHtml(pu.type)}</b><span>${escapeHtml(pu.reason)}</span><small>${fmtDate(pu.created_at)}</small></div>`).join('')}</div>
     ` : `<small style="color:var(--muted);display:block">Nicio sancțiune — așa să rămână! 🙂</small>`;
 
-    bodyEl.innerHTML = live + sanctions;
+    bodyEl.innerHTML = live + sanctions + propertyBlock(p) + activityBlock(p);
   } catch {
     statusEl.textContent = '';
     bodyEl.innerHTML = '<p class="muted" style="margin:0">Nu am putut încărca profilul.</p>';
@@ -176,6 +242,93 @@ async function loadProfileExtra() {
   }
 })();
 wireLogout('#logout-link');
+
+// Clopoțel de notificări (24.09.2026) — /api/me/notifications (vezi
+// backend/server.js). Reîmprospătăm periodic (30s) cât timp pagina e
+// deschisă, ca un jucător care stă pe Dashboard să vadă badge-ul apărând
+// fără să dea refresh manual — nu e nevoie de nimic mai elaborat (websocket
+// etc.) pentru un clopoțel de cont.
+const notifBell = document.getElementById('notif-bell');
+const notifBadge = document.getElementById('notif-badge');
+const notifDropdown = document.getElementById('notif-dropdown');
+let notifCache = [];
+
+function notifTimeAgo(iso) {
+  const diffMin = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+  if (diffMin < 1) return 'chiar acum';
+  if (diffMin < 60) return `acum ${diffMin} min`;
+  const diffH = Math.round(diffMin / 60);
+  if (diffH < 24) return `acum ${diffH}h`;
+  return fmtDate(iso);
+}
+
+function renderNotifDropdown() {
+  if (!notifCache.length) {
+    notifDropdown.innerHTML = '<div class="player-search-item muted">Nicio notificare deocamdată.</div>';
+    return;
+  }
+  const unreadCount = notifCache.filter(n => !n.read_at).length;
+  const head = unreadCount
+    ? `<button type="button" class="player-search-item" id="notif-mark-all" style="color:var(--orange);font-weight:800">Marchează tot ca citit</button>`
+    : '';
+  const items = notifCache.map(n => `
+    <div class="player-search-item notif-item" data-id="${escapeHtml(n.id)}" style="cursor:${n.read_at ? 'default' : 'pointer'};display:flex;gap:8px;align-items:flex-start;white-space:normal">
+      <span style="margin-top:5px;width:7px;height:7px;border-radius:50%;flex-shrink:0;background:${n.read_at ? 'transparent' : 'var(--orange)'}"></span>
+      <span style="flex:1">
+        <strong style="display:block;color:${n.read_at ? 'var(--text)' : '#fff'};font-size:12.5px">${escapeHtml(n.title)}</strong>
+        ${n.message ? `<span style="display:block;color:var(--muted);font-size:11.5px;margin-top:2px">${escapeHtml(n.message)}</span>` : ''}
+        <small style="display:block;color:#666;font-size:10px;margin-top:4px">${notifTimeAgo(n.created_at)}</small>
+      </span>
+    </div>`).join('');
+  notifDropdown.innerHTML = head + items;
+
+  const markAllBtn = document.getElementById('notif-mark-all');
+  if (markAllBtn) markAllBtn.addEventListener('click', async () => {
+    await apiFetch('/api/me/notifications/citeste-tot', { method: 'POST' });
+    loadNotifications();
+  });
+  notifDropdown.querySelectorAll('.notif-item').forEach(el => {
+    el.addEventListener('click', async () => {
+      const n = notifCache.find(x => x.id === el.dataset.id);
+      if (!n || n.read_at) return;
+      await apiFetch(`/api/me/notifications/${encodeURIComponent(n.id)}/citit`, { method: 'POST' });
+      loadNotifications();
+    });
+  });
+}
+
+async function loadNotifications() {
+  try {
+    const res = await apiFetch('/api/me/notifications');
+    if (!res.ok) return;
+    const data = await res.json();
+    notifCache = data.notifications || [];
+    const unread = data.unread || 0;
+    notifBadge.hidden = unread === 0;
+    notifBadge.textContent = unread > 9 ? '9+' : String(unread);
+    if (!notifDropdown.hidden) renderNotifDropdown();
+  } catch {
+    // Eșec silențios — un clopoțel care nu se actualizează o dată nu merită
+    // să întrerupă restul paginii cu o eroare vizibilă.
+  }
+}
+
+notifBell.addEventListener('click', (e) => {
+  e.stopPropagation();
+  const opening = notifDropdown.hidden;
+  notifDropdown.hidden = !opening;
+  notifBell.setAttribute('aria-expanded', String(opening));
+  if (opening) renderNotifDropdown();
+});
+document.addEventListener('click', (e) => {
+  if (!notifDropdown.hidden && !document.getElementById('notif-wrap').contains(e.target)) {
+    notifDropdown.hidden = true;
+    notifBell.setAttribute('aria-expanded', 'false');
+  }
+});
+
+loadNotifications();
+setInterval(loadNotifications, 30000);
 
 // Fluxul e în doi pași — cerut explicit, ca simpla deținere a sesiunii să nu
 // fie de-ajuns ca să pui orice email pe cont: (1) trimiți email+parolă, ni se

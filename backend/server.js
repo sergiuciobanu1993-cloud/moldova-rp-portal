@@ -79,6 +79,23 @@ async function logAction(actorId, action, entityType, entityId, metadata, ip) {
   );
 }
 
+// Notificare în cont (24.09.2026) — vezi tabela "notifications" din
+// database/schema.sql pentru context complet. Non-fatal cu bun-simț: dacă
+// insert-ul eșuează dintr-un motiv oarecare, NU trebuie să pice acțiunea
+// principală (ex. crearea unui tichet) doar pentru că notificarea n-a mers —
+// de-aia apelanții o cheamă fără await pe eroare (catch local, doar log).
+async function notifyUser(userId, { type, title, message, link }) {
+  if (!userId) return;
+  try {
+    await pool.query(
+      `INSERT INTO notifications(user_id, type, title, message, link) VALUES ($1,$2,$3,$4,$5)`,
+      [userId, type, title, message || null, link || null]
+    );
+  } catch (err) {
+    console.error("notifyUser a eșuat:", err.message);
+  }
+}
+
 app.get("/api/health", asyncRoute(async (_req, res) => {
   const { rows } = await pool.query("SELECT NOW() AS time");
   res.json({ ok: true, service: "moldova-rp-api", database: "online", time: rows[0].time });
@@ -1362,6 +1379,35 @@ app.get("/api/me/profile", auth, asyncRoute(async (req, res) => {
   res.json({ hasGameProfile: true, ...profile });
 }));
 
+// Notificări proprii (24.09.2026) — vezi tabela "notifications" din
+// database/schema.sql și notifyUser() mai sus pentru context. Limitat la 50
+// cele mai recente (destul pentru un clopoțel, fără paginare — dacă devine
+// nevoie de istoric complet, se poate adăuga pagination ca la /api/admin/logs).
+app.get("/api/me/notifications", auth, asyncRoute(async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT id, type, title, message, link, read_at, created_at
+     FROM notifications WHERE user_id = $1 ORDER BY created_at DESC LIMIT 50`,
+    [req.user.sub]
+  );
+  res.json({ notifications: rows, unread: rows.filter(r => !r.read_at).length });
+}));
+
+app.post("/api/me/notifications/:id/citit", auth, asyncRoute(async (req, res) => {
+  await pool.query(
+    `UPDATE notifications SET read_at = NOW() WHERE id = $1 AND user_id = $2 AND read_at IS NULL`,
+    [req.params.id, req.user.sub]
+  );
+  res.json({ ok: true });
+}));
+
+app.post("/api/me/notifications/citeste-tot", auth, asyncRoute(async (req, res) => {
+  await pool.query(
+    `UPDATE notifications SET read_at = NOW() WHERE user_id = $1 AND read_at IS NULL`,
+    [req.user.sub]
+  );
+  res.json({ ok: true });
+}));
+
 // Leagă contul de site (Discord) de personajul din joc — jucătorul scrie
 // "/leagacont" în joc, primește un cod de 6 cifre valabil 5 minute, îl
 // introduce aici o singură dată. Verificat DIRECT de moldovarp-api (vezi
@@ -2335,6 +2381,28 @@ app.post("/api/tickets", auth, asyncRoute(async (req, res) => {
     [req.user.sub, v.subject, v.category, v.description, v.link, reportedId, reportedLabel]
   );
   await logAction(req.user.sub, "ticket.create", "ticket", rows[0].id, { subject: v.subject }, req.ip);
+
+  // Cerut explicit (24.09.2026): jucătorul reclamat e anunțat pe cont,
+  // imediat ce reclamația se depune — nu abia după ce staff o rezolvă.
+  // Mesajul rămâne INTENȚIONAT vag: fără identitatea reclamantului și fără
+  // conținutul reclamației, ca acesta să nu poată fi identificat sau
+  // răzbunat de cel reclamat înainte ca staff să apuce să verifice. Doar
+  // dacă am reușit să legăm structurat reclamația de un cont real (vezi
+  // resolveReportedPlayer) — un text liber nepotrivit nu are cont de
+  // notificat. Nu notificăm dacă cineva se reclamă cumva pe sine însuși.
+  if (reportedId) {
+    const { rows: rp } = await pool.query(`SELECT user_id FROM players WHERE id = $1`, [reportedId]);
+    const reportedUserId = rp[0]?.user_id;
+    if (reportedUserId && reportedUserId !== req.user.sub) {
+      await notifyUser(reportedUserId, {
+        type: "ticket_reported",
+        title: "Ai fost reclamat",
+        message: "A fost depusă o reclamație despre tine. Un membru al staff-ului o va analiza în curând.",
+        link: null,
+      });
+    }
+  }
+
   res.status(201).json(rows[0]);
 }));
 

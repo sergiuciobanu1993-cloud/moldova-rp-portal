@@ -474,6 +474,28 @@ CREATE TABLE IF NOT EXISTS discord_log_cursors (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- === Notificări în cont (24.09.2026) ===
+-- Prima folosire: un jucător reclamat printr-un tichet (categoria
+-- "reclamatie", vezi reported_player_id mai sus) e anunțat imediat, chiar pe
+-- contul lui de site, că există o reclamație despre el — cerut explicit de
+-- staff. "type" rămâne generic ("ticket_reported" acum) ca tabela să poată
+-- fi reutilizată și pentru alte tipuri de notificări pe viitor (ex. răspuns
+-- la tichet, sancțiune primită), fără o nouă migrare. Mesajul NU include
+-- identitatea reclamantului sau conținutul reclamației — doar staff-ul vede
+-- detaliile, în admin, ca reclamantul să nu riște să fie identificat sau
+-- răzbunat înainte ca cineva să apuce să verifice reclamația.
+CREATE TABLE IF NOT EXISTS notifications (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  type VARCHAR(40) NOT NULL,
+  title VARCHAR(180) NOT NULL,
+  message TEXT,
+  link TEXT,
+  read_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, created_at DESC);
+
 INSERT INTO roles(name, description) VALUES
 ('player', 'Jucator standard'),
 ('moderator', 'Moderator'),

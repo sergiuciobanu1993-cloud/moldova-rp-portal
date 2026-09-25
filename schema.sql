@@ -1,0 +1,529 @@
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+CREATE TABLE IF NOT EXISTS roles (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name VARCHAR(40) UNIQUE NOT NULL,
+  description TEXT
+);
+
+CREATE TABLE IF NOT EXISTS users (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  username VARCHAR(32) UNIQUE NOT NULL,
+  email VARCHAR(160) UNIQUE,
+  password_hash TEXT,
+  role_id UUID REFERENCES roles(id),
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  discord_id VARCHAR(32) UNIQUE,
+  discord_username VARCHAR(100),
+  discord_avatar TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Migration guards for databases created before Discord login existed:
+-- safe to re-run (IF NOT EXISTS / dropping a constraint that's already gone
+-- is a no-op in Postgres), so this runs on every deploy via scripts/init-db.js.
+ALTER TABLE users ALTER COLUMN email DROP NOT NULL;
+ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS discord_id VARCHAR(32) UNIQUE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS discord_username VARCHAR(100);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS discord_avatar TEXT;
+
+-- Confirmare prin email la "Setează parola" (contul de staff creat inițial
+-- doar prin Discord) — cerut explicit: emailul și parola nu se salvează
+-- direct pe cont, stau "în așteptare" până jucătorul introduce codul de 6
+-- cifre primit pe email; abia atunci trec în email/password_hash de mai sus.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_email VARCHAR(160);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_password_hash TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verify_code VARCHAR(10);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verify_expires TIMESTAMPTZ;
+
+-- "Am uitat parola" — cod de 6 cifre trimis pe emailul contului (funcționează
+-- doar pentru conturi care au deja un email+parolă reale, nu pentru conturi
+-- doar-Discord, care nu au un email verificat de care să ne putem folosi).
+ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_password_code VARCHAR(10);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_password_expires TIMESTAMPTZ;
+
+-- Legătura cont de site <-> personaj din joc, pentru pagina "Cazuri" (coins).
+-- Site-ul se loghează cu Discord — nu are nicio legătură nativă, verificată,
+-- cu identifier-ul (licența) din joc. Populat DOAR prin comanda din joc
+-- "/leagacont" + codul de 6 cifre verificat de POST /api/cont/leaga-joc —
+-- niciodată introdus liber de utilizator (ar putea vedea/cheltui coins-urile
+-- altcuiva doar tastând un nume). game_identifier_name e strict informativ
+-- (afișat pe pagina de cont), NU folosit pentru nicio verificare de identitate.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS game_identifier VARCHAR(80);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS game_identifier_name VARCHAR(64);
+
+CREATE TABLE IF NOT EXISTS players (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+  game_id INTEGER UNIQUE,
+  display_name VARCHAR(64) NOT NULL,
+  avatar_url TEXT,
+  playtime_minutes INTEGER NOT NULL DEFAULT 0,
+  status VARCHAR(20) NOT NULL DEFAULT 'offline',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- "Ultima dată văzut" — o poză (snapshot) a banilor/jobului/vehiculelor unui
+-- jucător, salvată automat de backend din moldovarp-api la fiecare ~60s cât
+-- timp e online (vezi syncPlayerSnapshots în server.js). Scopul: profilul
+-- unui jucător (pagina "Profilul meu" / profilul din admin) să arate ceva
+-- relevant și când jucătorul e OFFLINE, nu doar "nu e conectat acum" — un
+-- portal "profesional" ține minte ultima stare cunoscută, nu doar live.
+-- last_synced_at = NULL înseamnă "nu am prins încă nicio poză" (cont nou,
+-- sau jucătorul nu a fost încă online de când există această coloană).
+ALTER TABLE players ADD COLUMN IF NOT EXISTS last_cash INTEGER;
+ALTER TABLE players ADD COLUMN IF NOT EXISTS last_bank INTEGER;
+ALTER TABLE players ADD COLUMN IF NOT EXISTS last_black_money INTEGER;
+ALTER TABLE players ADD COLUMN IF NOT EXISTS last_job VARCHAR(60);
+ALTER TABLE players ADD COLUMN IF NOT EXISTS last_job_label VARCHAR(100);
+ALTER TABLE players ADD COLUMN IF NOT EXISTS last_vehicles JSONB;
+ALTER TABLE players ADD COLUMN IF NOT EXISTS last_synced_at TIMESTAMPTZ;
+
+-- last_identifier/last_rp_name (25.09.2026, cerut explicit — profilul unui
+-- jucător OFFLINE arăta prea puține date la "Case deținute": case apăreau
+-- (se caută după numele CFX, mereu cunoscut), dar business-uri/benzinării/
+-- magazine/gașcă ieșeau aproape mereu goale. Motivul: acelea au nevoie de
+-- identificatorul ESX exact sau de numele de personaj RP (nume CFX ≠ nume RP,
+-- vezi comentariul din fetchAssets/getBusinesses) — informație pe care o
+-- primim DOAR cât timp jucătorul e online (din /players). Până acum n-o
+-- păstram nicăieri, deci dispărea imediat ce jucătorul se deconecta. Acum o
+-- salvăm aici, la fiecare tur de 60s cât jucătorul e online (syncPlayerSnapshots,
+-- server.js), exact ca restul coloanelor last_*, ca profilul offline să poată
+-- folosi ULTIMA valoare cunoscută în loc să rămână complet gol.
+ALTER TABLE players ADD COLUMN IF NOT EXISTS last_identifier VARCHAR(120);
+ALTER TABLE players ADD COLUMN IF NOT EXISTS last_rp_name VARCHAR(120);
+
+CREATE TABLE IF NOT EXISTS factions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name VARCHAR(100) UNIQUE NOT NULL,
+  type VARCHAR(30) NOT NULL,
+  description TEXT,
+  is_active BOOLEAN NOT NULL DEFAULT TRUE
+);
+
+CREATE TABLE IF NOT EXISTS faction_ranks (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  faction_id UUID NOT NULL REFERENCES factions(id) ON DELETE CASCADE,
+  name VARCHAR(80) NOT NULL,
+  level INTEGER NOT NULL,
+  UNIQUE(faction_id, level)
+);
+
+CREATE TABLE IF NOT EXISTS faction_members (
+  player_id UUID REFERENCES players(id) ON DELETE CASCADE,
+  faction_id UUID REFERENCES factions(id) ON DELETE CASCADE,
+  rank_id UUID REFERENCES faction_ranks(id),
+  joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY(player_id, faction_id)
+);
+
+CREATE TABLE IF NOT EXISTS regulations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title VARCHAR(180) NOT NULL,
+  slug VARCHAR(180) UNIQUE NOT NULL,
+  category VARCHAR(80) NOT NULL,
+  content TEXT NOT NULL,
+  version VARCHAR(30) NOT NULL DEFAULT '1.0',
+  is_published BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS announcements (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title VARCHAR(180) NOT NULL,
+  content TEXT NOT NULL,
+  category VARCHAR(40) NOT NULL DEFAULT 'General',
+  author_id UUID REFERENCES users(id),
+  is_published BOOLEAN NOT NULL DEFAULT TRUE,
+  published_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- category adăugată ulterior (etichetă tip "OFICIAL"/"REGULAMENT" afișată pe
+-- homepage) — safe pe baze existente.
+ALTER TABLE announcements ADD COLUMN IF NOT EXISTS category VARCHAR(40) NOT NULL DEFAULT 'General';
+
+-- image_url — o imagine opțională (link către o poză publică) atașată
+-- anunțului, afișată pe card-ul de pe homepage și în embed-ul de Discord.
+-- NULL = fără imagine, nimic nu se afișează. Safe pe baze existente.
+ALTER TABLE announcements ADD COLUMN IF NOT EXISTS image_url TEXT;
+
+-- video_url — un link opțional (YouTube etc.) atașat anunțului. Afișat pe
+-- homepage ca buton "▶ Vezi videoclipul" sub titlu, doar cand e completat.
+-- NULL = fără video, butonul nu apare. Safe pe baze existente.
+ALTER TABLE announcements ADD COLUMN IF NOT EXISTS video_url TEXT;
+
+CREATE TABLE IF NOT EXISTS punishments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  player_id UUID REFERENCES players(id) ON DELETE SET NULL,
+  target_name VARCHAR(64),
+  type VARCHAR(40) NOT NULL,
+  reason TEXT NOT NULL,
+  duration_minutes INTEGER,
+  issued_by UUID REFERENCES users(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- target_name ține numele jucătorului din joc direct (nu toți jucătorii de
+-- pe server au și cont pe site) — coloană adăugată ulterior, safe pe baze
+-- existente.
+ALTER TABLE punishments ADD COLUMN IF NOT EXISTS target_name VARCHAR(64);
+
+CREATE TABLE IF NOT EXISTS complaints (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  player_id UUID REFERENCES players(id) ON DELETE SET NULL,
+  subject VARCHAR(180) NOT NULL,
+  description TEXT NOT NULL,
+  status VARCHAR(30) NOT NULL DEFAULT 'open',
+  assigned_to UUID REFERENCES users(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS ck_requests (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  player_id UUID REFERENCES players(id) ON DELETE SET NULL,
+  reason TEXT NOT NULL,
+  evidence TEXT,
+  status VARCHAR(30) NOT NULL DEFAULT 'pending',
+  decided_by UUID REFERENCES users(id),
+  decision_note TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  decided_at TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS audit_logs (
+  id BIGSERIAL PRIMARY KEY,
+  actor_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  action VARCHAR(120) NOT NULL,
+  entity_type VARCHAR(60),
+  entity_id TEXT,
+  metadata JSONB,
+  ip INET,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Tichete de suport deschise de jucători din portal. Dovezile (poze/filmări)
+-- se atașează ca link extern (Streamable/YouTube/Discord etc.), nu ca fișier
+-- încărcat direct — evită complet nevoia de stocare persistentă pe Railway.
+CREATE TABLE IF NOT EXISTS tickets (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  subject VARCHAR(180) NOT NULL,
+  category VARCHAR(40) NOT NULL DEFAULT 'general',
+  description TEXT NOT NULL,
+  evidence_url TEXT,
+  status VARCHAR(30) NOT NULL DEFAULT 'open',
+  assigned_to UUID REFERENCES users(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS ticket_replies (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  ticket_id UUID NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+  author_id UUID NOT NULL REFERENCES users(id),
+  message TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Acțiuni de staff trimise direct de panoul cloud Luxu Admin (kill, revive,
+-- give/take item, ban etc.), via webhook-ul propriu al lor (tab "Webhooks"),
+-- NU prin resursa moldovarp-api de pe serverul de joc — de-asta e tabelă
+-- separată, în baza noastră Postgres, nu în MySQL-ul jocului. Structura
+-- exactă a payload-ului Luxu nu e documentată public, deci păstrăm mereu
+-- răspunsul brut (raw) ca să nu pierdem nimic dacă extragerea câmpurilor
+-- (staff_name/target_name/action/reason) nu reușește pentru un anumit tip
+-- de eveniment.
+CREATE TABLE IF NOT EXISTS admin_action_logs (
+  id SERIAL PRIMARY KEY,
+  source VARCHAR(30) NOT NULL DEFAULT 'luxu',
+  staff_name VARCHAR(120),
+  target_name VARCHAR(120),
+  action VARCHAR(120),
+  reason TEXT,
+  raw JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_admin_action_logs_created_at ON admin_action_logs(created_at DESC);
+
+-- Conținut editabil din Admin → Conținut pagini. Fiecare "bloc" e o bucată
+-- numită de conținut a unei pagini publice (titlu, paragraf, listă de
+-- elemente sau bucată de HTML), identificată unic prin (page, block_key).
+-- type controlează cum se editează/randează: 'text' (simplu), 'richtext'
+-- (text formatat, salvat ca HTML simplu), 'html' (HTML brut, editat direct),
+-- 'list' (elemente repetate — content e un JSON array de {icon,title,text,url}).
+-- Rândurile inițiale sunt populate de scripts/seed-content.js cu ON CONFLICT
+-- DO NOTHING, deci editările din admin nu sunt niciodată suprascrise la
+-- redeploy.
+CREATE TABLE IF NOT EXISTS page_blocks (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  page VARCHAR(60) NOT NULL,
+  block_key VARCHAR(80) NOT NULL,
+  label VARCHAR(160) NOT NULL,
+  type VARCHAR(20) NOT NULL DEFAULT 'text',
+  content TEXT NOT NULL DEFAULT '',
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(page, block_key)
+);
+CREATE INDEX IF NOT EXISTS idx_page_blocks_page ON page_blocks(page, sort_order);
+
+-- Marcaje pentru seed-uri "o singură dată" (ex: un anunț creat automat la
+-- primul deploy după ce a fost adăugat în scripts/init-db.js). Diferă de
+-- page_blocks (care ține conținut editabil permanent): aici doar reținem CĂ
+-- o anumită acțiune s-a întâmplat deja, ca să nu se repete la fiecare
+-- redeploy — inclusiv dacă rândul creat de ea (ex: anunțul) e ulterior șters
+-- manual din admin. O dată bifat un key, rămâne bifat definitiv.
+CREATE TABLE IF NOT EXISTS seed_flags (
+  key VARCHAR(120) PRIMARY KEY,
+  applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- === MDT FIB (17.09.2026) ===================================================
+-- Terminal de dosare pentru FIB: dosare de anchetă, mandate emise pe baza lor
+-- și probele atașate fiecărui dosar. Accesul e verificat în server.js prin
+-- requireFib() — membru al facțiunii FIB (faction_members, mai jos) SAU
+-- staff (MOD_ROLES) — nu printr-un rol nou în tabela roles.
+CREATE TABLE IF NOT EXISTS mdt_dosare (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  -- "seq" există DOAR ca să dea fiecărui dosar un număr scurt, lizibil în RP
+  -- (FIB-2026-0007, calculat în server.js din seq+anul lui created_at) — nu
+  -- e cheia primară (aia rămâne id, UUID, ca peste tot în schema asta).
+  seq SERIAL,
+  title VARCHAR(200) NOT NULL,
+  category VARCHAR(60) NOT NULL DEFAULT 'altele',
+  status VARCHAR(20) NOT NULL DEFAULT 'deschis',
+  description TEXT NOT NULL DEFAULT '',
+  -- Array JSON de {name, role}, role fiind 'suspect' | 'martor' | 'victima'.
+  -- Nu sunt legați de tabela players — majoritatea nu au cont de site, un
+  -- dosar trebuie să poată numi pe oricine din joc, nu doar conturi înscrise.
+  suspects JSONB NOT NULL DEFAULT '[]',
+  created_by UUID REFERENCES users(id),
+  assigned_to UUID REFERENCES users(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_mdt_dosare_status ON mdt_dosare(status);
+CREATE INDEX IF NOT EXISTS idx_mdt_dosare_created_at ON mdt_dosare(created_at DESC);
+
+CREATE TABLE IF NOT EXISTS mdt_mandate (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  dosar_id UUID NOT NULL REFERENCES mdt_dosare(id) ON DELETE CASCADE,
+  type VARCHAR(20) NOT NULL, -- 'perchezitie' | 'arestare' | 'aducere'
+  target_name VARCHAR(120) NOT NULL,
+  details TEXT NOT NULL DEFAULT '',
+  status VARCHAR(20) NOT NULL DEFAULT 'activ', -- activ | executat | expirat | anulat
+  issued_by UUID REFERENCES users(id),
+  issued_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at TIMESTAMPTZ,
+  executed_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_mdt_mandate_dosar ON mdt_mandate(dosar_id);
+
+-- O probă poate fi un link extern (Discord/Streamable/imgur — la fel ca la
+-- tickets.evidence_url) ȘI/SAU un fișier încărcat direct (poză), stocat ca
+-- bytea chiar în Postgres — proiectul ăsta n-are storage persistent separat
+-- pe Railway (vezi comentariul la tickets mai sus), deci baza de date rămâne
+-- singurul loc cu adevărat persistent. file_data e plafonat în server.js
+-- (MDT_MAX_FILE_BYTES), nu aici, ca să nu umfle nejustificat baza.
+CREATE TABLE IF NOT EXISTS mdt_probe (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  dosar_id UUID NOT NULL REFERENCES mdt_dosare(id) ON DELETE CASCADE,
+  label VARCHAR(160) NOT NULL,
+  url TEXT,
+  file_data BYTEA,
+  file_mime VARCHAR(60),
+  file_name VARCHAR(160),
+  added_by UUID REFERENCES users(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CHECK (url IS NOT NULL OR file_data IS NOT NULL)
+);
+CREATE INDEX IF NOT EXISTS idx_mdt_probe_dosar ON mdt_probe(dosar_id);
+
+-- === MDT FIB — etichete, implicați și rapoarte (18.09.2026) =================
+-- Câmpuri noi cerute după ce clientul a arătat un alt MDT ca model: etichete
+-- + liste libere de persoane/obiecte implicate (scrise de mână, nu legate de
+-- alte tabele — la fel ca "target_name" la mandate) și o entitate nouă,
+-- separată, "Rapoarte" (incidente punctuale, ca un proces verbal), care se
+-- pot lega ulterior de unul sau mai multe dosare și/sau mandate.
+ALTER TABLE mdt_dosare ADD COLUMN IF NOT EXISTS tags JSONB NOT NULL DEFAULT '[]';
+ALTER TABLE mdt_dosare ADD COLUMN IF NOT EXISTS vehicles_involved JSONB NOT NULL DEFAULT '[]';
+ALTER TABLE mdt_dosare ADD COLUMN IF NOT EXISTS weapons_involved JSONB NOT NULL DEFAULT '[]';
+ALTER TABLE mdt_dosare ADD COLUMN IF NOT EXISTS officers_involved JSONB NOT NULL DEFAULT '[]';
+
+ALTER TABLE mdt_mandate ADD COLUMN IF NOT EXISTS tags JSONB NOT NULL DEFAULT '[]';
+-- 'scazuta' | 'medie' | 'inalta'
+ALTER TABLE mdt_mandate ADD COLUMN IF NOT EXISTS priority VARCHAR(10) NOT NULL DEFAULT 'medie';
+
+CREATE TABLE IF NOT EXISTS mdt_rapoarte (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  seq SERIAL, -- pentru report_number ("RAP-2026-0007"), calculat în server.js
+  title VARCHAR(200) NOT NULL,
+  type VARCHAR(20) NOT NULL DEFAULT 'altele', -- agresiune | talharie | spargere | furt | altele
+  description TEXT NOT NULL DEFAULT '',
+  tags JSONB NOT NULL DEFAULT '[]',
+  officers_involved JSONB NOT NULL DEFAULT '[]',
+  civilians_involved JSONB NOT NULL DEFAULT '[]',
+  suspects_involved JSONB NOT NULL DEFAULT '[]',
+  weapons_involved JSONB NOT NULL DEFAULT '[]',
+  created_by UUID REFERENCES users(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_mdt_rapoarte_created_at ON mdt_rapoarte(created_at DESC);
+
+-- Tabele de legătură many-to-many — un raport se poate lega de mai multe
+-- dosare și/sau mandate, iar un dosar/mandat poate avea mai multe rapoarte
+-- legate ("Rapoarte legate" + "Adaugă" din interfață).
+CREATE TABLE IF NOT EXISTS mdt_dosar_rapoarte (
+  dosar_id UUID REFERENCES mdt_dosare(id) ON DELETE CASCADE,
+  raport_id UUID REFERENCES mdt_rapoarte(id) ON DELETE CASCADE,
+  PRIMARY KEY(dosar_id, raport_id)
+);
+
+CREATE TABLE IF NOT EXISTS mdt_mandat_rapoarte (
+  mandat_id UUID REFERENCES mdt_mandate(id) ON DELETE CASCADE,
+  raport_id UUID REFERENCES mdt_rapoarte(id) ON DELETE CASCADE,
+  PRIMARY KEY(mandat_id, raport_id)
+);
+
+-- === Utilizatori — ștergere definitivă + dezactivare rapidă (18.09.2026) ===
+-- Ștergerea unui cont din users trebuia să blocheze pe orice tabelă care îl
+-- referă fără ON DELETE (implicit RESTRICT în Postgres). Aici relaxăm acele
+-- constrângeri la ON DELETE SET NULL, ca ștergerea unui utilizator să nu mai
+-- pice din cauza unui anunț/sesizări/dosar etc. la care a fost doar
+-- autor/responsabil — rândul rămâne, doar legătura cu contul șters dispare.
+-- (players.user_id, tickets.user_id și audit_logs.actor_id sunt deja OK din
+-- schema inițială — CASCADE / SET NULL — și nu sunt atinse aici.)
+ALTER TABLE ticket_replies ALTER COLUMN author_id DROP NOT NULL;
+
+ALTER TABLE announcements DROP CONSTRAINT IF EXISTS announcements_author_id_fkey;
+ALTER TABLE announcements ADD CONSTRAINT announcements_author_id_fkey FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE SET NULL;
+
+ALTER TABLE punishments DROP CONSTRAINT IF EXISTS punishments_issued_by_fkey;
+ALTER TABLE punishments ADD CONSTRAINT punishments_issued_by_fkey FOREIGN KEY (issued_by) REFERENCES users(id) ON DELETE SET NULL;
+
+ALTER TABLE complaints DROP CONSTRAINT IF EXISTS complaints_assigned_to_fkey;
+ALTER TABLE complaints ADD CONSTRAINT complaints_assigned_to_fkey FOREIGN KEY (assigned_to) REFERENCES users(id) ON DELETE SET NULL;
+
+ALTER TABLE ck_requests DROP CONSTRAINT IF EXISTS ck_requests_decided_by_fkey;
+ALTER TABLE ck_requests ADD CONSTRAINT ck_requests_decided_by_fkey FOREIGN KEY (decided_by) REFERENCES users(id) ON DELETE SET NULL;
+
+ALTER TABLE tickets DROP CONSTRAINT IF EXISTS tickets_assigned_to_fkey;
+ALTER TABLE tickets ADD CONSTRAINT tickets_assigned_to_fkey FOREIGN KEY (assigned_to) REFERENCES users(id) ON DELETE SET NULL;
+
+ALTER TABLE ticket_replies DROP CONSTRAINT IF EXISTS ticket_replies_author_id_fkey;
+ALTER TABLE ticket_replies ADD CONSTRAINT ticket_replies_author_id_fkey FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE SET NULL;
+
+ALTER TABLE mdt_dosare DROP CONSTRAINT IF EXISTS mdt_dosare_created_by_fkey;
+ALTER TABLE mdt_dosare ADD CONSTRAINT mdt_dosare_created_by_fkey FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL;
+
+ALTER TABLE mdt_dosare DROP CONSTRAINT IF EXISTS mdt_dosare_assigned_to_fkey;
+ALTER TABLE mdt_dosare ADD CONSTRAINT mdt_dosare_assigned_to_fkey FOREIGN KEY (assigned_to) REFERENCES users(id) ON DELETE SET NULL;
+
+ALTER TABLE mdt_mandate DROP CONSTRAINT IF EXISTS mdt_mandate_issued_by_fkey;
+ALTER TABLE mdt_mandate ADD CONSTRAINT mdt_mandate_issued_by_fkey FOREIGN KEY (issued_by) REFERENCES users(id) ON DELETE SET NULL;
+
+ALTER TABLE mdt_probe DROP CONSTRAINT IF EXISTS mdt_probe_added_by_fkey;
+ALTER TABLE mdt_probe ADD CONSTRAINT mdt_probe_added_by_fkey FOREIGN KEY (added_by) REFERENCES users(id) ON DELETE SET NULL;
+
+ALTER TABLE mdt_rapoarte DROP CONSTRAINT IF EXISTS mdt_rapoarte_created_by_fkey;
+ALTER TABLE mdt_rapoarte ADD CONSTRAINT mdt_rapoarte_created_by_fkey FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL;
+
+-- === Tichete — reclamații publice + jucător reclamat (18.09.2026) ===
+-- Tichetele de categoria "reclamatie" (reclamație jucător) devin vizibile ca
+-- pe un forum, pentru orice utilizator logat — nu doar pentru autor + staff,
+-- ca restul categoriilor (general/bug/ban_appeal), care rămân private.
+-- reported_player_id leagă structurat tichetul de jucătorul reclamat (ales
+-- dintr-o căutare în formular), ca staff-ul/comunitatea să știe exact despre
+-- cine e vorba, nu doar din text liber în descriere.
+ALTER TABLE tickets ADD COLUMN IF NOT EXISTS reported_player_id UUID REFERENCES players(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_tickets_reported_player ON tickets(reported_player_id);
+CREATE INDEX IF NOT EXISTS idx_tickets_category ON tickets(category);
+
+-- === Tichete — jucător reclamat prin text liber (20.09.2026) ===
+-- Căutarea live cerea o potrivire exactă în players (care nu exista mereu —
+-- ex. jucătorul reclamat prin ID-ul din joc, dacă nu a mai fost sincronizat),
+-- ceea ce bloca trimiterea tichetului cu "Niciun jucător găsit". Acum
+-- reclamantul scrie direct ID-ul/numele (reported_player_label), fără
+-- căutare obligatorie — staff-ul identifică jucătorul din reclamație.
+-- reported_player_id rămâne, dar acum e opțional: se completează doar dacă
+-- textul scris se potrivește exact cu un jucător existent (best-effort).
+ALTER TABLE tickets ADD COLUMN IF NOT EXISTS reported_player_label TEXT;
+
+-- === Loguri din Discord — bot propriu, citește canale (23.09.2026) ===
+-- Staff-ul are deja loguri detaliate (transferuri bancare, heist-uri,
+-- protecție exploit-uri) trimise în Discord prin ~185 de webhook-uri
+-- diferite, din scripturi variate — prea multe și, pe alocuri, closed-source,
+-- ca să le adăugăm câte un "al doilea webhook" spre site. Un bot Discord
+-- propriu (vezi pollDiscordLogs în backend/server.js) citește periodic
+-- mesajele noi din canalele la care are voie și le copiază aici, ca a treia
+-- sursă a paginii de Loguri (alături de jocul propriu-zis și Luxu Admin).
+CREATE TABLE IF NOT EXISTS discord_channel_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  message_id VARCHAR(32) NOT NULL UNIQUE,
+  channel_id VARCHAR(32) NOT NULL,
+  channel_name VARCHAR(120),
+  category_name VARCHAR(120),
+  author_name VARCHAR(120),
+  title VARCHAR(300),
+  fields JSONB,
+  content TEXT,
+  posted_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_discord_channel_logs_posted_at ON discord_channel_logs(posted_at DESC);
+CREATE INDEX IF NOT EXISTS idx_discord_channel_logs_channel ON discord_channel_logs(channel_id);
+
+-- Cursorul (ultimul mesaj citit) per canal — ca botul să continue exact de
+-- unde a rămas după un restart, fără să reimporte istoricul și fără să
+-- sară mesaje apărute cât timp serviciul era oprit.
+CREATE TABLE IF NOT EXISTS discord_log_cursors (
+  channel_id VARCHAR(32) PRIMARY KEY,
+  last_message_id VARCHAR(32) NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- === Notificări în cont (24.09.2026) ===
+-- Prima folosire: un jucător reclamat printr-un tichet (categoria
+-- "reclamatie", vezi reported_player_id mai sus) e anunțat imediat, chiar pe
+-- contul lui de site, că există o reclamație despre el — cerut explicit de
+-- staff. "type" rămâne generic ("ticket_reported" acum) ca tabela să poată
+-- fi reutilizată și pentru alte tipuri de notificări pe viitor (ex. răspuns
+-- la tichet, sancțiune primită), fără o nouă migrare. Mesajul NU include
+-- identitatea reclamantului sau conținutul reclamației — doar staff-ul vede
+-- detaliile, în admin, ca reclamantul să nu riște să fie identificat sau
+-- răzbunat înainte ca cineva să apuce să verifice reclamația.
+CREATE TABLE IF NOT EXISTS notifications (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  type VARCHAR(40) NOT NULL,
+  title VARCHAR(180) NOT NULL,
+  message TEXT,
+  link TEXT,
+  read_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, created_at DESC);
+
+INSERT INTO roles(name, description) VALUES
+('player', 'Jucator standard'),
+('moderator', 'Moderator'),
+('admin', 'Administrator'),
+('co-fondator', 'Co-fondator'),
+('owner', 'Proprietar')
+ON CONFLICT (name) DO NOTHING;
+
+INSERT INTO factions(name, type, description) VALUES
+('Poliție', 'legal', 'Organizație legală'),
+('SMURD', 'legal', 'Serviciu medical'),
+('Avocatură', 'legal', 'Serviciu juridic'),
+('FIB', 'legal', 'Biroul Federal de Investigații'),
+('Sindicat', 'ilegal', 'Organizație ilegală'),
+('Ganguri', 'ilegal', 'Organizații criminale'),
+('Mafii', 'ilegal', 'Organizații criminale')
+ON CONFLICT (name) DO NOTHING;

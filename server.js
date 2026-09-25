@@ -79,6 +79,23 @@ async function logAction(actorId, action, entityType, entityId, metadata, ip) {
   );
 }
 
+// Notificare în cont (24.09.2026) — vezi tabela "notifications" din
+// database/schema.sql pentru context complet. Non-fatal cu bun-simț: dacă
+// insert-ul eșuează dintr-un motiv oarecare, NU trebuie să pice acțiunea
+// principală (ex. crearea unui tichet) doar pentru că notificarea n-a mers —
+// de-aia apelanții o cheamă fără await pe eroare (catch local, doar log).
+async function notifyUser(userId, { type, title, message, link }) {
+  if (!userId) return;
+  try {
+    await pool.query(
+      `INSERT INTO notifications(user_id, type, title, message, link) VALUES ($1,$2,$3,$4,$5)`,
+      [userId, type, title, message || null, link || null]
+    );
+  } catch (err) {
+    console.error("notifyUser a eșuat:", err.message);
+  }
+}
+
 app.get("/api/health", asyncRoute(async (_req, res) => {
   const { rows } = await pool.query("SELECT NOW() AS time");
   res.json({ ok: true, service: "moldova-rp-api", database: "online", time: rows[0].time });
@@ -303,7 +320,16 @@ app.get("/api/admin/live/players", auth, requireRole(...ADMIN_ROLES), asyncRoute
 async function syncPlayerSnapshots() {
   if (!FIVEM_API_SECRET) return;
   try {
-    const detail = await fetchPlayersDetail();
+    // (21.09.2026, optimizare resurse) Înainte, acest tur chema
+    // fetchPlayersDetail() direct — o cerere NOU-NOUȚĂ către serverul de joc,
+    // complet separată de cache-ul de 20s de mai sus (getPlayersDetail),
+    // folosit de orice altă parte a site-ului (profil jucător, admin, etc).
+    // Rezultatul: dacă cineva se uita pe site exact în aceeași fereastră de
+    // 60s, resursa moldovarp-api primea DOUĂ cereri /players aproape
+    // simultan, în loc de una singură refolosită. Acum folosim aceeași
+    // funcție cu cache ca tot restul site-ului — o cerere reală la cel mult
+    // fiecare 20s, indiferent câte locuri din site au nevoie de date.
+    const detail = await getPlayersDetail();
     if (!detail.online || !detail.players.length) return;
 
     // (19.09.2026, optimizare resurse) Înainte, acest tur trimitea câte un
@@ -333,24 +359,46 @@ async function syncPlayerSnapshots() {
         pl.job || null,
         pl.jobLabel || null,
         JSON.stringify(pl.vehicles || []),
+        // last_identifier/last_rp_name (25.09.2026) — vezi comentariul din
+        // schema.sql. "license" e identificatorul ESX exact al jucătorului
+        // (pl.license, trimis deja de moldovarp-api), "serverName" e numele
+        // de personaj RP (firstname+lastname din ESX "users", NU numele CFX
+        // de mai jos) — le salvăm acum ca să rămână disponibile și cât
+        // jucătorul e offline, pentru profilul lui (case/business-uri/
+        // benzinării/magazine/gașcă — vezi buildPlayerProfile).
+        pl.license || null,
+        pl.serverName || null,
         name
       );
       // Tipurile sunt indicate explicit (::int, ::text, ::jsonb) pentru că, cu
       // valori NULL pe primul rând, Postgres nu poate deduce singur tipul
       // coloanei din VALUES și ar refuza interogarea.
       values.push(
-        `($${i + 1}::int,$${i + 2}::int,$${i + 3}::int,$${i + 4}::text,$${i + 5}::text,$${i + 6}::jsonb,$${i + 7}::text)`
+        `($${i + 1}::int,$${i + 2}::int,$${i + 3}::int,$${i + 4}::text,$${i + 5}::text,$${i + 6}::jsonb,$${i + 7}::text,$${i + 8}::text,$${i + 9}::text)`
       );
-      i += 7;
+      i += 9;
     }
     if (!values.length) return;
 
+    // playtime_minutes (24.09.2026) — coloana exista în schema.sql încă de
+    // la început (DEFAULT 0), dar nimic n-o actualiza vreodată nicăieri în
+    // cod, nici aici, nici în moldovarp-api — de-aia arăta mereu "0h" pentru
+    // toată lumea, indiferent cât timp chiar jucase cineva. Acest tur rulează
+    // exact la 60s (vezi setInterval mai jos) și găsește toți jucătorii
+    // online CHIAR ACUM — +1 minut per tur, per jucător online, e o
+    // aproximare rezonabilă (±1 minut), fără nevoie de o urmărire separată
+    // de sesiuni (conectare/deconectare) în joc. IMPORTANT: nu putem
+    // recupera orele jucate ÎNAINTE de acest update — informația aia n-a
+    // fost păstrată nicăieri până acum, deci toată lumea pornește de la ora
+    // curentă înainte, nu de la ora reală de joc acumulată în timp.
     await pool.query(
       `UPDATE players AS p SET
          last_cash = v.cash, last_bank = v.bank, last_black_money = v.black_money,
          last_job = v.job, last_job_label = v.job_label, last_vehicles = v.vehicles,
-         last_synced_at = NOW()
-       FROM (VALUES ${values.join(",")}) AS v(cash, bank, black_money, job, job_label, vehicles, display_name)
+         last_identifier = COALESCE(v.identifier, p.last_identifier),
+         last_rp_name = COALESCE(v.rp_name, p.last_rp_name),
+         last_synced_at = NOW(), playtime_minutes = p.playtime_minutes + 1
+       FROM (VALUES ${values.join(",")}) AS v(cash, bank, black_money, job, job_label, vehicles, identifier, rp_name, display_name)
        WHERE p.display_name ILIKE v.display_name`,
       params
     );
@@ -551,7 +599,9 @@ app.get("/api/admin/live/jobs", auth, requireRole(...ADMIN_ROLES), asyncRoute(as
 // Sancțiunile (moderator+) — e un instrument de investigație pentru staff,
 // nu date publice.
 const GAME_LOG_CATEGORIES = ["chat", "command", "connect", "disconnect", "death", "money", "money_vehicle_deposit", "money_vehicle_withdraw", "item_buy", "item_craft", "item_transfer", "item_obtained", "item_drop", "item_pickup", "vehicle_acquired"];
-const LOG_CATEGORIES = [...GAME_LOG_CATEGORIES, "admin"];
+// "discord" (23.09.2026) — a treia sursă, vezi botul de citit canale Discord
+// mai jos (pollDiscordLogs) și fetchDiscordLogsPage.
+const LOG_CATEGORIES = [...GAME_LOG_CATEGORIES, "admin", "discord"];
 
 // Cere loguri de joc de la moldovarp-api. `category` poate fi o singura
 // categorie sau mai multe separate prin virgula (resursa stie sa le
@@ -914,6 +964,58 @@ async function fetchStaffLogsPage({ player, page, pageSize }) {
   return { logs, total };
 }
 
+// A treia sursă a paginii de Loguri (23.09.2026, cerut explicit): mesajele
+// copiate din canalele Discord de loguri (bancă/facturi, heist-uri,
+// protecție exploit-uri etc.) de botul nostru — vezi pollDiscordLogs mai
+// jos, care le salvează în discord_channel_logs. Aceeași formă de rezultat
+// ca fetchStaffLogsPage, ca frontend-ul să le trateze la fel (o singură
+// categorie dedicată, paginată exact, nu amestecată cu logurile de joc).
+async function fetchDiscordLogsPage({ player, page, pageSize }) {
+  const conditions = [];
+  const params = [];
+  if (player) {
+    params.push(`%${player}%`);
+    conditions.push(`(author_name ILIKE $${params.length} OR title ILIKE $${params.length} OR channel_name ILIKE $${params.length} OR fields::text ILIKE $${params.length})`);
+  }
+  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+  const countRes = await pool.query(`SELECT COUNT(*)::int AS total FROM discord_channel_logs ${where}`, params);
+  const total = countRes.rows[0]?.total || 0;
+
+  const limitParams = [...params, pageSize, (page - 1) * pageSize];
+  const { rows } = await pool.query(
+    `SELECT channel_name, category_name, author_name, title, fields, content, posted_at
+     FROM discord_channel_logs ${where} ORDER BY posted_at DESC LIMIT $${limitParams.length - 1} OFFSET $${limitParams.length}`,
+    limitParams
+  );
+  const logs = rows.map(r => ({
+    category: "discord",
+    player: extractDiscordPlayer(r.fields) || r.author_name || r.channel_name || "necunoscut",
+    details: {
+      channel: r.channel_name,
+      category: r.category_name,
+      author: r.author_name,
+      title: r.title,
+      fields: r.fields,
+      content: r.content,
+    },
+    at: r.posted_at,
+  }));
+  return { logs, total };
+}
+
+// Best-effort: cautăm în câmpurile embed-ului unul care pare să fie despre
+// jucător ("Jucator"/"Player"), ca filtrul după jucător de pe pagina de
+// Loguri să funcționeze și pentru intrările din Discord, nu doar cele din
+// joc/Luxu. Dacă nu găsim un asemenea câmp, rândul tot apare — doar coloana
+// JUCĂTOR arată numele bot-ului/canalului în loc.
+function extractDiscordPlayer(fields) {
+  if (!fields || typeof fields !== "object") return null;
+  for (const [key, value] of Object.entries(fields)) {
+    if (/jucator|player/i.test(key)) return String(value).slice(0, 120);
+  }
+  return null;
+}
+
 // Corelare best-effort: cand un log de joc (item obtinut generic, moarte,
 // vehicul nou aparut) se intampla FOARTE aproape in timp de o actiune de
 // staff din Luxu care pare potrivita (dupa un cuvant-cheie in actiune/motiv)
@@ -965,6 +1067,14 @@ app.get("/api/admin/logs", auth, requireRole(...MOD_ROLES), asyncRoute(async (re
   // paginăm direct pe ea, cu total/totalPages proprii.
   if (category === "admin") {
     const { logs, total } = await fetchStaffLogsPage({ player, page, pageSize });
+    const totalPages = Math.max(1, Math.ceil((total || 0) / pageSize));
+    return res.json({ online: true, logs, page, pageSize, total, totalPages });
+  }
+
+  // La fel ca "admin" mai sus — sursă proprie (Postgres, botul de Discord),
+  // paginată separat, nu depinde de serverul de joc fiind online.
+  if (category === "discord") {
+    const { logs, total } = await fetchDiscordLogsPage({ player, page, pageSize });
     const totalPages = Math.max(1, Math.ceil((total || 0) / pageSize));
     return res.json({ online: true, logs, page, pageSize, total, totalPages });
   }
@@ -1137,8 +1247,8 @@ async function buildPlayerProfile(name) {
     pool.query(
       `SELECT p.id, p.game_id, p.display_name, p.playtime_minutes, p.status, p.created_at,
               p.last_cash, p.last_bank, p.last_black_money, p.last_job, p.last_job_label,
-              p.last_vehicles, p.last_synced_at,
-              u.id AS user_id, u.username, u.email,
+              p.last_vehicles, p.last_synced_at, p.last_identifier, p.last_rp_name,
+              u.id AS user_id, u.username, u.email, u.game_identifier, u.game_identifier_name,
               f.name AS faction_name, fr.name AS rank_name
        FROM players p
        JOIN users u ON u.id = p.user_id
@@ -1167,15 +1277,32 @@ async function buildPlayerProfile(name) {
     ? (liveDetail.players || []).find(p => (p.name || "").toLowerCase().trim() === lower) || null
     : null;
 
+  const account = accountResult.rows[0] || null;
+
   // Cerută separat, DUPĂ ce știm `live` — dacă jucătorul e online chiar
   // acum, moldovarp-api ne-a dat deja identificatorul lui ESX exact (vezi
   // /players), pe care îl trimitem mai departe la /assets pentru un match
   // sigur pe casă/gașcă (owner/identificator), în loc de potrivire de nume
-  // (owner_name/customnick — pot să nu semene deloc cu numele CFX). Fără el
-  // (jucător offline), rămâne căutarea după nume, cu limitările știute.
-  const assetsResult = await fetchAssets({ player: cleanName, identifier: live?.license, rpName: live?.serverName });
+  // (owner_name/customnick — pot să nu semene deloc cu numele CFX).
+  //
+  // (25.09.2026, cerut explicit — prea puține date la "Case deținute" pentru
+  // un jucător OFFLINE): înainte, fără `live`, treceam direct la căutarea
+  // după nume, cu limitările știute (business-uri/benzinării/magazine/gașcă
+  // ieșeau aproape mereu goale, pentru că au nevoie de identificator ESX/nume
+  // RP, nu de numele CFX). Acum, dacă avem un cont pe site pentru acest
+  // jucător (`account`), folosim ULTIMA valoare cunoscută salvată automat cât
+  // timp a fost online (last_identifier/last_rp_name, vezi syncPlayerSnapshots)
+  // — și, dacă lipsește și aia (cont foarte nou, încă nesincronizat o dată),
+  // identificatorul legat manual prin "/leagacont" (game_identifier). Un
+  // jucător FĂRĂ cont pe site (ca "account" să fie null) tot nu are din ce
+  // sursă să primească aceste date offline — rămâne limitarea cunoscută,
+  // fără soluție posibilă fără ca jucătorul să-și facă cont sau să fie online.
+  const assetsResult = await fetchAssets({
+    player: cleanName,
+    identifier: live?.license || account?.last_identifier || account?.game_identifier || undefined,
+    rpName: live?.serverName || account?.last_rp_name || account?.game_identifier_name || undefined,
+  });
 
-  const account = accountResult.rows[0] || null;
   let tickets = [];
   if (account) {
     const t = await pool.query(
@@ -1289,6 +1416,35 @@ app.get("/api/me/profile", auth, asyncRoute(async (req, res) => {
   if (!displayName) return res.json({ hasGameProfile: false });
   const profile = await buildPlayerProfile(displayName);
   res.json({ hasGameProfile: true, ...profile });
+}));
+
+// Notificări proprii (24.09.2026) — vezi tabela "notifications" din
+// database/schema.sql și notifyUser() mai sus pentru context. Limitat la 50
+// cele mai recente (destul pentru un clopoțel, fără paginare — dacă devine
+// nevoie de istoric complet, se poate adăuga pagination ca la /api/admin/logs).
+app.get("/api/me/notifications", auth, asyncRoute(async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT id, type, title, message, link, read_at, created_at
+     FROM notifications WHERE user_id = $1 ORDER BY created_at DESC LIMIT 50`,
+    [req.user.sub]
+  );
+  res.json({ notifications: rows, unread: rows.filter(r => !r.read_at).length });
+}));
+
+app.post("/api/me/notifications/:id/citit", auth, asyncRoute(async (req, res) => {
+  await pool.query(
+    `UPDATE notifications SET read_at = NOW() WHERE id = $1 AND user_id = $2 AND read_at IS NULL`,
+    [req.params.id, req.user.sub]
+  );
+  res.json({ ok: true });
+}));
+
+app.post("/api/me/notifications/citeste-tot", auth, asyncRoute(async (req, res) => {
+  await pool.query(
+    `UPDATE notifications SET read_at = NOW() WHERE user_id = $1 AND read_at IS NULL`,
+    [req.user.sub]
+  );
+  res.json({ ok: true });
 }));
 
 // Leagă contul de site (Discord) de personajul din joc — jucătorul scrie
@@ -1552,6 +1708,200 @@ setInterval(() => {
   pool.query("DELETE FROM admin_action_logs WHERE created_at < NOW() - INTERVAL '30 days'")
     .catch(err => console.error("Curățarea admin_action_logs a eșuat:", err.message));
 }, 6 * 60 * 60 * 1000);
+
+// ---------------------------------------------------------------------------
+// Loguri din Discord — bot propriu, citește canale (23.09.2026, cerut
+// explicit). Staff-ul are deja loguri detaliate (transferuri bancare,
+// heist-uri, protecție exploit-uri) trimise în Discord prin ~185 de
+// webhook-uri diferite, provenind din scripturi variate — prea multe și, pe
+// alocuri, closed-source, ca să le adăugăm câte un "al doilea webhook" spre
+// site (ca la Luxu, mai sus). Soluția: UN bot Discord al nostru (cont
+// separat, token propriu — DISCORD_LOGS_BOT_TOKEN, cu voie DOAR să vadă
+// canalele de loguri, nicio permisiune de scris), care citește periodic
+// mesajele noi de-acolo și le copiază în discord_channel_logs — indiferent
+// ce script/webhook le-a trimis inițial în Discord.
+//
+// Canalele NU sunt hardcodate: citim toate canalele-text din server la care
+// botul chiar are acces (permisiunea se dă din Discord, per categorie —
+// vezi admin-loguri.html) — un canal nou de loguri, adăugat mai târziu, nu
+// cere nicio schimbare de cod, doar să i se dea botului voie să-l vadă.
+const DISCORD_LOGS_BOT_TOKEN = process.env.DISCORD_LOGS_BOT_TOKEN || "";
+const DISCORD_LOGS_GUILD_ID = process.env.DISCORD_LOGS_GUILD_ID || "";
+const DISCORD_API_BASE = "https://discord.com/api/v10";
+
+async function discordApiGet(path) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    return await fetch(`${DISCORD_API_BASE}${path}`, {
+      headers: { Authorization: `Bot ${DISCORD_LOGS_BOT_TOKEN}` },
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+let discordChannelMapCache = { channels: null, fetchedAt: 0 };
+const DISCORD_CHANNEL_MAP_TTL_MS = 10 * 60 * 1000;
+// Canale la care botul nu are acces (403/404) — le ținem minte ca să nu mai
+// încercăm la fiecare tur de 30s; dacă li se dă acces mai târziu, se
+// rezolvă la următorul restart al serviciului.
+const discordWarnedChannels = new Set();
+
+// Cursoarele (ultimul mesaj_id citit din fiecare canal) — încărcate o
+// singură dată din DB, apoi ținute în memorie; scrise înapoi doar când apar
+// mesaje noi, ca fiecare tur de polling să nu facă un SELECT per canal.
+let discordCursors = null;
+async function loadDiscordCursors() {
+  if (discordCursors) return discordCursors;
+  const { rows } = await pool.query("SELECT channel_id, last_message_id FROM discord_log_cursors");
+  discordCursors = new Map(rows.map(r => [r.channel_id, r.last_message_id]));
+  return discordCursors;
+}
+async function saveDiscordCursor(channelId, lastMessageId) {
+  discordCursors.set(channelId, lastMessageId);
+  await pool.query(
+    `INSERT INTO discord_log_cursors(channel_id, last_message_id, updated_at) VALUES ($1,$2,NOW())
+     ON CONFLICT (channel_id) DO UPDATE SET last_message_id=$2, updated_at=NOW()`,
+    [channelId, lastMessageId]
+  );
+}
+
+async function getDiscordChannelMap() {
+  const age = Date.now() - discordChannelMapCache.fetchedAt;
+  if (discordChannelMapCache.channels && age < DISCORD_CHANNEL_MAP_TTL_MS) return discordChannelMapCache.channels;
+
+  const res = await discordApiGet(`/guilds/${DISCORD_LOGS_GUILD_ID}/channels`);
+  if (!res.ok) {
+    console.error(`Discord logs: nu am putut lista canalele serverului (HTTP ${res.status}).`);
+    return discordChannelMapCache.channels || new Map();
+  }
+  const list = await res.json();
+  const byId = new Map(list.map(c => [c.id, c]));
+  const channels = new Map();
+  for (const c of list) {
+    // Tip 0 = text normal, 5 = anunțuri — singurele din care are sens să
+    // citim mesaje; categoriile (tip 4) și canalele vocale sunt sărite.
+    if (c.type !== 0 && c.type !== 5) continue;
+    const parent = c.parent_id ? byId.get(c.parent_id) : null;
+    channels.set(c.id, { id: c.id, name: c.name, categoryName: parent?.name || null });
+  }
+  discordChannelMapCache = { channels, fetchedAt: Date.now() };
+  return channels;
+}
+
+// ID-urile Discord (snowflake) sunt numere pe 64 de biți — un Number
+// obișnuit din JS și-ar pierde precizia, așa că le comparăm ca BigInt.
+function snowflakeGreater(a, b) {
+  if (!a) return false;
+  if (!b) return true;
+  return BigInt(a) > BigInt(b);
+}
+
+function parseDiscordEmbed(message) {
+  const embed = message.embeds && message.embeds[0];
+  if (!embed) return { title: null, fields: null, content: message.content || null };
+  const fields = {};
+  for (const f of embed.fields || []) {
+    if (f?.name) fields[String(f.name).slice(0, 120)] = String(f.value ?? "").slice(0, 500);
+  }
+  return {
+    title: embed.title || null,
+    fields: Object.keys(fields).length ? fields : null,
+    content: embed.description || message.content || null,
+  };
+}
+
+async function pollDiscordChannel(channelInfo) {
+  if (discordWarnedChannels.has(channelInfo.id)) return;
+
+  const cursors = await loadDiscordCursors();
+  let lastSeen = cursors.get(channelInfo.id) || null;
+
+  if (!lastSeen) {
+    // Prima dată când vedem acest canal: NU importăm tot istoricul (ar
+    // putea fi luni de mesaje, pe 185 de webhook-uri) — doar "ancorăm"
+    // cursorul la cel mai recent mesaj de acum; de-aici încolo citim doar
+    // ce e nou.
+    const res = await discordApiGet(`/channels/${channelInfo.id}/messages?limit=1`);
+    if (res.status === 403 || res.status === 404) {
+      discordWarnedChannels.add(channelInfo.id);
+      console.warn(`Discord logs: fără acces la #${channelInfo.name} (${channelInfo.id}) — sărim peste el (repornește serverul dacă i-ai dat voie între timp).`);
+      return;
+    }
+    if (!res.ok) { console.error(`Discord logs: eroare HTTP ${res.status} la ancorarea #${channelInfo.name}.`); return; }
+    const messages = await res.json();
+    if (messages.length) await saveDiscordCursor(channelInfo.id, messages[0].id);
+    return;
+  }
+
+  // Recuperăm TOATE mesajele noi, nu doar primele 100 — dacă un canal a
+  // fost foarte activ între două tururi, continuăm în buclă până ne prindem
+  // din urmă (limită de siguranță: max 2000 mesaje/tur/canal).
+  for (let guard = 0; guard < 20; guard++) {
+    const res = await discordApiGet(`/channels/${channelInfo.id}/messages?after=${encodeURIComponent(lastSeen)}&limit=100`);
+    if (res.status === 403 || res.status === 404) {
+      discordWarnedChannels.add(channelInfo.id);
+      console.warn(`Discord logs: fără acces la #${channelInfo.name} (${channelInfo.id}) — sărim peste el (repornește serverul dacă i-ai dat voie între timp).`);
+      return;
+    }
+    if (res.status === 429) { console.warn(`Discord logs: rate-limited pe #${channelInfo.name} — reîncercăm la următorul tur.`); return; }
+    if (!res.ok) { console.error(`Discord logs: eroare HTTP ${res.status} pe #${channelInfo.name}.`); return; }
+
+    const messages = await res.json();
+    if (!messages.length) return;
+
+    // Discord întoarce mereu cele mai noi mesaje primele — le procesăm de
+    // la cel mai vechi la cel mai nou, ca ordinea din baza noastră de date
+    // să urmeze ordinea reală din Discord.
+    const ordered = [...messages].reverse();
+    for (const msg of ordered) {
+      const { title, fields, content } = parseDiscordEmbed(msg);
+      await pool.query(
+        `INSERT INTO discord_channel_logs
+           (message_id, channel_id, channel_name, category_name, author_name, title, fields, content, posted_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+         ON CONFLICT (message_id) DO NOTHING`,
+        [
+          msg.id, channelInfo.id, channelInfo.name, channelInfo.categoryName,
+          msg.author?.username || null, title, fields ? JSON.stringify(fields) : null, content, msg.timestamp,
+        ]
+      );
+      if (snowflakeGreater(msg.id, lastSeen)) lastSeen = msg.id;
+    }
+    await saveDiscordCursor(channelInfo.id, lastSeen);
+    if (messages.length < 100) return; // ne-am prins din urmă
+  }
+}
+
+async function pollDiscordLogs() {
+  if (!DISCORD_LOGS_BOT_TOKEN || !DISCORD_LOGS_GUILD_ID) return;
+  const channels = await getDiscordChannelMap();
+  for (const channelInfo of channels.values()) {
+    try {
+      await pollDiscordChannel(channelInfo);
+    } catch (err) {
+      console.error(`Discord logs: eroare la #${channelInfo.name}:`, err.message);
+    }
+    // Pauză mică între canale, ca să nu trimitem toate cererile deodată
+    // către Discord (rate limits per-rută, plus un buget global comun).
+    await new Promise(r => setTimeout(r, 150));
+  }
+}
+
+if (DISCORD_LOGS_BOT_TOKEN && DISCORD_LOGS_GUILD_ID) {
+  setInterval(() => pollDiscordLogs().catch(err => console.error("pollDiscordLogs a eșuat:", err.message)), 30_000);
+  pollDiscordLogs().catch(err => console.error("pollDiscordLogs (prima rulare) a eșuat:", err.message));
+
+  // Aceeași politică de păstrare ca restul Logurilor — 30 de zile.
+  setInterval(() => {
+    pool.query("DELETE FROM discord_channel_logs WHERE posted_at < NOW() - INTERVAL '30 days'")
+      .catch(err => console.error("Curățarea discord_channel_logs a eșuat:", err.message));
+  }, 6 * 60 * 60 * 1000);
+} else {
+  console.log("Discord logs: DISCORD_LOGS_BOT_TOKEN/DISCORD_LOGS_GUILD_ID lipsesc — botul de citit loguri e dezactivat.");
+}
 
 // URL-ul panoului txAdmin al serverului de joc — NU e hardcodat în fișierele
 // statice (oricine ar putea deschide admin-txadmin.html și vedea sursa),
@@ -2003,9 +2353,9 @@ function validTicketFields(body, existingCategory) {
   return { subject, description, category, link };
 }
 
-// Căutare jucători pentru câmpul "jucător reclamat" din formularul de tichet
-// — deschisă oricărui utilizator logat (nu doar staff), spre deosebire de
-// /api/admin/players care e restricționată la MOD_ROLES.
+// Căutare jucători — folosită acum doar de staff (căutarea din formularul
+// public a fost înlocuită cu text liber, vezi mai jos); rămasă disponibilă
+// oricărui utilizator logat, nu doar staff.
 app.get("/api/players/search", auth, asyncRoute(async (req, res) => {
   const q = (req.query.q || "").trim();
   if (q.length < 2) return res.json([]);
@@ -2019,11 +2369,28 @@ app.get("/api/players/search", auth, asyncRoute(async (req, res) => {
   res.json(rows);
 }));
 
+// (20.09.2026) Reclamantul scrie ID-ul/numele jucătorului reclamat ca text
+// liber (reported_player_label) — nu mai trebuie să-l găsească într-o
+// căutare live, care bloca trimiterea când jucătorul nu era încă în baza
+// noastră de date. Încercăm totuși, best-effort, o potrivire exactă (ID
+// numeric sau nume exact) ca să legăm structurat tichetul de players — dacă
+// nu găsim nimic, tichetul se salvează oricum, cu textul scris de reclamant.
+async function resolveReportedPlayer(label) {
+  const text = (label || "").trim();
+  if (!text) return null;
+  const { rows } = await pool.query(
+    `SELECT id FROM players WHERE CAST(game_id AS TEXT) = $1 OR display_name ILIKE $1 LIMIT 1`,
+    [text]
+  );
+  return rows[0]?.id || null;
+}
+
 app.get("/api/tickets", auth, asyncRoute(async (req, res) => {
   const { rows } = await pool.query(
     `SELECT t.id,t.subject,t.category,t.status,t.evidence_url,t.created_at,t.updated_at,
             (t.user_id=$1) AS is_own, u.username submitted_by,
-            rp.id reported_player_id, rp.display_name reported_player_name
+            rp.id reported_player_id, t.reported_player_label,
+            COALESCE(rp.display_name, t.reported_player_label) reported_display
      FROM tickets t
      JOIN users u ON u.id = t.user_id
      LEFT JOIN players rp ON rp.id = t.reported_player_id
@@ -2038,28 +2405,50 @@ app.post("/api/tickets", auth, asyncRoute(async (req, res) => {
   const v = validTicketFields(req.body);
   if (v.error) return res.status(400).json({ error: v.error });
 
+  let reportedLabel = null;
   let reportedId = null;
   if (v.category === "reclamatie") {
-    if (!req.body.reported_player_id)
-      return res.status(400).json({ error: "Selectează jucătorul reclamat din listă." });
-    const p = await pool.query("SELECT id FROM players WHERE id=$1", [req.body.reported_player_id]);
-    if (!p.rows[0]) return res.status(400).json({ error: "Jucătorul reclamat nu a fost găsit." });
-    reportedId = p.rows[0].id;
+    reportedLabel = (req.body.reported_player_label || "").trim();
+    if (!reportedLabel)
+      return res.status(400).json({ error: "Scrie ID-ul sau numele jucătorului reclamat." });
+    reportedId = await resolveReportedPlayer(reportedLabel);
   }
 
   const { rows } = await pool.query(
-    `INSERT INTO tickets(user_id, subject, category, description, evidence_url, reported_player_id)
-     VALUES($1,$2,$3,$4,$5,$6) RETURNING *`,
-    [req.user.sub, v.subject, v.category, v.description, v.link, reportedId]
+    `INSERT INTO tickets(user_id, subject, category, description, evidence_url, reported_player_id, reported_player_label)
+     VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+    [req.user.sub, v.subject, v.category, v.description, v.link, reportedId, reportedLabel]
   );
   await logAction(req.user.sub, "ticket.create", "ticket", rows[0].id, { subject: v.subject }, req.ip);
+
+  // Cerut explicit (24.09.2026): jucătorul reclamat e anunțat pe cont,
+  // imediat ce reclamația se depune — nu abia după ce staff o rezolvă.
+  // Mesajul rămâne INTENȚIONAT vag: fără identitatea reclamantului și fără
+  // conținutul reclamației, ca acesta să nu poată fi identificat sau
+  // răzbunat de cel reclamat înainte ca staff să apuce să verifice. Doar
+  // dacă am reușit să legăm structurat reclamația de un cont real (vezi
+  // resolveReportedPlayer) — un text liber nepotrivit nu are cont de
+  // notificat. Nu notificăm dacă cineva se reclamă cumva pe sine însuși.
+  if (reportedId) {
+    const { rows: rp } = await pool.query(`SELECT user_id FROM players WHERE id = $1`, [reportedId]);
+    const reportedUserId = rp[0]?.user_id;
+    if (reportedUserId && reportedUserId !== req.user.sub) {
+      await notifyUser(reportedUserId, {
+        type: "ticket_reported",
+        title: "Ai fost reclamat",
+        message: "A fost depusă o reclamație despre tine. Un membru al staff-ului o va analiza în curând.",
+        link: null,
+      });
+    }
+  }
+
   res.status(201).json(rows[0]);
 }));
 
 app.get("/api/tickets/:id", auth, asyncRoute(async (req, res) => {
   const { rows } = await pool.query(
     `SELECT t.*, (t.user_id=$2) AS is_own, u.username submitted_by,
-            rp.id reported_player_id, rp.display_name reported_player_name
+            rp.id reported_player_id, COALESCE(rp.display_name, t.reported_player_label) reported_display
      FROM tickets t
      JOIN users u ON u.id = t.user_id
      LEFT JOIN players rp ON rp.id = t.reported_player_id
@@ -2092,20 +2481,20 @@ app.put("/api/tickets/:id", auth, asyncRoute(async (req, res) => {
   const v = validTicketFields(req.body, existing.rows[0].category);
   if (v.error) return res.status(400).json({ error: v.error });
 
+  let reportedLabel = null;
   let reportedId = null;
   if (v.category === "reclamatie") {
-    if (!req.body.reported_player_id)
-      return res.status(400).json({ error: "Selectează jucătorul reclamat din listă." });
-    const p = await pool.query("SELECT id FROM players WHERE id=$1", [req.body.reported_player_id]);
-    if (!p.rows[0]) return res.status(400).json({ error: "Jucătorul reclamat nu a fost găsit." });
-    reportedId = p.rows[0].id;
+    reportedLabel = (req.body.reported_player_label || "").trim();
+    if (!reportedLabel)
+      return res.status(400).json({ error: "Scrie ID-ul sau numele jucătorului reclamat." });
+    reportedId = await resolveReportedPlayer(reportedLabel);
   }
 
   const { rows } = await pool.query(
     `UPDATE tickets SET subject=$1, category=$2, description=$3, evidence_url=$4,
-       reported_player_id=$5, updated_at=NOW()
-     WHERE id=$6 RETURNING *`,
-    [v.subject, v.category, v.description, v.link, reportedId, req.params.id]
+       reported_player_id=$5, reported_player_label=$6, updated_at=NOW()
+     WHERE id=$7 RETURNING *`,
+    [v.subject, v.category, v.description, v.link, reportedId, reportedLabel, req.params.id]
   );
   await logAction(req.user.sub, "ticket.edit", "ticket", req.params.id, { subject: v.subject }, req.ip);
   res.json(rows[0]);
@@ -3441,7 +3830,8 @@ app.put("/api/admin/content/:id", auth, requireRole(...ADMIN_ROLES), asyncRoute(
 app.get("/api/admin/tickets", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
   const status = req.query.status;
   const { rows } = await pool.query(
-    `SELECT t.*, u.username submitted_by, a.username assigned_username, rp.display_name reported_player_name
+    `SELECT t.*, u.username submitted_by, a.username assigned_username,
+            COALESCE(rp.display_name, t.reported_player_label) reported_display
      FROM tickets t
      JOIN users u ON u.id = t.user_id
      LEFT JOIN users a ON a.id = t.assigned_to
@@ -3455,7 +3845,8 @@ app.get("/api/admin/tickets", auth, requireRole(...MOD_ROLES), asyncRoute(async 
 
 app.get("/api/admin/tickets/:id", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
   const { rows } = await pool.query(
-    `SELECT t.*, u.username submitted_by, a.username assigned_username, rp.display_name reported_player_name
+    `SELECT t.*, u.username submitted_by, a.username assigned_username,
+            COALESCE(rp.display_name, t.reported_player_label) reported_display
      FROM tickets t
      JOIN users u ON u.id = t.user_id
      LEFT JOIN users a ON a.id = t.assigned_to
@@ -3481,10 +3872,15 @@ app.get("/api/admin/tickets/:id", auth, requireRole(...MOD_ROLES), asyncRoute(as
 // până acum.
 app.put("/api/admin/tickets/:id", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
   const { id } = req.params;
-  const { status, assigned_to, subject, description, evidence_url } = req.body;
+  const { status, assigned_to, subject, description, evidence_url, category } = req.body;
   const allowedStatuses = ["open", "in_progress", "resolved", "closed"];
+  // (21.09.2026, cerut explicit) staff poate corecta și categoria unui tichet
+  // — de exemplu dacă jucătorul a ales-o greșit la creare — nu doar status.
+  const allowedCategories = ["general", "bug", "reclamatie", "ban_appeal"];
   if (status && !allowedStatuses.includes(status))
     return res.status(400).json({ error: "Status invalid." });
+  if (category && !allowedCategories.includes(category))
+    return res.status(400).json({ error: "Categorie invalidă." });
   if (evidence_url && !/^https?:\/\/\S+$/i.test(evidence_url.trim()))
     return res.status(400).json({ error: "Linkul trebuie să înceapă cu http:// sau https://." });
   const { rows } = await pool.query(
@@ -3494,9 +3890,10 @@ app.put("/api/admin/tickets/:id", auth, requireRole(...MOD_ROLES), asyncRoute(as
        subject = COALESCE($3, subject),
        description = COALESCE($4, description),
        evidence_url = COALESCE($5, evidence_url),
+       category = COALESCE($6, category),
        updated_at = NOW()
-     WHERE id = $6 RETURNING *`,
-    [status || null, assigned_to || null, subject?.trim() || null, description?.trim() || null, evidence_url?.trim() || null, id]
+     WHERE id = $7 RETURNING *`,
+    [status || null, assigned_to || null, subject?.trim() || null, description?.trim() || null, evidence_url?.trim() || null, category || null, id]
   );
   if (!rows[0]) return res.status(404).json({ error: "Tichetul nu există." });
   await logAction(req.user.sub, "ticket.update", "ticket", id, req.body, req.ip);

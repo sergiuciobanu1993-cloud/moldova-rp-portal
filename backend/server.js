@@ -1166,6 +1166,23 @@ app.get("/api/admin/kill-logs", auth, requireRole(...MOD_ROLES), asyncRoute(asyn
       pageSize: 500,
     });
 
+    // DIAGNOSTIC TEMPORAR (25.09.2026) — de scos după ce găsim cauza reală a
+    // bug-ului "Jaf după moarte" raportat (Nurofen ucis de Dima Relaxare —
+    // Loguri arată clar 6 transferuri de iteme către ucigaș, dar Kill Logs
+    // arată gol la "Jaf după moarte" pentru exact acest kill). Afișăm exact
+    // ce a primit corelarea (fereastra de timp calculată, câte transferuri
+    // s-au întors de la moldovarp-api, numele exact al victimei la fiecare
+    // moarte și la fiecare transfer, orele exacte) — asta rulează AICI, pe
+    // Railway, deci vedem direct în "railway logs" fără să mai depindem de
+    // consola serverului de joc.
+    console.log(`[kill-logs-debug] player=${JSON.stringify(player)} deaths=${deaths.length} oldest=${oldest.toISOString()} newest=${newest.toISOString()} transfersFetched=${transfers.length}`);
+    for (const d of deaths) {
+      console.log(`[kill-logs-debug] death victim=${JSON.stringify(d.player)} at=${JSON.stringify(d.at)} parsedAt=${new Date(d.at).toISOString()}`);
+    }
+    for (const t of transfers) {
+      console.log(`[kill-logs-debug] transfer player=${JSON.stringify(t.player)} at=${JSON.stringify(t.at)} parsedAt=${new Date(t.at).toISOString()} details=${JSON.stringify(t.details)}`);
+    }
+
     const staffLogs = await fetchStaffLogs({ after: oldest, before: newest, limit: 500 });
     correlateStaffAction(deaths, staffLogs, "death", /kill/i, "adminKill");
 

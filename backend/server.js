@@ -359,15 +359,24 @@ async function syncPlayerSnapshots() {
         pl.job || null,
         pl.jobLabel || null,
         JSON.stringify(pl.vehicles || []),
+        // last_identifier/last_rp_name (25.09.2026) — vezi comentariul din
+        // schema.sql. "license" e identificatorul ESX exact al jucătorului
+        // (pl.license, trimis deja de moldovarp-api), "serverName" e numele
+        // de personaj RP (firstname+lastname din ESX "users", NU numele CFX
+        // de mai jos) — le salvăm acum ca să rămână disponibile și cât
+        // jucătorul e offline, pentru profilul lui (case/business-uri/
+        // benzinării/magazine/gașcă — vezi buildPlayerProfile).
+        pl.license || null,
+        pl.serverName || null,
         name
       );
       // Tipurile sunt indicate explicit (::int, ::text, ::jsonb) pentru că, cu
       // valori NULL pe primul rând, Postgres nu poate deduce singur tipul
       // coloanei din VALUES și ar refuza interogarea.
       values.push(
-        `($${i + 1}::int,$${i + 2}::int,$${i + 3}::int,$${i + 4}::text,$${i + 5}::text,$${i + 6}::jsonb,$${i + 7}::text)`
+        `($${i + 1}::int,$${i + 2}::int,$${i + 3}::int,$${i + 4}::text,$${i + 5}::text,$${i + 6}::jsonb,$${i + 7}::text,$${i + 8}::text,$${i + 9}::text)`
       );
-      i += 7;
+      i += 9;
     }
     if (!values.length) return;
 
@@ -386,8 +395,10 @@ async function syncPlayerSnapshots() {
       `UPDATE players AS p SET
          last_cash = v.cash, last_bank = v.bank, last_black_money = v.black_money,
          last_job = v.job, last_job_label = v.job_label, last_vehicles = v.vehicles,
+         last_identifier = COALESCE(v.identifier, p.last_identifier),
+         last_rp_name = COALESCE(v.rp_name, p.last_rp_name),
          last_synced_at = NOW(), playtime_minutes = p.playtime_minutes + 1
-       FROM (VALUES ${values.join(",")}) AS v(cash, bank, black_money, job, job_label, vehicles, display_name)
+       FROM (VALUES ${values.join(",")}) AS v(cash, bank, black_money, job, job_label, vehicles, identifier, rp_name, display_name)
        WHERE p.display_name ILIKE v.display_name`,
       params
     );
@@ -1236,8 +1247,8 @@ async function buildPlayerProfile(name) {
     pool.query(
       `SELECT p.id, p.game_id, p.display_name, p.playtime_minutes, p.status, p.created_at,
               p.last_cash, p.last_bank, p.last_black_money, p.last_job, p.last_job_label,
-              p.last_vehicles, p.last_synced_at,
-              u.id AS user_id, u.username, u.email,
+              p.last_vehicles, p.last_synced_at, p.last_identifier, p.last_rp_name,
+              u.id AS user_id, u.username, u.email, u.game_identifier, u.game_identifier_name,
               f.name AS faction_name, fr.name AS rank_name
        FROM players p
        JOIN users u ON u.id = p.user_id
@@ -1266,15 +1277,32 @@ async function buildPlayerProfile(name) {
     ? (liveDetail.players || []).find(p => (p.name || "").toLowerCase().trim() === lower) || null
     : null;
 
+  const account = accountResult.rows[0] || null;
+
   // Cerută separat, DUPĂ ce știm `live` — dacă jucătorul e online chiar
   // acum, moldovarp-api ne-a dat deja identificatorul lui ESX exact (vezi
   // /players), pe care îl trimitem mai departe la /assets pentru un match
   // sigur pe casă/gașcă (owner/identificator), în loc de potrivire de nume
-  // (owner_name/customnick — pot să nu semene deloc cu numele CFX). Fără el
-  // (jucător offline), rămâne căutarea după nume, cu limitările știute.
-  const assetsResult = await fetchAssets({ player: cleanName, identifier: live?.license, rpName: live?.serverName });
+  // (owner_name/customnick — pot să nu semene deloc cu numele CFX).
+  //
+  // (25.09.2026, cerut explicit — prea puține date la "Case deținute" pentru
+  // un jucător OFFLINE): înainte, fără `live`, treceam direct la căutarea
+  // după nume, cu limitările știute (business-uri/benzinării/magazine/gașcă
+  // ieșeau aproape mereu goale, pentru că au nevoie de identificator ESX/nume
+  // RP, nu de numele CFX). Acum, dacă avem un cont pe site pentru acest
+  // jucător (`account`), folosim ULTIMA valoare cunoscută salvată automat cât
+  // timp a fost online (last_identifier/last_rp_name, vezi syncPlayerSnapshots)
+  // — și, dacă lipsește și aia (cont foarte nou, încă nesincronizat o dată),
+  // identificatorul legat manual prin "/leagacont" (game_identifier). Un
+  // jucător FĂRĂ cont pe site (ca "account" să fie null) tot nu are din ce
+  // sursă să primească aceste date offline — rămâne limitarea cunoscută,
+  // fără soluție posibilă fără ca jucătorul să-și facă cont sau să fie online.
+  const assetsResult = await fetchAssets({
+    player: cleanName,
+    identifier: live?.license || account?.last_identifier || account?.game_identifier || undefined,
+    rpName: live?.serverName || account?.last_rp_name || account?.game_identifier_name || undefined,
+  });
 
-  const account = accountResult.rows[0] || null;
   let tickets = [];
   if (account) {
     const t = await pool.query(

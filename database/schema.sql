@@ -82,6 +82,20 @@ ALTER TABLE players ADD COLUMN IF NOT EXISTS last_job_label VARCHAR(100);
 ALTER TABLE players ADD COLUMN IF NOT EXISTS last_vehicles JSONB;
 ALTER TABLE players ADD COLUMN IF NOT EXISTS last_synced_at TIMESTAMPTZ;
 
+-- last_identifier/last_rp_name (25.09.2026, cerut explicit — profilul unui
+-- jucător OFFLINE arăta prea puține date la "Case deținute": case apăreau
+-- (se caută după numele CFX, mereu cunoscut), dar business-uri/benzinării/
+-- magazine/gașcă ieșeau aproape mereu goale. Motivul: acelea au nevoie de
+-- identificatorul ESX exact sau de numele de personaj RP (nume CFX ≠ nume RP,
+-- vezi comentariul din fetchAssets/getBusinesses) — informație pe care o
+-- primim DOAR cât timp jucătorul e online (din /players). Până acum n-o
+-- păstram nicăieri, deci dispărea imediat ce jucătorul se deconecta. Acum o
+-- salvăm aici, la fiecare tur de 60s cât jucătorul e online (syncPlayerSnapshots,
+-- server.js), exact ca restul coloanelor last_*, ca profilul offline să poată
+-- folosi ULTIMA valoare cunoscută în loc să rămână complet gol.
+ALTER TABLE players ADD COLUMN IF NOT EXISTS last_identifier VARCHAR(120);
+ALTER TABLE players ADD COLUMN IF NOT EXISTS last_rp_name VARCHAR(120);
+
 CREATE TABLE IF NOT EXISTS factions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name VARCHAR(100) UNIQUE NOT NULL,

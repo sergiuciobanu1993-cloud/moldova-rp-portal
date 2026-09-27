@@ -890,6 +890,36 @@ async function fetchCaseHistory(identifier, limit) {
   }
 }
 
+// Jurnalul folosirilor comenzii "/referal COD" DIN JOC (27.09.2026, cerut
+// explicit de Sergiu — comanda deja există și dă recompense în joc, dar
+// site-ul nu știa nimic despre asta). Exact același model ca
+// fetchCaseOpeningsLog/fetchCaseHistory de mai sus — citit LIVE dintr-un tabel
+// nou pe serverul de joc printr-o rută nouă în moldovarp-api
+// ("/referrals/log", NU există încă acolo — trebuie adăugată acolo separat,
+// vezi discuția din chat), fără să stocăm nimic din asta pe site. `code`
+// opțional filtrează la un singur cod (folosit de /api/me/referral-log, ca un
+// streamer să-și vadă DOAR propriile folosiri) — fără el, întoarce tot
+// jurnalul (folosit de /api/admin/referrals/log).
+async function fetchReferralLog({ code, limit } = {}) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const qs = new URLSearchParams({ limit: String(limit || 50) });
+    if (code) qs.set("code", code);
+    const r = await fetch(`http://${FIVEM_ADDRESS}/moldovarp-api/referrals/log?${qs.toString()}`, {
+      headers: { "x-api-key": FIVEM_API_SECRET },
+      signal: controller.signal,
+    });
+    if (!r.ok) throw new Error(`moldovarp-api HTTP ${r.status}`);
+    const body = await r.json();
+    return { online: true, log: body.log || [] };
+  } catch {
+    return { online: false, log: [] };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 // Cerere generică către rutele de administrare a VIP Shop-ului din
 // moldovarp-api ("/cases/admin..." — vezi server.lua v1.30.0), folosită de
 // toate rutele /api/admin/vip-shop/... de mai jos. Un singur helper în loc de
@@ -2679,6 +2709,29 @@ app.put("/api/admin/users/:id/referral-code", auth, requireRole(...ADMIN_ROLES),
     if (e.code === "23505") return res.status(409).json({ error: "Acest cod e deja folosit de alt cont." });
     throw e;
   }
+}));
+
+// Jurnalul folosirilor comenzii "/referal COD" din joc, pentru orice cod —
+// instrument de staff (audit), la fel ca /api/vip-shop/log de mai sus, deci
+// aceleași reguli: ADMIN_ROLES, live din moldovarp-api, nimic stocat pe site.
+app.get("/api/admin/referrals/log", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+  const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
+  const result = await fetchReferralLog({ limit });
+  res.json({ online: result.online, log: result.log });
+}));
+
+// Jurnalul folosirilor din joc DOAR pentru codul propriu al contului logat —
+// vizibil oricărui cont cu un referral_code setat (în practică, rangul
+// Streamer), nu doar ADMIN_ROLES ca ruta de mai sus. Dacă acest cont n-are
+// niciun cod, întoarcem direct un jurnal gol, fără să mai deranjăm serverul
+// de joc degeaba.
+app.get("/api/me/referral-log", auth, asyncRoute(async (req, res) => {
+  const { rows } = await pool.query("SELECT referral_code FROM users WHERE id=$1", [req.user.sub]);
+  const code = rows[0]?.referral_code;
+  if (!code) return res.json({ online: true, log: [] });
+  const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
+  const result = await fetchReferralLog({ code, limit });
+  res.json({ online: result.online, log: result.log });
 }));
 
 app.put("/api/admin/users/:id/role", auth, requireRole("owner"), asyncRoute(async (req, res) => {

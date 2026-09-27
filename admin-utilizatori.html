@@ -22,6 +22,18 @@
   </p>
 </section>
 
+<section class="tablebox" style="margin-top:20px">
+  <div class="title">
+    <h2>Jurnal folosiri „/referal COD" din joc</h2>
+    <span class="muted">orice cod, toți jucătorii</span>
+  </div>
+  <table><thead><tr><th>JUCĂTOR (din joc)</th><th>COD FOLOSIT</th><th>CÂND</th></tr></thead>
+  <tbody id="referral-log-body"><tr><td colspan="3">Se încarcă…</td></tr></tbody></table>
+  <p class="muted" style="margin:12px 22px 16px;font-size:11px">
+    Citit live direct de pe serverul de joc (comanda „/referal COD"), nu e stocat nimic din asta pe site.
+  </p>
+</section>
+
 </main>
 <script src="auth-client.js"></script>
 <script>
@@ -236,6 +248,34 @@ async function loadUsers(canEdit, me) {
   }
 }
 
+// Jurnalul „/referal COD" din joc (27.09.2026) — citit live din
+// moldovarp-api, la fel ca restul jurnalelor de pe site (vezi /api/admin/vip-shop/log) —
+// nimic din asta nu e stocat pe site, deci un refresh de pagină arată mereu
+// starea reală curentă.
+async function loadReferralLog() {
+  const tbody = document.getElementById('referral-log-body');
+  try {
+    const res = await apiFetch('/api/admin/referrals/log');
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    if (!data.online) {
+      tbody.innerHTML = '<tr><td colspan="3">Serverul de joc nu răspunde momentan — încearcă mai târziu.</td></tr>';
+      return;
+    }
+    const log = data.log || [];
+    tbody.innerHTML = log.length
+      ? log.map(e => `
+        <tr>
+          <td>${escapeHtmlAttr(e.playerName || e.identifier || '?')}</td>
+          <td><span class="pill info">${escapeHtmlAttr(e.code || '—')}</span></td>
+          <td>${fmtDate(e.usedAt)}</td>
+        </tr>`).join('')
+      : '<tr><td colspan="3">Comanda „/referal" nu a fost folosită încă.</td></tr>';
+  } catch {
+    tbody.innerHTML = '<tr><td colspan="3">Nu am putut încărca jurnalul din joc.</td></tr>';
+  }
+}
+
 (async () => {
   const me = await requireRole('admin', 'co-fondator', 'owner');
   if (!me) return;
@@ -246,6 +286,7 @@ async function loadUsers(canEdit, me) {
     : 'Poți vedea lista și dezactiva/activa conturi. Doar fondatorul poate schimba rangul sau șterge definitiv un utilizator.';
   await loadSiteFactions();
   loadUsers(canEdit, me);
+  loadReferralLog();
 })();
 </script>
 </body></html>

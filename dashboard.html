@@ -61,8 +61,10 @@
       <button type="button" id="streamer-copy-btn">Copiază linkul</button>
     </div>
     <p id="streamer-copy-msg" class="muted" style="margin:8px 0 0;font-size:11px" hidden></p>
-    <small style="color:var(--muted);display:block;margin:18px 0 8px">CINE S-A ÎNREGISTRAT CU CODUL TĂU</small>
+    <small style="color:var(--muted);display:block;margin:18px 0 8px">CINE S-A ÎNREGISTRAT CU CODUL TĂU (pe site)</small>
     <div id="streamer-referrals" class="thread"></div>
+    <small style="color:var(--muted);display:block;margin:18px 0 8px">CINE A FOLOSIT CODUL TĂU ÎN JOC (comanda /referal)</small>
+    <div id="streamer-ingame-log" class="thread"><p class="muted" style="margin:0">Se încarcă…</p></div>
   </div>
 </section>
 <section class="panel" id="profile-extra" style="margin-top:20px">
@@ -201,6 +203,30 @@ async function loadProfileExtra() {
   }
 }
 
+// Jurnalul folosirilor din joc ale comenzii "/referal COD" (27.09.2026) —
+// citit LIVE de pe serverul de joc (vezi /api/me/referral-log în backend),
+// separat de lista de mai sus (înregistrări pe SITE) ca să nu amestecăm cele
+// două surse — un jucător poate folosi comanda din joc fără să aibă neapărat
+// cont pe site, deci "playerName" de aici e numele din joc, nu un username.
+async function loadStreamerIngameLog() {
+  const el = document.getElementById('streamer-ingame-log');
+  try {
+    const res = await apiFetch('/api/me/referral-log');
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    if (!data.online) {
+      el.innerHTML = '<p class="muted" style="margin:0">Serverul de joc nu răspunde momentan — încearcă mai târziu.</p>';
+      return;
+    }
+    const log = data.log || [];
+    el.innerHTML = log.length
+      ? log.map(e => `<div class="msg"><b>${escapeHtml(e.playerName || e.identifier || '?')}</b><small>${fmtDate(e.usedAt)}</small></div>`).join('')
+      : '<p class="muted" style="margin:0">Încă nimeni — codul nu a fost folosit în joc.</p>';
+  } catch {
+    el.innerHTML = '<p class="muted" style="margin:0">Nu am putut încărca jurnalul din joc.</p>';
+  }
+}
+
 (async () => {
   if (!requireAuth()) return;
   try {
@@ -271,6 +297,7 @@ async function loadProfileExtra() {
         ? referrals.map(r => `<div class="msg"><b>${escapeHtml(r.name)}</b><small>${fmtDate(r.created_at)}</small></div>`).join('')
         : '<p class="muted" style="margin:0">Încă nimeni — trimite linkul de mai sus!</p>';
       document.getElementById('streamer-panel').hidden = false;
+      loadStreamerIngameLog();
     }
 
     loadProfileExtra();

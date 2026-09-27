@@ -42,6 +42,24 @@
     <p id="confirm-code-msg" class="muted" style="margin:10px 0 0" hidden></p>
   </div>
 </section>
+<section class="panel" id="game-link-panel" style="margin-top:20px" hidden>
+  <div class="head"><h2>Contul din joc</h2><span id="game-link-status" class="muted"></span></div>
+  <div id="game-link-linked" hidden>
+    <p style="margin:0">Personaj legat: <strong id="game-link-name">—</strong> · <a href="#" id="game-unlink">Dezleagă contul</a></p>
+  </div>
+  <div id="game-link-unlinked" hidden>
+    <p class="muted" style="margin:0 0 12px">
+      Leagă o singură dată contul de site de personajul tău. Scrie în chat, în joc, <code>/leagacont</code>:
+      primești un cod de 6 cifre, valabil 5 minute. Pune-l aici.
+    </p>
+    <form id="game-link-form" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+      <div><label for="game-link-code" style="display:block;font-size:11px;color:var(--muted);margin-bottom:4px">Codul din joc (6 cifre)</label>
+        <input id="game-link-code" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code" class="filter-select" style="letter-spacing:4px;font-size:18px;width:120px"></div>
+      <button type="submit">Leagă contul</button>
+    </form>
+    <p id="game-link-msg" class="muted" style="margin:10px 0 0" hidden></p>
+  </div>
+</section>
 <section class="panel" id="streamer-panel" style="margin-top:20px;border-color:#3ddc84" hidden>
   <div class="head"><h2>🎥 Panou Streamer</h2><span>Codul tău de referal</span></div>
   <div style="padding:0 0 4px">
@@ -203,6 +221,45 @@ async function loadProfileExtra() {
   }
 }
 
+// Legarea contului de personajul din joc (/leagacont) — aceeași rută ca pe
+// pagina VIP Shop (/api/cont/leaga-joc), acum și direct din Dashboard.
+let meCache = null;
+function renderGameLink(me) {
+  meCache = me;
+  document.getElementById('game-link-linked').hidden = !me.gameLinked;
+  document.getElementById('game-link-unlinked').hidden = !!me.gameLinked;
+  document.getElementById('game-link-name').textContent = me.gameName || 'necunoscut';
+  document.getElementById('game-link-status').textContent = me.gameLinked ? 'legat' : 'nelegat';
+  document.getElementById('game-link-panel').hidden = false;
+}
+document.getElementById('game-link-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const msg = document.getElementById('game-link-msg');
+  const code = document.getElementById('game-link-code').value.trim();
+  msg.hidden = false;
+  if (!/^\d{6}$/.test(code)) { msg.textContent = 'Codul trebuie să aibă 6 cifre.'; return; }
+  msg.textContent = 'Se verifică…';
+  try {
+    const res = await apiFetch('/api/cont/leaga-joc', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code }) });
+    const d = await res.json();
+    if (!res.ok) { msg.textContent = d.error || 'Cod invalid.'; return; }
+    msg.hidden = true;
+    document.getElementById('game-link-code').value = '';
+    renderGameLink({ ...meCache, gameLinked: true, gameName: d.name });
+    if (!document.getElementById('streamer-panel').hidden) loadStreamerIngameLog();
+  } catch { msg.textContent = 'Eroare de rețea.'; }
+});
+document.getElementById('game-unlink').addEventListener('click', async (e) => {
+  e.preventDefault();
+  if (!confirm('Sigur dezlegi contul de personajul din joc?')) return;
+  try {
+    const res = await apiFetch('/api/cont/dezleaga-joc', { method: 'POST' });
+    if (!res.ok) throw new Error();
+    renderGameLink({ ...meCache, gameLinked: false, gameName: null });
+    if (!document.getElementById('streamer-panel').hidden) loadStreamerIngameLog();
+  } catch { alert('Nu am putut dezlega contul. Încearcă din nou.'); }
+});
+
 // Folosirile din joc ale comenzii "/referal COD" (27.09.2026) — citite LIVE
 // de pe serverul de joc (vezi /api/me/referal în backend), separat de lista
 // de mai sus (înregistrări pe SITE). "personaj" e numele din joc.
@@ -214,7 +271,7 @@ async function loadStreamerIngameLog() {
     if (!res.ok) throw new Error();
     const d = await res.json();
     if (!d.online) return void (el.innerHTML = note('Serverul de joc nu răspunde momentan — încearcă mai târziu.'));
-    if (d.needsLink) return void (el.innerHTML = note('Ca să vezi folosirile din joc, leagă-ți contul de personaj: scrie <b>/leagacont</b> în joc și pune codul pe pagina <a href="vip-shop.html">VIP Shop</a>.'));
+    if (d.needsLink) return void (el.innerHTML = note('Ca să vezi folosirile din joc, leagă-ți contul de personaj: folosește caseta „Contul din joc” de mai sus.'));
     if (d.forbidden) return void (el.innerHTML = note('Personajul legat de contul tău nu e streamerul acestui cod pe server. Leagă personajul corect prin /leagacont sau anunță un admin.'));
     if (d.notFound) return void (el.innerHTML = note('Codul tău nu există încă pe serverul de joc. Anunță un admin.'));
     const stats = [['Total', d.total], ['Azi', d.azi], ['7 zile', d.ultimele7Zile], ['30 zile', d.ultimele30Zile]]
@@ -290,6 +347,7 @@ async function loadStreamerIngameLog() {
     // login-ul ăla). Codul e alocat de admin din admin-utilizatori.html.
     // me.referrals (listă nume + dată) vine doar pentru conturile streamer —
     // vezi /api/me în backend.
+    renderGameLink(me);
     if (me.dbRole === 'streamer' && me.referralCode) {
       document.getElementById('streamer-code').textContent = me.referralCode;
       document.getElementById('streamer-count').textContent = me.referralCount ?? 0;

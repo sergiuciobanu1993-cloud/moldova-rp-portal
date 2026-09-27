@@ -2341,6 +2341,7 @@ app.get("/api/me", auth, asyncRoute(async (req, res) => {
   const { rows } = await pool.query(
     `SELECT u.id,u.username,u.email,r.name db_role,(u.password_hash IS NOT NULL) has_password,
             u.discord_id, u.discord_username, u.discord_avatar, u.referral_code,
+            (u.game_identifier IS NOT NULL) game_linked, u.game_identifier_name,
             (SELECT COUNT(*)::int FROM users ref WHERE ref.referred_by_user_id=u.id) referral_count,
             p.id player_id,p.game_id,p.display_name,p.playtime_minutes,p.status,
             f.id faction_id, f.name faction_name, fr.id rank_id, fr.name rank_name
@@ -2384,6 +2385,7 @@ app.get("/api/me", auth, asyncRoute(async (req, res) => {
   res.json({
     ...row, role: req.user.role, dbRole: row.db_role, hasPassword: row.has_password,
     referralCode: row.referral_code, referralCount: row.referral_count, referrals,
+    gameLinked: row.game_linked, gameName: row.game_identifier_name,
   });
 }));
 

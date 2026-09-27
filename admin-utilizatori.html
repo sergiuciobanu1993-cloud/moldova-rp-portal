@@ -24,13 +24,18 @@
 
 <section class="tablebox" style="margin-top:20px">
   <div class="title">
-    <h2>Jurnal folosiri „/referal COD" din joc</h2>
-    <span class="muted">orice cod, toți jucătorii</span>
+    <h2>Coduri de referal din joc („/referal COD")</h2>
+    <span class="muted">toate codurile, live de pe server</span>
   </div>
-  <table><thead><tr><th>JUCĂTOR (din joc)</th><th>COD FOLOSIT</th><th>CÂND</th></tr></thead>
-  <tbody id="referral-log-body"><tr><td colspan="3">Se încarcă…</td></tr></tbody></table>
+  <table><thead><tr><th>COD</th><th>STREAMER</th><th>TOTAL</th><th>AZI</th><th>7 ZILE</th><th>30 ZILE</th><th>ULTIMA FOLOSIRE</th><th></th></tr></thead>
+  <tbody id="referal-codes-body"><tr><td colspan="8">Se încarcă…</td></tr></tbody></table>
+  <div id="referal-detail" hidden style="margin:0 22px 16px">
+    <h3 id="referal-detail-title" style="margin:16px 0 8px"></h3>
+    <table><thead><tr><th>PERSONAJ</th><th>CÂND</th><th>ORE JUCATE</th><th>PLĂTIT</th><th>ACELAȘI PC</th></tr></thead>
+    <tbody id="referal-detail-body"></tbody></table>
+  </div>
   <p class="muted" style="margin:12px 22px 16px;font-size:11px">
-    Citit live direct de pe serverul de joc (comanda „/referal COD"), nu e stocat nimic din asta pe site.
+    Citit live de pe serverul de joc (comanda „/referal COD"), nu e stocat nimic din asta pe site.
   </p>
 </section>
 
@@ -248,31 +253,70 @@ async function loadUsers(canEdit, me) {
   }
 }
 
-// Jurnalul „/referal COD" din joc (27.09.2026) — citit live din
-// moldovarp-api, la fel ca restul jurnalelor de pe site (vezi /api/admin/vip-shop/log) —
-// nimic din asta nu e stocat pe site, deci un refresh de pagină arată mereu
-// starea reală curentă.
+// Codurile „/referal COD" din joc (27.09.2026) — citite live din moldovarp-api
+// (rutele /referal și /referal/<COD> ale serverului), nimic stocat pe site.
+function fmtDateTime(ms) {
+  return ms ? new Date(ms).toLocaleString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+}
+const orDash = v => (v ?? '—');
+
 async function loadReferralLog() {
-  const tbody = document.getElementById('referral-log-body');
+  const tbody = document.getElementById('referal-codes-body');
   try {
-    const res = await apiFetch('/api/admin/referrals/log');
+    const res = await apiFetch('/api/admin/referal');
     if (!res.ok) throw new Error();
     const data = await res.json();
     if (!data.online) {
-      tbody.innerHTML = '<tr><td colspan="3">Serverul de joc nu răspunde momentan — încearcă mai târziu.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8">Serverul de joc nu răspunde momentan — încearcă mai târziu.</td></tr>';
       return;
     }
-    const log = data.log || [];
-    tbody.innerHTML = log.length
-      ? log.map(e => `
+    const coduri = data.coduri || [];
+    tbody.innerHTML = coduri.length
+      ? coduri.map(c => `
         <tr>
-          <td>${escapeHtmlAttr(e.playerName || e.identifier || '?')}</td>
-          <td><span class="pill info">${escapeHtmlAttr(e.code || '—')}</span></td>
-          <td>${fmtDate(e.usedAt)}</td>
+          <td><span class="pill info">${escapeHtmlAttr(c.cod)}</span>${c.activ === false ? ' <small class="muted">(inactiv)</small>' : ''}${c.nivel != null ? ` <small class="muted">nivel ${escapeHtmlAttr(c.nivel)}</small>` : ''}</td>
+          <td>${escapeHtmlAttr(orDash(c.nume))}</td>
+          <td><b>${escapeHtmlAttr(orDash(c.total))}</b></td>
+          <td>${escapeHtmlAttr(orDash(c.azi))}</td>
+          <td>${escapeHtmlAttr(orDash(c.ultimele7Zile))}</td>
+          <td>${escapeHtmlAttr(orDash(c.ultimele30Zile))}</td>
+          <td>${fmtDateTime(c.ultimaFolosire)}</td>
+          <td><div class="rowactions"><button data-referal-cod="${escapeHtmlAttr(c.cod)}">Folosiri</button></div></td>
         </tr>`).join('')
-      : '<tr><td colspan="3">Comanda „/referal" nu a fost folosită încă.</td></tr>';
+      : '<tr><td colspan="8">Nu există încă niciun cod de referal pe server.</td></tr>';
+    tbody.querySelectorAll('[data-referal-cod]').forEach(btn =>
+      btn.addEventListener('click', () => loadReferalDetail(btn.dataset.referalCod)));
   } catch {
-    tbody.innerHTML = '<tr><td colspan="3">Nu am putut încărca jurnalul din joc.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8">Nu am putut încărca codurile din joc.</td></tr>';
+  }
+}
+
+async function loadReferalDetail(cod) {
+  const box = document.getElementById('referal-detail');
+  const tbody = document.getElementById('referal-detail-body');
+  document.getElementById('referal-detail-title').textContent = `Ultimele folosiri ale codului ${cod}`;
+  tbody.innerHTML = '<tr><td colspan="5">Se încarcă…</td></tr>';
+  box.hidden = false;
+  try {
+    const res = await apiFetch(`/api/admin/referal/${encodeURIComponent(cod)}`);
+    if (!res.ok) throw new Error();
+    const d = await res.json();
+    if (!d.online) return void (tbody.innerHTML = '<tr><td colspan="5">Serverul de joc nu răspunde momentan.</td></tr>');
+    if (d.notFound) return void (tbody.innerHTML = '<tr><td colspan="5">Codul nu mai există pe server.</td></tr>');
+    const yesNo = v => v === true ? 'da' : v === false ? 'nu' : escapeHtmlAttr(orDash(v));
+    const list = d.folosiri || [];
+    tbody.innerHTML = list.length
+      ? list.map(f => `
+        <tr>
+          <td>${escapeHtmlAttr(orDash(f.personaj))}</td>
+          <td>${fmtDateTime(f.data)}</td>
+          <td>${escapeHtmlAttr(orDash(f.ore))}</td>
+          <td>${yesNo(f.platit)}</td>
+          <td>${f.acelasiCalculator === true ? '<span class="pill warn">da</span>' : yesNo(f.acelasiCalculator)}</td>
+        </tr>`).join('')
+      : '<tr><td colspan="5">Codul nu a fost folosit încă.</td></tr>';
+  } catch {
+    tbody.innerHTML = '<tr><td colspan="5">Nu am putut încărca folosirile.</td></tr>';
   }
 }
 

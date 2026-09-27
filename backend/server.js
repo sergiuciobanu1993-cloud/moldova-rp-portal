@@ -890,31 +890,30 @@ async function fetchCaseHistory(identifier, limit) {
   }
 }
 
-// Jurnalul folosirilor comenzii "/referal COD" DIN JOC (27.09.2026, cerut
-// explicit de Sergiu — comanda deja există și dă recompense în joc, dar
-// site-ul nu știa nimic despre asta). Exact același model ca
-// fetchCaseOpeningsLog/fetchCaseHistory de mai sus — citit LIVE dintr-un tabel
-// nou pe serverul de joc printr-o rută nouă în moldovarp-api
-// ("/referrals/log", NU există încă acolo — trebuie adăugată acolo separat,
-// vezi discuția din chat), fără să stocăm nimic din asta pe site. `code`
-// opțional filtrează la un singur cod (folosit de /api/me/referral-log, ca un
-// streamer să-și vadă DOAR propriile folosiri) — fără el, întoarce tot
-// jurnalul (folosit de /api/admin/referrals/log).
-async function fetchReferralLog({ code, limit } = {}) {
+// Codurile de referal din JOC (27.09.2026). Comanda "/referal COD" și
+// evidența ei sunt deja pe serverul de joc (resursa vx_referal, rutele
+// "/referal" și "/referal/<COD>" din moldovarp-api, vezi SITE_INTEGRARE.md
+// de la echipa serverului). Site-ul doar le citește LIVE, nu stochează nimic.
+// Câmpurile noi (nivel, baniStreamer, inAsteptare...) sunt doar adăugiri,
+// deci trimitem răspunsul mai departe așa cum vine.
+const REFERAL_CODE_RE = /^[A-Za-z0-9_-]{1,40}$/;
+async function fetchReferal(path, params = {}) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8000);
   try {
-    const qs = new URLSearchParams({ limit: String(limit || 50) });
-    if (code) qs.set("code", code);
-    const r = await fetch(`http://${FIVEM_ADDRESS}/moldovarp-api/referrals/log?${qs.toString()}`, {
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) if (v != null && v !== "") qs.set(k, String(v));
+    const q = qs.toString();
+    const r = await fetch(`http://${FIVEM_ADDRESS}/moldovarp-api${path}${q ? "?" + q : ""}`, {
       headers: { "x-api-key": FIVEM_API_SECRET },
       signal: controller.signal,
     });
+    if (r.status === 403) return { online: true, status: 403, body: null };
+    if (r.status === 404) return { online: true, status: 404, body: null };
     if (!r.ok) throw new Error(`moldovarp-api HTTP ${r.status}`);
-    const body = await r.json();
-    return { online: true, log: body.log || [] };
+    return { online: true, status: 200, body: await r.json() };
   } catch {
-    return { online: false, log: [] };
+    return { online: false, status: 0, body: null };
   } finally {
     clearTimeout(timeout);
   }
@@ -2711,27 +2710,43 @@ app.put("/api/admin/users/:id/referral-code", auth, requireRole(...ADMIN_ROLES),
   }
 }));
 
-// Jurnalul folosirilor comenzii "/referal COD" din joc, pentru orice cod —
-// instrument de staff (audit), la fel ca /api/vip-shop/log de mai sus, deci
-// aceleași reguli: ADMIN_ROLES, live din moldovarp-api, nimic stocat pe site.
-app.get("/api/admin/referrals/log", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
-  const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
-  const result = await fetchReferralLog({ limit });
-  res.json({ online: result.online, log: result.log });
+// Staff: toate codurile de referal din joc, cu totaluri (GET /referal).
+app.get("/api/admin/referal", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+  const result = await fetchReferal("/referal");
+  const body = result.body || {};
+  res.json({ online: result.online, generatLa: body.generatLa || null, coduri: Array.isArray(body.coduri) ? body.coduri : [] });
 }));
 
-// Jurnalul folosirilor din joc DOAR pentru codul propriu al contului logat —
-// vizibil oricărui cont cu un referral_code setat (în practică, rangul
-// Streamer), nu doar ADMIN_ROLES ca ruta de mai sus. Dacă acest cont n-are
-// niciun cod, întoarcem direct un jurnal gol, fără să mai deranjăm serverul
-// de joc degeaba.
-app.get("/api/me/referral-log", auth, asyncRoute(async (req, res) => {
-  const { rows } = await pool.query("SELECT referral_code FROM users WHERE id=$1", [req.user.sub]);
+// Staff: un singur cod, cu ultimele folosiri (GET /referal/<COD>, max 50).
+app.get("/api/admin/referal/:cod", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+  const cod = String(req.params.cod || "");
+  if (!REFERAL_CODE_RE.test(cod)) return res.status(400).json({ error: "Cod invalid." });
+  const result = await fetchReferal(`/referal/${encodeURIComponent(cod)}`, { limit: 50 });
+  if (result.status === 404) return res.json({ online: true, notFound: true, folosiri: [] });
+  const body = result.body || {};
+  res.json({ online: result.online, ...body, folosiri: Array.isArray(body.folosiri) ? body.folosiri : [] });
+}));
+
+// Streamer: DOAR codul propriu, în vederea de streamer a serverului
+// (?identifier=<charN:licență>, din contul legat prin /leagacont). Serverul
+// răspunde 403 dacă personajul nu e al streamerului acelui cod.
+app.get("/api/me/referal", auth, asyncRoute(async (req, res) => {
+  const { rows } = await pool.query("SELECT referral_code, game_identifier FROM users WHERE id=$1", [req.user.sub]);
   const code = rows[0]?.referral_code;
-  if (!code) return res.json({ online: true, log: [] });
-  const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
-  const result = await fetchReferralLog({ code, limit });
-  res.json({ online: result.online, log: result.log });
+  const identifier = rows[0]?.game_identifier;
+  if (!code) return res.json({ online: true, noCode: true, folosiri: [] });
+  if (!identifier) return res.json({ online: true, needsLink: true, folosiri: [] });
+  const result = await fetchReferal(`/referal/${encodeURIComponent(code)}`, { identifier, limit: 50 });
+  if (result.status === 403) return res.json({ online: true, forbidden: true, folosiri: [] });
+  if (result.status === 404) return res.json({ online: true, notFound: true, folosiri: [] });
+  const b = result.body || {};
+  res.json({
+    online: result.online,
+    total: b.total ?? null, azi: b.azi ?? null,
+    ultimele7Zile: b.ultimele7Zile ?? null, ultimele30Zile: b.ultimele30Zile ?? null,
+    nivel: b.nivel ?? null,
+    folosiri: (Array.isArray(b.folosiri) ? b.folosiri : []).map(f => ({ personaj: f.personaj, data: f.data, ore: f.ore })),
+  });
 }));
 
 app.put("/api/admin/users/:id/role", auth, requireRole("owner"), asyncRoute(async (req, res) => {

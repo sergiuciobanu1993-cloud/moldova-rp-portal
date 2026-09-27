@@ -203,27 +203,29 @@ async function loadProfileExtra() {
   }
 }
 
-// Jurnalul folosirilor din joc ale comenzii "/referal COD" (27.09.2026) —
-// citit LIVE de pe serverul de joc (vezi /api/me/referral-log în backend),
-// separat de lista de mai sus (înregistrări pe SITE) ca să nu amestecăm cele
-// două surse — un jucător poate folosi comanda din joc fără să aibă neapărat
-// cont pe site, deci "playerName" de aici e numele din joc, nu un username.
+// Folosirile din joc ale comenzii "/referal COD" (27.09.2026) — citite LIVE
+// de pe serverul de joc (vezi /api/me/referal în backend), separat de lista
+// de mai sus (înregistrări pe SITE). "personaj" e numele din joc.
 async function loadStreamerIngameLog() {
   const el = document.getElementById('streamer-ingame-log');
+  const note = t => `<p class="muted" style="margin:0">${t}</p>`;
   try {
-    const res = await apiFetch('/api/me/referral-log');
+    const res = await apiFetch('/api/me/referal');
     if (!res.ok) throw new Error();
-    const data = await res.json();
-    if (!data.online) {
-      el.innerHTML = '<p class="muted" style="margin:0">Serverul de joc nu răspunde momentan — încearcă mai târziu.</p>';
-      return;
-    }
-    const log = data.log || [];
-    el.innerHTML = log.length
-      ? log.map(e => `<div class="msg"><b>${escapeHtml(e.playerName || e.identifier || '?')}</b><small>${fmtDate(e.usedAt)}</small></div>`).join('')
-      : '<p class="muted" style="margin:0">Încă nimeni — codul nu a fost folosit în joc.</p>';
+    const d = await res.json();
+    if (!d.online) return void (el.innerHTML = note('Serverul de joc nu răspunde momentan — încearcă mai târziu.'));
+    if (d.needsLink) return void (el.innerHTML = note('Ca să vezi folosirile din joc, leagă-ți contul de personaj: scrie <b>/leagacont</b> în joc și pune codul pe pagina <a href="vip-shop.html">VIP Shop</a>.'));
+    if (d.forbidden) return void (el.innerHTML = note('Personajul legat de contul tău nu e streamerul acestui cod pe server. Leagă personajul corect prin /leagacont sau anunță un admin.'));
+    if (d.notFound) return void (el.innerHTML = note('Codul tău nu există încă pe serverul de joc. Anunță un admin.'));
+    const stats = [['Total', d.total], ['Azi', d.azi], ['7 zile', d.ultimele7Zile], ['30 zile', d.ultimele30Zile]]
+      .filter(([, v]) => v != null)
+      .map(([k, v]) => `<span style="margin-right:14px"><small class="muted">${k}</small> <b>${v}</b></span>`).join('');
+    const list = d.folosiri || [];
+    el.innerHTML = (stats ? `<div style="margin-bottom:10px">${stats}</div>` : '') + (list.length
+      ? list.map(f => `<div class="msg"><b>${escapeHtml(f.personaj || '?')}</b><small>${fmtDate(f.data)}${f.ore != null ? ` · ${escapeHtml(String(f.ore))} ore jucate` : ''}</small></div>`).join('')
+      : note('Încă nimeni — codul nu a fost folosit în joc.'));
   } catch {
-    el.innerHTML = '<p class="muted" style="margin:0">Nu am putut încărca jurnalul din joc.</p>';
+    el.innerHTML = note('Nu am putut încărca folosirile din joc.');
   }
 }
 

@@ -2336,9 +2336,25 @@ app.get("/api/me", auth, asyncRoute(async (req, res) => {
   // arate panoul de streamer DOAR pe baza rangului real din baza de date
   // (dbRole), la fel ca panoul de "setează parolă" de mai sus — un login prin
   // Discord tot vede corect aceste cifre, chiar dacă sesiunea e "player".
+  //
+  // referrals (27.09.2026, cerut explicit de Sergiu): streamerul vrea să
+  // vadă NU doar un număr, ci exact CINE s-a înregistrat cu codul lui — deci
+  // interogăm separat lista, dar DOAR pentru conturile cu rang streamer (nu
+  // are rost să facem încă un query la fiecare /api/me pentru restul
+  // conturilor, care n-au niciodată cod). Limită 200 — suficient pentru un
+  // streamer, și evită un răspuns nesfârșit dacă vreodată devine viral.
+  let referrals = [];
+  if (row.db_role === 'streamer') {
+    const { rows: refRows } = await pool.query(
+      `SELECT COALESCE(discord_username, username) AS name, created_at
+       FROM users WHERE referred_by_user_id=$1 ORDER BY created_at DESC LIMIT 200`,
+      [row.id]
+    );
+    referrals = refRows;
+  }
   res.json({
     ...row, role: req.user.role, dbRole: row.db_role, hasPassword: row.has_password,
-    referralCode: row.referral_code, referralCount: row.referral_count,
+    referralCode: row.referral_code, referralCount: row.referral_count, referrals,
   });
 }));
 

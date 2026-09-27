@@ -42,6 +42,29 @@
     <p id="confirm-code-msg" class="muted" style="margin:10px 0 0" hidden></p>
   </div>
 </section>
+<section class="panel" id="streamer-panel" style="margin-top:20px;border-color:#3ddc84" hidden>
+  <div class="head"><h2>🎥 Panou Streamer</h2><span>Codul tău de referal</span></div>
+  <div style="padding:0 0 4px">
+    <p class="muted" style="margin:0 0 14px">
+      Trimite linkul tău mai jos oricui vrei să se înregistreze pe Moldova RP — de fiecare dată când cineva își
+      face cont folosind codul tău (din link sau introdus manual la înregistrare / conectare cu Discord),
+      contul lui rămâne legat de tine, chiar dacă îți schimbi codul mai târziu.
+    </p>
+    <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px">
+      <div><small style="display:block;font-size:11px;color:var(--muted);margin-bottom:4px">CODUL TĂU</small>
+        <strong id="streamer-code" style="font-size:20px;letter-spacing:1px">—</strong></div>
+      <div><small style="display:block;font-size:11px;color:var(--muted);margin-bottom:4px">JUCĂTORI ÎNREGISTRAȚI CU CODUL TĂU</small>
+        <strong id="streamer-count" style="font-size:20px">—</strong></div>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <input id="streamer-link" readonly class="filter-select" style="flex:1;min-width:240px" onclick="this.select()">
+      <button type="button" id="streamer-copy-btn">Copiază linkul</button>
+    </div>
+    <p id="streamer-copy-msg" class="muted" style="margin:8px 0 0;font-size:11px" hidden></p>
+    <small style="color:var(--muted);display:block;margin:18px 0 8px">CINE S-A ÎNREGISTRAT CU CODUL TĂU</small>
+    <div id="streamer-referrals" class="thread"></div>
+  </div>
+</section>
 <section class="panel" id="profile-extra" style="margin-top:20px">
   <div class="head"><h2>Profilul meu</h2><span id="profile-extra-status" class="muted"></span></div>
   <div id="profile-extra-body"><p class="muted" style="margin:0">Se încarcă…</p></div>
@@ -233,6 +256,23 @@ async function loadProfileExtra() {
       document.getElementById('set-password-panel').hidden = false;
     }
 
+    // Panou Streamer (27.09.2026) — vizibil doar rangului REAL "streamer"
+    // (me.dbRole, la fel ca panoul de parolă de mai sus — un streamer logat
+    // prin Discord tot îl vede, chiar dacă me.role rămâne "player" pentru
+    // login-ul ăla). Codul e alocat de admin din admin-utilizatori.html.
+    // me.referrals (listă nume + dată) vine doar pentru conturile streamer —
+    // vezi /api/me în backend.
+    if (me.dbRole === 'streamer' && me.referralCode) {
+      document.getElementById('streamer-code').textContent = me.referralCode;
+      document.getElementById('streamer-count').textContent = me.referralCount ?? 0;
+      document.getElementById('streamer-link').value = `${window.location.origin}/register.html?ref=${encodeURIComponent(me.referralCode)}`;
+      const referrals = me.referrals || [];
+      document.getElementById('streamer-referrals').innerHTML = referrals.length
+        ? referrals.map(r => `<div class="msg"><b>${escapeHtml(r.name)}</b><small>${fmtDate(r.created_at)}</small></div>`).join('')
+        : '<p class="muted" style="margin:0">Încă nimeni — trimite linkul de mai sus!</p>';
+      document.getElementById('streamer-panel').hidden = false;
+    }
+
     loadProfileExtra();
   } catch (err) {
     // apiFetch already clears the session and redirects on a genuine 401.
@@ -402,6 +442,19 @@ document.getElementById('resend-code-btn').addEventListener('click', async () =>
     msgEl.textContent = `Cod nou trimis pe ${pendingSetPassword.email}.`;
   } catch (err) {
     msgEl.textContent = err.message || 'Eroare necunoscută.';
+  }
+});
+
+document.getElementById('streamer-copy-btn').addEventListener('click', async () => {
+  const input = document.getElementById('streamer-link');
+  const msgEl = document.getElementById('streamer-copy-msg');
+  msgEl.hidden = false;
+  try {
+    await navigator.clipboard.writeText(input.value);
+    msgEl.textContent = 'Copiat!';
+  } catch {
+    input.select();
+    msgEl.textContent = 'Nu am putut copia automat — linkul e selectat, apasă Ctrl+C.';
   }
 });
 

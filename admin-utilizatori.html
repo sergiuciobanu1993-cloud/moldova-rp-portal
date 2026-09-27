@@ -12,20 +12,22 @@
     <h2>Toți utilizatorii înregistrați</h2>
     <span class="muted" id="count-note"></span>
   </div>
-  <table><thead><tr><th>UTILIZATOR</th><th>DISCORD</th><th>PAROLĂ</th><th>RANG</th><th>ÎNREGISTRAT</th><th>SCHIMBĂ RANG</th><th>FACȚIUNE</th><th>ACȚIUNI</th></tr></thead>
-  <tbody id="list-body"><tr><td colspan="8">Se încarcă…</td></tr></tbody></table>
+  <table><thead><tr><th>UTILIZATOR</th><th>DISCORD</th><th>PAROLĂ</th><th>RANG</th><th>ÎNREGISTRAT</th><th>SCHIMBĂ RANG</th><th>FACȚIUNE</th><th>COD REFERAL</th><th>ACȚIUNI</th></tr></thead>
+  <tbody id="list-body"><tr><td colspan="9">Se încarcă…</td></tr></tbody></table>
   <p class="muted" style="margin:12px 22px 16px;font-size:11px">
     Facțiunea de aici e cea de pe SITE (folosită de pagini precum MDT FIB, care se deblochează pentru membrii facțiunii „FIB")
-    — separată de jobul din joc, afișat pe pagina „Jucători".
+    — separată de jobul din joc, afișat pe pagina „Jucători".<br>
+    Codul de referal e vizibil contului respectiv pe Dashboard (dacă are rangul „Streamer") împreună cu numărul de jucători
+    înregistrați cu el — legătura se stabilește o singură dată, la înregistrare (formular sau Discord, prin link „?ref=COD").
   </p>
 </section>
 
 </main>
 <script src="auth-client.js"></script>
 <script>
-const ROLE_LABEL = { player: 'Jucător', moderator: 'Moderator', admin: 'Administrator', 'co-fondator': 'Co-fondator', owner: 'Fondator' };
-const ROLE_PILL = { player: 'off', moderator: 'info', admin: 'warn', 'co-fondator': 'on', owner: 'on' };
-const ROLES_ORDER = ['player', 'moderator', 'admin', 'co-fondator', 'owner'];
+const ROLE_LABEL = { player: 'Jucător', streamer: 'Streamer', moderator: 'Moderator', admin: 'Administrator', 'co-fondator': 'Co-fondator', owner: 'Fondator' };
+const ROLE_PILL = { player: 'off', streamer: 'info', moderator: 'info', admin: 'warn', 'co-fondator': 'on', owner: 'on' };
+const ROLES_ORDER = ['player', 'streamer', 'moderator', 'admin', 'co-fondator', 'owner'];
 
 function fmtDate(d) { return new Date(d).toLocaleDateString('ro-RO'); }
 
@@ -53,6 +55,26 @@ function factionSelectHtml(u) {
     <option value="">— fără facțiune —</option>
     ${siteFactions.map(f => `<option value="${f.id}" ${f.id === u.faction_id ? 'selected' : ''}>${f.name}</option>`).join('')}
   </select>`;
+}
+
+// Codul de referal e propriul cod al contului (afișat lui pe Dashboard dacă
+// are rangul Streamer), cu numărul curent de jucători înregistrați cu el
+// (referral_count, calculat de backend). Poate fi setat/schimbat de orice
+// admin/co-fondator/owner (endpoint ADMIN_ROLES, nu doar owner) — nu e o
+// schimbare de privilegii, doar o etichetă de tracking.
+function referralCodeHtml(u) {
+  const current = u.referral_code || '';
+  const countLabel = current
+    ? `<br><small style="color:var(--muted)">${u.referral_count ?? 0} înregistrați cu acest cod</small>`
+    : '';
+  return `<div class="rowactions" style="flex-wrap:wrap">
+    <input class="filter-select" style="width:110px" data-refcode-input="${u.id}" value="${escapeHtmlAttr(current)}" placeholder="ex: CULIOK">
+    <button data-refcode-for="${u.id}">Salvează</button>
+  </div>${countLabel}`;
+}
+
+function escapeHtmlAttr(s) {
+  return (s ?? '').toString().replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 }
 
 // Un cont de STAFF (orice rang peste jucător) fără parolă setată încă poate
@@ -103,8 +125,9 @@ async function loadUsers(canEdit, me) {
         <td>${fmtDate(u.created_at)}</td>
         <td>${canEdit ? roleSelectHtml(u.id, u.role) : '<span class="muted">doar fondatorul poate schimba</span>'}</td>
         <td>${factionSelectHtml(u)}</td>
+        <td>${referralCodeHtml(u)}</td>
         <td>${actionsHtml(u, u.id === me.id, canEdit)}</td>
-      </tr>`).join('') : '<tr><td colspan="8">Niciun utilizator încă.</td></tr>';
+      </tr>`).join('') : '<tr><td colspan="9">Niciun utilizator încă.</td></tr>';
 
     if (canEdit) {
       tbody.querySelectorAll('[data-role-for]').forEach(sel => {
@@ -150,6 +173,30 @@ async function loadUsers(canEdit, me) {
       });
     });
 
+    // Codul de referal e disponibil oricărui admin/co-fondator/owner (nu doar
+    // fondator), la fel ca facțiunea de mai sus — vezi comentariul de la
+    // referralCodeHtml().
+    tbody.querySelectorAll('[data-refcode-for]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const userId = btn.dataset.refcodeFor;
+        const input = tbody.querySelector(`[data-refcode-input="${userId}"]`);
+        const referralCode = (input.value || '').trim();
+        btn.disabled = true;
+        input.disabled = true;
+        try {
+          const res = await apiFetch(`/api/admin/users/${userId}/referral-code`, {
+            method: 'PUT', body: JSON.stringify({ referralCode })
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || 'Salvarea a eșuat.');
+        } catch (err) {
+          alert(err.message || 'Nu am putut salva codul de referal. Încearcă din nou.');
+        } finally {
+          loadUsers(canEdit, me);
+        }
+      });
+    });
+
     tbody.querySelectorAll('[data-deactivate-for],[data-activate-for]').forEach(btn => {
       btn.addEventListener('click', async () => {
         const userId = btn.dataset.deactivateFor || btn.dataset.activateFor;
@@ -185,7 +232,7 @@ async function loadUsers(canEdit, me) {
       });
     });
   } catch {
-    tbody.innerHTML = '<tr><td colspan="8">Nu am putut încărca lista de utilizatori.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9">Nu am putut încărca lista de utilizatori.</td></tr>';
   }
 }
 

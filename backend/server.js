@@ -72,6 +72,23 @@ const ADMIN_ROLES = ["admin", "co-fondator", "owner"];
 // fără acordul proprietarului contului.
 const FOUNDER_ROLES = ["co-fondator", "owner"];
 
+// Coduri de referal (27.09.2026) — normalizăm mereu la MAJUSCULE, ca un cod
+// tastat sau lipit de pe orice tastatură ("culiok", "Culiok", "CULIOK") să se
+// potrivească la fel, fără să ținem o coloană separată case-insensitive.
+// Întoarce id-ul contului care deține codul, sau null dacă nu există unul
+// (o intrare nevalidă NU blochează niciodată înregistrarea — vezi apelurile
+// de mai jos, la /api/auth/register și /api/auth/discord/callback).
+function normalizeReferralCode(code) {
+  const cleaned = (code || "").toString().trim().toUpperCase();
+  return /^[A-Z0-9_]{3,32}$/.test(cleaned) ? cleaned : null;
+}
+async function resolveReferrerId(rawCode) {
+  const code = normalizeReferralCode(rawCode);
+  if (!code) return null;
+  const { rows } = await pool.query("SELECT id FROM users WHERE referral_code=$1", [code]);
+  return rows[0]?.id || null;
+}
+
 async function logAction(actorId, action, entityType, entityId, metadata, ip) {
   await pool.query(
     "INSERT INTO audit_logs(actor_id,action,entity_type,entity_id,metadata,ip) VALUES($1,$2,$3,$4,$5,$6)",
@@ -1932,16 +1949,20 @@ app.get("/api/admin/txadmin-url", auth, requireRole(...FOUNDER_ROLES), asyncRout
 }));
 
 app.post("/api/auth/register", asyncRoute(async (req, res) => {
-  const { username, email, password } = req.body;
+  const { username, email, password, referralCode } = req.body;
   if (!username || !email || !password || password.length < 8)
     return res.status(400).json({ error: "Username, email și parolă de minimum 8 caractere sunt obligatorii." });
 
   const role = await pool.query("SELECT id FROM roles WHERE name='player'");
   const hash = await bcrypt.hash(password, 12);
+  // Cod de referal opțional (ex: link "register.html?ref=CULIOK" distribuit
+  // de un streamer) — un cod inexistent/greșit e ignorat silențios, exact ca
+  // la reported_player din tichete: NU blocăm crearea contului pentru asta.
+  const referredBy = await resolveReferrerId(referralCode);
   try {
     const { rows } = await pool.query(
-      "INSERT INTO users(username,email,password_hash,role_id) VALUES($1,$2,$3,$4) RETURNING id,username,email",
-      [username.trim(), email.trim().toLowerCase(), hash, role.rows[0].id]
+      "INSERT INTO users(username,email,password_hash,role_id,referred_by_user_id) VALUES($1,$2,$3,$4,$5) RETURNING id,username,email",
+      [username.trim(), email.trim().toLowerCase(), hash, role.rows[0].id, referredBy]
     );
     res.status(201).json({ user: rows[0] });
   } catch (e) {
@@ -2183,6 +2204,15 @@ app.get("/api/auth/discord", (req, res) => {
     response_type: "code",
     scope: "identify"
   });
+  // Cod de referal (27.09.2026) — register.html citește "?ref=COD" din URL-ul
+  // link-ului distribuit de streamer și îl adaugă și la butonul "Conectare cu
+  // Discord" (vezi acolo), ca să funcționeze indiferent cu ce metodă își
+  // creează cineva contul. "state" e parametrul standard OAuth pentru date
+  // arbitrare care fac dus-întors prin Discord — nu era folosit pentru CSRF
+  // aici înainte (callback-ul de mai jos nu-l verifica), deci refolosirea lui
+  // nu slăbește nimic. Validat/normalizat abia la callback (resolveReferrerId).
+  const ref = normalizeReferralCode(req.query.ref);
+  if (ref) params.set("state", ref);
   res.redirect(`https://discord.com/api/oauth2/authorize?${params.toString()}`);
 });
 
@@ -2225,13 +2255,17 @@ app.get("/api/auth/discord/callback", asyncRoute(async (req, res) => {
       );
       user = updated.rows[0];
     } else {
+      // "state" duce codul de referal (dacă a fost în link, vezi
+      // /api/auth/discord mai sus) — contează DOAR la crearea unui cont nou,
+      // niciodată la un cont Discord deja existent care doar se reconectează.
+      const referredBy = await resolveReferrerId(req.query.state);
       let attemptUsername = baseUsername;
       for (let attempt = 0; attempt < 5; attempt++) {
         try {
           const inserted = await pool.query(
-            `INSERT INTO users(username, role_id, discord_id, discord_username, discord_avatar)
-             VALUES($1,$2,$3,$4,$5) RETURNING *`,
-            [attemptUsername, roleRes.rows[0].id, profile.id, profile.username, profile.avatar]
+            `INSERT INTO users(username, role_id, discord_id, discord_username, discord_avatar, referred_by_user_id)
+             VALUES($1,$2,$3,$4,$5,$6) RETURNING *`,
+            [attemptUsername, roleRes.rows[0].id, profile.id, profile.username, profile.avatar, referredBy]
           );
           user = inserted.rows[0];
           break;
@@ -2277,7 +2311,8 @@ app.get("/api/auth/discord/callback", asyncRoute(async (req, res) => {
 app.get("/api/me", auth, asyncRoute(async (req, res) => {
   const { rows } = await pool.query(
     `SELECT u.id,u.username,u.email,r.name db_role,(u.password_hash IS NOT NULL) has_password,
-            u.discord_id, u.discord_username, u.discord_avatar,
+            u.discord_id, u.discord_username, u.discord_avatar, u.referral_code,
+            (SELECT COUNT(*)::int FROM users ref WHERE ref.referred_by_user_id=u.id) referral_count,
             p.id player_id,p.game_id,p.display_name,p.playtime_minutes,p.status,
             f.id faction_id, f.name faction_name, fr.id rank_id, fr.name rank_name
      FROM users u JOIN roles r ON r.id=u.role_id
@@ -2297,7 +2332,14 @@ app.get("/api/me", auth, asyncRoute(async (req, res) => {
   // "acest cont e de admin, dar sesiunea asta (prin Discord) nu are voie să
   // acționeze ca admin" și să arate un buton de "Setează parolă" în loc să
   // pretindă pur și simplu că userul n-are rang.
-  res.json({ ...row, role: req.user.role, dbRole: row.db_role, hasPassword: row.has_password });
+  // referralCode/referralCount (27.09.2026): folosite de Dashboard ca să
+  // arate panoul de streamer DOAR pe baza rangului real din baza de date
+  // (dbRole), la fel ca panoul de "setează parolă" de mai sus — un login prin
+  // Discord tot vede corect aceste cifre, chiar dacă sesiunea e "player".
+  res.json({
+    ...row, role: req.user.role, dbRole: row.db_role, hasPassword: row.has_password,
+    referralCode: row.referral_code, referralCount: row.referral_count,
+  });
 }));
 
 app.get("/api/regulations", asyncRoute(async (_req, res) => {
@@ -2573,7 +2615,7 @@ app.get("/api/admin/audit-logs", auth, requireRole(...ADMIN_ROLES), asyncRoute(a
 // la owner/admin fără acordul proprietarului contului.
 // ---------------------------------------------------------------------------
 
-const VALID_ROLES = ["player", "moderator", "admin", "co-fondator", "owner"];
+const VALID_ROLES = ["player", "moderator", "admin", "co-fondator", "owner", "streamer"];
 
 // player_id/faction_id/faction_name adăugate (17.09.2026) ca admin-utilizatori.html
 // să poată asigna direct o facțiune de site (ex: FIB, pentru acces la MDT) —
@@ -2584,6 +2626,8 @@ app.get("/api/admin/users", auth, requireRole(...ADMIN_ROLES), asyncRoute(async 
   const { rows } = await pool.query(
     `SELECT u.id, u.username, u.email, u.discord_id, u.discord_username, u.discord_avatar,
             u.is_active, u.created_at, r.name AS role, (u.password_hash IS NOT NULL) AS has_password,
+            u.referral_code,
+            (SELECT COUNT(*)::int FROM users ref WHERE ref.referred_by_user_id=u.id) AS referral_count,
             p.id AS player_id, f.id AS faction_id, f.name AS faction_name
      FROM users u
      JOIN roles r ON r.id = u.role_id
@@ -2593,6 +2637,32 @@ app.get("/api/admin/users", auth, requireRole(...ADMIN_ROLES), asyncRoute(async 
      ORDER BY u.created_at DESC`
   );
   res.json(rows);
+}));
+
+// Cod de referal (27.09.2026) — separat de schimbarea rangului (owner-only,
+// mai sus): setarea unui cod de referal nu e o escaladare de privilegii, doar
+// o etichetă de marketing, deci deschisă oricărui ADMIN_ROLES ca restul
+// operațiunilor curente de aici (dezactivare cont, atribuire facțiune etc).
+// Body gol/lipsă ȘTERGE codul (streamerul nu mai are unul activ).
+app.put("/api/admin/users/:id/referral-code", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+  const raw = (req.body.referralCode ?? "").toString().trim();
+  const code = raw ? normalizeReferralCode(raw) : null;
+  if (raw && !code)
+    return res.status(400).json({ error: "Cod invalid — doar litere, cifre și underscore, 3-32 caractere." });
+
+  try {
+    const { rows } = await pool.query(
+      `UPDATE users SET referral_code=$1, updated_at=NOW() WHERE id=$2
+       RETURNING id, username, referral_code`,
+      [code, req.params.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: "Utilizatorul nu există." });
+    await logAction(req.user.sub, "user.referral_code_change", "user", req.params.id, { code }, req.ip);
+    res.json(rows[0]);
+  } catch (e) {
+    if (e.code === "23505") return res.status(409).json({ error: "Acest cod e deja folosit de alt cont." });
+    throw e;
+  }
 }));
 
 app.put("/api/admin/users/:id/role", auth, requireRole("owner"), asyncRoute(async (req, res) => {

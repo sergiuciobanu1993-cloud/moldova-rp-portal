@@ -54,6 +54,20 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_password_expires TIMESTAMPTZ;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS game_identifier VARCHAR(80);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS game_identifier_name VARCHAR(64);
 
+-- Cod de referal pentru streameri/parteneri (27.09.2026, cerut explicit —
+-- Babazina, streamer, cod "CULIOK", trebuie să vadă câți jucători s-au
+-- înregistrat cu codul ei). referral_code e codul PROPRIU al unui cont
+-- (afișat lui pe Dashboard dacă are rangul "streamer"); referred_by_user_id
+-- e legătura PERMANENTĂ către cine l-a adus pe jucătorul nou, stabilită o
+-- singură dată la înregistrare (formular normal SAU Discord, ambele suportă
+-- link-ul "?ref=COD" — vezi register.html și /api/auth/discord). Rămâne
+-- legat de acel cont chiar dacă streamerul își schimbă mai târziu codul —
+-- contorul afișat pe Dashboard (vezi /api/me) e un simplu COUNT(*) pe
+-- această coloană, nu o valoare separată care ar putea rămâne desincronizată.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_code VARCHAR(32) UNIQUE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS referred_by_user_id UUID REFERENCES users(id);
+CREATE INDEX IF NOT EXISTS idx_users_referred_by ON users(referred_by_user_id);
+
 CREATE TABLE IF NOT EXISTS players (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID UNIQUE REFERENCES users(id) ON DELETE CASCADE,
@@ -515,7 +529,8 @@ INSERT INTO roles(name, description) VALUES
 ('moderator', 'Moderator'),
 ('admin', 'Administrator'),
 ('co-fondator', 'Co-fondator'),
-('owner', 'Proprietar')
+('owner', 'Proprietar'),
+('streamer', 'Streamer / partener — cod de referal propriu')
 ON CONFLICT (name) DO NOTHING;
 
 INSERT INTO factions(name, type, description) VALUES

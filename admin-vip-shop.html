@@ -38,7 +38,8 @@
 
 <p class="vip-intro">Aici adaugi, editezi sau ștergi cutiile și recompensele din <a href="vip-shop.html">VIP Shop</a> — direct de pe site, fără să mai fie nevoie de un update pe serverul de joc de fiecare dată. Șansa fiecărei recompense se calculează automat din „pondere" — valorile nu trebuie să însumeze 100, se normalizează singure (ex: dacă o recompensă are pondere 20 și toate din cutie însumează 1000, șansa ei afișată jucătorilor va fi 2%). O cutie dezactivată dispare din VIP Shop pentru jucători, dar rămâne salvată aici, gata de reactivat.</p>
 
-<div class="title" style="padding:0 0 16px"><h2>Cutii</h2><button id="new-case-btn">+ Cutie nouă</button></div>
+<div class="title" style="padding:0 0 16px"><h2>Cutii</h2><div style="display:flex;gap:8px;flex-wrap:wrap"><button id="balance-btn" type="button" style="background:transparent;color:var(--text);border:1px solid var(--line);box-shadow:none">⚖ Balansează Rare + Epic</button><button id="new-case-btn">+ Cutie nouă</button></div></div>
+<p id="balance-msg" class="muted" style="margin:-6px 0 14px" hidden></p>
 <div id="cases-list"><p class="muted">Se încarcă…</p></div>
 
 <!-- Modal cutie (creare/editare) -->
@@ -142,6 +143,23 @@ function rewardDetailHtml(r) {
   return '';
 }
 
+// Bani în medie per deschidere (28.09.2026) — doar recompensele de tip bani,
+// ponderate cu șansa lor. Ajută la balansare: cât „bagă” o cutie în economie.
+function cashStats(c) {
+  const pool = c.pool || [];
+  const total = pool.reduce((s, r) => s + (Number(r.weight) || 0), 0);
+  if (!total) return null;
+  let avg = 0, dirty = 0;
+  pool.forEach(r => {
+    if (r.type !== 'cash') return;
+    const v = (Number(r.weight) || 0) / total * (Number(r.amount) || 0);
+    avg += v;
+    if (r.account === 'black_money') dirty += v;
+  });
+  return { avg: Math.round(avg), perCoin: c.price ? Math.round(avg / c.price) : null, dirtyPct: avg ? Math.round(dirty / avg * 100) : 0 };
+}
+const fmtUsd = n => '$' + Number(n || 0).toLocaleString('ro-RO');
+
 function renderCases() {
   const wrap = document.getElementById('cases-list');
   if (!casesCache.length) {
@@ -158,6 +176,7 @@ function renderCases() {
         <div class="case-block-titles">
           <h3>${escapeHtml(c.name)}<span class="case-tier-badge ${theme}">${THEMES[theme].label}</span></h3>
           <small>id: ${escapeHtml(c.id)} · 🪙 ${c.price} coins · ${c.active ? '<span style="color:var(--green)">activă</span>' : '<span style="color:#888">dezactivată</span>'}</small>
+          ${(() => { const st = cashStats(c); return st ? `<small style="display:block;margin-top:3px">💵 Bani în medie / deschidere: <b>${fmtUsd(st.avg)}</b>${st.perCoin != null ? ` (≈ ${fmtUsd(st.perCoin)} / coin)` : ''} · murdari ${st.dirtyPct}%</small>` : ''; })()}
         </div>
         <div class="case-block-actions">
           <button type="button" class="btn-ghost" data-edit-case="${escapeHtml(c.id)}">Editează cutia</button>
@@ -411,6 +430,89 @@ async function deleteReward(caseId, rewardId) {
     alert('Nu am putut șterge recompensa — serverul de joc nu răspunde momentan.');
   }
 }
+
+// ---------- Balansare automată Rare + Epic (28.09.2026) ----------
+// Sume mai mici, cu șanse mai mari, ca la Legendara. Armele rămân 1,5%
+// fiecare și mașinile 2% fiecare (din 1000); restul se împarte pe treptele
+// de bani de mai jos. Nimic nu se schimbă până nu confirmi.
+const BALANCE_PLAN = {
+  rare: [
+    { amount: 25000,  account: 'bank',        share: 35 },
+    { amount: 40000,  account: 'bank',        share: 25 },
+    { amount: 60000,  account: 'bank',        share: 18 },
+    { amount: 80000,  account: 'black_money', share: 10 },
+    { amount: 100000, account: 'bank',        share: 7 },
+    { amount: 150000, account: 'bank',        share: 5 },
+  ],
+  epic: [
+    { amount: 60000,  account: 'bank',        share: 30 },
+    { amount: 100000, account: 'bank',        share: 25 },
+    { amount: 150000, account: 'bank',        share: 18 },
+    { amount: 150000, account: 'black_money', share: 12 },
+    { amount: 250000, account: 'bank',        share: 10 },
+    { amount: 400000, account: 'bank',        share: 5 },
+  ],
+};
+const BALANCE_WEIGHT = { item: 15, vehicle: 20 };
+const cashLabel = t => `$${t.amount.toLocaleString('ro-RO')} ${t.account === 'black_money' ? 'bani murdari' : 'în bancă'}`;
+
+function buildBalance(c, tiers) {
+  const others = (c.pool || []).filter(r => r.type !== 'cash');
+  const othersWeight = others.reduce((s, r) => s + (BALANCE_WEIGHT[r.type] || Number(r.weight) || 0), 0);
+  const cashTotal = 1000 - othersWeight;
+  if (cashTotal < 500) return { error: `„${c.name}” are prea multe arme/mașini pentru planul automat.` };
+  const shareSum = tiers.reduce((s, t) => s + t.share, 0);
+  const cash = tiers.map(t => ({ ...t, weight: Math.round(t.share / shareSum * cashTotal) }));
+  cash[0].weight += cashTotal - cash.reduce((s, t) => s + t.weight, 0);
+  const preview = { ...c, pool: [...others.map(r => ({ ...r, weight: BALANCE_WEIGHT[r.type] || r.weight })), ...cash.map(t => ({ type: 'cash', amount: t.amount, account: t.account, weight: t.weight }))] };
+  return { others, cash, oldCash: (c.pool || []).filter(r => r.type === 'cash'), before: cashStats(c), after: cashStats(preview) };
+}
+
+document.getElementById('balance-btn').addEventListener('click', async () => {
+  const msg = document.getElementById('balance-msg');
+  const plans = [];
+  for (const id of Object.keys(BALANCE_PLAN)) {
+    const c = casesCache.find(x => x.id === id);
+    if (!c) { alert(`Nu găsesc cutia cu id „${id}”.`); return; }
+    const b = buildBalance(c, BALANCE_PLAN[id]);
+    if (b.error) { alert(b.error); return; }
+    plans.push({ c, ...b });
+  }
+  const summary = plans.map(p =>
+    `${p.c.name} (${p.c.price} coins)\n` +
+    p.cash.map(t => `  • ${cashLabel(t)} — ${(t.weight / 10).toFixed(1)}%`).join('\n') +
+    `\n  • arme 1,5% fiecare, mașini 2% fiecare (${p.others.length} în total)` +
+    `\n  Bani în medie / deschidere: ${fmtUsd(p.before.avg)} → ${fmtUsd(p.after.avg)}`
+  ).join('\n\n');
+  if (!confirm(`Se vor înlocui recompensele de BANI din aceste cutii:\n\n${summary}\n\nArmele și mașinile rămân, doar șansele lor se aliniază. Continui?`)) return;
+
+  const btn = document.getElementById('balance-btn');
+  btn.disabled = true;
+  msg.hidden = false;
+  const call = async (url, method, body) => {
+    const res = await apiFetch(url, { method, body: body ? JSON.stringify(body) : undefined });
+    if (!res.ok) { let e = ''; try { e = (await res.json()).error; } catch {} throw new Error(e || `Eroare ${res.status}`); }
+  };
+  try {
+    for (const p of plans) {
+      const base = `/api/admin/vip-shop/cutii/${encodeURIComponent(p.c.id)}/recompense`;
+      msg.textContent = `Se actualizează „${p.c.name}”…`;
+      // Întâi adăugăm treptele noi, apoi scoatem banii vechi — cutia nu rămâne niciodată goală.
+      for (const t of p.cash) await call(base, 'POST', { type: 'cash', label: cashLabel(t), weight: t.weight, amount: t.amount, account: t.account });
+      for (const r of p.others) {
+        const w = BALANCE_WEIGHT[r.type];
+        if (w && Number(r.weight) !== w) await call(`${base}/${encodeURIComponent(r.id)}`, 'PUT', { ...r, weight: w });
+      }
+      for (const r of p.oldCash) await call(`${base}/${encodeURIComponent(r.id)}`, 'DELETE');
+    }
+    msg.textContent = 'Gata — Rare și Epic au fost balansate.';
+  } catch (err) {
+    msg.textContent = `Oprit la jumătate: ${err.message}. Verifică cutiile mai jos (poți apăsa din nou după ce serverul răspunde).`;
+  } finally {
+    btn.disabled = false;
+    loadCases();
+  }
+});
 
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;

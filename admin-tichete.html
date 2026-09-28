@@ -73,6 +73,7 @@
 </main>
 <script src="auth-client.js"></script>
 <script>
+const esc = s => (s ?? '').toString().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 let currentTicketId = null;
 
 const STATUS_LABEL = { open: 'DESCHIS', in_progress: 'ÎN LUCRU', resolved: 'REZOLVAT', closed: 'ÎNCHIS' };
@@ -90,8 +91,8 @@ async function loadList() {
     const items = await res.json();
     tbody.innerHTML = items.length ? items.map(t => `
       <tr>
-        <td>${t.subject}</td>
-        <td>${t.submitted_by}</td>
+        <td>${esc(t.subject)}</td>
+        <td>${esc(t.submitted_by)}</td>
         <td>${CATEGORY_LABEL[t.category] || t.category}</td>
         <td><span class="pill ${STATUS_PILL[t.status] || 'off'}">${STATUS_LABEL[t.status] || t.status}</span></td>
         <td>${t.assigned_username || '—'}</td>
@@ -136,14 +137,14 @@ async function openTicket(id) {
   document.getElementById('detail-date').textContent = fmtDate(t.created_at);
   const reportedEl = document.getElementById('detail-reported');
   if (t.reported_display) {
-    reportedEl.innerHTML = `<span class="reported-pill">🎯 Tichet despre: ${t.reported_display}${!t.reported_player_id ? ' <small>(negăsit automat în baza de date — verifică manual)</small>' : ''}</span>`;
+    reportedEl.innerHTML = `<span class="reported-pill">🎯 Tichet despre: ${esc(t.reported_display)}${t.reported_rp_name || t.reported_static_id ? ` <small>— personaj: ${esc(t.reported_rp_name || '?')}${t.reported_static_id ? ` #${esc(t.reported_static_id)}` : ''}</small>` : ''}${!t.reported_player_id ? ' <small>(negăsit automat în baza de date — verifică manual)</small>' : ''}</span>`;
     reportedEl.hidden = false;
   } else {
     reportedEl.hidden = true;
   }
   document.getElementById('detail-description').textContent = t.description;
   document.getElementById('detail-evidence').innerHTML = t.evidence_url
-    ? `<a href="${t.evidence_url}" target="_blank" rel="noopener noreferrer">🔗 Vezi dovada atașată</a>`
+    ? `<a href="${esc(t.evidence_url)}" target="_blank" rel="noopener noreferrer">🔗 Vezi dovada atașată</a>`
     : '';
   document.getElementById('detail-status-select').value = t.status;
   document.getElementById('detail-category-select').value = t.category;
@@ -151,8 +152,8 @@ async function openTicket(id) {
   document.getElementById('detail-replies').innerHTML = t.replies.length
     ? t.replies.map(r => `
         <div class="msg ${['moderator','admin','co-fondator','owner'].includes(r.author_role) ? 'staff' : ''}">
-          <b>${r.author}${['moderator','admin','co-fondator','owner'].includes(r.author_role) ? ' (staff)' : ''}</b>
-          <span>${r.message}</span>
+          <b>${esc(r.author)}${['moderator','admin','co-fondator','owner'].includes(r.author_role) ? ' (staff)' : ''}</b>
+          <span>${esc(r.message)}</span>
           <small>${fmtDate(r.created_at)}</small>
         </div>`).join('')
     : '<p class="muted">Niciun răspuns încă.</p>';

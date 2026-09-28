@@ -27,7 +27,7 @@
     </div>
     <div class="field player-search-wrap" id="f-reported-wrap" hidden>
       <label>ID / nume jucător reclamat</label>
-      <input id="f-reported-label" type="text" maxlength="120" placeholder="ex: 292 sau numele exact din joc" autocomplete="off">
+      <input id="f-reported-label" type="text" maxlength="120" placeholder="ex: #336, 91 sau numele RP din joc" autocomplete="off">
       <div class="player-search-dropdown" id="f-reported-dropdown" hidden></div>
       <small class="hint">Tichetul devine public — orice utilizator îl poate citi, inclusiv jucătorul reclamat. Scrie ID-ul din joc (F10) sau numele exact — staff-ul identifică jucătorul din reclamație. Pe măsură ce scrii, îți arătăm mai jos jucătorii găsiți, ca să confirmi că e cel corect.</small>
     </div>
@@ -52,6 +52,7 @@
 </main>
 <script src="auth-client.js"></script>
 <script>
+const esc = s => (s ?? '').toString().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 const STATUS_LABEL = { open: 'DESCHIS', in_progress: 'ÎN LUCRU', resolved: 'REZOLVAT', closed: 'ÎNCHIS' };
 const STATUS_PILL = { open: 'warn', in_progress: 'info', resolved: 'on', closed: 'off' };
 const CATEGORY_LABEL = { general: 'General', bug: 'Bug / problemă tehnică', reclamatie: 'Reclamație jucător', ban_appeal: 'Contestație sancțiune' };
@@ -103,9 +104,13 @@ function wireReportedPlayerSearch(inputId, dropdownId) {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'player-search-item';
-      btn.textContent = p.display_name + (p.game_id != null ? ` (ID: ${p.game_id})` : '');
+      // (28.09.2026) Nume RP + #ID static; ID-ul de server doar cât e online.
+      const label = (p.rp_name || p.display_name || '?') + (p.static_id ? ` #${p.static_id}` : (p.online && p.server_id != null ? ` (ID server ${p.server_id})` : ''));
+      btn.textContent = label
+        + (p.online ? ` · online${p.static_id && p.server_id != null ? `, ID server ${p.server_id}` : ''}` : '')
+        + (p.rp_name && p.display_name && p.rp_name !== p.display_name ? ` · cont: ${p.display_name}` : '');
       btn.addEventListener('click', () => {
-        input.value = (p.game_id != null ? String(p.game_id) : p.display_name);
+        input.value = label;
         closeDropdown();
         input.focus();
       });
@@ -117,7 +122,7 @@ function wireReportedPlayerSearch(inputId, dropdownId) {
   input.addEventListener('input', () => {
     const q = input.value.trim();
     clearTimeout(debounceTimer);
-    if (q.length < 2) { closeDropdown(); return; }
+    if (q.length < 2 && !/^#?\d+$/.test(q)) { closeDropdown(); return; }
     debounceTimer = setTimeout(async () => {
       try {
         const res = await apiFetch('/api/players/search?q=' + encodeURIComponent(q));
@@ -143,8 +148,8 @@ async function loadTickets() {
     list.innerHTML = items.length ? items.map(t => `
       <a class="ticket-row" href="tichet.html?id=${t.id}">
         <div>
-          <strong>${t.subject}</strong>
-          <small>${CATEGORY_LABEL[t.category] || t.category} · ${t.is_own ? 'tichetul tău' : `deschis de ${t.submitted_by}`} · ${new Date(t.created_at).toLocaleDateString('ro-RO')}${t.reported_display ? ` · <span style="color:#ff8a8a">despre ${t.reported_display}</span>` : ''}</small>
+          <strong>${esc(t.subject)}</strong>
+          <small>${CATEGORY_LABEL[t.category] || t.category} · ${t.is_own ? 'tichetul tău' : `deschis de ${esc(t.submitted_by)}`} · ${new Date(t.created_at).toLocaleDateString('ro-RO')}${t.reported_display ? ` · <span style="color:#ff8a8a">despre ${esc(t.reported_display)}</span>` : ''}</small>
         </div>
         <span class="pill ${STATUS_PILL[t.status] || 'off'}">${STATUS_LABEL[t.status] || t.status}</span>
       </a>`).join('') : '<p class="muted">Nu ai deschis niciun tichet și nicio reclamație publică nu există încă.</p>';

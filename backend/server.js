@@ -2503,17 +2503,55 @@ function validTicketFields(body, existingCategory) {
 // Căutare jucători — folosită acum doar de staff (căutarea din formularul
 // public a fost înlocuită cu text liber, vezi mai jos); rămasă disponibilă
 // oricărui utilizator logat, nu doar staff.
+// (28.09.2026) Caută și după NUMELE RP și ID-ul STATIC (#336), nu doar după
+// numele de pe site, și include jucătorii ONLINE chiar dacă n-au cont pe
+// site (din /players al serverului). Nu întoarcem niciodată identificatorul
+// ESX (licența) — doar ce se vede oricum în joc.
+function likeEscape(s) { return s.replace(/[\\%_]/g, "\\$&"); }
 app.get("/api/players/search", auth, asyncRoute(async (req, res) => {
-  const q = (req.query.q || "").trim();
-  if (q.length < 2) return res.json([]);
-  const { rows } = await pool.query(
-    `SELECT p.id, p.display_name, p.game_id
-     FROM players p
-     WHERE p.display_name ILIKE $1 OR CAST(p.game_id AS TEXT) ILIKE $1
-     ORDER BY p.display_name LIMIT 10`,
-    [`%${q}%`]
-  );
-  res.json(rows);
+  const q = String(req.query.q || "").trim().slice(0, 64).replace(/^#\s*/, "");
+  const isNum = /^\d+$/.test(q);
+  if (!q || (!isNum && q.length < 2)) return res.json([]);
+  const lower = q.toLowerCase();
+  const [{ rows }, detail] = await Promise.all([
+    pool.query(
+      `SELECT p.id, p.display_name, p.game_id, p.last_rp_name, p.last_static_id, p.last_identifier
+       FROM players p
+       WHERE p.display_name ILIKE $1 OR p.last_rp_name ILIKE $1
+          OR p.last_static_id = $2 OR CAST(p.game_id AS TEXT) ILIKE $1
+       ORDER BY p.last_synced_at DESC NULLS LAST LIMIT 10`,
+      [`%${likeEscape(q)}%`, q]
+    ),
+    getPlayersDetail(),
+  ]);
+  const online = detail.players || [];
+  const onlineByLicense = new Map(online.filter(pl => pl.license).map(pl => [pl.license, pl]));
+  const out = [];
+  const seenLicenses = new Set();
+  for (const r of rows) {
+    const pl = r.last_identifier ? onlineByLicense.get(r.last_identifier) : null;
+    if (pl) seenLicenses.add(pl.license);
+    out.push({
+      id: r.id, display_name: r.display_name, game_id: r.game_id,
+      rp_name: pl?.serverName || r.last_rp_name || null,
+      static_id: staticIdOf(pl) || r.last_static_id || null,
+      server_id: pl ? pl.id : null, online: !!pl,
+    });
+  }
+  for (const pl of online) {
+    if (out.length >= 10) break;
+    if (pl.license && seenLicenses.has(pl.license)) continue;
+    const sid = staticIdOf(pl);
+    const hit = (isNum && (String(pl.id) === q || sid === q))
+      || (pl.serverName || "").toLowerCase().includes(lower)
+      || (pl.name || "").toLowerCase().includes(lower);
+    if (!hit) continue;
+    out.push({
+      id: null, display_name: pl.name || null, game_id: null,
+      rp_name: pl.serverName || null, static_id: sid, server_id: pl.id, online: true,
+    });
+  }
+  res.json(out.slice(0, 10));
 }));
 
 // (20.09.2026) Reclamantul scrie ID-ul/numele jucătorului reclamat ca text
@@ -2525,9 +2563,20 @@ app.get("/api/players/search", auth, asyncRoute(async (req, res) => {
 async function resolveReportedPlayer(label) {
   const text = (label || "").trim();
   if (!text) return null;
+  // "Santta Klauss #336" (formatul pus de lista de căutare) — ID-ul static
+  // are prioritate; altfel nume exact (de pe site sau RP) ori ID numeric.
+  const staticMatch = text.match(/#\s*([A-Za-z0-9]+)/);
+  if (staticMatch) {
+    const { rows } = await pool.query(`SELECT id FROM players WHERE last_static_id = $1 LIMIT 1`, [staticMatch[1]]);
+    if (rows[0]) return rows[0].id;
+  }
+  const name = text.replace(/#\s*[A-Za-z0-9]+/, "").replace(/\(.*?\)/g, "").trim();
+  if (!name) return null;
   const { rows } = await pool.query(
-    `SELECT id FROM players WHERE CAST(game_id AS TEXT) = $1 OR display_name ILIKE $1 LIMIT 1`,
-    [text]
+    `SELECT id FROM players
+     WHERE CAST(game_id AS TEXT) = $1 OR last_static_id = $1 OR display_name ILIKE $2 OR last_rp_name ILIKE $2
+     LIMIT 1`,
+    [name, likeEscape(name)]
   );
   return rows[0]?.id || null;
 }
@@ -4045,7 +4094,8 @@ app.get("/api/admin/tickets", auth, requireRole(...MOD_ROLES), asyncRoute(async 
   const status = req.query.status;
   const { rows } = await pool.query(
     `SELECT t.*, u.username submitted_by, a.username assigned_username,
-            COALESCE(rp.display_name, t.reported_player_label) reported_display
+            COALESCE(rp.display_name, t.reported_player_label) reported_display,
+            rp.last_rp_name reported_rp_name, rp.last_static_id reported_static_id
      FROM tickets t
      JOIN users u ON u.id = t.user_id
      LEFT JOIN users a ON a.id = t.assigned_to
@@ -4060,7 +4110,8 @@ app.get("/api/admin/tickets", auth, requireRole(...MOD_ROLES), asyncRoute(async 
 app.get("/api/admin/tickets/:id", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
   const { rows } = await pool.query(
     `SELECT t.*, u.username submitted_by, a.username assigned_username,
-            COALESCE(rp.display_name, t.reported_player_label) reported_display
+            COALESCE(rp.display_name, t.reported_player_label) reported_display,
+            rp.last_rp_name reported_rp_name, rp.last_static_id reported_static_id
      FROM tickets t
      JOIN users u ON u.id = t.user_id
      LEFT JOIN users a ON a.id = t.assigned_to

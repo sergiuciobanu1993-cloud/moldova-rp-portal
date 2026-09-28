@@ -24,7 +24,7 @@
     </div>
     <div class="field player-search-wrap" id="e-reported-wrap" hidden>
       <label>ID / nume jucător reclamat</label>
-      <input id="e-reported-label" type="text" maxlength="120" placeholder="ex: 292 sau numele exact din joc" autocomplete="off">
+      <input id="e-reported-label" type="text" maxlength="120" placeholder="ex: #336, 91 sau numele RP din joc" autocomplete="off">
       <div class="player-search-dropdown" id="e-reported-dropdown" hidden></div>
       <small class="hint">Tichetul e public — orice utilizator îl poate citi, inclusiv jucătorul reclamat. Scrie ID-ul din joc (F10) sau numele exact — staff-ul identifică jucătorul din reclamație. Pe măsură ce scrii, îți arătăm mai jos jucătorii găsiți, ca să confirmi că e cel corect.</small>
     </div>
@@ -40,6 +40,7 @@
 </main>
 <script src="auth-client.js"></script>
 <script>
+const esc = s => (s ?? '').toString().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 const STATUS_LABEL = { open: 'DESCHIS', in_progress: 'ÎN LUCRU', resolved: 'REZOLVAT', closed: 'ÎNCHIS' };
 const STATUS_PILL = { open: 'warn', in_progress: 'info', resolved: 'on', closed: 'off' };
 const CATEGORY_LABEL = { general: 'General', bug: 'Bug / problemă tehnică', reclamatie: 'Reclamație jucător', ban_appeal: 'Contestație sancțiune' };
@@ -54,18 +55,18 @@ function render(t) {
   const canReply = t.is_own && !closed;
 
   box.innerHTML = `
-    <div class="head"><h2>${t.subject}</h2></div>
+    <div class="head"><h2>${esc(t.subject)}</h2></div>
     <div class="ticket-meta">
       <span class="pill ${STATUS_PILL[t.status] || 'off'}">${STATUS_LABEL[t.status] || t.status}</span>
       <span>${CATEGORY_LABEL[t.category] || t.category}</span>
       <span>·</span>
-      <span>${t.is_own ? 'tichetul tău' : `deschis de ${t.submitted_by}`}</span>
+      <span>${t.is_own ? 'tichetul tău' : `deschis de ${esc(t.submitted_by)}`}</span>
       <span>·</span>
       <span>${new Date(t.created_at).toLocaleString('ro-RO')}</span>
     </div>
-    ${t.reported_display ? `<p><span class="reported-pill">🎯 Tichet despre: ${t.reported_display}</span></p>` : ''}
-    <p class="ticket-desc">${t.description}</p>
-    ${t.evidence_url ? `<p><a href="${t.evidence_url}" target="_blank" rel="noopener noreferrer" style="color:var(--orange);font-weight:800;font-size:13px">🔗 Dovadă atașată</a></p>` : ''}
+    ${t.reported_display ? `<p><span class="reported-pill">🎯 Tichet despre: ${esc(t.reported_display)}</span></p>` : ''}
+    <p class="ticket-desc">${esc(t.description)}</p>
+    ${t.evidence_url ? `<p><a href="${esc(t.evidence_url)}" target="_blank" rel="noopener noreferrer" style="color:var(--orange);font-weight:800;font-size:13px">🔗 Dovadă atașată</a></p>` : ''}
     ${t.is_own ? `
       <div class="ticket-actions">
         ${canEdit ? '<button type="button" class="btn-ghost" id="edit-btn">Editează</button>' : ''}
@@ -88,8 +89,8 @@ function render(t) {
   document.getElementById('thread').innerHTML = t.replies.length
     ? t.replies.map(r => `
         <div class="msg ${['moderator','admin','co-fondator','owner'].includes(r.author_role) ? 'staff' : ''}">
-          <b>${r.author}${['moderator','admin','co-fondator','owner'].includes(r.author_role) ? ' (staff)' : ''}</b>
-          <span>${r.message}</span>
+          <b>${esc(r.author)}${['moderator','admin','co-fondator','owner'].includes(r.author_role) ? ' (staff)' : ''}</b>
+          <span>${esc(r.message)}</span>
           <small>${new Date(r.created_at).toLocaleString('ro-RO')}</small>
         </div>`).join('')
     : '<p class="muted">Niciun răspuns încă.</p>';
@@ -162,9 +163,13 @@ function wireReportedPlayerSearch(inputId, dropdownId) {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'player-search-item';
-      btn.textContent = p.display_name + (p.game_id != null ? ` (ID: ${p.game_id})` : '');
+      // (28.09.2026) Nume RP + #ID static; ID-ul de server doar cât e online.
+      const label = (p.rp_name || p.display_name || '?') + (p.static_id ? ` #${p.static_id}` : (p.online && p.server_id != null ? ` (ID server ${p.server_id})` : ''));
+      btn.textContent = label
+        + (p.online ? ` · online${p.static_id && p.server_id != null ? `, ID server ${p.server_id}` : ''}` : '')
+        + (p.rp_name && p.display_name && p.rp_name !== p.display_name ? ` · cont: ${p.display_name}` : '');
       btn.addEventListener('click', () => {
-        input.value = (p.game_id != null ? String(p.game_id) : p.display_name);
+        input.value = label;
         closeDropdown();
         input.focus();
       });
@@ -176,7 +181,7 @@ function wireReportedPlayerSearch(inputId, dropdownId) {
   input.addEventListener('input', () => {
     const q = input.value.trim();
     clearTimeout(debounceTimer);
-    if (q.length < 2) { closeDropdown(); return; }
+    if (q.length < 2 && !/^#?\d+$/.test(q)) { closeDropdown(); return; }
     debounceTimer = setTimeout(async () => {
       try {
         const res = await apiFetch('/api/players/search?q=' + encodeURIComponent(q));

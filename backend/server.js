@@ -2508,12 +2508,34 @@ function validTicketFields(body, existingCategory) {
 // site (din /players al serverului). Nu întoarcem niciodată identificatorul
 // ESX (licența) — doar ce se vede oricum în joc.
 function likeEscape(s) { return s.replace(/[\\%_]/g, "\\$&"); }
+
+// (29.09.2026) Căutare în baza de date a JOCULUI (moldovarp-api
+// "/players/search", adăugată de echipa serverului): găsește și jucătorii
+// OFFLINE fără cont pe site. q numeric = ID static exact; altfel nume RP
+// (minim 3 litere). Nu stricăm căutarea dacă serverul nu răspunde.
+async function fetchGamePlayerSearch(q) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
+  try {
+    const r = await fetch(`http://${FIVEM_ADDRESS}/moldovarp-api/players/search?q=${encodeURIComponent(q)}`, {
+      headers: { "x-api-key": FIVEM_API_SECRET },
+      signal: controller.signal,
+    });
+    if (!r.ok) return [];
+    const body = await r.json();
+    return Array.isArray(body.players) ? body.players : [];
+  } catch {
+    return [];
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 app.get("/api/players/search", auth, asyncRoute(async (req, res) => {
   const q = String(req.query.q || "").trim().slice(0, 64).replace(/^#\s*/, "");
   const isNum = /^\d+$/.test(q);
   if (!q || (!isNum && q.length < 2)) return res.json([]);
   const lower = q.toLowerCase();
-  const [{ rows }, detail] = await Promise.all([
+  const [{ rows }, detail, gameHits] = await Promise.all([
     pool.query(
       `SELECT p.id, p.display_name, p.game_id, p.last_rp_name, p.last_static_id, p.last_identifier
        FROM players p
@@ -2523,6 +2545,7 @@ app.get("/api/players/search", auth, asyncRoute(async (req, res) => {
       [`%${likeEscape(q)}%`, q]
     ),
     getPlayersDetail(),
+    (isNum || q.length >= 3) ? fetchGamePlayerSearch(q) : Promise.resolve([]),
   ]);
   const online = detail.players || [];
   const onlineByLicense = new Map(online.filter(pl => pl.license).map(pl => [pl.license, pl]));
@@ -2530,7 +2553,7 @@ app.get("/api/players/search", auth, asyncRoute(async (req, res) => {
   const seenLicenses = new Set();
   for (const r of rows) {
     const pl = r.last_identifier ? onlineByLicense.get(r.last_identifier) : null;
-    if (pl) seenLicenses.add(pl.license);
+    if (r.last_identifier) seenLicenses.add(r.last_identifier);
     out.push({
       id: r.id, display_name: r.display_name, game_id: r.game_id,
       rp_name: pl?.serverName || r.last_rp_name || null,
@@ -2546,9 +2569,22 @@ app.get("/api/players/search", auth, asyncRoute(async (req, res) => {
       || (pl.serverName || "").toLowerCase().includes(lower)
       || (pl.name || "").toLowerCase().includes(lower);
     if (!hit) continue;
+    if (pl.license) seenLicenses.add(pl.license);
     out.push({
       id: null, display_name: pl.name || null, game_id: null,
       rp_name: pl.serverName || null, static_id: sid, server_id: pl.id, online: true,
+    });
+  }
+  // Rezultatele din baza jocului (inclusiv offline, fără cont pe site).
+  // Identificatorul îl folosim doar ca să nu dublăm pe cineva deja găsit.
+  for (const g of gameHits) {
+    if (out.length >= 10) break;
+    if (g.identifier && seenLicenses.has(g.identifier)) continue;
+    if (g.identifier) seenLicenses.add(g.identifier);
+    out.push({
+      id: null, display_name: null, game_id: null,
+      rp_name: g.rpName || null, static_id: staticIdOf(g),
+      server_id: g.online && g.serverId != null ? g.serverId : null, online: !!g.online,
     });
   }
   res.json(out.slice(0, 10));

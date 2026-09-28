@@ -179,9 +179,10 @@ async function loadProfileExtra() {
     if (!res.ok) throw new Error();
     const p = await res.json();
 
+    const linkHint = '<p class="muted" style="margin:0 0 14px">Ca să vezi exact datele personajului tău, leagă-ți contul din caseta „Contul din joc” de mai sus (<b>/leagacont</b> în joc).</p>';
     if (!p.hasGameProfile) {
       statusEl.textContent = '';
-      bodyEl.innerHTML = '<p class="muted" style="margin:0">Profilul tău de joc nu e încă sincronizat cu site-ul — conectează-te pe server ca să apară aici.</p>';
+      bodyEl.innerHTML = linkHint;
       return;
     }
 
@@ -193,12 +194,28 @@ async function loadProfileExtra() {
     // avem nici una, nici alta (cont nou, niciodată prins online încă de
     // când există acest sync) arătăm mesajul "nu ești conectat".
     const src = p.online && p.live ? p.live : p.lastKnown;
+    // Cartea personajului (28.09.2026): nume RP, ID cont, job + grad — ca în
+    // meniul de pauză din joc.
+    const charName = src?.serverName || p.name;
+    const charId = p.identifier || src?.license;
+    const jobText = src ? [src.jobLabel || src.job, src.gradeLabel].filter(Boolean).join(' · ') : '';
+    const identity = `
+      <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-end;margin:0 0 16px">
+        <div><small style="display:block;font-size:11px;color:var(--muted);margin-bottom:4px">PERSONAJ</small>
+          <strong style="font-size:20px">${escapeHtml(charName || '—')}</strong></div>
+        ${p.online && p.live?.serverId != null ? `<div><small style="display:block;font-size:11px;color:var(--muted);margin-bottom:4px">ID SERVER</small><strong style="font-size:20px">${escapeHtml(String(p.live.serverId))}</strong></div>` : ''}
+        ${src?.staticId ? `<div><small style="display:block;font-size:11px;color:var(--muted);margin-bottom:4px">ID STATIC</small><strong style="font-size:20px">#${escapeHtml(String(src.staticId))}</strong></div>` : ''}
+        ${jobText ? `<div><small style="display:block;font-size:11px;color:var(--muted);margin-bottom:4px">JOB</small><strong>${escapeHtml(jobText)}</strong></div>` : ''}
+        ${p.gang ? `<div><small style="display:block;font-size:11px;color:var(--muted);margin-bottom:4px">GAȘCĂ</small><strong>${escapeHtml(p.gang.org || '—')}</strong></div>` : ''}
+        ${p.account?.playtime_minutes ? `<div><small style="display:block;font-size:11px;color:var(--muted);margin-bottom:4px">ORE JUCATE (de pe site)</small><strong>${Math.floor(p.account.playtime_minutes / 60)}h</strong></div>` : ''}
+      </div>
+      ${charId ? `<p style="margin:-6px 0 16px;font-size:11px;word-break:break-all"><span class="muted">ID CONT</span> <code>${escapeHtml(charId)}</code></p>` : ''}`;
     const moneyBlock = src ? `
       <div class="stats" style="margin:0 0 18px">
         <article><small>CASH</small><strong>${fmtMoney(src.cash)}</strong></article>
         <article><small>BANCĂ</small><strong>${fmtMoney(src.bank)}</strong></article>
         <article><small>BANI MURDARI</small><strong>${src.blackMoney == null ? '—' : fmtMoney(src.blackMoney)}</strong></article>
-        <article><small>JOB</small><strong style="font-size:15px">${escapeHtml(src.jobLabel || src.job || '—')}</strong></article>
+        <article><small>JOB</small><strong style="font-size:15px">${escapeHtml(jobText || '—')}</strong></article>
       </div>
       <p style="margin:0 0 6px"><small style="color:var(--muted)">VEHICULE</small><br>${
         (src.vehicles && src.vehicles.length)
@@ -214,7 +231,7 @@ async function loadProfileExtra() {
       <div class="thread">${p.punishments.map(pu => `<div class="msg"><b>${escapeHtml(pu.type)}</b><span>${escapeHtml(pu.reason)}</span><small>${fmtDate(pu.created_at)}</small></div>`).join('')}</div>
     ` : `<small style="color:var(--muted);display:block">Nicio sancțiune — așa să rămână! 🙂</small>`;
 
-    bodyEl.innerHTML = live + sanctions + propertyBlock(p) + activityBlock(p);
+    bodyEl.innerHTML = (p.linked ? '' : linkHint) + identity + live + sanctions + propertyBlock(p) + activityBlock(p);
   } catch {
     statusEl.textContent = '';
     bodyEl.innerHTML = '<p class="muted" style="margin:0">Nu am putut încărca profilul.</p>';
@@ -246,6 +263,7 @@ document.getElementById('game-link-form').addEventListener('submit', async (e) =
     msg.hidden = true;
     document.getElementById('game-link-code').value = '';
     renderGameLink({ ...meCache, gameLinked: true, gameName: d.name });
+    loadProfileExtra();
     if (!document.getElementById('streamer-panel').hidden) loadStreamerIngameLog();
   } catch { msg.textContent = 'Eroare de rețea.'; }
 });
@@ -256,6 +274,7 @@ document.getElementById('game-unlink').addEventListener('click', async (e) => {
     const res = await apiFetch('/api/cont/dezleaga-joc', { method: 'POST' });
     if (!res.ok) throw new Error();
     renderGameLink({ ...meCache, gameLinked: false, gameName: null });
+    loadProfileExtra();
     if (!document.getElementById('streamer-panel').hidden) loadStreamerIngameLog();
   } catch { alert('Nu am putut dezlega contul. Încearcă din nou.'); }
 });

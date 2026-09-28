@@ -110,6 +110,12 @@ ALTER TABLE players ADD COLUMN IF NOT EXISTS last_synced_at TIMESTAMPTZ;
 ALTER TABLE players ADD COLUMN IF NOT EXISTS last_identifier VARCHAR(120);
 ALTER TABLE players ADD COLUMN IF NOT EXISTS last_rp_name VARCHAR(120);
 
+-- last_static_id (28.09.2026): ID-ul STATIC al personajului (ex. #336 din
+-- HUD-ul din joc), permanent — spre deosebire de ID-ul de server (ex. 91),
+-- care se schimbă la fiecare conectare. Salvat cât jucătorul e online, ca să
+-- poată fi arătat pe site și când e offline.
+ALTER TABLE players ADD COLUMN IF NOT EXISTS last_static_id VARCHAR(32);
+
 CREATE TABLE IF NOT EXISTS factions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name VARCHAR(100) UNIQUE NOT NULL,

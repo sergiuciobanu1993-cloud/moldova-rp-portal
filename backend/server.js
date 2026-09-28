@@ -306,6 +306,13 @@ async function fetchPlayersDetail() {
 
 // Shared by the admin route below and by the public /api/live/players route
 // above (which strips this down to just id+name — no money/vehicles/job).
+// ID-ul static al personajului (28.09.2026) — acceptăm câteva nume posibile de
+// câmp, până confirmă echipa serverului numele exact din /players.
+function staticIdOf(pl) {
+  const v = pl?.staticId ?? pl?.static_id ?? pl?.uid ?? null;
+  return v == null || v === "" ? null : String(v).slice(0, 32);
+}
+
 async function getPlayersDetail(force) {
   const age = Date.now() - playersDetailCache.fetchedAt;
   if (!force && playersDetailCache.data && age < PLAYERS_CACHE_MS) return playersDetailCache.data;
@@ -385,15 +392,17 @@ async function syncPlayerSnapshots() {
         // benzinării/magazine/gașcă — vezi buildPlayerProfile).
         pl.license || null,
         pl.serverName || null,
-        name
+        name,
+        // ID-ul static al personajului (#336 din HUD), dacă serverul îl trimite.
+        staticIdOf(pl)
       );
       // Tipurile sunt indicate explicit (::int, ::text, ::jsonb) pentru că, cu
       // valori NULL pe primul rând, Postgres nu poate deduce singur tipul
       // coloanei din VALUES și ar refuza interogarea.
       values.push(
-        `($${i + 1}::int,$${i + 2}::int,$${i + 3}::int,$${i + 4}::text,$${i + 5}::text,$${i + 6}::jsonb,$${i + 7}::text,$${i + 8}::text,$${i + 9}::text)`
+        `($${i + 1}::int,$${i + 2}::int,$${i + 3}::int,$${i + 4}::text,$${i + 5}::text,$${i + 6}::jsonb,$${i + 7}::text,$${i + 8}::text,$${i + 9}::text,$${i + 10}::text)`
       );
-      i += 9;
+      i += 10;
     }
     if (!values.length) return;
 
@@ -414,9 +423,17 @@ async function syncPlayerSnapshots() {
          last_job = v.job, last_job_label = v.job_label, last_vehicles = v.vehicles,
          last_identifier = COALESCE(v.identifier, p.last_identifier),
          last_rp_name = COALESCE(v.rp_name, p.last_rp_name),
+         last_static_id = COALESCE(v.static_id, p.last_static_id),
          last_synced_at = NOW(), playtime_minutes = p.playtime_minutes + 1
-       FROM (VALUES ${values.join(",")}) AS v(cash, bank, black_money, job, job_label, vehicles, identifier, rp_name, display_name)
-       WHERE p.display_name ILIKE v.display_name`,
+       FROM (VALUES ${values.join(",")}) AS v(cash, bank, black_money, job, job_label, vehicles, identifier, rp_name, display_name, static_id),
+            users u
+       WHERE u.id = p.user_id AND (
+         -- Cont legat prin /leagacont (28.09.2026): potrivire EXACTĂ după
+         -- identificatorul ESX, nu după nume (numele de Discord de pe site și
+         -- numele din joc de obicei nu seamănă deloc).
+         (u.game_identifier IS NOT NULL AND u.game_identifier = v.identifier)
+         OR (u.game_identifier IS NULL AND p.display_name ILIKE v.display_name)
+       )`,
       params
     );
   } catch (err) {
@@ -1300,7 +1317,10 @@ app.get("/api/admin/live/assets", auth, requireRole(...MOD_ROLES), asyncRoute(as
 // Găsită după NUME (case-insensitive), nu după un id din baza noastră —
 // pentru că jucătorul din joc poate să nu aibă deloc cont pe site.
 // ---------------------------------------------------------------------------
-async function buildPlayerProfile(name) {
+// opts (28.09.2026): { userId, identifier } — pentru profilul PROPRIU al unui
+// cont legat prin /leagacont: contul se găsește după user_id și jucătorul
+// online după identificatorul ESX exact, nu după nume.
+async function buildPlayerProfile(name, opts = {}) {
   const cleanName = (name || "").toString().trim().slice(0, 64);
   if (!cleanName) return null;
   const lower = cleanName.toLowerCase();
@@ -1310,7 +1330,7 @@ async function buildPlayerProfile(name) {
     pool.query(
       `SELECT p.id, p.game_id, p.display_name, p.playtime_minutes, p.status, p.created_at,
               p.last_cash, p.last_bank, p.last_black_money, p.last_job, p.last_job_label,
-              p.last_vehicles, p.last_synced_at, p.last_identifier, p.last_rp_name,
+              p.last_vehicles, p.last_synced_at, p.last_identifier, p.last_rp_name, p.last_static_id,
               u.id AS user_id, u.username, u.email, u.game_identifier, u.game_identifier_name,
               f.name AS faction_name, fr.name AS rank_name
        FROM players p
@@ -1318,8 +1338,8 @@ async function buildPlayerProfile(name) {
        LEFT JOIN faction_members fm ON fm.player_id = p.id
        LEFT JOIN factions f ON f.id = fm.faction_id
        LEFT JOIN faction_ranks fr ON fr.id = fm.rank_id
-       WHERE p.display_name ILIKE $1
-       LIMIT 1`, [cleanName]
+       WHERE ${opts.userId ? "p.user_id = $1" : "p.display_name ILIKE $1"}
+       LIMIT 1`, [opts.userId || cleanName]
     ),
     pool.query(
       `SELECT pu.id, pu.type, pu.reason, pu.duration_minutes, pu.created_at, u.username AS issued_by,
@@ -1337,7 +1357,9 @@ async function buildPlayerProfile(name) {
   ]);
 
   const live = liveDetail.online
-    ? (liveDetail.players || []).find(p => (p.name || "").toLowerCase().trim() === lower) || null
+    ? (liveDetail.players || []).find(p => opts.identifier
+        ? p.license === opts.identifier
+        : (p.name || "").toLowerCase().trim() === lower) || null
     : null;
 
   const account = accountResult.rows[0] || null;
@@ -1362,7 +1384,7 @@ async function buildPlayerProfile(name) {
   // fără soluție posibilă fără ca jucătorul să-și facă cont sau să fie online.
   const assetsResult = await fetchAssets({
     player: cleanName,
-    identifier: live?.license || account?.last_identifier || account?.game_identifier || undefined,
+    identifier: live?.license || opts.identifier || account?.last_identifier || account?.game_identifier || undefined,
     rpName: live?.serverName || account?.last_rp_name || account?.game_identifier_name || undefined,
   });
 
@@ -1419,10 +1441,15 @@ async function buildPlayerProfile(name) {
   const stores = assetsResult.online ? assetsResult.stores : [];
   const gang = assetsResult.online ? (assetsResult.gangs[0] || null) : null;
 
-  const lastKnown = (!live && account && account.last_synced_at) ? {
+  // Pentru un cont legat, arătăm poza salvată doar dacă e chiar a
+  // personajului legat (nu una rămasă dintr-o potrivire veche după nume).
+  const snapshotIsOurs = !opts.identifier || !account?.last_identifier || account.last_identifier === opts.identifier;
+  const lastKnown = (!live && account && account.last_synced_at && snapshotIsOurs) ? {
     cash: account.last_cash, bank: account.last_bank, blackMoney: account.last_black_money,
     job: account.last_job, jobLabel: account.last_job_label,
     vehicles: account.last_vehicles || [], syncedAt: account.last_synced_at,
+    serverName: account.last_rp_name || null, license: account.last_identifier || null,
+    staticId: account.last_static_id || null,
   } : null;
 
   return {
@@ -1430,6 +1457,8 @@ async function buildPlayerProfile(name) {
     online: !!live,
     live: live ? {
       serverId: live.id, job: live.job, jobLabel: live.jobLabel, group: live.group,
+      grade: live.grade ?? null, gradeLabel: live.gradeLabel || null,
+      staticId: staticIdOf(live) || (snapshotIsOurs ? account?.last_static_id : null) || null,
       cash: live.cash, bank: live.bank, blackMoney: live.blackMoney, vehicles: live.vehicles || [],
       // cfxName = numele raportat de platformă (Steam/Rockstar), serverName =
       // numele personajului RP din baza jocului (users.firstname/lastname) —
@@ -1474,11 +1503,23 @@ app.get("/api/admin/player-profile", auth, requireRole(...MOD_ROLES), asyncRoute
 // populat la prima sincronizare cu jocul) — dacă nu există încă, răspundem
 // degradat, nu cu eroare.
 app.get("/api/me/profile", auth, asyncRoute(async (req, res) => {
-  const { rows } = await pool.query(`SELECT display_name FROM players WHERE user_id = $1 LIMIT 1`, [req.user.sub]);
-  const displayName = rows[0]?.display_name;
-  if (!displayName) return res.json({ hasGameProfile: false });
-  const profile = await buildPlayerProfile(displayName);
-  res.json({ hasGameProfile: true, ...profile });
+  const { rows } = await pool.query(
+    `SELECT p.display_name, u.game_identifier, u.game_identifier_name
+     FROM users u LEFT JOIN players p ON p.user_id = u.id WHERE u.id = $1 LIMIT 1`, [req.user.sub]);
+  const row = rows[0] || {};
+  // Cont legat prin /leagacont (28.09.2026): căutăm personajul după
+  // identificatorul exact. Numele pentru loguri/sancțiuni e numele din joc
+  // (live, sau cel salvat la legare), nu username-ul de pe site.
+  if (row.game_identifier) {
+    const detail = await getPlayersDetail();
+    const live = (detail.players || []).find(p => p.license === row.game_identifier);
+    const name = live?.name || row.game_identifier_name || row.display_name;
+    const profile = await buildPlayerProfile(name, { userId: req.user.sub, identifier: row.game_identifier });
+    return res.json({ hasGameProfile: true, linked: true, identifier: row.game_identifier, ...profile });
+  }
+  if (!row.display_name) return res.json({ hasGameProfile: false, linked: false });
+  const profile = await buildPlayerProfile(row.display_name);
+  res.json({ hasGameProfile: true, linked: false, ...profile });
 }));
 
 // Notificări proprii (24.09.2026) — vezi tabela "notifications" din

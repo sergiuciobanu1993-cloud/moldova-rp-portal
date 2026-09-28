@@ -652,7 +652,7 @@ async function openCase(caseId) {
     await reelSpinTo(winner, pool.length ? pool : [winner]);
 
     title.textContent = 'Felicitări!';
-    text.textContent = `Ai câștigat: ${d.reward.label}. Intră pe server și scrie /recompense ca să-l ridici.`;
+    text.textContent = `Ai câștigat: ${d.reward.label}. Intră pe server și scrie /recompense ca să-l ridici. Coins-ii s-au scăzut deja; dacă ești pe server, meniul VIP din joc îți arată soldul nou după relog.`;
     closeBtn.hidden = false;
     await loadAll();
   } catch {

@@ -184,6 +184,24 @@ window.openPlayerProfile = (function () {
     `;
   }
 
+  // Cutiile deschise în VIP Shop (29.09.2026).
+  const VIP_ICON = { cash: '💵', item: '🎒', vehicle: '🚗', coins: '🪙' };
+  function vipHtml(list) {
+    if (list == null) return '<p class="muted" style="margin:0">Serverul de joc nu răspunde — nu am putut citi cutiile.</p>';
+    if (!list.length) return '<p class="muted" style="margin:0">Nu a deschis nicio cutie.</p>';
+    const spent = list.reduce((s, e) => s + (Number(e.priceCoins) || 0), 0);
+    const rows = list.map(e => `
+      <tr>
+        <td>${escapeHtml(e.caseName || '—')}</td>
+        <td>${VIP_ICON[e.rewardType] || '🎁'} ${escapeHtml(e.rewardLabel || '—')}</td>
+        <td>🪙 ${Number(e.priceCoins) || 0}</td>
+        <td><span class="pill ${e.claimedAt ? 'on' : 'warn'}">${e.claimedAt ? 'RIDICAT' : 'ÎN AȘTEPTARE'}</span></td>
+        <td>${fmtDate(e.createdAt)}</td>
+      </tr>`).join('');
+    return `<p style="margin:0 0 10px">${list.length} cutii deschise · 🪙 ${spent} coins cheltuiți${list.length >= 50 ? ' <span class="muted">(ultimele 50)</span>' : ''}</p>
+      <table><thead><tr><th>CUTIE</th><th>RECOMPENSĂ</th><th>PREȚ</th><th>STATUS</th><th>CÂND</th></tr></thead><tbody>${rows}</tbody></table>`;
+  }
+
   function renderProfile(p) {
     const body = document.getElementById('profile-body');
     document.getElementById('profile-title').textContent = `Profil — ${p.name}`;
@@ -234,6 +252,7 @@ window.openPlayerProfile = (function () {
       <h2 style="font-size:14px;margin:22px 0 10px">⚠ Sancțiuni</h2>${punishments}
       ${moderationHtml(p.moderation)}
       ${propertyHtml(p)}
+      <h2 style="font-size:14px;margin:22px 0 10px">🎁 VIP Shop — cutii deschise</h2>${vipHtml(p.vipHistory)}
       <h2 style="font-size:14px;margin:22px 0 10px">🎫 Tichete</h2>${tickets}
       <h2 style="font-size:14px;margin:22px 0 10px">🗂 Activitate recentă</h2>${activity}
       <h2 style="font-size:14px;margin:22px 0 10px">🔪 Kill-uri — ca victimă</h2>${killsVictim}
@@ -268,14 +287,18 @@ window.openPlayerProfile = (function () {
     });
   }
 
-  return async function openPlayerProfile(name) {
+  // opts.identifier (opțional): identificatorul exact al personajului, ca
+  // profilul să fie găsit sigur (ex. din istoricul VIP Shop).
+  return async function openPlayerProfile(name, opts = {}) {
     ensureModal();
     document.getElementById('profile-overlay').hidden = false;
     document.body.classList.add('modal-open');
     document.getElementById('profile-title').textContent = `Profil — ${name}`;
     document.getElementById('profile-body').innerHTML = '<p class="muted">Se încarcă…</p>';
     try {
-      const res = await apiFetch(`/api/admin/player-profile?name=${encodeURIComponent(name)}`);
+      const qs = new URLSearchParams({ name });
+      if (opts.identifier) qs.set('identifier', opts.identifier);
+      const res = await apiFetch(`/api/admin/player-profile?${qs.toString()}`);
       if (!res.ok) throw new Error();
       renderProfile(await res.json());
     } catch {

@@ -290,7 +290,7 @@ function renderLog(log) {
           <span style="display:flex;align-items:center;gap:8px;min-width:220px">
             ${thumb}
             <span>
-              <strong>${escapeHtml(entry.playerName || entry.identifier || 'necunoscut')}</strong>
+              <a href="admin-jucatori.html?profil=${encodeURIComponent(entry.playerName || '')}&id=${encodeURIComponent(entry.identifier || '')}" target="_blank" rel="noopener" title="Deschide profilul jucătorului" style="color:inherit;text-decoration:underline;text-decoration-color:rgba(255,255,255,.3)"><strong>${escapeHtml(entry.playerName || entry.identifier || 'necunoscut')}</strong></a>
               <span class="muted"> · ${escapeHtml(entry.caseName || '')} · ${escapeHtml(entry.rewardLabel || '')}</span>
             </span>
           </span>

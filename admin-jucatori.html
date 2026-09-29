@@ -363,6 +363,10 @@ document.getElementById('gangs-refresh-btn').addEventListener('click', loadGangs
 
 (async () => {
   const me = await requireRole('admin', 'co-fondator', 'owner');
+  // (29.09.2026) Link direct la profilul unui jucător, ex. din istoricul VIP
+  // Shop: admin-jucatori.html?profil=<nume>&id=<identificator>
+  const urlParams = new URLSearchParams(location.search);
+  if (me && urlParams.get('profil')) window.openPlayerProfile(urlParams.get('profil'), { identifier: urlParams.get('id') || undefined });
   if (!me) return;
   document.getElementById('admin-name').textContent = me.username;
   loadPlayers();

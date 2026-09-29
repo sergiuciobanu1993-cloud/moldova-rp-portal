@@ -1391,8 +1391,12 @@ async function buildPlayerProfile(name, opts = {}) {
        LEFT JOIN faction_members fm ON fm.player_id = p.id
        LEFT JOIN factions f ON f.id = fm.faction_id
        LEFT JOIN faction_ranks fr ON fr.id = fm.rank_id
-       WHERE ${opts.userId ? "p.user_id = $1" : "p.display_name ILIKE $1"}
-       LIMIT 1`, [opts.userId || cleanName]
+       ${opts.userId
+         ? "WHERE p.user_id = $1"
+         // (29.09.2026) Cu identificator (ex. click din istoricul VIP Shop):
+         // întâi contul legat de acel personaj, altfel după nume ca înainte.
+         : "WHERE p.display_name ILIKE $1 OR ($2::text IS NOT NULL AND (u.game_identifier = $2 OR p.last_identifier = $2)) ORDER BY COALESCE($2::text IS NOT NULL AND (u.game_identifier = $2 OR p.last_identifier = $2), false) DESC"}
+       LIMIT 1`, opts.userId ? [opts.userId] : [cleanName, opts.identifier || null]
     ),
     pool.query(
       `SELECT pu.id, pu.type, pu.reason, pu.duration_minutes, pu.created_at, u.username AS issued_by,
@@ -1440,6 +1444,11 @@ async function buildPlayerProfile(name, opts = {}) {
     identifier: live?.license || opts.identifier || account?.last_identifier || account?.game_identifier || undefined,
     rpName: live?.serverName || account?.last_rp_name || account?.game_identifier_name || undefined,
   });
+
+  // Cutiile deschise în VIP Shop (29.09.2026) — după identificatorul exact al
+  // personajului (cel cu care se deschid cutiile pe site).
+  const vipIdentifier = live?.license || opts.identifier || account?.game_identifier || account?.last_identifier || null;
+  const vipResult = vipIdentifier ? await fetchCaseHistory(vipIdentifier, 50) : { online: true, history: [] };
 
   let tickets = [];
   if (account) {
@@ -1541,13 +1550,16 @@ async function buildPlayerProfile(name, opts = {}) {
     recentActivity,
     killsAsVictim,
     killsAsKiller,
+    vipHistory: vipResult.online ? vipResult.history : null,
   };
 }
 
 app.get("/api/admin/player-profile", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
   const name = String(req.query.name || "").trim();
   if (!name) return res.status(400).json({ error: "Parametrul name este obligatoriu." });
-  const profile = await buildPlayerProfile(name);
+  const idRaw = String(req.query.identifier || "").trim();
+  const identifier = /^[A-Za-z0-9:._-]{3,120}$/.test(idRaw) ? idRaw : undefined;
+  const profile = await buildPlayerProfile(name, identifier ? { identifier } : {});
   if (!profile) return res.status(400).json({ error: "Nume invalid." });
   res.json(profile);
 }));

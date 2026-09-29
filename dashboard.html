@@ -85,6 +85,10 @@
     <div id="streamer-ingame-log" class="thread"><p class="muted" style="margin:0">Se încarcă…</p></div>
   </div>
 </section>
+<section class="panel" id="vip-history-panel" style="margin-top:20px" hidden>
+  <div class="head"><h2>🎁 Cutiile mele din VIP Shop</h2><span id="vip-history-summary" class="muted"></span></div>
+  <div id="vip-history-body"></div>
+</section>
 <section class="panel" id="profile-extra" style="margin-top:20px">
   <div class="head"><h2>Profilul meu</h2><span id="profile-extra-status" class="muted"></span></div>
   <div id="profile-extra-body"><p class="muted" style="margin:0">Se încarcă…</p></div>
@@ -246,6 +250,37 @@ async function loadProfileExtra() {
   }
 }
 
+// Cutiile deschise de mine în VIP Shop (29.09.2026) — aceeași listă ca
+// „Istoricul tău” din pagina VIP Shop, acum și în Dashboard.
+const VIP_ICON = { cash: '💵', item: '🎒', vehicle: '🚗', coins: '🪙' };
+async function loadVipHistory() {
+  const panel = document.getElementById('vip-history-panel');
+  const body = document.getElementById('vip-history-body');
+  const sum = document.getElementById('vip-history-summary');
+  if (!meCache?.gameLinked) { panel.hidden = true; return; }
+  panel.hidden = false;
+  body.innerHTML = '<p class="muted" style="margin:0">Se încarcă…</p>';
+  try {
+    const res = await apiFetch('/api/vip-shop/istoric?limit=50');
+    if (!res.ok) throw new Error();
+    const d = await res.json();
+    if (!d.online) { sum.textContent = ''; body.innerHTML = '<p class="muted" style="margin:0">Serverul de joc nu răspunde momentan — încearcă mai târziu.</p>'; return; }
+    const list = d.history || [];
+    if (!list.length) { sum.textContent = ''; body.innerHTML = '<p class="muted" style="margin:0">Nu ai deschis încă nicio cutie. Vezi <a href="vip-shop.html">VIP Shop</a>.</p>'; return; }
+    const spent = list.reduce((s, e) => s + (Number(e.priceCoins) || 0), 0);
+    sum.textContent = `${list.length} cutii · 🪙 ${spent} coins${list.length >= 50 ? ' (ultimele 50)' : ''}`;
+    body.innerHTML = `<div class="thread">${list.map(e => `
+      <div class="msg">
+        <b>${VIP_ICON[e.rewardType] || '🎁'} ${escapeHtml(e.rewardLabel || '—')}</b>
+        <span>${escapeHtml(e.caseName || '')} · 🪙 ${Number(e.priceCoins) || 0} · ${e.claimedAt ? 'ridicat' : '<span style="color:var(--orange)">de ridicat cu /recompense</span>'}</span>
+        <small>${fmtDate(e.createdAt)}</small>
+      </div>`).join('')}</div>`;
+  } catch {
+    sum.textContent = '';
+    body.innerHTML = '<p class="muted" style="margin:0">Nu am putut încărca cutiile.</p>';
+  }
+}
+
 // Legarea contului de personajul din joc (/leagacont) — aceeași rută ca pe
 // pagina VIP Shop (/api/cont/leaga-joc), acum și direct din Dashboard.
 let meCache = null;
@@ -256,6 +291,7 @@ function renderGameLink(me) {
   document.getElementById('game-link-name').textContent = me.gameName || 'necunoscut';
   document.getElementById('game-link-status').textContent = me.gameLinked ? 'legat' : 'nelegat';
   document.getElementById('game-link-panel').hidden = false;
+  loadVipHistory();
 }
 document.getElementById('game-link-form').addEventListener('submit', async (e) => {
   e.preventDefault();

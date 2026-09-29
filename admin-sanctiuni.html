@@ -230,7 +230,7 @@ async function loadLuxuModeration() {
 
 document.getElementById('luxu-list-body').addEventListener('click', (e) => {
   const btn = e.target.closest('.player-link');
-  if (btn) window.openPlayerProfile(btn.dataset.player);
+  if (btn) window.openPlayerProfile(btn.dataset.player, { identifier: btn.dataset.identifier, rpName: btn.dataset.rpname });
 });
 document.getElementById('luxu-refresh-btn').addEventListener('click', loadLuxuModeration);
 

@@ -1453,6 +1453,12 @@ async function buildPlayerProfile(name, opts = {}) {
 
   const account = accountResult.rows[0] || null;
 
+  // (29.09.2026) Offline și fără poză salvată pe site → căutăm în baza jocului,
+  // ca profilul să arate ceva oriunde dai click pe un jucător.
+  const gameHit = (!live && !(account && account.last_synced_at))
+    ? await fetchGamePlayerLookup({ identifier: opts.identifier || account?.game_identifier || account?.last_identifier, name: opts.rpName || cleanName })
+    : null;
+
   // Cerută separat, DUPĂ ce știm `live` — dacă jucătorul e online chiar
   // acum, moldovarp-api ne-a dat deja identificatorul lui ESX exact (vezi
   // /players), pe care îl trimitem mai departe la /assets pentru un match
@@ -1473,13 +1479,13 @@ async function buildPlayerProfile(name, opts = {}) {
   // fără soluție posibilă fără ca jucătorul să-și facă cont sau să fie online.
   const assetsResult = await fetchAssets({
     player: cleanName,
-    identifier: live?.license || opts.identifier || account?.last_identifier || account?.game_identifier || undefined,
-    rpName: live?.serverName || account?.last_rp_name || account?.game_identifier_name || undefined,
+    identifier: live?.license || opts.identifier || gameHit?.identifier || account?.last_identifier || account?.game_identifier || undefined,
+    rpName: live?.serverName || gameHit?.rpName || account?.last_rp_name || account?.game_identifier_name || undefined,
   });
 
   // Cutiile deschise în VIP Shop (29.09.2026) — după identificatorul exact al
   // personajului (cel cu care se deschid cutiile pe site).
-  const vipIdentifier = live?.license || opts.identifier || account?.game_identifier || account?.last_identifier || null;
+  const vipIdentifier = live?.license || opts.identifier || gameHit?.identifier || account?.game_identifier || account?.last_identifier || null;
   const vipResult = vipIdentifier ? await fetchCaseHistory(vipIdentifier, 50) : { online: true, history: [] };
 
   let tickets = [];
@@ -1538,7 +1544,7 @@ async function buildPlayerProfile(name, opts = {}) {
   // Pentru un cont legat, arătăm poza salvată doar dacă e chiar a
   // personajului legat (nu una rămasă dintr-o potrivire veche după nume).
   const snapshotIsOurs = !opts.identifier || !account?.last_identifier || account.last_identifier === opts.identifier;
-  const lastKnown = (!live && account && account.last_synced_at && snapshotIsOurs) ? {
+  let lastKnown = (!live && account && account.last_synced_at && snapshotIsOurs) ? {
     cash: account.last_cash, bank: account.last_bank, blackMoney: account.last_black_money,
     job: account.last_job, jobLabel: account.last_job_label,
     vehicles: account.last_vehicles || [], syncedAt: account.last_synced_at,
@@ -1546,6 +1552,20 @@ async function buildPlayerProfile(name, opts = {}) {
     staticId: account.last_static_id || null,
     gradeLabel: account.last_grade_label || null,
   } : null;
+  if (!live && !lastKnown && gameHit) {
+    const num = v => (v == null || v === "" || !Number.isFinite(Number(v))) ? null : Number(v);
+    lastKnown = {
+      fromGame: true,
+      cash: num(gameHit.cash), bank: num(gameHit.bank), blackMoney: num(gameHit.blackMoney),
+      job: gameHit.job || null, jobLabel: gameHit.jobLabel || null,
+      gradeLabel: gameHit.gradeLabel || (gameHit.grade != null ? `grad ${gameHit.grade}` : null),
+      vehicles: Array.isArray(gameHit.vehicles) ? gameHit.vehicles : [],
+      syncedAt: gameHit.lastSeen || null,
+      serverName: gameHit.rpName || null, license: gameHit.identifier || null,
+      staticId: gameHit.staticId != null ? String(gameHit.staticId) : null,
+      playtimeMinutes: playtimeOf(gameHit),
+    };
+  }
 
   return {
     name: cleanName,
@@ -1569,7 +1589,7 @@ async function buildPlayerProfile(name, opts = {}) {
     account: account ? {
       id: account.id, game_id: account.game_id, display_name: account.display_name,
       playtime_minutes: account.playtime_minutes, status: account.status, created_at: account.created_at,
-      server_playtime_minutes: playtimeOf(live) ?? (snapshotIsOurs ? account.last_server_playtime : null) ?? null,
+      server_playtime_minutes: playtimeOf(live) ?? (snapshotIsOurs ? account.last_server_playtime : null) ?? lastKnown?.playtimeMinutes ?? null,
       username: account.username, faction_name: account.faction_name, rank_name: account.rank_name,
     } : null,
     punishments: punishmentResult.rows,
@@ -1592,7 +1612,8 @@ app.get("/api/admin/player-profile", auth, requireRole(...MOD_ROLES), asyncRoute
   if (!name) return res.status(400).json({ error: "Parametrul name este obligatoriu." });
   const idRaw = String(req.query.identifier || "").trim();
   const identifier = /^[A-Za-z0-9:._-]{3,120}$/.test(idRaw) ? idRaw : undefined;
-  const profile = await buildPlayerProfile(name, identifier ? { identifier } : {});
+  const rpName = String(req.query.rpName || "").trim().slice(0, 64) || undefined;
+  const profile = await buildPlayerProfile(name, { ...(identifier ? { identifier } : {}), ...(rpName ? { rpName } : {}) });
   if (!profile) return res.status(400).json({ error: "Nume invalid." });
   res.json(profile);
 }));
@@ -2725,6 +2746,35 @@ function likeEscape(s) { return s.replace(/[\\%_]/g, "\\$&"); }
 // "/players/search", adăugată de echipa serverului): găsește și jucătorii
 // OFFLINE fără cont pe site. q numeric = ID static exact; altfel nume RP
 // (minim 3 litere). Nu stricăm căutarea dacă serverul nu răspunde.
+// (29.09.2026) Profilul unui jucător OFFLINE, fără cont pe site: îl căutăm în
+// baza jocului — după identificator (dacă serverul știe "?identifier="), altfel
+// după numele RP exact. Întoarce null dacă nu găsim nimic sigur.
+async function fetchGamePlayerLookup({ identifier, name } = {}) {
+  const get = async (qs) => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    try {
+      const r = await fetch(`http://${FIVEM_ADDRESS}/moldovarp-api/players/search?${qs}`, {
+        headers: { "x-api-key": FIVEM_API_SECRET }, signal: controller.signal,
+      });
+      if (!r.ok) return [];
+      const body = await r.json();
+      return Array.isArray(body.players) ? body.players : [];
+    } catch { return []; } finally { clearTimeout(timeout); }
+  };
+  if (identifier) {
+    const hit = (await get(`identifier=${encodeURIComponent(identifier)}`)).find(p => p.identifier === identifier);
+    if (hit) return hit;
+  }
+  const n = String(name || "").trim();
+  if (n.length >= 3) {
+    const hits = (await get(`q=${encodeURIComponent(n)}`)).filter(p => String(p.rpName || "").toLowerCase() === n.toLowerCase());
+    if (identifier) { const h = hits.find(p => p.identifier === identifier); if (h) return h; }
+    if (hits.length === 1) return hits[0];
+  }
+  return null;
+}
+
 async function fetchGamePlayerSearch(q) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 5000);

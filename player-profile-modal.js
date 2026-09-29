@@ -184,6 +184,12 @@ window.openPlayerProfile = (function () {
     `;
   }
 
+  // Secțiuni lungi care se închid/deschid (29.09.2026) — închise implicit.
+  function fold(title, summary, inner, count) {
+    if (!count) return `<h2 style="font-size:14px;margin:22px 0 10px">${title}</h2>${inner}`;
+    return `<details class="pp-fold"><summary><span><b>${title}</b> <span class="muted" style="font-weight:400">· ${summary}</span></span><span class="pp-fold-btn"></span></summary>${inner}</details>`;
+  }
+
   // Cutiile deschise în VIP Shop (29.09.2026).
   const VIP_ICON = { cash: '💵', item: '🎒', vehicle: '🚗', coins: '🪙' };
   function vipHtml(list) {
@@ -210,14 +216,14 @@ window.openPlayerProfile = (function () {
     const live = liveSrc ? `
       <div class="metrics" style="grid-template-columns:repeat(4,1fr);margin-bottom:18px">
         <article><small>STATUS</small><strong style="font-size:16px;color:${p.live ? 'var(--green)' : 'var(--muted)'}">${p.live ? 'ONLINE' : 'OFFLINE'}</strong><em>${escapeHtml(liveSrc.jobLabel || liveSrc.job || '')}</em></article>
-        <article><small>CASH</small><strong>${fmtMoney(liveSrc.cash)}</strong><em>&nbsp;</em></article>
-        <article><small>BANCĂ</small><strong>${fmtMoney(liveSrc.bank)}</strong><em>&nbsp;</em></article>
+        <article><small>CASH</small><strong>${liveSrc.cash == null ? '—' : fmtMoney(liveSrc.cash)}</strong><em>&nbsp;</em></article>
+        <article><small>BANCĂ</small><strong>${liveSrc.bank == null ? '—' : fmtMoney(liveSrc.bank)}</strong><em>&nbsp;</em></article>
         <article><small>BANI MURDARI</small><strong>${liveSrc.blackMoney == null ? '—' : fmtMoney(liveSrc.blackMoney)}</strong><em>${p.live && liveSrc.group && liveSrc.group !== 'user' ? escapeHtml(liveSrc.group) : '&nbsp;'}</em></article>
       </div>
       ${(() => {
         // (29.09.2026) ID static, ID server, grad și ore jucate pe server.
         const src = p.live || p.lastKnown || {};
-        const hours = p.live?.playtimeMinutes ?? p.account?.server_playtime_minutes;
+        const hours = p.live?.playtimeMinutes ?? p.account?.server_playtime_minutes ?? p.lastKnown?.playtimeMinutes;
         const rows = [
           src.serverName ? `Nume server: <strong>${escapeHtml(src.serverName)}</strong>` : '',
           p.live?.cfxName ? `Nume CFX: <strong>${escapeHtml(p.live.cfxName)}</strong>` : '',
@@ -230,7 +236,7 @@ window.openPlayerProfile = (function () {
         return `<p style="margin:0 0 14px"><b style="font-size:11px;color:var(--muted);letter-spacing:.08em">IDENTITATE</b><br>${rows.join('<br>')}</p>`;
       })()}
       <p style="margin:0 0 6px"><b style="font-size:11px;color:var(--muted);letter-spacing:.08em">VEHICULE</b><br>${vehiclesHtml(liveSrc.vehicles)}</p>
-      ${!p.live ? `<p class="muted" style="margin:0 0 18px;font-size:11px">Date din ultima dată văzut online: ${fmtDate(p.lastKnown.syncedAt)} — nu sunt live.</p>` : `<p style="margin:0 0 18px"></p>`}
+      ${!p.live ? `<p class="muted" style="margin:0 0 18px;font-size:11px">${p.lastKnown.fromGame ? 'Date din baza de date a jocului' : 'Date salvate de site'} — ultima dată văzut online: ${fmtDate(p.lastKnown.syncedAt)}. Nu sunt live.</p>` : `<p style="margin:0 0 18px"></p>`}
     ` : `<p class="muted" style="margin:0 0 18px">Jucătorul nu e online momentan și nu avem încă nicio poză salvată din ultima dată — se arată doar istoricul de mai jos.</p>`;
 
     const account = p.account ? `
@@ -260,16 +266,31 @@ window.openPlayerProfile = (function () {
       <h2 style="font-size:14px;margin:22px 0 10px">⚠ Sancțiuni</h2>${punishments}
       ${moderationHtml(p.moderation)}
       ${propertyHtml(p)}
-      <h2 style="font-size:14px;margin:22px 0 10px">🎁 VIP Shop — cutii deschise</h2>${vipHtml(p.vipHistory)}
-      <h2 style="font-size:14px;margin:22px 0 10px">🎫 Tichete</h2>${tickets}
-      <h2 style="font-size:14px;margin:22px 0 10px">🗂 Activitate recentă</h2>${activity}
-      <h2 style="font-size:14px;margin:22px 0 10px">🔪 Kill-uri — ca victimă</h2>${killsVictim}
-      <h2 style="font-size:14px;margin:22px 0 10px">🔪 Kill-uri — ca ucigaș</h2>${killsKiller}
+      ${fold('🎁 VIP Shop — cutii deschise', `${(p.vipHistory || []).length} cutii`, vipHtml(p.vipHistory), (p.vipHistory || []).length)}
+      ${fold('🎫 Tichete', `${p.tickets.length}`, tickets, p.tickets.length)}
+      ${fold('🗂 Activitate recentă', `${p.recentActivity.length} acțiuni`, activity, p.recentActivity.length)}
+      ${fold('🔪 Kill-uri — ca victimă', `${p.killsAsVictim.length}`, killsVictim, p.killsAsVictim.length)}
+      ${fold('🔪 Kill-uri — ca ucigaș', `${p.killsAsKiller.length}`, killsKiller, p.killsAsKiller.length)}
     `;
   }
 
   function ensureModal() {
     if (document.getElementById('profile-overlay')) return;
+    if (!document.getElementById('pp-fold-style')) {
+      const st = document.createElement('style');
+      st.id = 'pp-fold-style';
+      st.textContent = `
+        details.pp-fold{margin:18px 0 0}
+        details.pp-fold>summary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.03);font-size:13px;user-select:none}
+        details.pp-fold>summary::-webkit-details-marker{display:none}
+        details.pp-fold>summary:hover{border-color:rgba(255,138,31,.45)}
+        details.pp-fold>summary:focus-visible{outline:2px solid var(--orange);outline-offset:2px}
+        details.pp-fold .pp-fold-btn{color:var(--orange);font-weight:800;font-size:12px;white-space:nowrap}
+        details.pp-fold .pp-fold-btn::after{content:"Arată ▾"}
+        details.pp-fold[open] .pp-fold-btn::after{content:"Ascunde ▴"}
+        details.pp-fold[open]>summary{margin-bottom:12px}`;
+      document.head.appendChild(st);
+    }
     const div = document.createElement('div');
     div.className = 'modal-overlay';
     div.id = 'profile-overlay';
@@ -306,6 +327,7 @@ window.openPlayerProfile = (function () {
     try {
       const qs = new URLSearchParams({ name });
       if (opts.identifier) qs.set('identifier', opts.identifier);
+      if (opts.rpName) qs.set('rpName', opts.rpName);
       const res = await apiFetch(`/api/admin/player-profile?${qs.toString()}`);
       if (!res.ok) throw new Error();
       renderProfile(await res.json());

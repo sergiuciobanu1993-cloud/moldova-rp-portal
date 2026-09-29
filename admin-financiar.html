@@ -80,7 +80,7 @@ function ensureFactionModal() {
   });
   document.getElementById('faction-body-modal').addEventListener('click', (e) => {
     const btn = e.target.closest('.player-link');
-    if (btn) window.openPlayerProfile(btn.dataset.player);
+    if (btn) window.openPlayerProfile(btn.dataset.player, { identifier: btn.dataset.identifier, rpName: btn.dataset.rpname });
   });
 }
 
@@ -108,7 +108,7 @@ async function openFactionProfile(jobName, jobLabel) {
     modalBody.innerHTML = `<table><thead><tr><th>PERSONAJ</th><th>CFX</th><th>ID SERVER</th></tr></thead><tbody>${
       members.map(p => `
         <tr>
-          <td><strong><button type="button" class="player-link" data-player="${escapeHtml(p.name)}">${escapeHtml(p.serverName || p.name)}</button></strong></td>
+          <td><strong><button type="button" class="player-link" data-player="${escapeHtml(p.name)}"${p.license ? ` data-identifier="${escapeHtml(p.license)}"` : ''}${p.serverName ? ` data-rpname="${escapeHtml(p.serverName)}"` : ''}>${escapeHtml(p.serverName || p.name)}</button></strong></td>
           <td>${escapeHtml(p.name)}</td>
           <td>#${p.id}</td>
         </tr>`).join('')

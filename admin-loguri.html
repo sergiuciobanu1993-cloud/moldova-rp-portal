@@ -102,8 +102,8 @@ const escapeHtml = s => (s ?? '').toString()
 // Numele jucătorului — buton clickabil, la fel ca la Kill Logs/Jucători, ca
 // să deschidă fereastra flotantă de profil direct din Loguri (cerut explicit
 // — până acum trebuia căutat manual jucătorul în altă pagină).
-function playerButton(name) {
-  return `<button type="button" class="player-link" data-player="${escapeHtml(name)}">${escapeHtml(name)}</button>`;
+function playerButton(name, identifier, rpName) {
+  return `<button type="button" class="player-link" data-player="${escapeHtml(name)}"${identifier ? ` data-identifier="${escapeHtml(identifier)}"` : ''}${rpName ? ` data-rpname="${escapeHtml(rpName)}"` : ''}>${escapeHtml(name)}</button>`;
 }
 
 // Unele campuri libere (metadata de item, motivul unei actiuni de staff,
@@ -450,7 +450,7 @@ function rowsHtml(logs) {
   return logs.map(log => `
       <tr>
         <td><span class="pill ${CATEGORY_PILL[log.category] || 'off'}">${escapeHtml((CATEGORY_LABEL[log.category] || log.category).toUpperCase())}</span></td>
-        <td><strong>${log.player ? playerButton(log.player) : escapeHtml('necunoscut')}</strong>${log.rpName ? `<br><span class="muted" style="font-size:11px">${escapeHtml(log.rpName)}</span>` : ''}</td>
+        <td><strong>${log.player ? playerButton(log.player, log.identifier, log.rpName) : escapeHtml('necunoscut')}</strong>${log.rpName ? `<br><span class="muted" style="font-size:11px">${escapeHtml(log.rpName)}</span>` : ''}</td>
         <td>${formatDetails(log)}</td>
         <td>${fmtDate(log.at)}</td>
       </tr>`).join('');
@@ -528,7 +528,7 @@ document.getElementById('refresh-btn').addEventListener('click', () => loadLogs(
 // la fel ca la Kill Logs/Jucători — cerut explicit de admin.
 document.getElementById('list-body').addEventListener('click', (e) => {
   const btn = e.target.closest('.player-link');
-  if (btn) window.openPlayerProfile(btn.dataset.player);
+  if (btn) window.openPlayerProfile(btn.dataset.player, { identifier: btn.dataset.identifier, rpName: btn.dataset.rpname });
 });
 
 (async () => {

@@ -85,6 +85,16 @@
     <div id="streamer-ingame-log" class="thread"><p class="muted" style="margin:0">Se încarcă…</p></div>
   </div>
 </section>
+<style>
+  details.fold>summary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.03);font-size:12px;color:var(--muted);user-select:none}
+  details.fold>summary::-webkit-details-marker{display:none}
+  details.fold>summary:hover{color:var(--text);border-color:rgba(255,138,31,.4)}
+  details.fold>summary .fold-btn{color:var(--orange);font-weight:800;white-space:nowrap}
+  details.fold>summary .fold-btn::after{content:"Arată ▾"}
+  details.fold[open]>summary .fold-btn::after{content:"Ascunde ▴"}
+  details.fold[open]>summary{margin-bottom:10px}
+  details.fold>summary:focus-visible{outline:2px solid var(--orange);outline-offset:2px}
+</style>
 <section class="panel" id="vip-history-panel" style="margin-top:20px" hidden>
   <div class="head"><h2>🎁 Cutiile mele din VIP Shop</h2><span id="vip-history-summary" class="muted"></span></div>
   <div id="vip-history-body"></div>
@@ -157,10 +167,14 @@ function summarizeActivity(a) {
     money_vehicle_deposit: 'Bani puși în torpedou/portbagaj', money_vehicle_withdraw: 'Bani scoși din torpedou/portbagaj',
     item_obtained: 'Item obținut', item_buy: 'Cumpărătură', item_transfer: 'Transfer item',
     item_craft: 'Crafting', item_drop: 'Item aruncat', vehicle_acquired: 'Vehicul nou',
-    admin: 'Acțiune de staff asupra ta',
+    admin: 'Acțiune de staff asupra ta', money: 'Bani',
   };
   const d = a.details || {};
-  const extra = d.message || d.reason || d.item || d.action || d.vehicle || null;
+  const amount = d.delta ?? d.amount ?? d.change ?? null;
+  const moneyText = (amount != null && Number.isFinite(Number(amount)))
+    ? `${Number(amount) > 0 ? '+' : ''}$${Number(amount).toLocaleString('ro-RO')}${d.account ? ` (${d.account === 'bank' ? 'bancă' : d.account === 'black_money' ? 'bani murdari' : d.account === 'money' ? 'cash' : d.account})` : ''}`
+    : null;
+  const extra = d.message || d.reason || d.item || d.action || d.vehicle || moneyText || null;
   return { label: labels[a.category] || a.category, extra: extra ? String(extra).slice(0, 120) : null };
 }
 function activityBlock(p) {
@@ -170,7 +184,7 @@ function activityBlock(p) {
     const { label, extra } = summarizeActivity(a);
     return `<div class="msg"><b>${escapeHtml(label)}</b>${extra ? `<span>${escapeHtml(extra)}</span>` : ''}<small>${fmtDate(a.at)}</small></div>`;
   }).join('');
-  return `<small style="color:var(--muted);display:block;margin:18px 0 8px">ACTIVITATE RECENTĂ</small><div class="thread">${rows}</div>`;
+  return `<small style="color:var(--muted);display:block;margin:18px 0 8px">ACTIVITATE RECENTĂ</small><details class="fold"><summary><span>Ultimele ${items.length} acțiuni</span><span class="fold-btn"></span></summary><div class="thread">${rows}</div></details>`;
 }
 
 // „Profilul meu" — bani/vehicule live (dacă ești conectat la server chiar
@@ -269,12 +283,12 @@ async function loadVipHistory() {
     if (!list.length) { sum.textContent = ''; body.innerHTML = '<p class="muted" style="margin:0">Nu ai deschis încă nicio cutie. Vezi <a href="vip-shop.html">VIP Shop</a>.</p>'; return; }
     const spent = list.reduce((s, e) => s + (Number(e.priceCoins) || 0), 0);
     sum.textContent = `${list.length} cutii · 🪙 ${spent} coins${list.length >= 50 ? ' (ultimele 50)' : ''}`;
-    body.innerHTML = `<div class="thread">${list.map(e => `
+    body.innerHTML = `<details class="fold"><summary><span>${list.length} cutii deschise</span><span class="fold-btn"></span></summary><div class="thread">${list.map(e => `
       <div class="msg">
         <b>${VIP_ICON[e.rewardType] || '🎁'} ${escapeHtml(e.rewardLabel || '—')}</b>
         <span>${escapeHtml(e.caseName || '')} · 🪙 ${Number(e.priceCoins) || 0} · ${e.claimedAt ? 'ridicat' : '<span style="color:var(--orange)">de ridicat cu /recompense</span>'}</span>
         <small>${fmtDate(e.createdAt)}</small>
-      </div>`).join('')}</div>`;
+      </div>`).join('')}</div></details>`;
   } catch {
     sum.textContent = '';
     body.innerHTML = '<p class="muted" style="margin:0">Nu am putut încărca cutiile.</p>';

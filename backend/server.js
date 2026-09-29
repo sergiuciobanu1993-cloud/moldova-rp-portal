@@ -3067,13 +3067,35 @@ app.get("/api/admin/stats", auth, requireRole(...ADMIN_ROLES), asyncRoute(async 
   });
 }));
 
-app.get("/api/admin/audit-logs", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (_req, res) => {
-  const { rows } = await pool.query(
-    `SELECT l.*,u.username actor FROM audit_logs l
-     LEFT JOIN users u ON u.id=l.actor_id
-     ORDER BY l.created_at DESC LIMIT 100`
-  );
-  res.json(rows);
+// (29.09.2026) Filtre: implicit doar acțiunile STAFF-ului (nu și ale
+// jucătorilor obișnuiți) și fără autentificări; opțional toată lumea,
+// autentificările, un singur om (actor) și pagini.
+app.get("/api/admin/audit-logs", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+  const per = Math.min(Math.max(parseInt(req.query.per, 10) || 50, 1), 200);
+  const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+  const where = [];
+  const params = [];
+  if (req.query.scope !== "all") {
+    params.push(MOD_ROLES);
+    where.push(`r.name = ANY($${params.length})`);
+  }
+  if (req.query.auth !== "1") where.push(`l.action NOT LIKE 'auth.%'`);
+  if (/^[0-9a-f-]{36}$/i.test(String(req.query.actor || ""))) {
+    params.push(req.query.actor);
+    where.push(`l.actor_id = $${params.length}`);
+  }
+  const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
+  const base = `FROM audit_logs l LEFT JOIN users u ON u.id = l.actor_id LEFT JOIN roles r ON r.id = u.role_id ${whereSql}`;
+  const [{ rows }, { rows: cnt }] = await Promise.all([
+    pool.query(
+      `SELECT l.id, l.actor_id, l.action, l.entity_type, l.entity_id, l.metadata, l.created_at,
+              COALESCE(u.discord_username, u.username) actor, r.name actor_role,
+              tu.id target_user_id, COALESCE(tu.discord_username, tu.username) target_user
+       ${base.replace("LEFT JOIN roles r ON r.id = u.role_id", "LEFT JOIN roles r ON r.id = u.role_id LEFT JOIN users tu ON l.entity_type = 'user' AND tu.id::text = l.entity_id")}
+       ORDER BY l.created_at DESC LIMIT ${per} OFFSET ${(page - 1) * per}`, params),
+    pool.query(`SELECT COUNT(*)::int n ${base}`, params),
+  ]);
+  res.json({ rows, total: cnt[0]?.n || 0, page, per });
 }));
 
 // ---------------------------------------------------------------------------

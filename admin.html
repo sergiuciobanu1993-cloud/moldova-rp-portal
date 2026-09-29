@@ -4,40 +4,126 @@
 <aside class="side"><a class="brand" href="index.html"><img src="assets/logo.png" alt=""><b>MOLDOVA<span>RP</span></b></a><p>ADMINISTRAȚIE</p><a class="sel" href="admin.html">▦ Dashboard</a><a href="admin-utilizatori.html">👤 Utilizatori</a><a href="admin-jucatori.html">♙ Jucători</a><a href="admin-financiar.html">◆ Facțiuni</a><a href="admin-sanctiuni.html">⚠ Sancțiuni</a><a>▤ Reclamații</a><a>⚖ CK</a><a href="admin-regulamente.html">📚 Regulamente</a><a href="admin-continut.html">📝 Conținut pagini</a><a href="admin-anunturi.html">◉ Anunțuri</a><a href="admin-actualizari.html">🆕 Actualizări</a><a href="admin-tichete.html">🎫 Tichete</a><a href="vip-shop.html">🎁 VIP Shop</a><a href="admin-vip-shop.html">🛠 Editor VIP Shop</a><a href="admin-loguri.html">🗂 Loguri</a><a href="admin-kill-logs.html">🔪 Kill Logs</a><a>⌁ Audit Logs</a><a href="admin-txadmin.html" id="nav-txadmin">🖥 txAdmin</a><a class="back" href="dashboard.html">← Contul meu</a><a class="back" href="index.html">← Site public</a></aside>
 <main><header><div><small>PANEL ADMINISTRATIV</small><h1>Dashboard</h1></div><a class="admin" href="dashboard.html" title="Înapoi la contul meu" style="text-decoration:none"><span id="admin-name">…</span> <i></i></a></header>
 <section class="metrics"><article><small>JUCĂTORI</small><strong id="metric-players">—</strong><em>TOTAL</em></article><article><small>ONLINE</small><strong id="metric-online">—</strong><em>LIVE</em></article><article><small>RECLAMAȚII</small><strong id="metric-complaints">—</strong><em>DESCHISE</em></article><article><small>SANCȚIUNI</small><strong id="metric-punishments">—</strong><em>LUNA CURENTĂ</em></article></section>
-<section class="tablebox"><div class="title"><h2>Activitate administrativă</h2><button>+ Acțiune nouă</button></div><table><thead><tr><th>ADMIN</th><th>ACȚIUNE</th><th>ȚINTĂ</th><th>DATA</th></tr></thead><tbody id="audit-body"><tr><td colspan="4">Se încarcă…</td></tr></tbody></table></section>
+<section class="tablebox"><div class="title"><h2>Activitate administrativă</h2>
+  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <select id="audit-scope" class="filter-select"><option value="staff">Doar staff</option><option value="all">Toată lumea (și jucători)</option></select>
+    <label style="display:flex;gap:6px;align-items:center;font-size:12px;color:var(--muted)"><input type="checkbox" id="audit-auth"> Arată și logările</label>
+  </div></div>
+  <p id="audit-actor-bar" style="margin:0 22px 12px" hidden></p>
+  <div style="overflow-x:auto"><table><thead><tr><th>CINE</th><th>CE A FĂCUT</th><th>DETALII</th><th>CÂND</th></tr></thead><tbody id="audit-body"><tr><td colspan="4">Se încarcă…</td></tr></tbody></table></div>
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:14px 22px;flex-wrap:wrap">
+    <button type="button" id="audit-prev" class="btn-ghost">← Mai noi</button>
+    <span id="audit-info" class="muted" style="font-size:12px"></span>
+    <button type="button" id="audit-next" class="btn-ghost">Mai vechi →</button>
+  </div>
+</section>
 </main>
 <script src="auth-client.js"></script>
+<script src="player-profile-modal.js"></script>
 <script>
+const esc = v => (v ?? '').toString().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+// Acțiunile, pe înțelesul tuturor (29.09.2026).
+const ACTION_LABEL = {
+  'auth.login': 'S-a logat pe site', 'auth.discord_login': 'S-a logat cu Discord', 'auth.discord_signup': 'Cont nou (Discord)',
+  'auth.set_password': 'Și-a setat parola', 'auth.reset_password': 'Și-a resetat parola',
+  'ticket.create': 'A deschis un tichet', 'ticket.reply': 'A răspuns la un tichet', 'ticket.update': 'A schimbat statusul unui tichet',
+  'ticket.edit': 'A editat un tichet', 'ticket.delete': 'A șters un tichet',
+  'user.role_change': 'A schimbat rangul unui cont', 'user.referral_code_change': 'A setat un cod de referal', 'user.delete': 'A șters un cont',
+  'user.deactivate': 'A dezactivat un cont', 'user.activate': 'A activat un cont',
+  'punishment.create': 'A dat o sancțiune', 'player.update': 'A editat un jucător',
+  'player.faction_assign': 'A pus un jucător într-o facțiune', 'player.faction_remove': 'A scos un jucător din facțiune',
+  'faction.create': 'A creat o facțiune', 'faction.update': 'A editat o facțiune',
+  'faction_rank.create': 'A creat un rank', 'faction_rank.update': 'A editat un rank', 'faction_rank.delete': 'A șters un rank',
+  'announcement.create': 'A publicat un anunț', 'announcement.update': 'A editat un anunț', 'announcement.delete': 'A șters un anunț',
+  'regulation.create': 'A adăugat un regulament', 'regulation.update': 'A editat un regulament', 'regulation.delete': 'A șters un regulament',
+  'content.update': 'A editat conținutul unei pagini',
+  'vip_shop.case.create': 'VIP Shop: cutie nouă', 'vip_shop.case.update': 'VIP Shop: a editat o cutie', 'vip_shop.case.delete': 'VIP Shop: a șters o cutie',
+  'vip_shop.reward.create': 'VIP Shop: recompensă nouă', 'vip_shop.reward.update': 'VIP Shop: a editat o recompensă',
+  'vip_shop.reward.delete': 'VIP Shop: a șters o recompensă', 'vip_shop.reward.reorder': 'VIP Shop: a schimbat ordinea recompenselor',
+  'vip_shop.item_value': 'VIP Shop: a setat valoarea unui item', 'vip_shop.sell_back': 'VIP Shop: a vândut înapoi o recompensă',
+  'mdt.dosar.create': 'MDT: dosar nou', 'mdt.dosar.update': 'MDT: a editat un dosar', 'mdt.dosar.delete': 'MDT: a șters un dosar',
+  'mdt.mandat.create': 'MDT: mandat nou', 'mdt.mandat.update': 'MDT: a editat un mandat', 'mdt.mandat.delete': 'MDT: a șters un mandat',
+  'mdt.raport.create': 'MDT: raport nou', 'mdt.raport.update': 'MDT: a editat un raport', 'mdt.raport.delete': 'MDT: a șters un raport',
+  'mdt.proba.create': 'MDT: probă nouă', 'mdt.proba.delete': 'MDT: a șters o probă',
+};
+const ROLE_LABEL = { player: 'Jucător', streamer: 'Streamer', moderator: 'Moderator', admin: 'Admin', 'co-fondator': 'Co-fondator', owner: 'Fondator' };
+const auditState = { page: 1, per: 50, scope: 'staff', auth: false, actor: null, actorName: '' };
+
+function auditDetails(l) {
+  const m = l.metadata || {};
+  const bits = [];
+  if (l.target_user) bits.push(`cont: <button type="button" class="player-link" data-profile-user="${esc(l.target_user_id)}" data-profile-name="${esc(l.target_user)}">${esc(l.target_user)}</button>`);
+  else if (l.entity_type) bits.push(`<span class="muted">${esc(l.entity_type)}${l.entity_id ? ' #' + esc(String(l.entity_id).slice(0, 8)) : ''}</span>`);
+  for (const [k, v] of Object.entries(m)) {
+    if (v == null || typeof v === 'object' || k === 'discordId') continue;
+    bits.push(`<span class="muted">${esc(k)}:</span> ${esc(String(v).slice(0, 80))}`);
+  }
+  return bits.join(' · ') || '—';
+}
+
+async function loadAudit() {
+  const tbody = document.getElementById('audit-body');
+  const qs = new URLSearchParams({ page: auditState.page, per: auditState.per, scope: auditState.scope });
+  if (auditState.auth) qs.set('auth', '1');
+  if (auditState.actor) qs.set('actor', auditState.actor);
+  try {
+    const res = await apiFetch('/api/admin/audit-logs?' + qs.toString());
+    if (!res.ok) throw new Error();
+    const d = await res.json();
+    const logs = d.rows || [];
+    tbody.innerHTML = logs.length ? logs.map(l => `
+      <tr>
+        <td>${l.actor_id
+          ? `<button type="button" class="player-link" data-actor="${esc(l.actor_id)}" data-actor-name="${esc(l.actor)}" title="Vezi doar ce a făcut el">${esc(l.actor || '?')}</button>
+             <br><small class="muted">${esc(ROLE_LABEL[l.actor_role] || l.actor_role || '')}</small>
+             · <button type="button" class="player-link" style="font-size:11px;font-weight:400" data-profile-user="${esc(l.actor_id)}" data-profile-name="${esc(l.actor)}">profil</button>`
+          : '<span class="muted">Sistem</span>'}</td>
+        <td>${esc(ACTION_LABEL[l.action] || l.action)}</td>
+        <td style="font-size:12px">${auditDetails(l)}</td>
+        <td style="white-space:nowrap">${new Date(l.created_at).toLocaleString('ro-RO')}</td>
+      </tr>`).join('') : '<tr><td colspan="4">Nicio acțiune găsită.</td></tr>';
+    const pages = Math.max(1, Math.ceil((d.total || 0) / auditState.per));
+    document.getElementById('audit-info').textContent = `Pagina ${auditState.page} din ${pages} · ${d.total || 0} acțiuni`;
+    document.getElementById('audit-prev').disabled = auditState.page <= 1;
+    document.getElementById('audit-next').disabled = auditState.page >= pages;
+  } catch {
+    tbody.innerHTML = '<tr><td colspan="4">Nu am putut încărca activitatea.</td></tr>';
+  }
+}
+
+function renderActorBar() {
+  const bar = document.getElementById('audit-actor-bar');
+  if (!auditState.actor) { bar.hidden = true; return; }
+  bar.hidden = false;
+  bar.innerHTML = `Arăt doar acțiunile lui <b>${esc(auditState.actorName)}</b> · <button type="button" class="player-link" id="audit-clear-actor">✕ arată pe toți</button>`;
+  document.getElementById('audit-clear-actor').addEventListener('click', () => { auditState.actor = null; auditState.page = 1; renderActorBar(); loadAudit(); });
+}
+
+document.getElementById('audit-body').addEventListener('click', (e) => {
+  const prof = e.target.closest('[data-profile-user]');
+  if (prof) { window.openPlayerProfile(prof.dataset.profileName, { userId: prof.dataset.profileUser }); return; }
+  const act = e.target.closest('[data-actor]');
+  if (act) { auditState.actor = act.dataset.actor; auditState.actorName = act.dataset.actorName; auditState.page = 1; auditState.scope = 'all'; document.getElementById('audit-scope').value = 'all'; renderActorBar(); loadAudit(); }
+});
+document.getElementById('audit-scope').addEventListener('change', (e) => { auditState.scope = e.target.value; auditState.page = 1; loadAudit(); });
+document.getElementById('audit-auth').addEventListener('change', (e) => { auditState.auth = e.target.checked; auditState.page = 1; loadAudit(); });
+document.getElementById('audit-prev').addEventListener('click', () => { if (auditState.page > 1) { auditState.page--; loadAudit(); } });
+document.getElementById('audit-next').addEventListener('click', () => { auditState.page++; loadAudit(); });
+
 (async () => {
   const me = await requireRole('admin', 'co-fondator', 'owner');
   if (!me) return;
   document.getElementById('admin-name').textContent = me.username;
-
   try {
-    const [statsRes, logsRes] = await Promise.all([
-      apiFetch('/api/admin/stats'),
-      apiFetch('/api/admin/audit-logs')
-    ]);
-    if (!statsRes.ok || !logsRes.ok) throw new Error();
-
+    const statsRes = await apiFetch('/api/admin/stats');
+    if (!statsRes.ok) throw new Error();
     const stats = await statsRes.json();
     document.getElementById('metric-players').textContent = Number(stats.players).toLocaleString('ro-RO');
     document.getElementById('metric-online').textContent = stats.online;
     document.getElementById('metric-complaints').textContent = stats.complaints;
     document.getElementById('metric-punishments').textContent = stats.punishments;
-
-    const logs = await logsRes.json();
-    const tbody = document.getElementById('audit-body');
-    tbody.innerHTML = logs.length ? logs.map(l => `
-      <tr>
-        <td>${l.actor || 'Sistem'}</td>
-        <td>${l.action}</td>
-        <td>${l.entity_type ? l.entity_type + (l.entity_id ? ' #' + String(l.entity_id).slice(0, 8) : '') : '—'}</td>
-        <td>${new Date(l.created_at).toLocaleString('ro-RO')}</td>
-      </tr>`).join('') : '<tr><td colspan="4">Niciun eveniment încă.</td></tr>';
-  } catch {
-    document.getElementById('audit-body').innerHTML = '<tr><td colspan="4">Nu am putut încărca datele administrative.</td></tr>';
-  }
+  } catch {}
+  loadAudit();
 })();
 </script>
 </body></html>

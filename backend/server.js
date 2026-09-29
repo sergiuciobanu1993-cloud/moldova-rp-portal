@@ -1591,6 +1591,7 @@ async function buildPlayerProfile(name, opts = {}) {
       playtime_minutes: account.playtime_minutes, status: account.status, created_at: account.created_at,
       server_playtime_minutes: playtimeOf(live) ?? (snapshotIsOurs ? account.last_server_playtime : null) ?? lastKnown?.playtimeMinutes ?? null,
       username: account.username, faction_name: account.faction_name, rank_name: account.rank_name,
+      game_linked: !!account.game_identifier, game_name: account.game_identifier_name || null,
     } : null,
     punishments: punishmentResult.rows,
     moderation,

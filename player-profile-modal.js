@@ -237,7 +237,9 @@ window.openPlayerProfile = (function () {
       })()}
       <p style="margin:0 0 6px"><b style="font-size:11px;color:var(--muted);letter-spacing:.08em">VEHICULE</b><br>${vehiclesHtml(liveSrc.vehicles)}</p>
       ${!p.live ? `<p class="muted" style="margin:0 0 18px;font-size:11px">${p.lastKnown.fromGame ? 'Date din baza de date a jocului' : 'Date salvate de site'} — ultima dată văzut online: ${fmtDate(p.lastKnown.syncedAt)}. Nu sunt live.</p>` : `<p style="margin:0 0 18px"></p>`}
-    ` : `<p class="muted" style="margin:0 0 18px">Jucătorul nu e online momentan și nu avem încă nicio poză salvată din ultima dată — se arată doar istoricul de mai jos.</p>`;
+    ` : (p.account && !p.account.game_linked
+      ? `<p class="muted" style="margin:0 0 18px">Contul de site nu e legat de niciun personaj din joc, așa că nu avem de unde lua banii, jobul sau mașinile lui. Jucătorul trebuie să scrie <b>/leagacont</b> în joc și să pună codul în Dashboard, la „Contul din joc”.</p>`
+      : `<p class="muted" style="margin:0 0 18px">Jucătorul nu e online acum și nu avem încă date salvate despre personajul lui — apar automat după ce intră o dată pe server. Mai jos e istoricul de pe site.</p>`);
 
     const account = p.account ? `
       <p style="margin:0 0 18px">
@@ -245,6 +247,9 @@ window.openPlayerProfile = (function () {
         ${escapeHtml(p.account.username)} ${p.account.game_id ? `<span class="muted">(ID #${escapeHtml(p.account.game_id)})</span>` : ''}
         ${p.account.faction_name ? ` · ${escapeHtml(p.account.faction_name)}${p.account.rank_name ? ' — ' + escapeHtml(p.account.rank_name) : ''}` : ''}
         ${p.account.playtime_minutes != null ? ` · ${Math.round(p.account.playtime_minutes / 60)}h jucate` : ''}
+        <br>${p.account.game_linked
+          ? `<span class="pill on">LEGAT DE JOC</span> <span class="muted">personaj: ${escapeHtml(p.account.game_name || '—')}</span>`
+          : `<span class="pill warn">NELEGAT DE JOC</span> <span class="muted">— n-a folosit încă /leagacont</span>`}
       </p>` : `<p class="muted" style="margin:0 0 18px">Jucătorul nu are (încă) cont pe site.</p>`;
 
     const punishments = p.punishments.length ? `<table><thead><tr><th>TIP</th><th>MOTIV</th><th>DE CINE</th><th>CÂND</th></tr></thead><tbody>${

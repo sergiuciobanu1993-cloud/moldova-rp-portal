@@ -199,6 +199,12 @@ async function loadProfileExtra() {
     const charName = src?.serverName || p.name;
     const charId = p.identifier || src?.license;
     const jobText = src ? [src.jobLabel || src.job, src.gradeLabel].filter(Boolean).join(' · ') : '';
+    // Căsuțele de sus (29.09.2026): ID static, ore de pe server, facțiunea
+    // (jobul) și rankul (gradul din job), direct din datele din joc.
+    if (src?.staticId) document.getElementById('stat-id').textContent = '#' + src.staticId;
+    if (p.account?.server_playtime_minutes != null) document.getElementById('stat-playtime').textContent = Math.floor(p.account.server_playtime_minutes / 60) + 'h';
+    if (src && (src.jobLabel || src.job)) document.getElementById('stat-faction').textContent = src.jobLabel || src.job;
+    if (src?.gradeLabel) document.getElementById('stat-rank').textContent = src.gradeLabel;
     const identity = `
       <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-end;margin:0 0 16px">
         <div><small style="display:block;font-size:11px;color:var(--muted);margin-bottom:4px">PERSONAJ</small>

@@ -120,6 +120,9 @@ ALTER TABLE players ADD COLUMN IF NOT EXISTS last_static_id VARCHAR(32);
 -- așa cum le ține serverul de joc — nu doar de când le numără site-ul
 -- (playtime_minutes). Salvate cât jucătorul e online, ca să rămână și offline.
 ALTER TABLE players ADD COLUMN IF NOT EXISTS last_server_playtime INTEGER;
+-- last_grade_label (29.09.2026): gradul din job (ex. „Director”), salvat ca
+-- să apară ca Rank în Dashboard și când jucătorul e offline.
+ALTER TABLE players ADD COLUMN IF NOT EXISTS last_grade_label VARCHAR(80);
 
 CREATE TABLE IF NOT EXISTS factions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

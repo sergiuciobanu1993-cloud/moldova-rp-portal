@@ -179,6 +179,8 @@
         <div class="reveal-track" id="reveal-track"></div>
       </div>
     </div>
+    <div id="reveal-actions" style="display:none;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:18px"></div>
+    <p id="reveal-sell-msg" class="muted" style="margin:10px 0 0" hidden></p>
     <button type="button" class="btn-primary" id="reveal-close" hidden style="margin-top:18px">Am înțeles</button>
   </div>
 </div>
@@ -702,6 +704,11 @@ async function openCase(caseId) {
   const flash = document.getElementById('reveal-flash');
 
   overlay.style.display = 'flex';
+  const actions = document.getElementById('reveal-actions');
+  actions.style.display = 'none';
+  actions.innerHTML = '';
+  document.getElementById('reveal-sell-msg').hidden = true;
+  closeBtn.textContent = 'Am înțeles';
   title.textContent = 'Se deschide…';
   text.textContent = 'Se trimite cererea către server…';
   closeBtn.hidden = true;
@@ -742,6 +749,40 @@ async function openCase(caseId) {
     text.textContent = d.reward.type === 'coins'
       ? `Ai câștigat: ${d.reward.label}. Au fost adăugați direct în contul tău de coins (în meniul VIP din joc apar după relog).`
       : `Ai câștigat: ${d.reward.label}. Intră pe server și scrie /recompense ca să-l ridici. Coins-ii s-au scăzut deja; dacă ești pe server, meniul VIP din joc îți arată soldul nou după relog.`;
+    // (29.09.2026) Mașină/armă cu valoare setată: alege imediat — o păstrezi
+    // (o ridici din joc) sau o vinzi înapoi pentru 50% din valoare.
+    if (d.sell && (d.sell.coins || d.sell.money)) {
+      text.textContent = `Ai câștigat: ${d.reward.label}. O păstrezi sau o vinzi înapoi pentru ${d.sell.pct}% din valoare?`;
+      actions.innerHTML = `
+        ${d.sell.coins ? `<button type="button" class="btn-ghost" data-rsell="coins" data-amount="${d.sell.coins}">Vinde pe 🪙 ${d.sell.coins} coins</button>` : ''}
+        ${d.sell.money ? `<button type="button" class="btn-ghost" data-rsell="money" data-amount="${d.sell.money}">Vinde pe $${Number(d.sell.money).toLocaleString('ro-RO')}</button>` : ''}`;
+      actions.style.display = 'flex';
+      closeBtn.textContent = 'Păstrez — o ridic din joc';
+      actions.querySelectorAll('[data-rsell]').forEach(b => b.addEventListener('click', async () => {
+        const currency = b.dataset.rsell;
+        const amount = Number(b.dataset.amount);
+        const price = currency === 'coins' ? `${amount} coins` : `$${amount.toLocaleString('ro-RO')} în bancă`;
+        const msg = document.getElementById('reveal-sell-msg');
+        actions.querySelectorAll('button').forEach(x => { x.disabled = true; });
+        closeBtn.disabled = true;
+        try {
+          const r = await apiFetch('/api/vip-shop/vinde', { method: 'POST', body: JSON.stringify({ openingId: d.sell.openingId, currency }) });
+          const rd = await r.json().catch(() => ({}));
+          if (!r.ok) throw new Error(rd.error || 'Nu am putut vinde recompensa.');
+          title.textContent = 'Vândut!';
+          text.textContent = `Ai vândut ${d.reward.label} și ai primit ${price}.`;
+          actions.style.display = 'none';
+          closeBtn.textContent = 'Am înțeles';
+          await loadAll();
+        } catch (err) {
+          msg.hidden = false; msg.style.color = '#ff8a8a';
+          msg.textContent = err.message + ' Recompensa rămâne a ta — o poți ridica din joc.';
+          actions.querySelectorAll('button').forEach(x => { x.disabled = false; });
+        } finally {
+          closeBtn.disabled = false;
+        }
+      }));
+    }
     closeBtn.hidden = false;
     await loadAll();
   } catch {

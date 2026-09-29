@@ -1739,7 +1739,20 @@ app.post("/api/vip-shop/deschide", auth, asyncRoute(async (req, res) => {
     };
     return res.status(400).json({ error: messages[outcome.error] || "Nu am putut deschide recompensa." });
   }
-  res.json({ ok: true, ...outcome.result });
+  // (29.09.2026) Oferta de vânzare înapoi, arătată direct după învârtire:
+  // găsim deschiderea tocmai creată (cea mai nouă neridicată cu aceeași
+  // recompensă) ca jucătorul să poată alege imediat: o păstrează sau o vinde.
+  let sell = null;
+  const won = outcome.result?.reward;
+  if (won && (won.type === "vehicle" || won.type === "item")) {
+    const [coinsResult, itemValues] = await Promise.all([fetchCoins(identifier), loadItemValues()]);
+    const offer = sellOfferFor(itemValues, won.type, won.data || {});
+    const opening = (coinsResult.pending || [])
+      .filter(p => p.reward_type === won.type && p.reward_label === won.label)
+      .sort((a, b) => Number(b.id) - Number(a.id))[0];
+    if (offer && opening) sell = { openingId: Number(opening.id), ...offer };
+  }
+  res.json({ ok: true, ...outcome.result, sell });
 }));
 
 // Vinde înapoi o mașină/armă câștigată și încă neridicată (29.09.2026), pentru

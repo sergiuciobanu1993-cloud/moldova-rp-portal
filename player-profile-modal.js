@@ -239,7 +239,8 @@ window.openPlayerProfile = (function () {
       ${!p.live ? `<p class="muted" style="margin:0 0 18px;font-size:11px">${p.lastKnown.fromGame ? 'Date din baza de date a jocului' : 'Date salvate de site'} — ultima dată văzut online: ${fmtDate(p.lastKnown.syncedAt)}. Nu sunt live.</p>` : `<p style="margin:0 0 18px"></p>`}
     ` : (p.account && !p.account.game_linked
       ? `<p class="muted" style="margin:0 0 18px">Contul de site nu e legat de niciun personaj din joc, așa că nu avem de unde lua banii, jobul sau mașinile lui. Jucătorul trebuie să scrie <b>/leagacont</b> în joc și să pună codul în Dashboard, la „Contul din joc”.</p>`
-      : `<p class="muted" style="margin:0 0 18px">Jucătorul nu e online acum și nu avem încă date salvate despre personajul lui — apar automat după ce intră o dată pe server. Mai jos e istoricul de pe site.</p>`);
+      : `<p class="muted" style="margin:0 0 18px">Jucătorul nu e online acum și nu avem încă date salvate despre personajul legat — apar automat după ce intră pe server cu acel personaj.${p.lastSeenFromLogs ? ` Ultima activitate pe server (din loguri): <b>${fmtDate(p.lastSeenFromLogs)}</b>.` : ''}</p>
+         ${(p.otherCharacters || []).length ? `<p style="margin:-8px 0 18px;font-size:12px"><span class="pill warn">ALT PERSONAJ</span> În loguri apare jucând cu alt personaj decât cel legat pe site (<code>${p.otherCharacters.map(escapeHtml).join('</code>, <code>')}</code>). Datele se salvează doar pentru personajul legat — dacă vrea altul, să refacă <b>/leagacont</b> de pe el.</p>` : ''}`);
 
     const account = p.account ? `
       <p style="margin:0 0 18px">

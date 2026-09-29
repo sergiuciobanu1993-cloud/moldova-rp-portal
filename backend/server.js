@@ -1455,9 +1455,20 @@ async function buildPlayerProfile(name, opts = {}) {
 
   // (29.09.2026) Offline și fără poză salvată pe site → căutăm în baza jocului,
   // ca profilul să arate ceva oriunde dai click pe un jucător.
+  // Numele RP îl putem afla și din logurile lui din joc (fiecare log are
+  // identificatorul și numele RP) — util când nu avem altă sursă.
+  const knownIdentifier = opts.identifier || account?.game_identifier || account?.last_identifier || null;
+  const ownLogs = (activityResult.logs || []).filter(l => !knownIdentifier || l.identifier === knownIdentifier);
+  const rpFromLogs = ownLogs.find(l => l.rpName)?.rpName || null;
   const gameHit = (!live && !(account && account.last_synced_at))
-    ? await fetchGamePlayerLookup({ identifier: opts.identifier || account?.game_identifier || account?.last_identifier, name: opts.rpName || cleanName })
+    ? await fetchGamePlayerLookup({ identifier: knownIdentifier, name: opts.rpName || rpFromLogs || cleanName })
     : null;
+  // Ultima dată văzut pe server, după loguri (dacă n-avem altă sursă).
+  const lastSeenFromLogs = (activityResult.logs || []).reduce((m, l) => (l.at && (!m || new Date(l.at) > new Date(m))) ? l.at : m, null);
+  // A jucat pe alt personaj decât cel legat? (ESX multichar: char0/char1…)
+  const otherCharacters = knownIdentifier
+    ? [...new Set((activityResult.logs || []).map(l => l.identifier).filter(id => id && id !== knownIdentifier))]
+    : [];
 
   // Cerută separat, DUPĂ ce știm `live` — dacă jucătorul e online chiar
   // acum, moldovarp-api ne-a dat deja identificatorul lui ESX exact (vezi
@@ -1605,6 +1616,8 @@ async function buildPlayerProfile(name, opts = {}) {
     killsAsVictim,
     killsAsKiller,
     vipHistory: vipResult.online ? vipResult.history : null,
+    lastSeenFromLogs,
+    otherCharacters,
   };
 }
 

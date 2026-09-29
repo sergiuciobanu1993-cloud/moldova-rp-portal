@@ -565,3 +565,16 @@ CREATE TABLE IF NOT EXISTS vip_reward_order (
   reward_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Valoarea mașinilor/armelor din cutiile VIP Shop (29.09.2026), setată de staff
+-- în Editorul VIP Shop: cât valorează în coins și în bani din joc. Jucătorul
+-- care câștigă una o poate vinde înapoi pentru 50% din valoare (în coins sau
+-- bani), în loc s-o ridice. Cheia e modelul mașinii / numele armei.
+CREATE TABLE IF NOT EXISTS vip_item_value (
+  kind VARCHAR(10) NOT NULL,
+  item_key VARCHAR(80) NOT NULL,
+  value_coins INTEGER,
+  value_money BIGINT,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (kind, item_key)
+);

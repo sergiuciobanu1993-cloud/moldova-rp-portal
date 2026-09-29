@@ -103,6 +103,9 @@
         <div class="field rf-item wide"><label>Item (numele exact din ox_inventory)</label><input id="rf-item" placeholder="ex: WEAPON_AKVVSGOLD" list="known-items"></div>
         <div class="field rf-item"><label>Cantitate</label><input id="rf-count" type="number" min="1" step="1" value="1"></div>
 
+        <div class="field rf-sell"><label>Valoare în coins</label><input id="rf-value-coins" type="number" min="0" step="1" placeholder="ex: 100"></div>
+        <div class="field rf-sell"><label>Valoare în bani din joc ($)</label><input id="rf-value-money" type="number" min="0" step="1000" placeholder="ex: 2000000"></div>
+        <p class="rf-sell muted wide" style="margin:-4px 0 0;font-size:11px;grid-column:1/-1">Jucătorul care câștigă asta o poate vinde înapoi pentru <b>50%</b> din valoare, în coins sau în bani — alege el. Lasă gol ca să nu se poată vinde.</p>
         <div class="field rf-vehicle wide"><label>Model (spawn code exact)</label><input id="rf-model" placeholder="ex: 2019chiron" list="known-models"><p class="muted" style="margin:6px 0 0">Trebuie să fie exact numele modelului de pe server (litere mici) — altfel /recompense va eșua în joc la ridicare.</p></div>
       </div>
       <datalist id="known-items"></datalist>
@@ -143,8 +146,11 @@ function computePercents(pool) {
 
 function rewardDetailHtml(r) {
   if (r.type === 'cash') return `$${Number(r.amount || 0).toLocaleString('ro-RO')} → ${escapeHtml(ACCOUNT_LABEL[r.account] || r.account || 'bank')}`;
-  if (r.type === 'item') return `${escapeHtml(r.item || '—')} × ${r.count || 1}`;
-  if (r.type === 'vehicle') return `model: ${escapeHtml(r.model || '—')}`;
+  const sell = (r.value_coins || r.value_money)
+    ? `<br><span style="color:var(--green)">💱 se vinde cu ${[r.value_coins ? `${Math.floor(r.value_coins / 2)} coins` : '', r.value_money ? fmtUsd(Math.floor(r.value_money / 2)) : ''].filter(Boolean).join(' sau ')}</span>`
+    : '';
+  if (r.type === 'item') return `${escapeHtml(r.item || '—')} × ${r.count || 1}${sell}`;
+  if (r.type === 'vehicle') return `model: ${escapeHtml(r.model || '—')}${sell}`;
   if (r.type === 'coins') return `🪙 ${Number(r.amount || 0)} coins înapoi`;
   return '';
 }
@@ -427,6 +433,7 @@ function updateRewardTypeFields() {
   document.getElementById('rf-amount-label').textContent = type === 'coins' ? 'Număr de coins' : 'Sumă ($)';
   document.querySelectorAll('.rf-item').forEach(el => el.style.display = type === 'item' ? '' : 'none');
   document.querySelectorAll('.rf-vehicle').forEach(el => el.style.display = type === 'vehicle' ? '' : 'none');
+  document.querySelectorAll('.rf-sell').forEach(el => el.style.display = (type === 'vehicle' || type === 'item') ? '' : 'none');
 }
 
 function updatePercentPreview() {
@@ -453,6 +460,8 @@ function openRewardModal(caseId, rewardId) {
   document.getElementById('rf-item').value = (r && r.item) || '';
   document.getElementById('rf-count').value = r ? (r.count || 1) : 1;
   document.getElementById('rf-model').value = (r && r.model) || '';
+  document.getElementById('rf-value-coins').value = (r && r.value_coins) || '';
+  document.getElementById('rf-value-money').value = (r && r.value_money) || '';
   updateRewardTypeFields();
   updatePercentPreview();
   document.getElementById('reward-form-msg').hidden = true;
@@ -499,6 +508,19 @@ document.getElementById('reward-form').addEventListener('submit', async (e) => {
     );
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Salvarea a eșuat.');
+    // Valoarea pentru vânzarea înapoi (29.09.2026) — ținută pe site, după
+    // modelul mașinii / numele armei.
+    if (type === 'vehicle' || type === 'item') {
+      const vres = await apiFetch('/api/admin/vip-shop/valoare', {
+        method: 'PUT',
+        body: JSON.stringify({
+          kind: type, key: type === 'vehicle' ? body.model : body.item,
+          coins: Number(document.getElementById('rf-value-coins').value) || null,
+          money: Number(document.getElementById('rf-value-money').value) || null,
+        }),
+      });
+      if (!vres.ok) { const vd = await vres.json().catch(() => ({})); throw new Error('Recompensa s-a salvat, dar valoarea nu: ' + (vd.error || 'eroare')); }
+    }
     closeRewardModal();
     loadCases();
   } catch (err) {

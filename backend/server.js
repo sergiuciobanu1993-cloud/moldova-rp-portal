@@ -978,6 +978,34 @@ function sortByOrder(list, ids, idOf) {
     .sort((a, b) => (a.p - b.p) || (a.i - b.i))
     .map(x => x.item);
 }
+// Vânzare înapoi (29.09.2026) — valoarea mașinilor/armelor, setată de staff.
+const SELL_BACK_PCT = 50;
+function valueKey(type, data) {
+  if (type === "vehicle" && data?.model) return ["vehicle", String(data.model).toLowerCase().slice(0, 80)];
+  if (type === "item" && data?.item) return ["item", String(data.item).slice(0, 80)];
+  return null;
+}
+async function loadItemValues() {
+  try {
+    const { rows } = await pool.query(`SELECT kind, item_key, value_coins, value_money FROM vip_item_value`);
+    return new Map(rows.map(r => [`${r.kind}|${r.item_key}`, { coins: r.value_coins, money: r.value_money != null ? Number(r.value_money) : null }]));
+  } catch {
+    return new Map();
+  }
+}
+function sellOfferFor(values, type, data) {
+  const k = valueKey(type, data);
+  const v = k && values.get(`${k[0]}|${k[1]}`);
+  if (!v) return null;
+  const coins = v.coins ? Math.floor(v.coins * SELL_BACK_PCT / 100) : null;
+  const money = v.money ? Math.floor(v.money * SELL_BACK_PCT / 100) : null;
+  return (coins || money) ? { coins, money, pct: SELL_BACK_PCT } : null;
+}
+function parseRewardData(raw) {
+  if (raw && typeof raw === "object") return raw;
+  try { return JSON.parse(raw || "{}"); } catch { return {}; }
+}
+
 // Lista publică (/cases) nu are id-uri, dar vine în aceeași ordine ca lista de
 // admin (/cases/admin) — le potrivim după poziție și verificăm tip+etichetă;
 // dacă ceva nu se potrivește, lăsăm cutia în ordinea de pe server.
@@ -1679,8 +1707,9 @@ app.get("/api/vip-shop", auth, asyncRoute(async (req, res) => {
     return res.json({ linked: false, online: casesResult.online, cases: await applyOrderToPublicCases(casesResult.cases) });
   }
 
-  const [coinsResult, casesResult] = await Promise.all([fetchCoins(identifier), fetchCasesList()]);
+  const [coinsResult, casesResult, itemValues] = await Promise.all([fetchCoins(identifier), fetchCasesList(), loadItemValues()]);
   casesResult.cases = await applyOrderToPublicCases(casesResult.cases);
+  coinsResult.pending = (coinsResult.pending || []).map(p => ({ ...p, sellOffer: sellOfferFor(itemValues, p.reward_type, parseRewardData(p.reward_data)) }));
   res.json({
     linked: true,
     name: rows[0].game_identifier_name,
@@ -1711,6 +1740,39 @@ app.post("/api/vip-shop/deschide", auth, asyncRoute(async (req, res) => {
     return res.status(400).json({ error: messages[outcome.error] || "Nu am putut deschide recompensa." });
   }
   res.json({ ok: true, ...outcome.result });
+}));
+
+// Vinde înapoi o mașină/armă câștigată și încă neridicată (29.09.2026), pentru
+// 50% din valoarea setată de staff, în coins sau bani din joc — la alegerea
+// jucătorului. Serverul de joc face efectiv vânzarea ("/cases/sell"): verifică
+// atomic că recompensa e a lui și încă neridicată, o marchează și dă plata.
+app.post("/api/vip-shop/vinde", auth, asyncRoute(async (req, res) => {
+  const { rows } = await pool.query(`SELECT game_identifier FROM users WHERE id = $1`, [req.user.sub]);
+  const identifier = rows[0]?.game_identifier;
+  if (!identifier) return res.status(400).json({ error: "Leagă-ți mai întâi contul de personajul din joc." });
+  const openingId = parseInt(req.body?.openingId, 10);
+  const currency = req.body?.currency === "money" ? "money" : req.body?.currency === "coins" ? "coins" : null;
+  if (!openingId || !currency) return res.status(400).json({ error: "Date invalide." });
+
+  const [coinsResult, itemValues] = await Promise.all([fetchCoins(identifier), loadItemValues()]);
+  if (!coinsResult.online) return res.status(503).json({ error: "Serverul de joc nu răspunde momentan." });
+  const opening = (coinsResult.pending || []).find(p => Number(p.id) === openingId);
+  if (!opening) return res.status(400).json({ error: "Recompensa nu mai e în așteptare (poate ai ridicat-o deja)." });
+  const offer = sellOfferFor(itemValues, opening.reward_type, parseRewardData(opening.reward_data));
+  const amount = offer && offer[currency];
+  if (!amount) return res.status(400).json({ error: "Această recompensă nu se poate vinde în moneda aleasă." });
+
+  const result = await vipShopAdminRequest("POST", "/cases/sell", { identifier, openingId, currency, amount });
+  if (!result.ok) {
+    const messages = {
+      nu_se_poate: "Recompensa nu mai poate fi vândută (poate ai ridicat-o deja).",
+      server_offline: "Serverul de joc nu răspunde momentan.",
+    };
+    const msg = result.status === 404 ? "Vânzarea înapoi nu e încă activă pe serverul de joc." : (messages[result.error] || "Nu am putut vinde recompensa.");
+    return res.status(400).json({ error: msg });
+  }
+  await logAction(req.user.sub, "vip_shop.sell_back", "vip_shop_opening", String(openingId), { currency, amount, label: opening.reward_label }, req.ip);
+  res.json({ ok: true, currency, amount });
 }));
 
 // Istoricul PROPRIU al jucătorului logat (deschideri ridicate ȘI în
@@ -1795,12 +1857,40 @@ app.get("/api/admin/vip-shop/cutii", auth, requireRole(...ADMIN_ROLES), asyncRou
   res.set("Cache-Control", "no-store");
   const result = await vipShopAdminRequest("GET", "/cases/admin");
   if (!result.ok) return vipShopAdminError(res, result);
-  const orders = await loadRewardOrders();
+  const [orders, itemValues] = await Promise.all([loadRewardOrders(), loadItemValues()]);
   const data = result.data || {};
   if (Array.isArray(data.cases)) {
-    data.cases = data.cases.map(c => ({ ...c, pool: sortByOrder(c.pool || [], orders.get(c.id), r => r.id) }));
+    data.cases = data.cases.map(c => ({
+      ...c,
+      pool: sortByOrder(c.pool || [], orders.get(c.id), r => r.id).map(r => {
+        const k = valueKey(r.type, r);
+        const v = k && itemValues.get(`${k[0]}|${k[1]}`);
+        return v ? { ...r, value_coins: v.coins, value_money: v.money } : r;
+      }),
+    }));
   }
-  res.json(data);
+  res.json({ ...data, sellBackPct: SELL_BACK_PCT });
+}));
+
+// Valoarea unei mașini/arme (în coins și în bani din joc) — pentru vânzarea înapoi.
+app.put("/api/admin/vip-shop/valoare", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+  const k = valueKey(req.body?.kind, req.body?.kind === "vehicle" ? { model: req.body?.key } : { item: req.body?.key });
+  if (!k || !String(req.body?.key || "").trim()) return res.status(400).json({ error: "Date invalide." });
+  const toNum = v => { const n = Math.floor(Number(v)); return Number.isFinite(n) && n > 0 ? n : null; };
+  const coins = toNum(req.body?.coins);
+  const money = toNum(req.body?.money);
+  if (coins != null && coins > 1000000) return res.status(400).json({ error: "Valoare în coins prea mare." });
+  if (!coins && !money) {
+    await pool.query(`DELETE FROM vip_item_value WHERE kind = $1 AND item_key = $2`, k);
+  } else {
+    await pool.query(
+      `INSERT INTO vip_item_value(kind, item_key, value_coins, value_money, updated_at) VALUES ($1,$2,$3,$4,NOW())
+       ON CONFLICT (kind, item_key) DO UPDATE SET value_coins = EXCLUDED.value_coins, value_money = EXCLUDED.value_money, updated_at = NOW()`,
+      [k[0], k[1], coins, money]
+    );
+  }
+  await logAction(req.user.sub, "vip_shop.item_value", "vip_item_value", `${k[0]}:${k[1]}`, { coins, money }, req.ip);
+  res.json({ ok: true, coins, money });
 }));
 
 // Salvează ordinea recompenselor dintr-o cutie (tras cu mouse-ul în editor).

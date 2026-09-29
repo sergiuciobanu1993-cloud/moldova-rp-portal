@@ -284,14 +284,41 @@ function renderPending(pending) {
   if (!pending || !pending.length) { panel.hidden = true; return; }
   panel.hidden = false;
   body.innerHTML = `
-    <p class="muted" style="margin:0 0 12px">Intră pe server și scrie <code>/recompense</code> ca să le ridici.</p>
+    <p class="muted" style="margin:0 0 12px">Intră pe server și scrie <code>/recompense</code> ca să le ridici. Mașinile și armele le poți și vinde înapoi de aici, pentru ${pending.find(p => p.sellOffer)?.sellOffer.pct || 50}% din valoare.</p>
     <div style="display:flex;flex-direction:column;gap:8px">
       ${pending.map(p => `
-        <div style="display:flex;justify-content:space-between;gap:10px;padding:10px 14px;background:rgba(255,255,255,.04);border-radius:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 14px;background:rgba(255,255,255,.04);border-radius:8px;flex-wrap:wrap">
           <span>${REWARD_ICON[p.reward_type] || '🎁'} <strong>${escapeHtml(p.reward_label || p.reward_type)}</strong> <span class="muted">(${escapeHtml(p.case_name || '')})</span></span>
-          <span class="muted">${fmtDate(p.created_at)}</span>
+          <span style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            ${p.sellOffer?.coins ? `<button type="button" class="btn-ghost" style="padding:7px 12px;font-size:12px" data-sell="${Number(p.id)}" data-currency="coins" data-label="${escapeHtml(p.reward_label || '')}" data-amount="${p.sellOffer.coins}">Vinde pe 🪙 ${p.sellOffer.coins} coins</button>` : ''}
+            ${p.sellOffer?.money ? `<button type="button" class="btn-ghost" style="padding:7px 12px;font-size:12px" data-sell="${Number(p.id)}" data-currency="money" data-label="${escapeHtml(p.reward_label || '')}" data-amount="${p.sellOffer.money}">Vinde pe $${Number(p.sellOffer.money).toLocaleString('ro-RO')}</button>` : ''}
+            <span class="muted">${fmtDate(p.created_at)}</span>
+          </span>
         </div>`).join('')}
-    </div>`;
+    </div>
+    <p id="sell-msg" class="muted" style="margin:10px 0 0" hidden></p>`;
+  body.querySelectorAll('[data-sell]').forEach(btn => btn.addEventListener('click', () => sellBack(btn)));
+}
+
+// Vinde înapoi o mașină/armă neridicată (29.09.2026).
+async function sellBack(btn) {
+  const currency = btn.dataset.currency;
+  const amount = Number(btn.dataset.amount);
+  const price = currency === 'coins' ? `${amount} coins` : `$${amount.toLocaleString('ro-RO')} în bancă`;
+  if (!confirm(`Vinzi „${btn.dataset.label}” pentru ${price}?\n\nDupă vânzare nu o mai poți ridica din joc.`)) return;
+  const msg = document.getElementById('sell-msg');
+  document.querySelectorAll('[data-sell]').forEach(b => { b.disabled = true; });
+  try {
+    const res = await apiFetch('/api/vip-shop/vinde', { method: 'POST', body: JSON.stringify({ openingId: Number(btn.dataset.sell), currency }) });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(d.error || 'Nu am putut vinde recompensa.');
+    await loadAll();
+    const m = document.getElementById('sell-msg');
+    if (m) { m.hidden = false; m.style.color = 'var(--green)'; m.textContent = `Vândut! Ai primit ${price}.`; }
+  } catch (err) {
+    msg.hidden = false; msg.style.color = '#ff8a8a'; msg.textContent = err.message;
+    document.querySelectorAll('[data-sell]').forEach(b => { b.disabled = false; });
+  }
 }
 
 // Jurnalul TUTUROR deschiderilor (toți jucătorii, nu doar cel logat) — vezi
@@ -389,7 +416,9 @@ function renderHistory(history) {
         const thumb = (entry.rewardType === 'vehicle' && data.model)
           ? `<img src="assets/vip-cars/${escapeHtml(data.model)}.png" alt="" loading="lazy" style="width:40px;height:22px;object-fit:contain;border-radius:3px;flex:none">`
           : `<span style="width:18px;text-align:center;flex:none">${REWARD_ICON[entry.rewardType] || '🎁'}</span>`;
-        const claimedPill = entry.claimedAt
+        const claimedPill = entry.soldCurrency
+          ? `<span class="pill" style="background:rgba(125,178,255,.15);color:#7db2ff;flex:none">Vândut · ${entry.soldCurrency === 'coins' ? `🪙 ${Number(entry.soldAmount) || 0}` : `$${Number(entry.soldAmount || 0).toLocaleString('ro-RO')}`}</span>`
+          : entry.claimedAt
           ? `<span class="pill" style="background:rgba(66,223,138,.15);color:var(--green);flex:none">Ridicat</span>`
           : `<span class="pill warn" style="flex:none">În așteptare</span>`;
         return `

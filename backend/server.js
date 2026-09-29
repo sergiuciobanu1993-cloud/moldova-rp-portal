@@ -880,19 +880,23 @@ async function postOpenCase({ identifier, playerName, caseId }) {
 
 // Jurnalul tuturor deschiderilor de cutii (vezi ruta "/cases/log" de mai jos
 // din moldovarp-api, v1.29.3+) — folosit doar de panoul de admin de pe site.
-async function fetchCaseOpeningsLog(limit) {
+async function fetchCaseOpeningsLog(limit, extra = {}) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8000);
   try {
-    const r = await fetch(`http://${FIVEM_ADDRESS}/moldovarp-api/cases/log?limit=${encodeURIComponent(limit)}`, {
+    // (29.09.2026) offset/q/status — pagini în jurnal; dacă serverul le
+    // suportă, întoarce și "total" (vezi /api/vip-shop/log mai jos).
+    const qs = new URLSearchParams({ limit: String(limit) });
+    for (const [k, v] of Object.entries(extra)) if (v != null && v !== "") qs.set(k, String(v));
+    const r = await fetch(`http://${FIVEM_ADDRESS}/moldovarp-api/cases/log?${qs.toString()}`, {
       headers: { "x-api-key": FIVEM_API_SECRET },
       signal: controller.signal,
     });
     if (!r.ok) throw new Error(`moldovarp-api HTTP ${r.status}`);
     const body = await r.json();
-    return { online: true, log: body.log || [] };
+    return { online: true, log: body.log || [], total: Number.isFinite(Number(body.total)) && body.total !== null && body.total !== undefined ? Number(body.total) : null };
   } catch {
-    return { online: false, log: [] };
+    return { online: false, log: [], total: null };
   } finally {
     clearTimeout(timeout);
   }
@@ -1734,10 +1738,27 @@ app.get("/api/vip-shop/istoric", auth, asyncRoute(async (req, res) => {
 // de staff, nu un feature pentru jucători). Citit direct din
 // moldovarp_case_openings de pe serverul de joc, prin ruta "/cases/log" din
 // moldovarp-api (v1.29.3) — NU e stocat nimic din asta pe site.
+// (29.09.2026) Pagini + căutare după jucător + filtru ridicat/în așteptare.
+// Dacă serverul de joc știe de "offset" (întoarce "total"), paginile merg
+// oricât de departe în istoric. Altfel luăm ultimele 200 și paginăm aici.
 app.get("/api/vip-shop/log", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
-  const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
-  const result = await fetchCaseOpeningsLog(limit);
-  res.json({ online: result.online, log: result.log });
+  const per = Math.min(Math.max(parseInt(req.query.per ?? req.query.limit, 10) || 25, 1), 100);
+  const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+  const q = String(req.query.q || "").trim().slice(0, 64);
+  const status = ["claimed", "pending"].includes(req.query.status) ? req.query.status : "";
+  const first = await fetchCaseOpeningsLog(per, { offset: (page - 1) * per, q, status });
+  if (!first.online) return res.json({ online: false, log: [], total: 0, page, per });
+  if (first.total != null) {
+    return res.json({ online: true, log: first.log, total: first.total, page, per, capped: false });
+  }
+  // Server fără pagini: ultimele 200, filtrate și împărțite pe pagini aici.
+  const all = (await fetchCaseOpeningsLog(200)).log;
+  const ql = q.toLowerCase();
+  const filtered = all.filter(e =>
+    (!ql || [e.playerName, e.identifier, e.rewardLabel, e.caseName].some(v => String(v || "").toLowerCase().includes(ql))) &&
+    (!status || (status === "claimed" ? !!e.claimedAt : !e.claimedAt))
+  );
+  res.json({ online: true, log: filtered.slice((page - 1) * per, page * per), total: filtered.length, page, per, capped: all.length >= 200 });
 }));
 
 // Editor de cutii/recompense VIP Shop (09.09.2026, cerut explicit de staff)

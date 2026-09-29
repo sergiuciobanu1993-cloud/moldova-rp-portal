@@ -114,9 +114,23 @@
 <section class="panel" id="log-panel" style="margin-top:20px" hidden>
   <div class="head"><h2>🧾 Jurnal deschideri</h2><span class="muted">Cine a deschis ce — cel mai recent primul</span></div>
   <p class="muted" style="margin:0 0 14px;font-size:12px">
-    Vizibil doar pentru staff, cât timp VIP Shop e în testare — util ca să vedem live cine a testat ce cutie și ce a picat, până punem pragurile finale.
+    Vizibil doar pentru staff. Caută după jucător, cutie sau recompensă; apasă pe un nume ca să-i deschizi profilul.
   </p>
+  <form id="log-filters" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:0 0 14px">
+    <input id="log-q" type="search" class="filter-select" placeholder="Caută jucător, cutie, recompensă…" style="flex:1;min-width:200px">
+    <select id="log-status" class="filter-select">
+      <option value="">Toate</option>
+      <option value="claimed">Ridicate</option>
+      <option value="pending">În așteptare</option>
+    </select>
+    <button type="submit">Caută</button>
+  </form>
   <div id="log-body"></div>
+  <div id="log-pager" style="display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-top:14px" hidden>
+    <button type="button" id="log-prev" class="btn-ghost">← Mai noi</button>
+    <span id="log-page-info" class="muted" style="font-size:12px"></span>
+    <button type="button" id="log-next" class="btn-ghost">Mai vechi →</button>
+  </div>
 </section>
 
 <div id="link-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:50;align-items:center;justify-content:center">
@@ -273,8 +287,8 @@ function renderPending(pending) {
 function renderLog(log) {
   const panel = document.getElementById('log-panel');
   const body = document.getElementById('log-body');
-  if (!log || !log.length) { panel.hidden = true; return; }
   panel.hidden = false;
+  if (!log || !log.length) { body.innerHTML = '<p class="muted" style="margin:0">Nicio deschidere găsită.</p>'; return; }
   body.innerHTML = `
     <div style="display:flex;flex-direction:column;gap:8px">
       ${log.map(entry => {
@@ -304,16 +318,43 @@ function renderLog(log) {
     </div>`;
 }
 
+// Pagini în jurnal (29.09.2026) — 25 pe pagină, cele mai noi primele.
+const logState = { page: 1, per: 25, q: '', status: '' };
 async function loadLog() {
   try {
-    const res = await apiFetch('/api/vip-shop/log?limit=50');
+    const qs = new URLSearchParams({ page: logState.page, per: logState.per });
+    if (logState.q) qs.set('q', logState.q);
+    if (logState.status) qs.set('status', logState.status);
+    const res = await apiFetch('/api/vip-shop/log?' + qs.toString());
     if (!res.ok) { document.getElementById('log-panel').hidden = true; return; }
     const d = await res.json();
+    if (!d.online) {
+      document.getElementById('log-panel').hidden = false;
+      document.getElementById('log-body').innerHTML = '<p class="muted" style="margin:0">Serverul de joc nu răspunde momentan.</p>';
+      document.getElementById('log-pager').hidden = true;
+      return;
+    }
     renderLog(d.log || []);
+    const pages = Math.max(1, Math.ceil((d.total || 0) / logState.per));
+    document.getElementById('log-pager').hidden = pages <= 1 && logState.page === 1;
+    document.getElementById('log-page-info').textContent =
+      `Pagina ${logState.page} din ${pages} · ${d.total || 0} deschideri${d.capped ? ' (doar ultimele 200)' : ''}`;
+    document.getElementById('log-prev').disabled = logState.page <= 1;
+    document.getElementById('log-next').disabled = logState.page >= pages;
   } catch {
     document.getElementById('log-panel').hidden = true;
   }
 }
+document.getElementById('log-filters').addEventListener('submit', (e) => {
+  e.preventDefault();
+  logState.q = document.getElementById('log-q').value.trim();
+  logState.status = document.getElementById('log-status').value;
+  logState.page = 1;
+  loadLog();
+});
+document.getElementById('log-status').addEventListener('change', () => document.getElementById('log-filters').requestSubmit());
+document.getElementById('log-prev').addEventListener('click', () => { if (logState.page > 1) { logState.page--; loadLog(); } });
+document.getElementById('log-next').addEventListener('click', () => { logState.page++; loadLog(); });
 
 // Istoricul PROPRIU al jucătorului logat (deschideri ridicate ȘI în
 // așteptare) — vezi /api/vip-shop/istoric din backend. Aceeași înfățișare ca

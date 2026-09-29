@@ -214,13 +214,21 @@ window.openPlayerProfile = (function () {
         <article><small>BANCĂ</small><strong>${fmtMoney(liveSrc.bank)}</strong><em>&nbsp;</em></article>
         <article><small>BANI MURDARI</small><strong>${liveSrc.blackMoney == null ? '—' : fmtMoney(liveSrc.blackMoney)}</strong><em>${p.live && liveSrc.group && liveSrc.group !== 'user' ? escapeHtml(liveSrc.group) : '&nbsp;'}</em></article>
       </div>
-      ${p.live && (p.live.cfxName || p.live.serverName || p.live.license) ? `
-      <p style="margin:0 0 14px">
-        <b style="font-size:11px;color:var(--muted);letter-spacing:.08em">IDENTITATE</b><br>
-        ${p.live.serverName ? `Nume server: <strong>${escapeHtml(p.live.serverName)}</strong><br>` : ''}
-        ${p.live.cfxName ? `Nume CFX: <strong>${escapeHtml(p.live.cfxName)}</strong><br>` : ''}
-        ${p.live.license ? `Licență: <code>${escapeHtml(p.live.license)}</code>` : ''}
-      </p>` : ''}
+      ${(() => {
+        // (29.09.2026) ID static, ID server, grad și ore jucate pe server.
+        const src = p.live || p.lastKnown || {};
+        const hours = p.live?.playtimeMinutes ?? p.account?.server_playtime_minutes;
+        const rows = [
+          src.serverName ? `Nume server: <strong>${escapeHtml(src.serverName)}</strong>` : '',
+          p.live?.cfxName ? `Nume CFX: <strong>${escapeHtml(p.live.cfxName)}</strong>` : '',
+          src.staticId ? `ID static: <strong>#${escapeHtml(src.staticId)}</strong>` : '',
+          p.live?.serverId != null ? `ID server: <strong>${escapeHtml(String(p.live.serverId))}</strong>` : '',
+          (src.jobLabel || src.job) ? `Job: <strong>${escapeHtml([src.jobLabel || src.job, src.gradeLabel].filter(Boolean).join(' · '))}</strong>` : '',
+          hours != null ? `Ore jucate pe server: <strong>${Math.floor(hours / 60)}h ${hours % 60}m</strong>` : `Ore jucate pe server: <span class="muted">necunoscut (serverul nu trimite încă orele)</span>`,
+          (p.live?.license || src.license) ? `Licență: <code>${escapeHtml(p.live?.license || src.license)}</code>` : '',
+        ].filter(Boolean);
+        return `<p style="margin:0 0 14px"><b style="font-size:11px;color:var(--muted);letter-spacing:.08em">IDENTITATE</b><br>${rows.join('<br>')}</p>`;
+      })()}
       <p style="margin:0 0 6px"><b style="font-size:11px;color:var(--muted);letter-spacing:.08em">VEHICULE</b><br>${vehiclesHtml(liveSrc.vehicles)}</p>
       ${!p.live ? `<p class="muted" style="margin:0 0 18px;font-size:11px">Date din ultima dată văzut online: ${fmtDate(p.lastKnown.syncedAt)} — nu sunt live.</p>` : `<p style="margin:0 0 18px"></p>`}
     ` : `<p class="muted" style="margin:0 0 18px">Jucătorul nu e online momentan și nu avem încă nicio poză salvată din ultima dată — se arată doar istoricul de mai jos.</p>`;

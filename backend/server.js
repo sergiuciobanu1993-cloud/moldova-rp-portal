@@ -1553,6 +1553,7 @@ async function buildPlayerProfile(name, opts = {}) {
     live: live ? {
       serverId: live.id, job: live.job, jobLabel: live.jobLabel, group: live.group,
       grade: live.grade ?? null, gradeLabel: live.gradeLabel || null,
+      playtimeMinutes: playtimeOf(live),
       staticId: staticIdOf(live) || (snapshotIsOurs ? account?.last_static_id : null) || null,
       cash: live.cash, bank: live.bank, blackMoney: live.blackMoney, vehicles: live.vehicles || [],
       // cfxName = numele raportat de platformă (Steam/Rockstar), serverName =

@@ -556,3 +556,12 @@ INSERT INTO factions(name, type, description) VALUES
 ('Ganguri', 'ilegal', 'Organizații criminale'),
 ('Mafii', 'ilegal', 'Organizații criminale')
 ON CONFLICT (name) DO NOTHING;
+
+-- Ordinea recompenselor din cutiile VIP Shop (29.09.2026) — aranjată de staff
+-- prin tragere în Editorul VIP Shop. Recompensele stau pe serverul de joc;
+-- aici ținem doar ordinea de afișare (lista de id-uri) pentru fiecare cutie.
+CREATE TABLE IF NOT EXISTS vip_reward_order (
+  case_id VARCHAR(40) PRIMARY KEY,
+  reward_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

@@ -955,6 +955,46 @@ async function fetchReferal(path, params = {}) {
 // cate o funcție separată pentru fiecare operație (creare/editare/ștergere de
 // cutii și recompense) — toate au aceeași formă (metodă + cale + body opțional
 // -> JSON sau eroare).
+// Ordinea recompenselor (29.09.2026) — salvată pe site (vip_reward_order),
+// aplicată la afișare. Recompensele noi (fără loc salvat) rămân la final, în
+// ordinea lor de acum.
+async function loadRewardOrders() {
+  try {
+    const { rows } = await pool.query(`SELECT case_id, reward_ids FROM vip_reward_order`);
+    return new Map(rows.map(r => [r.case_id, (Array.isArray(r.reward_ids) ? r.reward_ids : []).map(String)]));
+  } catch {
+    return new Map();
+  }
+}
+function sortByOrder(list, ids, idOf) {
+  if (!ids || !ids.length) return list;
+  const pos = new Map(ids.map((id, i) => [String(id), i]));
+  return list
+    .map((item, i) => ({ item, i, p: pos.has(String(idOf(item, i))) ? pos.get(String(idOf(item, i))) : Infinity }))
+    .sort((a, b) => (a.p - b.p) || (a.i - b.i))
+    .map(x => x.item);
+}
+// Lista publică (/cases) nu are id-uri, dar vine în aceeași ordine ca lista de
+// admin (/cases/admin) — le potrivim după poziție și verificăm tip+etichetă;
+// dacă ceva nu se potrivește, lăsăm cutia în ordinea de pe server.
+async function applyOrderToPublicCases(cases) {
+  const orders = await loadRewardOrders();
+  if (!orders.size || !cases.length) return cases;
+  const admin = await vipShopAdminRequest("GET", "/cases/admin");
+  if (!admin.ok) return cases;
+  const adminById = new Map((admin.data?.cases || []).map(c => [c.id, c]));
+  return cases.map(c => {
+    const ids = orders.get(c.id);
+    const ac = adminById.get(c.id);
+    const pubPool = c.pool || [];
+    const admPool = ac?.pool || [];
+    if (!ids || pubPool.length !== admPool.length) return c;
+    const aligned = pubPool.every((r, i) => r.type === admPool[i].type && r.label === admPool[i].label);
+    if (!aligned) return c;
+    return { ...c, pool: sortByOrder(pubPool, ids, (_r, i) => admPool[i].id) };
+  });
+}
+
 async function vipShopAdminRequest(method, path, body) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8000);
@@ -1620,10 +1660,11 @@ app.get("/api/vip-shop", auth, asyncRoute(async (req, res) => {
 
   if (!identifier) {
     const casesResult = await fetchCasesList();
-    return res.json({ linked: false, online: casesResult.online, cases: casesResult.cases });
+    return res.json({ linked: false, online: casesResult.online, cases: await applyOrderToPublicCases(casesResult.cases) });
   }
 
   const [coinsResult, casesResult] = await Promise.all([fetchCoins(identifier), fetchCasesList()]);
+  casesResult.cases = await applyOrderToPublicCases(casesResult.cases);
   res.json({
     linked: true,
     name: rows[0].game_identifier_name,
@@ -1721,7 +1762,26 @@ app.get("/api/admin/vip-shop/cutii", auth, requireRole(...ADMIN_ROLES), asyncRou
   res.set("Cache-Control", "no-store");
   const result = await vipShopAdminRequest("GET", "/cases/admin");
   if (!result.ok) return vipShopAdminError(res, result);
-  res.json(result.data);
+  const orders = await loadRewardOrders();
+  const data = result.data || {};
+  if (Array.isArray(data.cases)) {
+    data.cases = data.cases.map(c => ({ ...c, pool: sortByOrder(c.pool || [], orders.get(c.id), r => r.id) }));
+  }
+  res.json(data);
+}));
+
+// Salvează ordinea recompenselor dintr-o cutie (tras cu mouse-ul în editor).
+app.put("/api/admin/vip-shop/cutii/:id/ordine", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+  const caseId = String(req.params.id || "").slice(0, 40);
+  const ids = Array.isArray(req.body?.ids) ? req.body.ids.map(String).filter(x => /^\d{1,12}$/.test(x)).slice(0, 200) : null;
+  if (!caseId || !ids) return res.status(400).json({ error: "Ordine invalidă." });
+  await pool.query(
+    `INSERT INTO vip_reward_order(case_id, reward_ids, updated_at) VALUES ($1, $2::jsonb, NOW())
+     ON CONFLICT (case_id) DO UPDATE SET reward_ids = EXCLUDED.reward_ids, updated_at = NOW()`,
+    [caseId, JSON.stringify(ids)]
+  );
+  await logAction(req.user.sub, "vip_shop.reward.reorder", "vip_shop_case", caseId, { count: ids.length }, req.ip);
+  res.json({ ok: true });
 }));
 
 app.post("/api/admin/vip-shop/cutii", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {

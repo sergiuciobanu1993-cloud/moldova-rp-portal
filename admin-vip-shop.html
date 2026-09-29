@@ -29,6 +29,11 @@
   .theme-opt.sel span{color:var(--orange)}
   .theme-opt input{position:absolute;opacity:0;pointer-events:none}
   .empty-note{padding:20px 22px;color:var(--muted);font-size:12px}
+  .drag-handle{cursor:grab;color:var(--muted);font-size:16px;user-select:none;padding:0 4px}
+  tr.dragging{opacity:.4}
+  tr.drop-before td{box-shadow:inset 0 2px 0 var(--orange)}
+  tr.drop-after td{box-shadow:inset 0 -2px 0 var(--orange)}
+  .order-saved{color:var(--green);font-size:11px;margin-left:8px}
 </style>
 </head>
 <body>
@@ -186,21 +191,24 @@ function renderCases() {
           <button type="button" class="btn-ghost" data-del-case="${escapeHtml(c.id)}" style="color:#ff8a8a">Șterge cutia</button>
         </div>
       </div>
-      <table><thead><tr><th>ȘANSĂ</th><th>TIP</th><th>ETICHETĂ</th><th>DETALII</th><th></th></tr></thead>
+      <table><thead><tr><th title="Trage de ⠿ ca să schimbi ordinea"></th><th>ȘANSĂ</th><th>TIP</th><th>ETICHETĂ</th><th>DETALII</th><th></th></tr></thead>
       <tbody>
         ${rows.length ? rows.map(r => `
-          <tr>
+          <tr draggable="true" data-rid="${r.id}" data-case="${escapeHtml(c.id)}">
+            <td><span class="drag-handle" title="Trage ca să muți">⠿</span></td>
             <td><span class="percent-bar"><i style="width:${Math.min(100, r.percent)}%"></i></span>${r.percent}%</td>
             <td>${TYPE_ICON[r.type] || ''} ${r.type}</td>
             <td>${escapeHtml(r.label)}</td>
             <td class="reward-detail">${rewardDetailHtml(r)}</td>
             <td class="rowactions">
+              <button type="button" data-move="-1" data-rid="${r.id}" data-case="${escapeHtml(c.id)}" title="Mută mai sus">↑</button>
+              <button type="button" data-move="1" data-rid="${r.id}" data-case="${escapeHtml(c.id)}" title="Mută mai jos">↓</button>
               <button type="button" data-edit-reward="${r.id}" data-case="${escapeHtml(c.id)}">Editează</button>
               <button type="button" class="danger" data-del-reward="${r.id}" data-case="${escapeHtml(c.id)}">Șterge</button>
             </td>
-          </tr>`).join('') : '<tr><td colspan="5" class="muted">Nicio recompensă încă în această cutie.</td></tr>'}
+          </tr>`).join('') : '<tr><td colspan="6" class="muted">Nicio recompensă încă în această cutie.</td></tr>'}
       </tbody></table>
-      <div class="add-reward-row"><button type="button" class="btn-ghost" data-add-reward="${escapeHtml(c.id)}">+ Adaugă recompensă</button></div>
+      <div class="add-reward-row"><button type="button" class="btn-ghost" data-add-reward="${escapeHtml(c.id)}">+ Adaugă recompensă</button><span class="order-saved" data-order-msg="${escapeHtml(c.id)}"></span></div>
     </div>`;
   }).join('');
 
@@ -210,6 +218,81 @@ function renderCases() {
   wrap.querySelectorAll('[data-add-reward]').forEach(b => b.addEventListener('click', () => openRewardModal(b.dataset.addReward, null)));
   wrap.querySelectorAll('[data-edit-reward]').forEach(b => b.addEventListener('click', () => openRewardModal(b.dataset.case, b.dataset.editReward)));
   wrap.querySelectorAll('[data-del-reward]').forEach(b => b.addEventListener('click', () => deleteReward(b.dataset.case, b.dataset.delReward)));
+  wrap.querySelectorAll('[data-move]').forEach(b => b.addEventListener('click', () => moveReward(b.dataset.case, b.dataset.rid, Number(b.dataset.move))));
+  wireDragAndDrop(wrap);
+}
+
+// ---------- Ordinea recompenselor (29.09.2026) ----------
+// Tragi de ⠿ (sau apeși ↑/↓) și ordinea se salvează singură. Aceeași ordine
+// o văd și jucătorii în VIP Shop.
+async function saveOrder(caseId) {
+  const c = casesCache.find(x => x.id === caseId);
+  if (!c) return;
+  const msgEl = document.querySelector(`[data-order-msg="${CSS.escape(caseId)}"]`);
+  try {
+    const res = await apiFetch(`/api/admin/vip-shop/cutii/${encodeURIComponent(caseId)}/ordine`, {
+      method: 'PUT', body: JSON.stringify({ ids: (c.pool || []).map(r => String(r.id)) }),
+    });
+    if (!res.ok) throw new Error();
+    const m = document.querySelector(`[data-order-msg="${CSS.escape(caseId)}"]`);
+    if (m) { m.style.color = ''; m.textContent = '✓ Ordine salvată'; setTimeout(() => { m.textContent = ''; }, 2000); }
+  } catch {
+    const m = document.querySelector(`[data-order-msg="${CSS.escape(caseId)}"]`) || msgEl;
+    if (m) { m.style.color = '#ff8a8a'; m.textContent = 'Nu am putut salva ordinea — reîncearcă.'; }
+  }
+}
+function reorder(caseId, fromId, toIndex) {
+  const c = casesCache.find(x => x.id === caseId);
+  if (!c) return false;
+  const pool = c.pool || [];
+  const from = pool.findIndex(r => String(r.id) === String(fromId));
+  if (from < 0) return false;
+  const clamped = Math.max(0, Math.min(pool.length - 1, toIndex));
+  if (clamped === from) return false;
+  const [item] = pool.splice(from, 1);
+  pool.splice(clamped, 0, item);
+  return true;
+}
+function moveReward(caseId, rid, dir) {
+  const c = casesCache.find(x => x.id === caseId);
+  const idx = (c?.pool || []).findIndex(r => String(r.id) === String(rid));
+  if (idx < 0 || !reorder(caseId, rid, idx + dir)) return;
+  renderCases();
+  saveOrder(caseId);
+}
+function wireDragAndDrop(wrap) {
+  let dragged = null;
+  const clear = () => wrap.querySelectorAll('.drop-before,.drop-after').forEach(el => el.classList.remove('drop-before', 'drop-after'));
+  wrap.querySelectorAll('tr[draggable="true"]').forEach(tr => {
+    tr.addEventListener('dragstart', (e) => {
+      dragged = tr;
+      tr.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      try { e.dataTransfer.setData('text/plain', tr.dataset.rid); } catch {}
+    });
+    tr.addEventListener('dragend', () => { tr.classList.remove('dragging'); clear(); dragged = null; });
+    tr.addEventListener('dragover', (e) => {
+      if (!dragged || dragged === tr || dragged.dataset.case !== tr.dataset.case) return;
+      e.preventDefault();
+      const rect = tr.getBoundingClientRect();
+      const after = e.clientY > rect.top + rect.height / 2;
+      clear();
+      tr.classList.add(after ? 'drop-after' : 'drop-before');
+    });
+    tr.addEventListener('drop', (e) => {
+      if (!dragged || dragged === tr || dragged.dataset.case !== tr.dataset.case) return;
+      e.preventDefault();
+      const caseId = tr.dataset.case;
+      const c = casesCache.find(x => x.id === caseId);
+      const pool = c?.pool || [];
+      const rect = tr.getBoundingClientRect();
+      const after = e.clientY > rect.top + rect.height / 2;
+      const from = pool.findIndex(r => String(r.id) === String(dragged.dataset.rid));
+      let to = pool.findIndex(r => String(r.id) === String(tr.dataset.rid)) + (after ? 1 : 0);
+      if (from < to) to -= 1;
+      if (reorder(caseId, dragged.dataset.rid, to)) { renderCases(); saveOrder(caseId); }
+    });
+  });
 }
 
 function populateKnownLists() {

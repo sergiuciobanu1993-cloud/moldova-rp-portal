@@ -116,6 +116,11 @@ ALTER TABLE players ADD COLUMN IF NOT EXISTS last_rp_name VARCHAR(120);
 -- poată fi arătat pe site și când e offline.
 ALTER TABLE players ADD COLUMN IF NOT EXISTS last_static_id VARCHAR(32);
 
+-- last_server_playtime (29.09.2026): orele jucate REAL pe server (în minute),
+-- așa cum le ține serverul de joc — nu doar de când le numără site-ul
+-- (playtime_minutes). Salvate cât jucătorul e online, ca să rămână și offline.
+ALTER TABLE players ADD COLUMN IF NOT EXISTS last_server_playtime INTEGER;
+
 CREATE TABLE IF NOT EXISTS factions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name VARCHAR(100) UNIQUE NOT NULL,

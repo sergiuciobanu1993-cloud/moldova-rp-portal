@@ -313,6 +313,13 @@ function staticIdOf(pl) {
   return v == null || v === "" ? null : String(v).slice(0, 32);
 }
 
+// Orele jucate pe server (29.09.2026), în minute — câmpul "playtimeMinutes"
+// din /players, dacă serverul de joc îl trimite.
+function playtimeOf(pl) {
+  const v = Number(pl?.playtimeMinutes ?? pl?.playtime_minutes);
+  return Number.isFinite(v) && v >= 0 ? Math.round(v) : null;
+}
+
 async function getPlayersDetail(force) {
   const age = Date.now() - playersDetailCache.fetchedAt;
   if (!force && playersDetailCache.data && age < PLAYERS_CACHE_MS) return playersDetailCache.data;
@@ -394,15 +401,17 @@ async function syncPlayerSnapshots() {
         pl.serverName || null,
         name,
         // ID-ul static al personajului (#336 din HUD), dacă serverul îl trimite.
-        staticIdOf(pl)
+        staticIdOf(pl),
+        // Orele jucate pe server (minute), dacă serverul le trimite.
+        playtimeOf(pl)
       );
       // Tipurile sunt indicate explicit (::int, ::text, ::jsonb) pentru că, cu
       // valori NULL pe primul rând, Postgres nu poate deduce singur tipul
       // coloanei din VALUES și ar refuza interogarea.
       values.push(
-        `($${i + 1}::int,$${i + 2}::int,$${i + 3}::int,$${i + 4}::text,$${i + 5}::text,$${i + 6}::jsonb,$${i + 7}::text,$${i + 8}::text,$${i + 9}::text,$${i + 10}::text)`
+        `($${i + 1}::int,$${i + 2}::int,$${i + 3}::int,$${i + 4}::text,$${i + 5}::text,$${i + 6}::jsonb,$${i + 7}::text,$${i + 8}::text,$${i + 9}::text,$${i + 10}::text,$${i + 11}::int)`
       );
-      i += 10;
+      i += 11;
     }
     if (!values.length) return;
 
@@ -424,8 +433,9 @@ async function syncPlayerSnapshots() {
          last_identifier = COALESCE(v.identifier, p.last_identifier),
          last_rp_name = COALESCE(v.rp_name, p.last_rp_name),
          last_static_id = COALESCE(v.static_id, p.last_static_id),
+         last_server_playtime = COALESCE(v.server_playtime, p.last_server_playtime),
          last_synced_at = NOW(), playtime_minutes = p.playtime_minutes + 1
-       FROM (VALUES ${values.join(",")}) AS v(cash, bank, black_money, job, job_label, vehicles, identifier, rp_name, display_name, static_id),
+       FROM (VALUES ${values.join(",")}) AS v(cash, bank, black_money, job, job_label, vehicles, identifier, rp_name, display_name, static_id, server_playtime),
             users u
        WHERE u.id = p.user_id AND (
          -- Cont legat prin /leagacont (28.09.2026): potrivire EXACTĂ după
@@ -1330,7 +1340,7 @@ async function buildPlayerProfile(name, opts = {}) {
     pool.query(
       `SELECT p.id, p.game_id, p.display_name, p.playtime_minutes, p.status, p.created_at,
               p.last_cash, p.last_bank, p.last_black_money, p.last_job, p.last_job_label,
-              p.last_vehicles, p.last_synced_at, p.last_identifier, p.last_rp_name, p.last_static_id,
+              p.last_vehicles, p.last_synced_at, p.last_identifier, p.last_rp_name, p.last_static_id, p.last_server_playtime,
               u.id AS user_id, u.username, u.email, u.game_identifier, u.game_identifier_name,
               f.name AS faction_name, fr.name AS rank_name
        FROM players p
@@ -1473,6 +1483,7 @@ async function buildPlayerProfile(name, opts = {}) {
     account: account ? {
       id: account.id, game_id: account.game_id, display_name: account.display_name,
       playtime_minutes: account.playtime_minutes, status: account.status, created_at: account.created_at,
+      server_playtime_minutes: playtimeOf(live) ?? (snapshotIsOurs ? account.last_server_playtime : null) ?? null,
       username: account.username, faction_name: account.faction_name, rank_name: account.rank_name,
     } : null,
     punishments: punishmentResult.rows,
@@ -2384,7 +2395,7 @@ app.get("/api/me", auth, asyncRoute(async (req, res) => {
             u.discord_id, u.discord_username, u.discord_avatar, u.referral_code,
             (u.game_identifier IS NOT NULL) game_linked, u.game_identifier_name,
             (SELECT COUNT(*)::int FROM users ref WHERE ref.referred_by_user_id=u.id) referral_count,
-            p.id player_id,p.game_id,p.display_name,p.playtime_minutes,p.status,
+            p.id player_id,p.game_id,p.display_name,p.playtime_minutes,p.last_server_playtime,p.status,
             f.id faction_id, f.name faction_name, fr.id rank_id, fr.name rank_name
      FROM users u JOIN roles r ON r.id=u.role_id
      LEFT JOIN players p ON p.user_id=u.id

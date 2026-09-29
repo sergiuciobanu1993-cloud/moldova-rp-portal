@@ -207,7 +207,9 @@ async function loadProfileExtra() {
         ${src?.staticId ? `<div><small style="display:block;font-size:11px;color:var(--muted);margin-bottom:4px">ID STATIC</small><strong style="font-size:20px">#${escapeHtml(String(src.staticId))}</strong></div>` : ''}
         ${jobText ? `<div><small style="display:block;font-size:11px;color:var(--muted);margin-bottom:4px">JOB</small><strong>${escapeHtml(jobText)}</strong></div>` : ''}
         ${p.gang ? `<div><small style="display:block;font-size:11px;color:var(--muted);margin-bottom:4px">GAȘCĂ</small><strong>${escapeHtml(p.gang.org || '—')}</strong></div>` : ''}
-        ${p.account?.playtime_minutes ? `<div><small style="display:block;font-size:11px;color:var(--muted);margin-bottom:4px">ORE JUCATE (de pe site)</small><strong>${Math.floor(p.account.playtime_minutes / 60)}h</strong></div>` : ''}
+        ${p.account?.server_playtime_minutes != null
+          ? `<div><small style="display:block;font-size:11px;color:var(--muted);margin-bottom:4px">ORE JUCATE</small><strong>${Math.floor(p.account.server_playtime_minutes / 60)}h</strong></div>`
+          : (p.account?.playtime_minutes ? `<div><small style="display:block;font-size:11px;color:var(--muted);margin-bottom:4px">ORE JUCATE (de pe site)</small><strong>${Math.floor(p.account.playtime_minutes / 60)}h</strong></div>` : '')}
       </div>
       ${charId ? `<p style="margin:-6px 0 16px;font-size:11px;word-break:break-all"><span class="muted">ID CONT</span> <code>${escapeHtml(charId)}</code></p>` : ''}`;
     const moneyBlock = src ? `
@@ -320,8 +322,9 @@ async function loadStreamerIngameLog() {
     const name = me.display_name || me.username;
     document.getElementById('welcome-name').textContent = name;
     document.getElementById('stat-id').textContent = me.game_id ? '#' + me.game_id : '—';
-    document.getElementById('stat-playtime').textContent = me.playtime_minutes != null
-      ? Math.round(me.playtime_minutes / 60) + 'h' : '—';
+    const ptMin = me.last_server_playtime ?? me.playtime_minutes;
+    document.getElementById('stat-playtime').textContent = ptMin != null
+      ? Math.floor(ptMin / 60) + 'h' : '—';
     document.getElementById('stat-faction').textContent = me.faction_name || 'Fără facțiune';
     document.getElementById('stat-rank').textContent = me.rank_name || '—';
 

@@ -41,6 +41,7 @@
 
 </main>
 <script src="auth-client.js"></script>
+<script src="player-profile-modal.js"></script>
 <script>
 const ROLE_LABEL = { player: 'Jucător', streamer: 'Streamer', moderator: 'Moderator', admin: 'Administrator', 'co-fondator': 'Co-fondator', owner: 'Fondator' };
 const ROLE_PILL = { player: 'off', streamer: 'info', moderator: 'info', admin: 'warn', 'co-fondator': 'on', owner: 'on' };
@@ -132,9 +133,9 @@ async function loadUsers(canEdit, me) {
     tbody.innerHTML = users.length ? users.map(u => `
       <tr>
         <td>
-          <strong>${u.discord_username || u.username}</strong>
-          ${u.discord_username && u.discord_username !== u.username ? `<br><small style="color:var(--muted)">${u.username}</small>` : ''}
-          ${u.email ? `<br><small style="color:var(--muted)">${u.email}</small>` : ''}
+          <strong><button type="button" class="player-link" data-profile-user="${escapeHtmlAttr(u.id)}" data-profile-name="${escapeHtmlAttr(u.discord_username || u.username)}" title="Deschide profilul">${escapeHtmlAttr(u.discord_username || u.username)}</button></strong>
+          ${u.discord_username && u.discord_username !== u.username ? `<br><small style="color:var(--muted)">${escapeHtmlAttr(u.username)}</small>` : ''}
+          ${u.email ? `<br><small style="color:var(--muted)">${escapeHtmlAttr(u.email)}</small>` : ''}
         </td>
         <td>${u.discord_username ? `<span class="pill info">CONECTAT</span>` : `<span class="pill off">FĂRĂ DISCORD</span>`}</td>
         <td>${passwordPillHtml(u)}</td>
@@ -193,6 +194,10 @@ async function loadUsers(canEdit, me) {
     // Codul de referal e disponibil oricărui admin/co-fondator/owner (nu doar
     // fondator), la fel ca facțiunea de mai sus — vezi comentariul de la
     // referralCodeHtml().
+    // Click pe nume → profilul complet al jucătorului (29.09.2026).
+    tbody.querySelectorAll('[data-profile-user]').forEach(btn => btn.addEventListener('click', () =>
+      window.openPlayerProfile(btn.dataset.profileName, { userId: btn.dataset.profileUser })));
+
     tbody.querySelectorAll('[data-refcode-for]').forEach(btn => {
       btn.addEventListener('click', async () => {
         const userId = btn.dataset.refcodeFor;

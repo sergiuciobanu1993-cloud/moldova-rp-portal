@@ -1613,6 +1613,25 @@ app.get("/api/admin/player-profile", auth, requireRole(...MOD_ROLES), asyncRoute
   const idRaw = String(req.query.identifier || "").trim();
   const identifier = /^[A-Za-z0-9:._-]{3,120}$/.test(idRaw) ? idRaw : undefined;
   const rpName = String(req.query.rpName || "").trim().slice(0, 64) || undefined;
+  // (29.09.2026) Din pagina Utilizatori: profilul după contul de pe site.
+  const userIdRaw = String(req.query.userId || "").trim();
+  if (/^[0-9a-f-]{36}$/i.test(userIdRaw)) {
+    const { rows } = await pool.query(
+      `SELECT u.id, u.username, u.game_identifier, u.game_identifier_name, p.display_name, p.last_rp_name
+       FROM users u LEFT JOIN players p ON p.user_id = u.id WHERE u.id = $1 LIMIT 1`, [userIdRaw]);
+    const u = rows[0];
+    if (!u) return res.status(404).json({ error: "Utilizatorul nu există." });
+    const detail = await getPlayersDetail();
+    const liveP = u.game_identifier ? (detail.players || []).find(p => p.license === u.game_identifier) : null;
+    const pname = liveP?.name || u.game_identifier_name || u.display_name || u.username;
+    const prof = await buildPlayerProfile(pname, {
+      userId: u.id,
+      ...(u.game_identifier ? { identifier: u.game_identifier } : {}),
+      ...(u.last_rp_name ? { rpName: u.last_rp_name } : {}),
+    });
+    if (!prof) return res.status(400).json({ error: "Nume invalid." });
+    return res.json(prof);
+  }
   const profile = await buildPlayerProfile(name, { ...(identifier ? { identifier } : {}), ...(rpName ? { rpName } : {}) });
   if (!profile) return res.status(400).json({ error: "Nume invalid." });
   res.json(profile);

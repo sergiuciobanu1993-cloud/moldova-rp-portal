@@ -328,6 +328,7 @@ window.openPlayerProfile = (function () {
       const qs = new URLSearchParams({ name });
       if (opts.identifier) qs.set('identifier', opts.identifier);
       if (opts.rpName) qs.set('rpName', opts.rpName);
+      if (opts.userId) qs.set('userId', opts.userId);
       const res = await apiFetch(`/api/admin/player-profile?${qs.toString()}`);
       if (!res.ok) throw new Error();
       renderProfile(await res.json());

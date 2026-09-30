@@ -1,11 +1,13 @@
 /* Intro imersiv pe pagina principală (30.09.2026).
-   Scena e "lipită" (sticky) pe ecran, iar scroll-ul controlează camera:
-   ceața se ridică, imaginea se apropie lent, textul apare din blur.
-   Toate valorile animate vin din imersiv.js prin variabile CSS
-   (--v, --o, --s, --y, --fog, --haze), ca să nu recalculăm layout-ul. */
+   Cutie de aceeași mărime ca bannerul de sus (hero), fără să blocheze
+   scroll-ul: scenele se derulează singure — ceața se ridică, imaginea se
+   apropie lent, textul apare din blur. Se poate opri, și schimba cu
+   săgețile / punctele. Valorile animate vin din imersiv.js prin variabile
+   CSS (--v, --o, --s, --y, --fog, --haze). */
 
-.imx{position:relative;background:#050506;--imx-ink:#f4efe9;--imx-muted:rgba(244,239,233,.72);--imx-fog:#efe6db;--imx-fog-ink:#2a1d12}
-.imx-stage{position:sticky;top:0;height:100vh;height:100svh;overflow:hidden;isolation:isolate}
+.imx{position:relative;margin:96px 8vw 0;height:clamp(460px,76vh,680px);border-radius:18px;overflow:hidden;background:#050506;box-shadow:var(--shadow,0 24px 70px rgba(0,0,0,.45));--imx-ink:#f4efe9;--imx-muted:rgba(244,239,233,.72);--imx-fog:#efe6db;--imx-fog-ink:#2a1d12}
+.imx-stage{position:absolute;inset:0;overflow:hidden;isolation:isolate}
+.imx + .highlights-marquee{padding-top:44px}
 
 /* ---- fundaluri ---- */
 .imx-bg{position:absolute;inset:0;opacity:var(--o,0);will-change:opacity,transform;transform:translate3d(0,var(--y,0),0) scale(var(--s,1.2));transform-origin:50% 55%}
@@ -33,15 +35,15 @@
 .imx-haze{position:absolute;inset:0;z-index:3;pointer-events:none;opacity:var(--haze,0);background:radial-gradient(ellipse 80% 70% at 50% 50%,rgba(240,226,210,.75),rgba(240,226,210,.35) 60%,transparent 100%);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
 
 /* ---- text ---- */
-.imx-copy{position:absolute;z-index:5;left:8vw;bottom:15vh;width:min(640px,84vw);color:var(--imx-ink);pointer-events:none}
-.imx-copy.is-right{left:auto;right:12vw;text-align:left}
-.imx-copy.is-center{left:50%;bottom:auto;top:50%;width:min(1100px,92vw);text-align:center;transform:translate(-50%,-50%)}
+.imx-copy{position:absolute;z-index:5;left:56px;bottom:84px;width:min(600px,calc(100% - 112px));color:var(--imx-ink);pointer-events:none}
+.imx-copy.is-right{left:auto;right:56px}
+.imx-copy.is-center{left:50%;bottom:auto;top:50%;width:calc(100% - 64px);text-align:center;transform:translate(-50%,-50%)}
 .imx-copy a,.imx-copy button{pointer-events:auto}
 .imx-block{opacity:var(--v,0);filter:blur(calc((1 - var(--v,0)) * 14px));transform:translate3d(0,calc((1 - var(--v,0)) * 26px),0);will-change:opacity,filter,transform}
 .imx-kicker{display:flex;align-items:center;gap:12px;margin:0 0 18px;font-size:11px;font-weight:800;letter-spacing:.32em;text-transform:uppercase;color:var(--orange,#ff8a1f)}
 .imx-kicker::before{content:'';width:34px;height:1px;background:currentColor}
 .imx-kicker small{color:var(--imx-muted);font-size:11px;letter-spacing:.2em;font-weight:700}
-.imx-title{position:relative;margin:0 0 18px;font-size:clamp(34px,4.6vw,68px);line-height:1;letter-spacing:-.035em;font-weight:900;text-wrap:balance}
+.imx-title{position:relative;margin:0 0 16px;font-size:clamp(28px,3.3vw,52px);line-height:1;letter-spacing:-.035em;font-weight:900;text-wrap:balance}
 .imx-title span{color:var(--orange,#ff8a1f)}
 /* dublura "fantomă" care se suprapune peste titlu cât timp apare */
 .imx-title::after{content:attr(data-ghost);position:absolute;left:0;right:0;top:0;color:inherit;opacity:calc((1 - var(--v,0)) * .55);transform:translate3d(calc((1 - var(--v,0)) * 18px),calc((1 - var(--v,0)) * -10px),0);filter:blur(2px);pointer-events:none}
@@ -57,41 +59,35 @@
 @keyframes imx-pulse{70%{box-shadow:0 0 0 10px rgba(61,220,132,0)}100%{box-shadow:0 0 0 0 rgba(61,220,132,0)}}
 
 /* titlul de intrare: litere rare, închise la culoare cât e ceață */
-.imx-brand{margin:0;font-size:clamp(30px,6.2vw,96px);font-weight:300;line-height:1;text-transform:uppercase;letter-spacing:calc(.12em + var(--fog,1) * .38em);padding-left:calc(.12em + var(--fog,1) * .38em);color:color-mix(in srgb,var(--imx-fog-ink) calc(var(--fog,1) * 100%),var(--imx-ink))}
+.imx-brand{margin:0;font-size:clamp(28px,5vw,80px);font-weight:300;line-height:1;text-transform:uppercase;letter-spacing:calc(.12em + var(--fog,1) * .38em);padding-left:calc(.12em + var(--fog,1) * .38em);color:color-mix(in srgb,var(--imx-fog-ink) calc(var(--fog,1) * 100%),var(--imx-ink))}
 .imx-brand b{font-weight:900;color:var(--orange,#ff8a1f)}
 .imx-brand-sub{margin:22px 0 0;font-size:12px;font-weight:700;letter-spacing:.34em;text-transform:uppercase;color:color-mix(in srgb,#6b5846 calc(var(--fog,1) * 100%),var(--imx-muted))}
-.imx-cue{position:absolute;z-index:5;left:50%;bottom:34px;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:10px;font-size:10px;font-weight:800;letter-spacing:.3em;text-transform:uppercase;color:color-mix(in srgb,#6b5846 calc(var(--fog,1) * 100%),var(--imx-muted));opacity:var(--cue,1);pointer-events:none}
-.imx-cue span{width:1px;height:46px;background:linear-gradient(currentColor,transparent);animation:imx-cue 1.8s ease-in-out infinite;transform-origin:top}
-@keyframes imx-cue{0%{transform:scaleY(0)}50%{transform:scaleY(1)}100%{transform:scaleY(1);opacity:0}}
 
-/* ---- navigare laterală (ca în video: puncte + săgeți) ---- */
-.imx-rail{position:absolute;z-index:7;right:28px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:14px;margin:0;padding:0;list-style:none}
-.imx-rail button{display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:2px 0;border:0;background:none;cursor:pointer;color:rgba(244,239,233,.5);font:700 10px/1 inherit;font-family:inherit;letter-spacing:.2em;text-transform:uppercase;transition:color .25s}
-.imx-rail button::after{content:'';width:18px;height:1px;background:currentColor;transition:width .3s,background .3s}
-.imx-rail button span{opacity:0;transform:translateX(6px);transition:opacity .25s,transform .25s}
-.imx-rail button:hover span,.imx-rail button:focus-visible span,.imx-rail button.is-active span{opacity:1;transform:none}
-.imx-rail button.is-active{color:var(--imx-ink)}
-.imx-rail button.is-active::after{width:38px;background:var(--orange,#ff8a1f)}
-.imx.is-foggy .imx-rail button{color:rgba(42,29,18,.45)}
-.imx-arrows{position:absolute;z-index:7;right:24px;bottom:96px;display:flex;flex-direction:column;gap:8px}
-.imx-arrows button,.imx-skip{display:grid;place-items:center;width:38px;height:38px;border-radius:50%;border:1px solid rgba(244,239,233,.3);background:rgba(5,5,6,.25);color:var(--imx-ink);cursor:pointer;font-size:14px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);transition:border-color .2s,background .2s}
+/* ---- control: puncte + săgeți + pauză ---- */
+.imx-controls{position:absolute;z-index:7;left:24px;right:24px;bottom:22px;display:flex;align-items:center;justify-content:space-between;gap:16px;pointer-events:none}
+.imx-controls>*{pointer-events:auto}
+.imx-dots{display:flex;gap:6px;margin:0;padding:0;list-style:none}
+.imx-dots button{position:relative;display:block;width:34px;height:22px;padding:0;border:0;background:none;cursor:pointer}
+.imx-dots button::before{content:'';position:absolute;left:0;right:0;top:10px;height:2px;border-radius:2px;background:rgba(244,239,233,.28)}
+.imx-dots button::after{content:'';position:absolute;left:0;top:10px;height:2px;border-radius:2px;width:calc(var(--fill,0) * 100%);background:var(--orange,#ff8a1f)}
+.imx-dots button span{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.imx-arrows{display:flex;gap:8px}
+.imx-arrows button{display:grid;place-items:center;width:36px;height:36px;border-radius:50%;border:1px solid rgba(244,239,233,.3);background:rgba(5,5,6,.3);color:var(--imx-ink);cursor:pointer;font:700 13px/1 inherit;font-family:inherit;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);transition:border-color .2s,background .2s}
+.imx-arrows button[data-imx="pause"]{font-size:10px;letter-spacing:-1px}
 .imx-arrows button:hover{border-color:var(--orange,#ff8a1f);background:rgba(255,138,31,.15)}
-.imx-arrows button:disabled{opacity:.3;cursor:default}
-.imx-skip{position:absolute;z-index:7;left:24px;bottom:28px;width:auto;height:auto;padding:9px 14px;border-radius:999px;font-size:11px;font-weight:800;letter-spacing:.14em;text-transform:uppercase}
-.imx-skip:hover{border-color:var(--orange,#ff8a1f)}
-.imx.is-foggy .imx-arrows button,.imx.is-foggy .imx-skip{color:var(--imx-fog-ink);border-color:rgba(42,29,18,.3);background:rgba(255,255,255,.3)}
+.imx.is-foggy .imx-dots button::before{background:rgba(42,29,18,.25)}
+.imx.is-foggy .imx-arrows button{color:var(--imx-fog-ink);border-color:rgba(42,29,18,.3);background:rgba(255,255,255,.3)}
 .imx button:focus-visible,.imx a:focus-visible{outline:2px solid var(--orange,#ff8a1f);outline-offset:3px}
 
-/* trecere lină spre restul paginii */
-.imx-exit{position:absolute;left:0;right:0;bottom:0;height:22vh;z-index:5;pointer-events:none;background:linear-gradient(0deg,#0b0c0d,transparent);opacity:var(--exit,0)}
-
 @media (max-width:900px){
-  .imx-copy,.imx-copy.is-right{left:22px;right:22px;width:auto;bottom:108px}
+  .imx{margin:92px 16px 0;height:560px}
+  .imx-copy,.imx-copy.is-right{left:20px;right:20px;width:auto;bottom:70px}
   .imx-shade,.imx-shade.is-right{background:radial-gradient(ellipse 130% 90% at 50% 40%,transparent 30%,rgba(5,5,6,.6) 100%),linear-gradient(0deg,rgba(5,5,6,.92) 0%,rgba(5,5,6,.55) 45%,transparent 75%)}
-  .imx-rail{display:none}
-  .imx-arrows{display:none}
-  .imx-skip{left:16px;bottom:22px}
-  .imx-title{font-size:clamp(30px,8.5vw,44px)}
+  .imx-controls{left:14px;right:14px;bottom:14px}
+  .imx-dots button{width:24px}
+  .imx-title{font-size:clamp(26px,7.5vw,38px)}
+  .imx-text{font-size:14px}
+  .imx-facts li{font-size:11px;padding:5px 10px}
   .imx-brand{letter-spacing:calc(.06em + var(--fog,1) * .22em);padding-left:calc(.06em + var(--fog,1) * .22em)}
 }
 
@@ -100,6 +96,6 @@
   .imx-bg{transform:none!important}
   .imx-block{filter:none;transform:none}
   .imx-title::after,.imx-grain,.imx-fog::before,.imx-fog::after{display:none;animation:none}
-  .imx-cue span,.imx-live i{animation:none}
+  .imx-live i{animation:none}
   .imx-haze{display:none}
 }

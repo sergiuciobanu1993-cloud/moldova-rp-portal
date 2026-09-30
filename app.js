@@ -67,6 +67,14 @@ if (playerGrid) {
         if (sub) sub.textContent = 'Niciun jucător conectat momentan.';
         return;
       }
+      // Peste 24 de jucători (30.09.2026): lista completă intră în „sfera"
+      // 3D din sfera.js, care se rotește cu rotița mouse-ului / cu degetul.
+      window.__mrpPlayers = d.list;
+      if (window.MRPSfera && d.list.length > 24) {
+        window.MRPSfera.render(d.list, sub);
+        return;
+      }
+      if (window.MRPSfera) window.MRPSfera.reset();
       const SHOWN = 24;
       const shown = d.list.slice(0, SHOWN);
       playerGrid.innerHTML = shown.map(p => `

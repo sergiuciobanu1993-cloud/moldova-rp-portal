@@ -1,0 +1,38 @@
+/* „Sfera" jucătorilor online (30.09.2026) — vezi sfera.js.
+   Aceeași lățime ca grila de dinainte; cardurile stau pe o sferă 3D, cele
+   din față clare, cele din laterale se rotesc și se estompează. */
+
+.player-grid.is-sfera{display:block;position:relative}
+.sfera-stage{position:absolute;inset:0 0 58px;perspective:1800px;perspective-origin:50% 50%;overflow:hidden;touch-action:pan-y;cursor:grab;outline:none;
+  -webkit-mask-image:linear-gradient(90deg,transparent 0,#000 7%,#000 93%,transparent 100%);mask-image:linear-gradient(90deg,transparent 0,#000 7%,#000 93%,transparent 100%)}
+.sfera-stage.is-drag{cursor:grabbing}
+.sfera-stage:focus-visible{box-shadow:inset 0 0 0 2px var(--orange,#ff8a1f);border-radius:14px}
+.sfera-ring{position:absolute;left:50%;top:50%;width:0;height:0;transform-style:preserve-3d;will-change:transform}
+
+.player.sf-card{position:absolute;left:0;top:0;width:var(--sf-w,360px);height:var(--sf-h,84px);box-sizing:border-box;backface-visibility:hidden;-webkit-backface-visibility:hidden;transition:border-color .2s,background .2s,box-shadow .2s;will-change:opacity;user-select:none;-webkit-user-drag:none}
+.sf-card .sf-info{flex:1;min-width:0}
+.sf-card .sf-info strong{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sf-card .online-badge{margin-left:auto;flex-shrink:0}
+a.sf-card{color:inherit;text-decoration:none;cursor:pointer}
+.sf-open{display:none;flex-shrink:0;margin-left:auto;padding:4px 9px;border-radius:999px;background:rgba(255,138,31,.16);color:var(--orange,#ff8a1f);font-size:10px;font-weight:900;letter-spacing:.05em;text-transform:uppercase}
+a.sf-card:hover .online-badge,a.sf-card:focus-visible .online-badge{display:none}
+a.sf-card:hover .sf-open,a.sf-card:focus-visible .sf-open{display:inline-block}
+a.sf-card:focus-visible{outline:2px solid var(--orange,#ff8a1f);outline-offset:2px}
+
+/* căutare: cine se potrivește iese în față, restul se sting */
+.has-query .sf-card:not(.is-hit){filter:grayscale(1) brightness(.55)}
+.sf-card.is-hit{border-color:var(--orange,#ff8a1f);box-shadow:0 0 0 1px var(--orange,#ff8a1f),0 0 26px rgba(255,138,31,.25)}
+
+.sfera-ctrl{position:absolute;left:0;right:0;bottom:0;height:44px;display:flex;align-items:center;justify-content:center;gap:12px}
+.sfera-ctrl button{display:grid;place-items:center;width:38px;height:38px;border-radius:50%;border:1px solid var(--line,rgba(255,255,255,.08));background:rgba(255,255,255,.04);color:#fff;font:700 20px/1 inherit;font-family:inherit;cursor:pointer;transition:border-color .2s,background .2s}
+.sfera-ctrl button:hover{border-color:rgba(255,138,31,.5);background:rgba(255,138,31,.12)}
+.sfera-ctrl button:focus-visible,.sfera-search:focus-visible{outline:2px solid var(--orange,#ff8a1f);outline-offset:2px}
+.sfera-pos{min-width:64px;text-align:center;color:var(--muted,#9ca1a8);font-size:12px;font-weight:800;letter-spacing:.08em;font-variant-numeric:tabular-nums}
+.sfera-search{position:absolute;right:0;top:50%;transform:translateY(-50%);width:210px;height:38px;padding:0 14px;border-radius:999px;border:1px solid var(--line,rgba(255,255,255,.08));background:rgba(255,255,255,.04);color:#fff;font:inherit;font-size:13px}
+.sfera-search::placeholder{color:var(--muted,#9ca1a8)}
+
+@media (max-width:700px){
+  .sfera-stage{inset:0 0 100px}
+  .sfera-ctrl{height:92px;flex-wrap:wrap;align-content:center;row-gap:10px}
+  .sfera-search{position:static;transform:none;width:100%;order:4}
+}

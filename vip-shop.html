@@ -349,6 +349,7 @@ function renderLog(log) {
             <span>
               <a href="admin-jucatori.html?profil=${encodeURIComponent(entry.playerName || '')}&id=${encodeURIComponent(entry.identifier || '')}" target="_blank" rel="noopener" title="Deschide profilul jucătorului" style="color:inherit;text-decoration:underline;text-decoration-color:rgba(255,255,255,.3)"><strong>${escapeHtml(entry.playerName || entry.identifier || 'necunoscut')}</strong></a>
               <span class="muted"> · ${escapeHtml(entry.caseName || '')} · ${escapeHtml(entry.rewardLabel || '')}</span>
+              ${data.model ? `<br><small class="muted" title="Codul de spawn salvat la deschidere — cu el se pune mașina în garaj">model: <code>${escapeHtml(data.model)}</code></small>` : ''}${data.item ? `<br><small class="muted">item: <code>${escapeHtml(data.item)}</code></small>` : ''}
             </span>
           </span>
           <span style="display:flex;align-items:center;gap:10px;flex:none">

@@ -578,3 +578,13 @@ CREATE TABLE IF NOT EXISTS vip_item_value (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (kind, item_key)
 );
+
+-- Setări VIP Shop (30.09.2026), editate din Editorul VIP Shop. Deocamdată:
+-- "legal_exchange" = schimbul banilor murdari câștigați de membrii
+-- facțiunilor legale în bani curați (bancă), la un procent ales de staff.
+-- value: {"enabled": true, "pct": 70, "jobs": ["police", "ambulance", ...]}
+CREATE TABLE IF NOT EXISTS vip_settings (
+  key VARCHAR(64) PRIMARY KEY,
+  value JSONB NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

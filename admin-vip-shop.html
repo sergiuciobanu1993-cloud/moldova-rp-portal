@@ -34,6 +34,28 @@
   tr.drop-before td{box-shadow:inset 0 2px 0 var(--orange)}
   tr.drop-after td{box-shadow:inset 0 -2px 0 var(--orange)}
   .order-saved{color:var(--green);font-size:11px;margin-left:8px}
+  /* Schimb bani murdari — facțiuni legale (30.09.2026) */
+  .lx-box{margin:0 0 22px}
+  .lx-box summary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:12px}
+  .lx-box summary::-webkit-details-marker{display:none}
+  .lx-box summary h2{margin:0}
+  .lx-box summary .lx-state{color:var(--muted);font-size:12px}
+  .lx-box[open] summary{margin-bottom:16px}
+  .lx-row{display:flex;align-items:flex-end;gap:18px;flex-wrap:wrap}
+  .lx-pct{display:flex;align-items:center;gap:12px}
+  .lx-pct input[type=range]{width:220px;accent-color:var(--orange)}
+  .lx-pct input[type=number]{width:84px}
+  .lx-example{color:var(--muted);font-size:12px;margin:10px 0 0}
+  .lx-example b{color:var(--green)}
+  .lx-jobs{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+  .lx-job{display:inline-flex;align-items:center;gap:7px;padding:7px 12px;border:1px solid var(--line);border-radius:999px;background:var(--bg);cursor:pointer;font-size:12px;user-select:none;transition:.15s ease}
+  .lx-job input{accent-color:var(--orange);margin:0}
+  .lx-job.on{border-color:rgba(66,223,138,.45);background:rgba(66,223,138,.08)}
+  .lx-job small{color:var(--muted);font-size:10px}
+  .lx-jobs .lx-job{display:inline-flex;margin:0;text-transform:none;letter-spacing:0;font-size:12px;font-weight:600;color:var(--text)}
+  .lx-jobs .lx-job input{width:auto;padding:0}
+  .lx-add{display:flex;gap:8px;margin-top:12px;max-width:420px}
+  .lx-add input{flex:1}
 </style>
 </head>
 <body>
@@ -42,6 +64,26 @@
 <header><div><small>PANEL ADMINISTRATIV</small><h1>Editor VIP Shop</h1></div><a class="admin" href="dashboard.html" title="Înapoi la contul meu" style="text-decoration:none"><span id="admin-name">…</span> <i></i></a></header>
 
 <p class="vip-intro">Aici adaugi, editezi sau ștergi cutiile și recompensele din <a href="vip-shop.html">VIP Shop</a> — direct de pe site, fără să mai fie nevoie de un update pe serverul de joc de fiecare dată. Șansa fiecărei recompense se calculează automat din „pondere" — valorile nu trebuie să însumeze 100, se normalizează singure (ex: dacă o recompensă are pondere 20 și toate din cutie însumează 1000, șansa ei afișată jucătorilor va fi 2%). O cutie dezactivată dispare din VIP Shop pentru jucători, dar rămâne salvată aici, gata de reactivat.</p>
+
+<details class="formbox lx-box" id="lx-box">
+  <summary><h2>🧼 Bani murdari → facțiuni legale</h2><span class="lx-state" id="lx-state">Se încarcă…</span></summary>
+  <p class="vip-intro" style="margin:0 0 16px">Când un membru al unei facțiuni legale câștigă <b>bani murdari</b> dintr-o cutie, imediat după învârtire (și în lista „Recompensele tale") primește opțiunea să-i schimbe în <b>bani curați, în bancă</b>, la procentul de mai jos. Dacă nu vrea, îi păstrează murdari. Jucătorii din facțiuni ilegale nu văd opțiunea.</p>
+  <div class="lx-row">
+    <div class="field checkbox"><input type="checkbox" id="lx-enabled"><label for="lx-enabled">Schimbul e activ</label></div>
+    <div class="field">
+      <label for="lx-pct-num">Procent primit (bani curați)</label>
+      <div class="lx-pct"><input type="range" id="lx-pct-range" min="1" max="100" step="1"><input type="number" id="lx-pct-num" min="1" max="100" step="1"><span>%</span></div>
+    </div>
+  </div>
+  <p class="lx-example" id="lx-example"></p>
+  <div class="field" style="margin-top:14px">
+    <label>Joburi care contează ca facțiuni legale</label>
+    <small class="hint">Bifează joburile legale. Lista vine din jucătorii văzuți pe server (numele jobului din joc, ex. <code>police</code>); poți adăuga și manual.</small>
+    <div class="lx-jobs" id="lx-jobs"></div>
+    <div class="lx-add"><input type="text" id="lx-new-job" placeholder="ex: sheriff" maxlength="40"><button type="button" class="btn-ghost" id="lx-add-btn">+ Adaugă job</button></div>
+  </div>
+  <div class="formactions"><button type="button" class="btn-primary" id="lx-save">Salvează</button><span class="order-saved" id="lx-saved" hidden></span></div>
+</details>
 
 <div class="title" style="padding:0 0 16px"><h2>Cutii</h2><button id="new-case-btn">+ Cutie nouă</button></div>
 <div id="cases-list"><p class="muted">Se încarcă…</p></div>
@@ -552,6 +594,81 @@ document.addEventListener('keydown', (e) => {
   if (!me) return;
   document.getElementById('admin-name').textContent = me.username;
   loadCases();
+  loadLegalExchange();
 })();
+
+// ---- Bani murdari → facțiuni legale (30.09.2026) ----
+const lx = { settings: null, known: [], checked: new Set() };
+function lxRenderJobs() {
+  const wrap = document.getElementById('lx-jobs');
+  const all = new Map(lx.known.map(j => [j.job, j]));
+  lx.checked.forEach(j => { if (!all.has(j)) all.set(j, { job: j, label: null, players: 0 }); });
+  const list = [...all.values()].sort((a, b) => (lx.checked.has(b.job) - lx.checked.has(a.job)) || (b.players - a.players));
+  wrap.innerHTML = list.length ? list.map(j => `
+    <label class="lx-job${lx.checked.has(j.job) ? ' on' : ''}">
+      <input type="checkbox" data-job="${escapeHtml(j.job)}"${lx.checked.has(j.job) ? ' checked' : ''}>
+      <span>${escapeHtml(j.label && j.label.toLowerCase() !== j.job ? `${j.label} (${j.job})` : j.job)}</span>
+      ${j.players ? `<small>${j.players} jucători</small>` : ''}
+    </label>`).join('') : '<span class="muted">Niciun job încă — adaugă manual.</span>';
+  wrap.querySelectorAll('input[data-job]').forEach(cb => cb.addEventListener('change', () => {
+    if (cb.checked) lx.checked.add(cb.dataset.job); else lx.checked.delete(cb.dataset.job);
+    cb.closest('.lx-job').classList.toggle('on', cb.checked);
+  }));
+}
+function lxExample() {
+  const pct = Number(document.getElementById('lx-pct-num').value) || 0;
+  const on = document.getElementById('lx-enabled').checked;
+  document.getElementById('lx-example').innerHTML = on
+    ? `Exemplu: <b>$100.000</b> bani murdari → <b>$${Math.floor(100000 * pct / 100).toLocaleString('ro-RO')}</b> curați în bancă.`
+    : 'Schimbul e oprit — nimeni nu vede opțiunea.';
+  document.getElementById('lx-state').textContent = on ? `Activ · ${pct}% · ${lx.checked.size} joburi` : 'Oprit';
+}
+async function loadLegalExchange() {
+  try {
+    const res = await apiFetch('/api/admin/vip-shop/schimb-legal');
+    if (!res.ok) throw new Error();
+    const d = await res.json();
+    lx.settings = d.settings;
+    lx.known = d.jobs || [];
+    lx.checked = new Set(d.settings.jobs || []);
+    document.getElementById('lx-enabled').checked = !!d.settings.enabled;
+    document.getElementById('lx-pct-range').value = d.settings.pct;
+    document.getElementById('lx-pct-num').value = d.settings.pct;
+    lxRenderJobs();
+    lxExample();
+  } catch {
+    document.getElementById('lx-state').textContent = 'Nu am putut încărca setările.';
+  }
+}
+document.getElementById('lx-pct-range').addEventListener('input', e => { document.getElementById('lx-pct-num').value = e.target.value; lxExample(); });
+document.getElementById('lx-pct-num').addEventListener('input', e => { document.getElementById('lx-pct-range').value = e.target.value; lxExample(); });
+document.getElementById('lx-enabled').addEventListener('change', lxExample);
+document.getElementById('lx-add-btn').addEventListener('click', () => {
+  const inp = document.getElementById('lx-new-job');
+  const job = inp.value.trim().toLowerCase();
+  if (!job) return;
+  lx.checked.add(job);
+  inp.value = '';
+  lxRenderJobs();
+  lxExample();
+});
+document.getElementById('lx-new-job').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); document.getElementById('lx-add-btn').click(); } });
+document.getElementById('lx-save').addEventListener('click', async () => {
+  const saved = document.getElementById('lx-saved');
+  const pct = Number(document.getElementById('lx-pct-num').value);
+  if (!(pct >= 1 && pct <= 100)) { alert('Procentul trebuie să fie între 1 și 100.'); return; }
+  try {
+    const res = await apiFetch('/api/admin/vip-shop/schimb-legal', { method: 'PUT', body: JSON.stringify({ enabled: document.getElementById('lx-enabled').checked, pct, jobs: [...lx.checked] }) });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(d.error || 'Nu am putut salva.');
+    lx.checked = new Set(d.settings.jobs);
+    lxRenderJobs();
+    lxExample();
+    saved.hidden = false; saved.style.color = 'var(--green)'; saved.textContent = '✓ Salvat';
+    setTimeout(() => { saved.hidden = true; }, 2500);
+  } catch (err) {
+    saved.hidden = false; saved.style.color = '#ff8a8a'; saved.textContent = err.message;
+  }
+});
 </script>
 </body></html>

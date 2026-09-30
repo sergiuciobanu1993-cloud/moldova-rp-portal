@@ -1006,6 +1006,69 @@ function parseRewardData(raw) {
   try { return JSON.parse(raw || "{}"); } catch { return {}; }
 }
 
+// Schimbul banilor murdari pentru facțiunile legale (30.09.2026).
+// Un membru al unei facțiuni legale (Poliție, SMURD, Armată…) care câștigă
+// bani murdari la VIP Shop îi poate schimba, înainte să-i ridice, în bani
+// curați în bancă — la procentul setat de staff (implicit 70%). Lista de
+// joburi „legale" și procentul se editează din Editorul VIP Shop.
+const LEGAL_EXCHANGE_DEFAULT = {
+  enabled: true,
+  pct: 70,
+  jobs: ["police", "sheriff", "ambulance", "army", "fib", "gov", "doj"],
+};
+function normalizeLegalExchange(v) {
+  const pct = Math.floor(Number(v?.pct));
+  const jobs = Array.isArray(v?.jobs)
+    ? [...new Set(v.jobs.map(j => String(j || "").trim().toLowerCase().slice(0, 40)).filter(Boolean))].slice(0, 60)
+    : LEGAL_EXCHANGE_DEFAULT.jobs;
+  return {
+    enabled: v?.enabled !== false,
+    pct: Number.isFinite(pct) && pct >= 1 && pct <= 100 ? pct : LEGAL_EXCHANGE_DEFAULT.pct,
+    jobs,
+  };
+}
+async function loadLegalExchange() {
+  try {
+    const { rows } = await pool.query(`SELECT value FROM vip_settings WHERE key = 'legal_exchange'`);
+    return normalizeLegalExchange(rows[0]?.value || LEGAL_EXCHANGE_DEFAULT);
+  } catch {
+    return normalizeLegalExchange(LEGAL_EXCHANGE_DEFAULT);
+  }
+}
+// E jucătorul (personajul legat) într-o facțiune legală? Întâi datele live de
+// pe server (dacă serverul trimite direct un câmp „legal", îl folosim pe el),
+// apoi ultimul job salvat de sincronizare.
+async function isLegalFactionMember(identifier, settings) {
+  if (!identifier) return false;
+  const jobs = new Set(settings.jobs);
+  try {
+    const detail = await getPlayersDetail();
+    const live = (detail.players || []).find(p => p.license === identifier);
+    if (live) {
+      const flag = live.legalFaction ?? live.isLegal ?? live.legal;
+      if (typeof flag === "boolean") return flag;
+      if (live.job) return jobs.has(String(live.job).toLowerCase());
+    }
+  } catch { /* trecem la datele salvate */ }
+  try {
+    const { rows } = await pool.query(
+      `SELECT last_job FROM players WHERE last_identifier = $1 AND last_job IS NOT NULL ORDER BY last_synced_at DESC NULLS LAST LIMIT 1`,
+      [identifier]
+    );
+    return !!rows[0] && jobs.has(String(rows[0].last_job).toLowerCase());
+  } catch {
+    return false;
+  }
+}
+// Oferta de schimb pentru o recompensă: doar bani murdari, doar pentru legali.
+function exchangeOfferFor(settings, isLegal, type, data) {
+  if (!settings.enabled || !isLegal || type !== "cash") return null;
+  if (String(data?.account || "") !== "black_money") return null;
+  const from = Math.floor(Number(data?.amount) || 0);
+  if (from <= 0) return null;
+  return { from, amount: Math.floor(from * settings.pct / 100), pct: settings.pct };
+}
+
 // Lista publică (/cases) nu are id-uri, dar vine în aceeași ordine ca lista de
 // admin (/cases/admin) — le potrivim după poziție și verificăm tip+etichetă;
 // dacă ceva nu se potrivește, lăsăm cutia în ordinea de pe server.
@@ -1762,9 +1825,14 @@ app.get("/api/vip-shop", auth, asyncRoute(async (req, res) => {
     return res.json({ linked: false, online: casesResult.online, cases: await applyOrderToPublicCases(casesResult.cases) });
   }
 
-  const [coinsResult, casesResult, itemValues] = await Promise.all([fetchCoins(identifier), fetchCasesList(), loadItemValues()]);
+  const [coinsResult, casesResult, itemValues, legalCfg] = await Promise.all([fetchCoins(identifier), fetchCasesList(), loadItemValues(), loadLegalExchange()]);
   casesResult.cases = await applyOrderToPublicCases(casesResult.cases);
-  coinsResult.pending = (coinsResult.pending || []).map(p => ({ ...p, sellOffer: sellOfferFor(itemValues, p.reward_type, parseRewardData(p.reward_data)) }));
+  const hasDirty = (coinsResult.pending || []).some(p => p.reward_type === "cash" && parseRewardData(p.reward_data).account === "black_money");
+  const isLegal = hasDirty && legalCfg.enabled ? await isLegalFactionMember(identifier, legalCfg) : false;
+  coinsResult.pending = (coinsResult.pending || []).map(p => {
+    const data = parseRewardData(p.reward_data);
+    return { ...p, sellOffer: sellOfferFor(itemValues, p.reward_type, data), exchangeOffer: exchangeOfferFor(legalCfg, isLegal, p.reward_type, data) };
+  });
   res.json({
     linked: true,
     name: rows[0].game_identifier_name,
@@ -1807,7 +1875,21 @@ app.post("/api/vip-shop/deschide", auth, asyncRoute(async (req, res) => {
       .sort((a, b) => Number(b.id) - Number(a.id))[0];
     if (offer && opening) sell = { openingId: Number(opening.id), ...offer };
   }
-  res.json({ ok: true, ...outcome.result, sell });
+  // (30.09.2026) Bani murdari câștigați de un membru al unei facțiuni legale:
+  // îi oferim imediat schimbul în bani curați (bancă), la procentul setat.
+  let exchange = null;
+  if (won && won.type === "cash" && String(won.data?.account || "") === "black_money") {
+    const legalCfg = await loadLegalExchange();
+    if (legalCfg.enabled && await isLegalFactionMember(identifier, legalCfg)) {
+      const offer = exchangeOfferFor(legalCfg, true, won.type, won.data);
+      const coinsResult = await fetchCoins(identifier);
+      const opening = (coinsResult.pending || [])
+        .filter(p => p.reward_type === "cash" && p.reward_label === won.label)
+        .sort((a, b) => Number(b.id) - Number(a.id))[0];
+      if (offer && opening) exchange = { openingId: Number(opening.id), ...offer };
+    }
+  }
+  res.json({ ok: true, ...outcome.result, sell, exchange });
 }));
 
 // Vinde înapoi o mașină/armă câștigată și încă neridicată (29.09.2026), pentru
@@ -1841,6 +1923,44 @@ app.post("/api/vip-shop/vinde", auth, asyncRoute(async (req, res) => {
   }
   await logAction(req.user.sub, "vip_shop.sell_back", "vip_shop_opening", String(openingId), { currency, amount, label: opening.reward_label }, req.ip);
   res.json({ ok: true, currency, amount });
+}));
+
+// Schimbă banii murdari (neridicați) în bani curați în bancă (30.09.2026) —
+// doar pentru membrii facțiunilor legale, la procentul setat de staff.
+// Serverul de joc face efectiv schimbul ("/cases/convert"): verifică atomic
+// că recompensa e a jucătorului, încă neridicată și chiar bani murdari, apoi
+// o transformă în bani în bancă (suma de mai jos) — se ridică tot cu /recompense.
+app.post("/api/vip-shop/schimba", auth, asyncRoute(async (req, res) => {
+  const { rows } = await pool.query(`SELECT game_identifier FROM users WHERE id = $1`, [req.user.sub]);
+  const identifier = rows[0]?.game_identifier;
+  if (!identifier) return res.status(400).json({ error: "Leagă-ți mai întâi contul de personajul din joc." });
+  const openingId = parseInt(req.body?.openingId, 10);
+  if (!openingId) return res.status(400).json({ error: "Date invalide." });
+
+  const [coinsResult, legalCfg] = await Promise.all([fetchCoins(identifier), loadLegalExchange()]);
+  if (!coinsResult.online) return res.status(503).json({ error: "Serverul de joc nu răspunde momentan." });
+  if (!legalCfg.enabled) return res.status(400).json({ error: "Schimbul banilor murdari e oprit momentan." });
+  const opening = (coinsResult.pending || []).find(p => Number(p.id) === openingId);
+  if (!opening) return res.status(400).json({ error: "Recompensa nu mai e în așteptare (poate ai ridicat-o deja)." });
+  if (!(await isLegalFactionMember(identifier, legalCfg))) {
+    return res.status(403).json({ error: "Schimbul e doar pentru membrii facțiunilor legale." });
+  }
+  const offer = exchangeOfferFor(legalCfg, true, opening.reward_type, parseRewardData(opening.reward_data));
+  if (!offer) return res.status(400).json({ error: "Doar banii murdari se pot schimba." });
+
+  const result = await vipShopAdminRequest("POST", "/cases/convert", {
+    identifier, openingId, account: "bank", amount: offer.amount, pct: offer.pct,
+  });
+  if (!result.ok) {
+    const messages = {
+      nu_se_poate: "Recompensa nu mai poate fi schimbată (poate ai ridicat-o deja).",
+      server_offline: "Serverul de joc nu răspunde momentan.",
+    };
+    const msg = result.status === 404 ? "Schimbul banilor murdari nu e încă activ pe serverul de joc." : (messages[result.error] || "Nu am putut schimba banii.");
+    return res.status(400).json({ error: msg });
+  }
+  await logAction(req.user.sub, "vip_shop.legal_exchange", "vip_shop_opening", String(openingId), { from: offer.from, amount: offer.amount, pct: offer.pct, label: opening.reward_label }, req.ip);
+  res.json({ ok: true, amount: offer.amount, pct: offer.pct });
 }));
 
 // Istoricul PROPRIU al jucătorului logat (deschideri ridicate ȘI în
@@ -1938,6 +2058,36 @@ app.get("/api/admin/vip-shop/cutii", auth, requireRole(...ADMIN_ROLES), asyncRou
     }));
   }
   res.json({ ...data, sellBackPct: SELL_BACK_PCT });
+}));
+
+// Setările schimbului de bani murdari pentru facțiunile legale (30.09.2026).
+// GET întoarce și joburile văzute pe server (din sincronizarea jucătorilor),
+// ca staff-ul să bifeze din listă care sunt legale.
+app.get("/api/admin/vip-shop/schimb-legal", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (_req, res) => {
+  const settings = await loadLegalExchange();
+  let jobs = [];
+  try {
+    const { rows } = await pool.query(
+      `SELECT LOWER(last_job) job, MAX(last_job_label) label, COUNT(*)::int players
+       FROM players WHERE last_job IS NOT NULL AND last_job <> ''
+       GROUP BY LOWER(last_job) ORDER BY COUNT(*) DESC LIMIT 80`
+    );
+    jobs = rows;
+  } catch { /* fără listă — se pot adăuga manual */ }
+  res.json({ settings, jobs });
+}));
+
+app.put("/api/admin/vip-shop/schimb-legal", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+  const pct = Math.floor(Number(req.body?.pct));
+  if (!Number.isFinite(pct) || pct < 1 || pct > 100) return res.status(400).json({ error: "Procentul trebuie să fie între 1 și 100." });
+  const settings = normalizeLegalExchange({ enabled: req.body?.enabled !== false, pct, jobs: req.body?.jobs });
+  await pool.query(
+    `INSERT INTO vip_settings(key, value, updated_at) VALUES ('legal_exchange', $1, NOW())
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+    [JSON.stringify(settings)]
+  );
+  await logAction(req.user.sub, "vip_shop.legal_exchange_settings", "vip_settings", "legal_exchange", settings, req.ip);
+  res.json({ ok: true, settings });
 }));
 
 // Valoarea unei mașini/arme (în coins și în bani din joc) — pentru vânzarea înapoi.

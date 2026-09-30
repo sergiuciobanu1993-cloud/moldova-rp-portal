@@ -1,0 +1,83 @@
+/* „Orbita" — scroll imersiv pentru secțiunile de pe pagina principală
+   (Jucători online, Facțiuni online, Actualizări, Regulamente, Anunțuri).
+   30.09.2026. Nu blochează scroll-ul: fiecare secțiune, când intră pe
+   ecran, se deschide dintr-un cerc (ca o lentilă), are un inel care se
+   rotește cu scroll-ul și un cuvânt uriaș, abia vizibil, care alunecă în
+   spate. Titlul și cardurile apar din blur, o singură dată.
+   Totul e pornit de orbita.js (clasa .orb-on pe <html>); fără JS pagina
+   arată exact ca înainte. Variabile de la JS: --e (0→1 cât a intrat
+   secțiunea), --q (0→1 cât a fost parcursă). */
+
+.orb-sec{position:relative;isolation:isolate}
+.orb-deco{position:absolute;inset:36px 0 20px;z-index:-1;pointer-events:none;overflow:hidden;border-radius:30px}
+
+/* panoul care se deschide din cerc */
+.orb-panel{position:absolute;inset:0;border-radius:30px;border:1px solid rgba(255,255,255,.045);
+  background:
+    radial-gradient(circle at 86% 14%,rgba(255,138,31,.13),transparent 42%),
+    radial-gradient(circle at 10% 100%,rgba(255,138,31,.05),transparent 50%),
+    linear-gradient(180deg,rgba(255,255,255,.028),rgba(255,255,255,.008));
+  clip-path:circle(calc(var(--e,0) * 150%) at 86% 14%)}
+
+/* cuvântul-fantomă din spate */
+.orb-word{position:absolute;top:18px;left:0;white-space:nowrap;font-size:clamp(76px,13vw,190px);font-weight:900;line-height:1;letter-spacing:-.04em;color:transparent;-webkit-text-stroke:1px rgba(255,255,255,.075);transform:translate3d(calc((.35 - var(--q,0)) * 22%),0,0);opacity:calc(.3 + var(--e,0) * .7);user-select:none}
+
+/* inelul „radar" din colțul secțiunii */
+.orb-ring{position:absolute;top:-70px;right:-70px;width:300px;aspect-ratio:1;border-radius:50%;opacity:calc(var(--e,0) * .9);transform:rotate(calc(var(--q,0) * 300deg)) scale(calc(.7 + var(--e,0) * .3))}
+.orb-ring i{position:absolute;border-radius:50%}
+.orb-ring i:nth-child(1){inset:0;border:1px dashed rgba(255,138,31,.28)}
+.orb-ring i:nth-child(2){inset:34px;border:1px solid rgba(255,255,255,.07);
+  background:conic-gradient(from 0deg,transparent 0 72%,rgba(255,138,31,.0) 72%,rgba(255,138,31,.22) 100%);
+  -webkit-mask:radial-gradient(circle,transparent 62%,#000 63%);mask:radial-gradient(circle,transparent 62%,#000 63%)}
+.orb-ring i:nth-child(3){inset:92px;border:1px solid rgba(255,138,31,.18);box-shadow:0 0 40px rgba(255,138,31,.12) inset}
+.orb-ring i:nth-child(3)::after{content:'';position:absolute;top:-4px;left:50%;width:7px;height:7px;margin-left:-3.5px;border-radius:50%;background:var(--orange,#ff8a1f);box-shadow:0 0 12px var(--orange,#ff8a1f)}
+
+/* ---- apariția conținutului (o singură dată) ---- */
+.orb-on .orb-sec:not(.orb-in) :is(.section-head>div>*,.section-head>.muted,.section-head>.text-link,.player,.faction,.news,.info-card,.empty-state,.callout-banner,.callout){opacity:0}
+.orb-on .orb-sec.orb-in:not(.orb-done) :is(.section-head>div>*,.section-head>.muted,.section-head>.text-link){animation:orb-rise .9s cubic-bezier(.2,.7,.2,1) both}
+.orb-on .orb-sec.orb-in:not(.orb-done) .section-head>div>:nth-child(2){animation-delay:.08s}
+.orb-on .orb-sec.orb-in:not(.orb-done) :is(.section-head>.muted,.section-head>.text-link){animation-delay:.16s}
+.orb-on .orb-sec.orb-in:not(.orb-done) :is(.player,.faction,.news,.info-card,.empty-state,.callout-banner,.callout){animation:orb-rise .85s cubic-bezier(.2,.7,.2,1) both;animation-delay:calc(.22s + var(--i,0) * 60ms)}
+.orb-sec :is(.player,.faction,.news,.info-card):nth-child(2){--i:1}
+.orb-sec :is(.player,.faction,.news,.info-card):nth-child(3){--i:2}
+.orb-sec :is(.player,.faction,.news,.info-card):nth-child(4){--i:3}
+.orb-sec :is(.player,.faction,.news,.info-card):nth-child(5){--i:4}
+.orb-sec :is(.player,.faction,.news,.info-card):nth-child(6){--i:5}
+.orb-sec :is(.player,.faction,.news,.info-card):nth-child(7){--i:6}
+.orb-sec :is(.player,.faction,.news,.info-card):nth-child(8){--i:7}
+.orb-sec :is(.player,.faction,.news,.info-card):nth-child(n+9){--i:8}
+.orb-sec .callout-banner,.orb-sec .callout{--i:4}
+@keyframes orb-rise{from{opacity:0;filter:blur(10px);transform:translate3d(0,26px,0) scale(.98)}to{opacity:1;filter:none;transform:none}}
+
+/* avatar rotund cu inel, în ton cu „orbita" */
+.orb-sec .player .avatar{border-radius:50%;box-shadow:0 0 0 3px rgba(255,138,31,.14),0 0 0 7px rgba(255,138,31,.05)}
+.orb-sec .faction>span{border-radius:50%;box-shadow:0 0 0 3px rgba(255,138,31,.08)}
+
+/* ---- orbita din stânga: un cerc de progres pentru fiecare secțiune ---- */
+.orb-rail{position:fixed;left:18px;top:50%;z-index:15;display:flex;flex-direction:column;gap:10px;margin:0;padding:0;list-style:none;transform:translate3d(-12px,-50%,0);opacity:0;pointer-events:none;transition:opacity .35s,transform .35s}
+.orb-rail.is-shown{opacity:1;transform:translate3d(0,-50%,0);pointer-events:auto}
+.orb-rail a{position:relative;display:grid;place-items:center;width:34px;height:34px;border-radius:50%;color:var(--muted,#9ca1a8);text-decoration:none}
+.orb-rail svg{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg)}
+.orb-rail circle{fill:none;stroke-width:2}
+.orb-rail .bg{stroke:rgba(255,255,255,.1)}
+.orb-rail .fg{stroke:var(--orange,#ff8a1f);stroke-linecap:round;stroke-dasharray:88;stroke-dashoffset:calc(88 - var(--q,0) * 88);transition:stroke-dashoffset .12s linear}
+.orb-rail b{width:6px;height:6px;border-radius:50%;background:currentColor;transition:transform .25s,background .25s}
+.orb-rail a.is-active{color:#fff}
+.orb-rail a.is-active b{transform:scale(1.5);background:var(--orange,#ff8a1f)}
+.orb-rail span{position:absolute;left:44px;top:50%;transform:translate(-6px,-50%);white-space:nowrap;padding:6px 10px;border-radius:8px;background:rgba(11,12,13,.9);border:1px solid var(--line,rgba(255,255,255,.08));font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#fff;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s}
+.orb-rail a:hover span,.orb-rail a:focus-visible span{opacity:1;transform:translate(0,-50%)}
+.orb-rail a:focus-visible{outline:2px solid var(--orange,#ff8a1f);outline-offset:2px}
+@media (max-width:1259px){.orb-rail{display:none}}
+
+@media (max-width:700px){
+  .orb-deco{inset:24px 0 12px;border-radius:22px}
+  .orb-ring{width:200px;top:-50px;right:-60px}
+  .orb-ring i:nth-child(2){inset:24px}
+  .orb-ring i:nth-child(3){inset:62px}
+}
+
+@media (prefers-reduced-motion:reduce){
+  .orb-on .orb-sec :is(.section-head>div>*,.section-head>.muted,.section-head>.text-link,.player,.faction,.news,.info-card,.empty-state,.callout-banner,.callout){animation:none!important;opacity:1!important}
+  .orb-word,.orb-ring{transform:none}
+  .orb-panel{clip-path:none}
+}

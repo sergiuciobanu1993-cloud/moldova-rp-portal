@@ -1,0 +1,74 @@
+/* „Vitrina" — modelele 3D pentru secțiunile de pe pagina principală
+   (30.09.2026). Vezi vitrina.js. Clasele apar doar după ce JS-ul
+   „îmbracă" listele; fără JS totul rămâne ca înainte. */
+
+/* ---------- comun: butoanele ‹ • • • › ---------- */
+.vt-ctrl{display:flex;align-items:center;justify-content:center;gap:14px;margin-top:18px}
+.vt-ctrl[hidden]{display:none}
+.vt-arrow{display:grid;place-items:center;width:38px;height:38px;border-radius:50%;border:1px solid var(--line,rgba(255,255,255,.08));background:rgba(255,255,255,.04);color:#fff;font:700 20px/1 inherit;font-family:inherit;cursor:pointer;transition:border-color .2s,background .2s,opacity .2s}
+.vt-arrow:hover:not(:disabled){border-color:rgba(255,138,31,.5);background:rgba(255,138,31,.12)}
+.vt-arrow:disabled{opacity:.3;cursor:default}
+.vt-dots{display:flex;gap:8px}
+.vt-dot{width:9px;height:9px;padding:0;border-radius:50%;border:0;background:rgba(255,255,255,.2);cursor:pointer;transition:background .25s,transform .25s}
+.vt-dot.is-active{background:var(--orange,#ff8a1f);transform:scale(1.35)}
+.vt-arrow:focus-visible,.vt-dot:focus-visible{outline:2px solid var(--orange,#ff8a1f);outline-offset:3px}
+
+/* card de știre folosit de coverflow și teanc */
+.vt-flow>.news.vt-item,.vt-deck>.news.vt-item{position:absolute;top:0;display:block;margin:0;padding:22px 24px;border:1px solid var(--line,rgba(255,255,255,.08));border-radius:16px;background:linear-gradient(145deg,#17191b,#0e1011);box-shadow:0 24px 60px rgba(0,0,0,.45);overflow:hidden;will-change:transform,opacity;transition:border-color .25s,box-shadow .25s;user-select:none}
+.vt-flow>.news.vt-item:hover,.vt-deck>.news.vt-item:hover{background:linear-gradient(145deg,#1a1c1f,#101213)}
+.vt-item.is-front{border-color:rgba(255,138,31,.35)}
+.vt-item .news-date{display:inline-block;margin:0 0 12px;padding:4px 10px;border-radius:999px;background:rgba(255,138,31,.12);color:var(--orange,#ff8a1f);font-size:11px;letter-spacing:.08em}
+.vt-item .news-img{max-height:190px;width:100%;object-fit:cover}
+.vt-item h3{font-size:19px;line-height:1.2;text-wrap:balance}
+
+/* ---------- ACTUALIZĂRI: coverflow ---------- */
+.news-list.vt-flow{position:relative;border-top:0;perspective:1500px;perspective-origin:50% 40%;touch-action:pan-y;cursor:grab}
+.news-list.vt-flow.is-drag{cursor:grabbing}
+.vt-flow>.news.vt-item{left:50%;transform-origin:50% 50%}
+.vt-flow>.news.vt-item:not(.is-front)::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,rgba(7,8,9,.35),rgba(7,8,9,.1));pointer-events:none}
+
+/* ---------- ULTIMELE ANUNȚURI: teanc ---------- */
+.news-list.vt-deck{position:relative;border-top:0;touch-action:pan-y;cursor:grab}
+.news-list.vt-deck.is-drag{cursor:grabbing}
+.vt-deck>.news.vt-item{left:0;right:0;transform-origin:50% 0}
+
+/* ---------- FACȚIUNI: orbită ---------- */
+.faction-grid.vt-orbit{position:relative;display:block;touch-action:pan-y;cursor:grab;user-select:none}
+.faction-grid.vt-orbit.is-drag{cursor:grabbing}
+/* elipsele orbitelor */
+.faction-grid.vt-orbit::before,.faction-grid.vt-orbit::after{content:'';position:absolute;left:50%;top:50%;width:calc(var(--rx,400px) * 2);height:calc(var(--ry,120px) * 2);transform:translate(-50%,-50%);border-radius:50%;border:1px dashed rgba(255,138,31,.3);pointer-events:none}
+.faction-grid.vt-orbit::after{width:calc(var(--rx,400px) * 1.16);height:calc(var(--ry,120px) * 1.16);border-style:solid;border-color:rgba(255,255,255,.06)}
+.vt-core{position:absolute;left:50%;top:50%;z-index:60;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;justify-content:center;width:150px;height:150px;border-radius:50%;background:radial-gradient(circle,rgba(255,138,31,.22),rgba(12,13,14,.92) 68%);box-shadow:0 0 0 1px rgba(255,138,31,.3),0 0 60px rgba(255,138,31,.18);text-align:center;pointer-events:none}
+.vt-core img{width:46px;height:46px;object-fit:contain;margin-bottom:2px}
+.vt-core strong{font-size:26px;line-height:1;font-variant-numeric:tabular-nums}
+.vt-core small{color:var(--muted,#9ca1a8);font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+.vt-orbit>.faction.vt-item{position:absolute;left:50%;top:50%;flex-direction:column;gap:6px;padding:0;border:0;background:none;text-align:center;will-change:transform,opacity}
+.vt-orbit>.faction.vt-item:hover{background:none}
+.vt-orbit>.faction.vt-item>span{width:var(--sz,56px);height:var(--sz,56px);border-radius:50%;font-size:calc(var(--sz,56px) * .26);background:radial-gradient(circle at 35% 30%,#2a2c30,#141517 70%);box-shadow:0 0 0 2px rgba(255,138,31,.35),0 0 24px rgba(255,138,31,.15),inset 0 -6px 14px rgba(0,0,0,.5);transition:box-shadow .25s,transform .25s}
+.vt-orbit>.faction.vt-item:hover>span{box-shadow:0 0 0 2px var(--orange,#ff8a1f),0 0 36px rgba(255,138,31,.45),inset 0 -6px 14px rgba(0,0,0,.5);transform:scale(1.08)}
+.vt-orbit>.faction.vt-item strong{font-size:13px;white-space:nowrap}
+.vt-orbit>.faction.vt-item small{font-size:11px;color:var(--green,#3ddc84)}
+
+/* ---------- înclinare după mouse ---------- */
+.vt-tilt{position:relative;transition:transform .5s cubic-bezier(.2,.7,.2,1);transform-style:preserve-3d}
+.vt-tilt.is-tilting{transition:transform .08s linear}
+.vt-tilt::after{content:'';position:absolute;inset:0;border-radius:inherit;background:radial-gradient(circle at var(--mx,50%) var(--my,50%),rgba(255,255,255,.1),transparent 45%);opacity:0;transition:opacity .3s;pointer-events:none}
+.vt-tilt.is-tilting::after{opacity:1}
+
+@media (max-width:700px){
+  .vt-flow>.news.vt-item,.vt-deck>.news.vt-item{padding:18px}
+  .vt-core{width:92px;height:92px}
+  .vt-core img{width:26px;height:26px}
+  .vt-core strong{font-size:18px}
+  .vt-core small{font-size:8px}
+  .vt-orbit>.faction.vt-item{gap:3px}
+  .vt-orbit>.faction.vt-item strong{font-size:10px}
+  .vt-orbit>.faction.vt-item small{font-size:9px}
+}
+
+@media (prefers-reduced-motion:reduce){
+  .vt-tilt,.vt-tilt.is-tilting{transition:none}
+}
+
+/* cardurile din lateral nu au voie să lărgească pagina (telefon) */
+#factiuni,#actualizari,#anunturi{overflow-x:clip}

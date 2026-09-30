@@ -1,0 +1,26 @@
+{
+  "id": "/",
+  "name": "Moldova RP",
+  "short_name": "Moldova RP",
+  "description": "Portalul oficial Moldova RP: contul tău din joc, VIP Shop, tichete, regulamente și anunțuri.",
+  "lang": "ro",
+  "dir": "ltr",
+  "start_url": "/index.html?sursa=aplicatie",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#090a0b",
+  "theme_color": "#090a0b",
+  "categories": ["games", "social", "entertainment"],
+  "icons": [
+    { "src": "/assets/app/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/assets/app/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/assets/app/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Contul meu", "short_name": "Cont", "url": "/dashboard.html", "icons": [{ "src": "/assets/app/icon-192.png", "sizes": "192x192" }] },
+    { "name": "VIP Shop", "short_name": "VIP", "url": "/vip-shop.html", "icons": [{ "src": "/assets/app/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Tichete", "short_name": "Tichete", "url": "/tichete.html", "icons": [{ "src": "/assets/app/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Regulamente", "short_name": "Reguli", "url": "/regulamente.html", "icons": [{ "src": "/assets/app/icon-192.png", "sizes": "192x192" }] }
+  ]
+}

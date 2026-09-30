@@ -28,9 +28,22 @@ app.use(express.json({ limit: "8mb" }));
 // costă un download complet la fiecare navigare, doar garantează că HTML-ul
 // e mereu proaspăt. CSS/JS/imaginile rămân cu comportamentul implicit al
 // express.static (cache normal, revalidare pe ETag).
+// (30.09.2026) Folderele interne ale proiectului (codul serverului, schema
+// bazei de date, scripturi, docker) și fișierele de configurare nu sunt
+// pagini — nu le mai servim public, deși stau în același folder cu site-ul.
+const PRIVATE_PATHS = /^\/(backend|database|scripts|docker|node_modules)(\/|$)|^\/(package(-lock)?\.json|docker-compose\.ya?ml|API\.md|README\.md)$/i;
+app.use((req, res, next) => {
+  let p = req.path;
+  try { p = decodeURIComponent(p); } catch { /* cale invalidă */ }
+  if (PRIVATE_PATHS.test(p.replace(/\/{2,}/g, "/"))) return res.status(404).end();
+  next();
+});
 app.use(express.static(path.join(__dirname, ".."), {
   setHeaders: (res, filePath) => {
-    if (filePath.endsWith(".html")) res.set("Cache-Control", "no-cache");
+    // sw.js și manifestul aplicației trebuie verificate mereu, ca telefoanele
+    // să ia imediat versiunea nouă a aplicației (PWA, 30.09.2026).
+    if (filePath.endsWith(".html") || filePath.endsWith("sw.js") || filePath.endsWith(".webmanifest")) res.set("Cache-Control", "no-cache");
+    if (filePath.endsWith(".webmanifest")) res.type("application/manifest+json");
   },
 }));
 

@@ -81,6 +81,72 @@
 @keyframes revealWinPulse{0%{box-shadow:0 0 0 1px var(--orange),0 0 0 rgba(255,138,31,0)}40%{box-shadow:0 0 0 1px var(--orange),0 0 30px rgba(255,138,31,.6)}100%{box-shadow:0 0 0 1px var(--orange),0 0 22px rgba(255,138,31,.45)}}
 #reveal-panel.shake{animation:revealShake .38s cubic-bezier(.36,.07,.19,.97)}
 @keyframes revealShake{10%,90%{transform:translateX(-1px)}20%,80%{transform:translateX(2px)}30%,50%,70%{transform:translateX(-4px)}40%,60%{transform:translateX(4px)}}
+/* ---- Deschidere cinematică (30.09.2026), în stil PUBG: cutia cade, se
+   încarcă (culoarea urcă prin rarități până la cea câștigată), explodează,
+   iar recompensa apare pe un card care se întoarce, cu raze în spate.
+   Recompensa e DEJA decisă de server — animația doar o prezintă. ---- */
+#reveal-panel.is-cinema{max-width:760px!important}
+.ox-stage{--ox:#9aa3ad;position:relative;height:380px;margin:6px 0 14px;border-radius:14px;overflow:hidden;isolation:isolate;cursor:pointer;user-select:none;
+  background:radial-gradient(ellipse 70% 60% at 50% 55%,color-mix(in srgb,var(--ox) 20%,#0b0c0d),#060708 75%);transition:background .4s}
+.ox-stage[hidden]{display:none}
+.ox-fx{position:absolute;inset:0;width:100%;height:100%;z-index:3;pointer-events:none}
+.ox-rays{position:absolute;left:50%;top:50%;width:1000px;height:1000px;margin:-500px 0 0 -500px;z-index:0;opacity:0;
+  background:repeating-conic-gradient(from 0deg,color-mix(in srgb,var(--ox) 42%,transparent) 0deg 6deg,transparent 6deg 18deg);
+  -webkit-mask:radial-gradient(circle,#000 0,transparent 55%);mask:radial-gradient(circle,#000 0,transparent 55%);animation:oxSpin 16s linear infinite;transition:opacity .7s}
+.ox-stage.is-open .ox-rays{opacity:.85}
+@keyframes oxSpin{to{transform:rotate(360deg)}}
+.ox-floor{position:absolute;left:50%;bottom:56px;width:320px;height:44px;margin-left:-160px;border-radius:50%;background:radial-gradient(ellipse,rgba(0,0,0,.75),transparent 70%);z-index:1;transition:opacity .4s}
+.ox-stage.is-open .ox-floor{opacity:0}
+.ox-glow{position:absolute;left:50%;top:50%;width:420px;height:420px;margin:-210px 0 0 -210px;border-radius:50%;z-index:1;pointer-events:none;
+  background:radial-gradient(circle,color-mix(in srgb,var(--ox) 75%,transparent),transparent 62%);opacity:var(--glow,.15);filter:blur(10px)}
+.ox-ring{position:absolute;left:50%;top:50%;width:130px;height:130px;margin:-65px 0 0 -65px;border-radius:50%;border:3px solid var(--ox);opacity:0;z-index:2;pointer-events:none}
+.ox-ring.go{animation:oxRing .75s ease-out}
+@keyframes oxRing{0%{opacity:.95;transform:scale(.4)}100%{opacity:0;transform:scale(4.4)}}
+.ox-crate{position:absolute;left:50%;top:50%;width:340px;height:189px;margin:-112px 0 0 -170px;z-index:2;transform-origin:50% 85%;opacity:0}
+.ox-crate .half{position:absolute;inset:0;border-radius:14px;background:#15171a center/cover no-repeat;
+  -webkit-mask:radial-gradient(ellipse 60% 64% at 50% 50%,#000 62%,transparent 100%);mask:radial-gradient(ellipse 60% 64% at 50% 50%,#000 62%,transparent 100%)}
+.ox-crate .half.l{clip-path:inset(0 50% 0 0)}
+.ox-crate .half.r{clip-path:inset(0 0 0 50%)}
+.ox-crate .ox-emoji{position:absolute;inset:0;display:grid;place-items:center;font-size:110px}
+.ox-crate.drop{animation:oxDrop .75s cubic-bezier(.3,1.45,.5,1) both}
+@keyframes oxDrop{0%{transform:translateY(-280px) scale(.75);opacity:0}55%{opacity:1}100%{transform:none;opacity:1}}
+.ox-crate.burst{opacity:1}
+.ox-crate.burst .half{transition:transform .7s cubic-bezier(.15,.8,.2,1),opacity .5s .15s;opacity:0}
+.ox-crate.burst .half.l{transform:translate(-190px,-40px) rotate(-22deg)}
+.ox-crate.burst .half.r{transform:translate(190px,-40px) rotate(22deg)}
+.ox-crate.gone{opacity:0}
+.ox-card{position:absolute;left:50%;top:50%;width:260px;min-height:250px;margin:-135px 0 0 -130px;z-index:4;border-radius:18px;padding:20px 16px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;
+  background:linear-gradient(160deg,color-mix(in srgb,var(--ox) 34%,#16181b),#0c0e0f 72%);border:2px solid var(--ox);
+  box-shadow:0 0 0 1px rgba(0,0,0,.6),0 0 46px color-mix(in srgb,var(--ox) 60%,transparent),inset 0 0 30px color-mix(in srgb,var(--ox) 18%,transparent);opacity:0;pointer-events:none}
+.ox-card.show{animation:oxCard .95s cubic-bezier(.2,1.3,.4,1) forwards}
+.ox-card.instant{animation-duration:.01s}
+@keyframes oxCard{0%{opacity:0;transform:perspective(900px) rotateY(110deg) scale(.45)}55%{opacity:1}100%{opacity:1;transform:perspective(900px) rotateY(0) scale(1)}}
+.ox-card::after{content:'';position:absolute;inset:0;border-radius:inherit;background:linear-gradient(115deg,transparent 35%,rgba(255,255,255,.22) 50%,transparent 65%);background-size:250% 100%;animation:oxShine 2.6s ease-in-out 1s infinite;pointer-events:none}
+@keyframes oxShine{0%{background-position:130% 0}60%,100%{background-position:-60% 0}}
+.ox-card .ox-icon{font-size:72px;line-height:1;filter:drop-shadow(0 8px 18px rgba(0,0,0,.6))}
+.ox-card .ox-photo{width:224px;height:118px;object-fit:contain;filter:drop-shadow(0 10px 18px rgba(0,0,0,.65))}
+.ox-card .ox-label{font-weight:900;font-size:19px;line-height:1.2;text-wrap:balance}
+.ox-badge{padding:4px 12px;border-radius:999px;background:var(--ox);color:#0b0b0b;font-size:10px;font-weight:900;letter-spacing:.14em;text-transform:uppercase}
+.ox-flash{position:absolute;inset:0;background:#fff;opacity:0;z-index:5;pointer-events:none}
+.ox-flash.go{animation:oxFlash .65s ease-out}
+@keyframes oxFlash{0%{opacity:0}8%{opacity:.95}100%{opacity:0}}
+.ox-tier{position:absolute;left:0;right:0;top:18px;z-index:6;font-size:12px;letter-spacing:.34em;font-weight:900;color:var(--ox);text-transform:uppercase;text-shadow:0 0 16px var(--ox);transition:color .3s}
+.ox-tier.pop{animation:oxPop .35s ease-out}
+@keyframes oxPop{0%{transform:scale(1.5);opacity:.3}100%{transform:none;opacity:1}}
+.ox-hint{position:absolute;left:0;right:0;bottom:14px;z-index:6;font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:rgba(255,255,255,.5);font-weight:800;transition:opacity .3s}
+.ox-stage.is-open .ox-hint{opacity:0}
+.ox-sound{position:absolute;right:12px;top:12px;z-index:7;width:34px;height:34px;border-radius:50%;border:1px solid rgba(255,255,255,.16);background:rgba(0,0,0,.4);color:#fff;font-size:14px;cursor:pointer}
+.ox-sound:focus-visible{outline:2px solid var(--orange);outline-offset:2px}
+@media (max-width:600px){
+  .ox-stage{height:320px}
+  .ox-crate{width:260px;height:145px;margin:-86px 0 0 -130px}
+  .ox-card{width:220px;min-height:220px;margin:-118px 0 0 -110px}
+  .ox-card .ox-photo{width:190px;height:100px}
+}
+@media (prefers-reduced-motion:reduce){
+  .ox-rays,.ox-card::after{animation:none}
+  .ox-crate.drop,.ox-card.show{animation-duration:.01s}
+}
 </style>
 </head>
 <body>
@@ -169,7 +235,20 @@
   <div class="panel" id="reveal-panel" style="max-width:580px;width:100%;text-align:center;padding:28px 24px">
     <h2 id="reveal-title" style="margin:0 0 4px">Se deschide…</h2>
     <p id="reveal-text" class="muted" style="margin:0 0 16px;min-height:18px"></p>
-    <div class="reveal-stage">
+    <div class="ox-stage" id="ox-stage" hidden>
+      <div class="ox-rays"></div>
+      <div class="ox-glow"></div>
+      <div class="ox-floor"></div>
+      <div class="ox-ring" id="ox-ring"></div>
+      <div class="ox-crate" id="ox-crate"><div class="half l"></div><div class="half r"></div></div>
+      <div class="ox-card" id="ox-card"></div>
+      <canvas class="ox-fx" id="ox-fx"></canvas>
+      <div class="ox-flash" id="ox-flash"></div>
+      <div class="ox-tier" id="ox-tier"></div>
+      <div class="ox-hint">Apasă ca să sari animația</div>
+      <button type="button" class="ox-sound" id="ox-sound" aria-label="Sunet deschidere">🔊</button>
+    </div>
+    <div class="reveal-stage" style="display:none">
       <div class="reveal-spotlight"></div>
       <div class="reveal-frame" id="reveal-frame">
         <div class="reveal-fade left"></div>
@@ -726,6 +805,207 @@ function reelSpinTo(winner, pool) {
   });
 }
 
+// ---- Deschidere cinematică (30.09.2026), stil PUBG ----
+// Recompensa e deja decisă de server; aici doar o prezentăm: cutia cade, se
+// „încarcă" urcând prin culorile rarităților până la cea câștigată, explodează
+// și recompensa apare pe un card rotit, cu raze în spate. Click = sari.
+const OX_TIERS = ['common', 'uncommon', 'rare', 'legendary'];
+const OX_COLOR = { common: '#9aa3ad', uncommon: '#4b7bff', rare: '#b04cf0', legendary: '#ffb347' };
+const OX_LABEL = { common: 'Comun', uncommon: 'Neobișnuit', rare: 'Rar', legendary: 'Legendar' };
+
+// sunete scurte, generate pe loc (fără fișiere); se pot opri din 🔊
+const oxSfx = (() => {
+  let ctx = null, off = false;
+  try { off = localStorage.getItem('mrp_ox_mute') === '1'; } catch {}
+  const ac = () => { if (!ctx) { try { ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch { ctx = null; } } return ctx; };
+  function tone(freq, dur, type = 'sine', vol = 0.18, slide = 0) {
+    const c = ac(); if (!c || off) return;
+    const t = c.currentTime, o = c.createOscillator(), g = c.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t);
+    if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(30, freq * slide), t + dur);
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(c.destination); o.start(t); o.stop(t + dur + 0.02);
+  }
+  function noise(dur, vol = 0.25) {
+    const c = ac(); if (!c || off) return;
+    const len = Math.floor(c.sampleRate * dur), buf = c.createBuffer(1, len, c.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.2);
+    const src = c.createBufferSource(), g = c.createGain(), f = c.createBiquadFilter();
+    f.type = 'lowpass'; f.frequency.value = 1800;
+    src.buffer = buf; g.gain.value = vol; src.connect(f).connect(g).connect(c.destination); src.start();
+  }
+  return {
+    get off() { return off; },
+    toggle() { off = !off; try { localStorage.setItem('mrp_ox_mute', off ? '1' : '0'); } catch {} return off; },
+    unlock() { const c = ac(); if (c && c.state === 'suspended') c.resume(); },
+    thud() { tone(95, 0.35, 'sine', 0.3, 0.5); noise(0.12, 0.12); },
+    tick(i) { tone(420 + i * 160, 0.18, 'triangle', 0.12, 1.5); },
+    boom() { noise(0.7, 0.35); tone(70, 0.8, 'sine', 0.35, 0.4); },
+    win(r) { const base = 523 + OX_TIERS.indexOf(r) * 60; [0, 4, 7, 12].forEach((s, k) => setTimeout(() => tone(base * Math.pow(2, s / 12), 0.35, 'triangle', 0.1), k * 70)); },
+  };
+})();
+(() => {
+  const b = document.getElementById('ox-sound');
+  if (!b) return;
+  const paint = () => { b.textContent = oxSfx.off ? '🔇' : '🔊'; };
+  paint();
+  b.addEventListener('click', e => { e.stopPropagation(); oxSfx.toggle(); paint(); });
+})();
+
+let oxRun = 0; // crește la fiecare deschidere / închidere — oprește bucla veche
+function oxCardHtml(w) {
+  const visual = (w.type === 'vehicle' && w.model)
+    ? `<img class="ox-photo" src="assets/vip-cars/${escapeHtml(w.model)}.png" alt="" onerror="this.outerHTML='<div class=&quot;ox-icon&quot;>🚗</div>'">`
+    : `<div class="ox-icon">${REWARD_ICON[w.type] || '🎁'}</div>`;
+  return `${visual}<div class="ox-label">${escapeHtml(w.label)}</div><span class="ox-badge">${OX_LABEL[w.rarity] || ''}</span>`;
+}
+
+function crateOpenTo(winner, caseObj) {
+  return new Promise(resolve => {
+    const run = ++oxRun;
+    const stage = document.getElementById('ox-stage');
+    const crate = document.getElementById('ox-crate');
+    const card = document.getElementById('ox-card');
+    const ring = document.getElementById('ox-ring');
+    const flash = document.getElementById('ox-flash');
+    const tierEl = document.getElementById('ox-tier');
+    const canvas = document.getElementById('ox-fx');
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const rarity = OX_TIERS.includes(winner.rarity) ? winner.rarity : 'common';
+    const target = OX_TIERS.indexOf(rarity);
+
+    document.getElementById('reveal-panel').classList.add('is-cinema');
+    // altfel animațiile rămase de la deschiderea trecută repornesc la afișare
+    flash.classList.remove('go'); ring.classList.remove('go'); tierEl.classList.remove('pop');
+    stage.hidden = false;
+    stage.classList.remove('is-open');
+    stage.style.setProperty('--ox', OX_COLOR.common);
+    stage.style.setProperty('--glow', '0.15');
+    tierEl.textContent = '';
+    crate.className = 'ox-crate';
+    crate.style.transform = '';
+    crate.style.opacity = '';
+    const img = caseObj && CASE_IMG[caseObj.theme];
+    crate.querySelectorAll('.half').forEach(h => { h.style.backgroundImage = img ? `url("${img}")` : 'none'; h.style.transform = ''; });
+    crate.querySelector('.ox-emoji')?.remove();
+    if (!img) crate.insertAdjacentHTML('beforeend', '<div class="ox-emoji">📦</div>');
+    card.className = 'ox-card';
+    card.innerHTML = oxCardHtml({ ...winner, rarity });
+
+    // ---- particule (canvas) ----
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const W = canvas.clientWidth || 700, H = canvas.clientHeight || 380;
+    canvas.width = W * dpr; canvas.height = H * dpr;
+    const g2 = canvas.getContext('2d');
+    g2.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const cx = W / 2, cy = H / 2;
+    let parts = [];
+    let color = OX_COLOR.common;
+    const spawnIn = () => {
+      const a = Math.random() * Math.PI * 2, r = 170 + Math.random() * 90;
+      parts.push({ x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r * 0.75, vx: 0, vy: 0, mode: 'in', life: 1, size: 1.5 + Math.random() * 2, c: color });
+    };
+    const burst = n => {
+      for (let i = 0; i < n; i++) {
+        const a = Math.random() * Math.PI * 2, sp = 3 + Math.random() * 9;
+        parts.push({ x: cx, y: cy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 2, mode: 'out', life: 1, size: 2 + Math.random() * 3.5, c: Math.random() < 0.25 ? '#ffffff' : color });
+      }
+    };
+    const ember = () => parts.push({ x: cx + (Math.random() - 0.5) * 300, y: cy + 120, vx: (Math.random() - 0.5) * 0.4, vy: -0.6 - Math.random() * 0.9, mode: 'ember', life: 1, size: 1 + Math.random() * 2, c: color });
+
+    let phase = 'drop', t0 = performance.now(), shownTier = -1, doneAt = 0, finished = false;
+    const setTier = i => {
+      shownTier = i;
+      color = OX_COLOR[OX_TIERS[i]];
+      stage.style.setProperty('--ox', color);
+      tierEl.textContent = OX_LABEL[OX_TIERS[i]];
+      tierEl.classList.remove('pop'); void tierEl.offsetWidth; tierEl.classList.add('pop');
+      ring.classList.remove('go'); void ring.offsetWidth; ring.classList.add('go');
+      oxSfx.tick(i);
+    };
+    const open = instant => {
+      phase = 'open';
+      if (shownTier !== target) setTier(target);
+      tierEl.textContent = OX_LABEL[rarity];
+      stage.classList.add('is-open');
+      crate.style.transform = '';
+      if (instant) { crate.style.opacity = '0'; crate.classList.add('gone'); card.classList.add('show', 'instant'); }
+      else {
+        flash.classList.remove('go'); void flash.offsetWidth; flash.classList.add('go');
+        ring.classList.remove('go'); void ring.offsetWidth; ring.classList.add('go');
+        crate.classList.add('burst');
+        burst(rarity === 'legendary' ? 220 : 140);
+        oxSfx.boom();
+        setTimeout(() => { if (run === oxRun) { card.classList.add('show'); oxSfx.win(rarity); } }, 140);
+      }
+      stage.style.setProperty('--glow', '0.55');
+    };
+    const finish = () => { if (finished) return; finished = true; resolve(); };
+
+    // sari animația
+    const skip = () => {
+      if (phase === 'open') return;
+      open(true);
+      finish();
+    };
+    stage.onclick = skip;
+
+    if (reduced) { open(true); finish(); }
+    else {
+      crate.classList.add('drop');
+      setTimeout(() => { if (run === oxRun && phase === 'drop') oxSfx.thud(); }, 420);
+    }
+
+    const CHARGE_FROM = 750, CHARGE_MS = 1300 + target * 450, OPEN_AT = CHARGE_FROM + CHARGE_MS;
+    function frame(now) {
+      if (run !== oxRun || stage.hidden) return; // închis sau o altă deschidere
+      const t = now - t0;
+      if (phase === 'drop' && t >= CHARGE_FROM) { phase = 'charge'; crate.classList.remove('drop'); crate.style.opacity = '1'; setTier(0); }
+      if (phase === 'charge') {
+        const k = Math.min(1, (t - CHARGE_FROM) / CHARGE_MS);
+        // treptele de raritate, împărțite egal pe durata încărcării
+        const step = Math.min(target, Math.floor(k * (target + 1)));
+        if (step > shownTier) setTier(step);
+        const amp = 1.5 + k * k * 9;
+        crate.style.transform = `translate(${((Math.random() - 0.5) * amp).toFixed(1)}px,${((Math.random() - 0.5) * amp * 0.6).toFixed(1)}px) rotate(${((Math.random() - 0.5) * amp * 0.35).toFixed(2)}deg) scale(${(1 + k * 0.06).toFixed(3)})`;
+        stage.style.setProperty('--glow', (0.15 + k * 0.6).toFixed(3));
+        const rate = 1 + Math.floor(k * 5);
+        for (let i = 0; i < rate; i++) spawnIn();
+        if (k >= 1) { open(false); doneAt = t + 900; }
+      }
+      if (phase === 'open') {
+        if (Math.random() < 0.35) ember();
+        if (doneAt && t >= doneAt) finish();
+      }
+      // desen particule
+      g2.clearRect(0, 0, W, H);
+      g2.globalCompositeOperation = 'lighter';
+      parts = parts.filter(p => p.life > 0);
+      for (const p of parts) {
+        if (p.mode === 'in') {
+          const dx = cx - p.x, dy = cy - p.y, d = Math.hypot(dx, dy) || 1;
+          p.vx += dx / d * 0.55; p.vy += dy / d * 0.55;
+          p.vx *= 0.9; p.vy *= 0.9;
+          if (d < 24) p.life = 0;
+        } else if (p.mode === 'out') {
+          p.vx *= 0.965; p.vy = p.vy * 0.965 + 0.12;
+          p.life -= 0.016;
+        } else {
+          p.life -= 0.008;
+        }
+        p.x += p.vx; p.y += p.vy;
+        g2.globalAlpha = Math.max(0, Math.min(1, p.life));
+        g2.fillStyle = p.c;
+        g2.beginPath(); g2.arc(p.x, p.y, p.size, 0, Math.PI * 2); g2.fill();
+      }
+      g2.globalAlpha = 1;
+      if (parts.length > 900) parts.splice(0, parts.length - 900);
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  });
+}
+
 async function openCase(caseId) {
   const overlay = document.getElementById('reveal-overlay');
   const title = document.getElementById('reveal-title');
@@ -736,6 +1016,10 @@ async function openCase(caseId) {
   const flash = document.getElementById('reveal-flash');
 
   overlay.style.display = 'flex';
+  oxSfx.unlock(); // sunetul trebuie pornit din click-ul jucătorului
+  oxRun++;
+  document.getElementById('ox-stage').hidden = true;
+  document.getElementById('reveal-panel').classList.remove('is-cinema');
   const actions = document.getElementById('reveal-actions');
   actions.style.display = 'none';
   actions.innerHTML = '';
@@ -775,7 +1059,7 @@ async function openCase(caseId) {
     };
 
     text.textContent = '';
-    await reelSpinTo(winner, pool.length ? pool : [winner]);
+    await crateOpenTo(winner, c);
 
     title.textContent = 'Felicitări!';
     text.textContent = d.reward.type === 'coins'
@@ -856,6 +1140,9 @@ async function openCase(caseId) {
 
 document.getElementById('reveal-close').addEventListener('click', () => {
   document.getElementById('reveal-overlay').style.display = 'none';
+  oxRun++; // oprește particulele
+  document.getElementById('ox-stage').hidden = true;
+  document.getElementById('reveal-panel').classList.remove('is-cinema');
 });
 
 async function loadAll() {

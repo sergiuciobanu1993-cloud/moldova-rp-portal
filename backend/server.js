@@ -1957,7 +1957,10 @@ app.post("/api/vip-shop/vinde", auth, asyncRoute(async (req, res) => {
     return res.status(400).json({ error: msg });
   }
   await logAction(req.user.sub, "vip_shop.sell_back", "vip_shop_opening", String(openingId), { currency, amount, label: opening.reward_label }, req.ip);
-  res.json({ ok: true, currency, amount });
+  // (01.10.2026) Serverul de joc poate recalcula singur suma (mai sigur) —
+  // dacă întoarce „amount", aia e suma reală plătită și pe aia o arătăm.
+  const paid = Number(result.data?.amount);
+  res.json({ ok: true, currency, amount: Number.isFinite(paid) && paid > 0 ? Math.floor(paid) : amount });
 }));
 
 // Schimbă banii murdari (neridicați) în bani curați în bancă (30.09.2026) —
@@ -1996,7 +1999,8 @@ app.post("/api/vip-shop/schimba", auth, asyncRoute(async (req, res) => {
     return res.status(400).json({ error: msg });
   }
   await logAction(req.user.sub, "vip_shop.legal_exchange", "vip_shop_opening", String(openingId), { from: offer.from, amount: offer.amount, pct: offer.pct, label: opening.reward_label }, req.ip);
-  res.json({ ok: true, amount: offer.amount, pct: offer.pct });
+  const paid = Number(result.data?.amount);
+  res.json({ ok: true, amount: Number.isFinite(paid) && paid > 0 ? Math.floor(paid) : offer.amount, pct: offer.pct });
 }));
 
 // Istoricul PROPRIU al jucătorului logat (deschideri ridicate ȘI în

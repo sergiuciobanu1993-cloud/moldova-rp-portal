@@ -418,7 +418,7 @@ async function exchangeDirty(btn) {
     if (!res.ok) throw new Error(d.error || 'Nu am putut schimba banii.');
     await loadAll();
     const m = document.getElementById('sell-msg');
-    if (m) { m.hidden = false; m.style.color = 'var(--green)'; m.textContent = `Gata! Acum ai de ridicat $${amount.toLocaleString('ro-RO')} curați în bancă — scrie /recompense în joc.`; }
+    if (m) { m.hidden = false; m.style.color = 'var(--green)'; m.textContent = `Gata! Acum ai de ridicat $${Number(d.amount || amount).toLocaleString('ro-RO')} curați în bancă — scrie /recompense în joc.`; }
   } catch (err) {
     msg.hidden = false; msg.style.color = '#ff8a8a'; msg.textContent = err.message;
     document.querySelectorAll('[data-exch],[data-sell]').forEach(b => { b.disabled = false; });
@@ -439,7 +439,7 @@ async function sellBack(btn) {
     if (!res.ok) throw new Error(d.error || 'Nu am putut vinde recompensa.');
     await loadAll();
     const m = document.getElementById('sell-msg');
-    if (m) { m.hidden = false; m.style.color = 'var(--green)'; m.textContent = `Vândut! Ai primit ${price}.`; }
+    if (m) { m.hidden = false; m.style.color = 'var(--green)'; m.textContent = `Vândut! Ai primit ${d.amount ? (currency === 'coins' ? `${d.amount} coins` : `$${Number(d.amount).toLocaleString('ro-RO')} în bancă`) : price}.`; }
   } catch (err) {
     msg.hidden = false; msg.style.color = '#ff8a8a'; msg.textContent = err.message;
     document.querySelectorAll('[data-sell]').forEach(b => { b.disabled = false; });
@@ -1089,8 +1089,8 @@ async function openCase(caseId) {
 
     title.textContent = 'Felicitări!';
     text.textContent = d.reward.type === 'coins'
-      ? `Ai câștigat: ${d.reward.label}. Au fost adăugați direct în contul tău de coins (în meniul VIP din joc apar după relog).`
-      : `Ai câștigat: ${d.reward.label}. Intră pe server și scrie /recompense ca să-l ridici. Coins-ii s-au scăzut deja; dacă ești pe server, meniul VIP din joc îți arată soldul nou după relog.`;
+      ? `Ai câștigat: ${d.reward.label}. Au fost adăugați direct în contul tău de coins.`
+      : `Ai câștigat: ${d.reward.label}. Intră pe server și scrie /recompense ca să-l ridici.`;
     // (29.09.2026) Mașină/armă cu valoare setată: alege imediat — o păstrezi
     // (o ridici din joc) sau o vinzi înapoi pentru 50% din valoare.
     if (d.sell && (d.sell.coins || d.sell.money)) {
@@ -1112,7 +1112,7 @@ async function openCase(caseId) {
           const rd = await r.json().catch(() => ({}));
           if (!r.ok) throw new Error(rd.error || 'Nu am putut vinde recompensa.');
           title.textContent = 'Vândut!';
-          text.textContent = `Ai vândut ${d.reward.label} și ai primit ${price}.`;
+          text.textContent = `Ai vândut ${d.reward.label} și ai primit ${rd.amount ? (currency === 'coins' ? `${rd.amount} coins` : `$${Number(rd.amount).toLocaleString('ro-RO')} în bancă`) : price}.`;
           actions.style.display = 'none';
           closeBtn.textContent = 'Am înțeles';
           await loadAll();
@@ -1142,7 +1142,7 @@ async function openCase(caseId) {
           const rd = await r.json().catch(() => ({}));
           if (!r.ok) throw new Error(rd.error || 'Nu am putut schimba banii.');
           title.textContent = 'Schimbat!';
-          text.textContent = `Acum ai de ridicat ${clean} curați, în bancă. Intră pe server și scrie /recompense.`;
+          text.textContent = `Acum ai de ridicat ${rd.amount ? `$${Number(rd.amount).toLocaleString('ro-RO')}` : clean} curați, în bancă. Intră pe server și scrie /recompense.`;
           actions.style.display = 'none';
           closeBtn.textContent = 'Am înțeles';
           await loadAll();

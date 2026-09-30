@@ -956,7 +956,9 @@ function crateOpenTo(winner, caseObj) {
       setTimeout(() => { if (run === oxRun && phase === 'drop') oxSfx.thud(); }, 420);
     }
 
-    const CHARGE_FROM = 750, CHARGE_MS = 1300 + target * 450, OPEN_AT = CHARGE_FROM + CHARGE_MS;
+    // (30.09.2026) Încărcare mai lungă, la cererea staff-ului: ~3s la comun,
+    // ~5,7s la legendar, ca suspansul să țină mai mult.
+    const CHARGE_FROM = 900, CHARGE_MS = 3000 + target * 900;
     function frame(now) {
       if (run !== oxRun || stage.hidden) return; // închis sau o altă deschidere
       const t = now - t0;
@@ -971,7 +973,7 @@ function crateOpenTo(winner, caseObj) {
         stage.style.setProperty('--glow', (0.15 + k * 0.6).toFixed(3));
         const rate = 1 + Math.floor(k * 5);
         for (let i = 0; i < rate; i++) spawnIn();
-        if (k >= 1) { open(false); doneAt = t + 900; }
+        if (k >= 1) { open(false); doneAt = t + 1400; }
       }
       if (phase === 'open') {
         if (Math.random() < 0.35) ember();

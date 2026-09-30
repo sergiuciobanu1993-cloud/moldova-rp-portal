@@ -1073,6 +1073,23 @@ async function isLegalFactionMember(identifier, settings) {
     return false;
   }
 }
+// (01.10.2026) Vânzarea înapoi (/cases/sell) și schimbul banilor murdari
+// (/cases/convert) le face serverul de joc. Cât timp rutele lipsesc acolo
+// (răspund 404), NU mai arătăm butoanele jucătorilor — altfel apasă și
+// primesc doar „nu e încă activ". Verificăm singuri la pornire și la 15 min;
+// cererea de verificare n-are identificator, deci nu poate face nimic în joc.
+const gameRouteReady = { sell: null, convert: null };
+async function probeGameRoutes() {
+  for (const [key, path] of [["sell", "/cases/sell"], ["convert", "/cases/convert"]]) {
+    const r = await vipShopAdminRequest("POST", path, {});
+    if (r.status === 503) continue; // server oprit — nu știm, păstrăm ce aveam
+    gameRouteReady[key] = r.status !== 404;
+  }
+}
+setTimeout(() => probeGameRoutes().catch(() => {}), 20_000);
+setInterval(() => probeGameRoutes().catch(() => {}), 15 * 60_000);
+const gameRouteOk = key => gameRouteReady[key] !== false;
+
 // Oferta de schimb pentru o recompensă: doar bani murdari, doar pentru legali.
 function exchangeOfferFor(settings, isLegal, type, data) {
   if (!settings.enabled || !isLegal || type !== "cash") return null;
@@ -1844,7 +1861,11 @@ app.get("/api/vip-shop", auth, asyncRoute(async (req, res) => {
   const isLegal = hasDirty && legalCfg.enabled ? await isLegalFactionMember(identifier, legalCfg) : false;
   coinsResult.pending = (coinsResult.pending || []).map(p => {
     const data = parseRewardData(p.reward_data);
-    return { ...p, sellOffer: sellOfferFor(itemValues, p.reward_type, data), exchangeOffer: exchangeOfferFor(legalCfg, isLegal, p.reward_type, data) };
+    return {
+      ...p,
+      sellOffer: gameRouteOk("sell") ? sellOfferFor(itemValues, p.reward_type, data) : null,
+      exchangeOffer: gameRouteOk("convert") ? exchangeOfferFor(legalCfg, isLegal, p.reward_type, data) : null,
+    };
   });
   res.json({
     linked: true,
@@ -1880,7 +1901,7 @@ app.post("/api/vip-shop/deschide", auth, asyncRoute(async (req, res) => {
   // recompensă) ca jucătorul să poată alege imediat: o păstrează sau o vinde.
   let sell = null;
   const won = outcome.result?.reward;
-  if (won && (won.type === "vehicle" || won.type === "item")) {
+  if (won && (won.type === "vehicle" || won.type === "item") && gameRouteOk("sell")) {
     const [coinsResult, itemValues] = await Promise.all([fetchCoins(identifier), loadItemValues()]);
     const offer = sellOfferFor(itemValues, won.type, won.data || {});
     const opening = (coinsResult.pending || [])
@@ -1891,7 +1912,7 @@ app.post("/api/vip-shop/deschide", auth, asyncRoute(async (req, res) => {
   // (30.09.2026) Bani murdari câștigați de un membru al unei facțiuni legale:
   // îi oferim imediat schimbul în bani curați (bancă), la procentul setat.
   let exchange = null;
-  if (won && won.type === "cash" && String(won.data?.account || "") === "black_money") {
+  if (won && won.type === "cash" && String(won.data?.account || "") === "black_money" && gameRouteOk("convert")) {
     const legalCfg = await loadLegalExchange();
     if (legalCfg.enabled && await isLegalFactionMember(identifier, legalCfg)) {
       const offer = exchangeOfferFor(legalCfg, true, won.type, won.data);
@@ -1931,6 +1952,7 @@ app.post("/api/vip-shop/vinde", auth, asyncRoute(async (req, res) => {
       nu_se_poate: "Recompensa nu mai poate fi vândută (poate ai ridicat-o deja).",
       server_offline: "Serverul de joc nu răspunde momentan.",
     };
+    if (result.status === 404) gameRouteReady.sell = false;
     const msg = result.status === 404 ? "Vânzarea înapoi nu e încă activă pe serverul de joc." : (messages[result.error] || "Nu am putut vinde recompensa.");
     return res.status(400).json({ error: msg });
   }
@@ -1969,6 +1991,7 @@ app.post("/api/vip-shop/schimba", auth, asyncRoute(async (req, res) => {
       nu_se_poate: "Recompensa nu mai poate fi schimbată (poate ai ridicat-o deja).",
       server_offline: "Serverul de joc nu răspunde momentan.",
     };
+    if (result.status === 404) gameRouteReady.convert = false;
     const msg = result.status === 404 ? "Schimbul banilor murdari nu e încă activ pe serverul de joc." : (messages[result.error] || "Nu am putut schimba banii.");
     return res.status(400).json({ error: msg });
   }

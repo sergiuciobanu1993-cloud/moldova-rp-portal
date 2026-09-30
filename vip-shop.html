@@ -290,6 +290,20 @@ function fmtDate(iso) {
 }
 
 const REWARD_ICON = { cash: '💵', item: '🎒', vehicle: '🚗', coins: '🪙' };
+// (01.10.2026) Armele erau afișate cu 🎒 (rucsac) — acum 🔫: după numele
+// itemului din joc (weapon_...) sau, unde nu-l avem, după denumire.
+const WEAPON_WORDS = /\b(weapon|draco|ak-?\d*|akm|m4a?\d?|hk\d*|mp5|mp7|uzi|glock|pistol|deagle|revolver|shotgun|pump|sniper|rifle|carabin\w*|pu[sș]c[aă]|arm[aă]|smg|scar|g36|famas|aug|vector|tec-?9)\b/i;
+function rewardIcon(type, data, label) {
+  if (type === 'item') {
+    const it = String((data && data.item) || '');
+    if (/^weapon_/i.test(it) || WEAPON_WORDS.test(String(label || '')) || WEAPON_WORDS.test(it.replace(/_/g, ' '))) return '🔫';
+  }
+  return REWARD_ICON[type] || '🎁';
+}
+function rewardDataOf(raw) {
+  if (raw && typeof raw === 'object') return raw;
+  try { return JSON.parse(raw || '{}'); } catch { return {}; }
+}
 const TEBEX_URL = 'https://moldovaroleplay.tebex.io';
 const CASE_IMG = { rare: 'assets/vip-cases/rare.webp', epic: 'assets/vip-cases/epic.webp', legendara: 'assets/vip-cases/legendara.webp' };
 const CASE_ACCENT = { rare: 'purple', epic: 'blue', legendara: 'orange' };
@@ -370,7 +384,7 @@ function renderPending(pending) {
     <div style="display:flex;flex-direction:column;gap:8px">
       ${pending.map(p => `
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 14px;background:rgba(255,255,255,.04);border-radius:8px;flex-wrap:wrap">
-          <span>${REWARD_ICON[p.reward_type] || '🎁'} <strong>${escapeHtml(p.reward_label || p.reward_type)}</strong> <span class="muted">(${escapeHtml(p.case_name || '')})</span></span>
+          <span>${rewardIcon(p.reward_type, rewardDataOf(p.reward_data), p.reward_label)} <strong>${escapeHtml(p.reward_label || p.reward_type)}</strong> <span class="muted">(${escapeHtml(p.case_name || '')})</span></span>
           <span style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
             ${p.sellOffer?.coins ? `<button type="button" class="btn-ghost" style="padding:7px 12px;font-size:12px" data-sell="${Number(p.id)}" data-currency="coins" data-label="${escapeHtml(p.reward_label || '')}" data-amount="${p.sellOffer.coins}">Vinde pe 🪙 ${p.sellOffer.coins} coins</button>` : ''}
             ${p.sellOffer?.money ? `<button type="button" class="btn-ghost" style="padding:7px 12px;font-size:12px" data-sell="${Number(p.id)}" data-currency="money" data-label="${escapeHtml(p.reward_label || '')}" data-amount="${p.sellOffer.money}">Vinde pe $${Number(p.sellOffer.money).toLocaleString('ro-RO')}</button>` : ''}
@@ -447,7 +461,7 @@ function renderLog(log) {
         const data = entry.rewardData || {};
         const thumb = (entry.rewardType === 'vehicle' && data.model)
           ? `<img src="assets/vip-cars/${escapeHtml(data.model)}.png" alt="" loading="lazy" style="width:40px;height:22px;object-fit:contain;border-radius:3px;flex:none">`
-          : `<span style="width:18px;text-align:center;flex:none">${REWARD_ICON[entry.rewardType] || '🎁'}</span>`;
+          : `<span style="width:18px;text-align:center;flex:none">${rewardIcon(entry.rewardType, data, entry.rewardLabel)}</span>`;
         const claimedPill = entry.claimedAt
           ? `<span class="pill" style="background:rgba(66,223,138,.15);color:var(--green);flex:none">Ridicat</span>`
           : `<span class="pill warn" style="flex:none">În așteptare</span>`;
@@ -527,7 +541,7 @@ function renderHistory(history) {
         const data = entry.rewardData || {};
         const thumb = (entry.rewardType === 'vehicle' && data.model)
           ? `<img src="assets/vip-cars/${escapeHtml(data.model)}.png" alt="" loading="lazy" style="width:40px;height:22px;object-fit:contain;border-radius:3px;flex:none">`
-          : `<span style="width:18px;text-align:center;flex:none">${REWARD_ICON[entry.rewardType] || '🎁'}</span>`;
+          : `<span style="width:18px;text-align:center;flex:none">${rewardIcon(entry.rewardType, data, entry.rewardLabel)}</span>`;
         const claimedPill = entry.soldCurrency
           ? `<span class="pill" style="background:rgba(125,178,255,.15);color:#7db2ff;flex:none">Vândut · ${entry.soldCurrency === 'coins' ? `🪙 ${Number(entry.soldAmount) || 0}` : `$${Number(entry.soldAmount || 0).toLocaleString('ro-RO')}`}</span>`
           : entry.convertedAmount
@@ -578,7 +592,7 @@ function poolRowsHtml(pool) {
   return pool.map(r => {
     const thumb = (r.type === 'vehicle' && r.model)
       ? `<img src="assets/vip-cars/${escapeHtml(r.model)}.png" alt="" loading="lazy" style="width:40px;height:22px;object-fit:contain;border-radius:3px;flex:none">`
-      : `<span style="width:18px;text-align:center;flex:none">${REWARD_ICON[r.type] || '🎁'}</span>`;
+      : `<span style="width:18px;text-align:center;flex:none">${rewardIcon(r.type, r, r.label)}</span>`;
     const dot = `<span class="odds-dot ${rarityOf(r.chancePercent)}"></span>`;
     return `
     <div style="display:flex;align-items:center;gap:8px;font-size:12px">
@@ -720,7 +734,7 @@ function reelWeightedFiller(pool) {
 function reelTileHtml(reward) {
   const icon = (reward.type === 'vehicle' && reward.model)
     ? `<div class="tile-icon has-photo"><img src="assets/vip-cars/${escapeHtml(reward.model)}.png" alt="" loading="lazy"></div>`
-    : `<div class="tile-icon">${REWARD_ICON[reward.type] || '🎁'}</div>`;
+    : `<div class="tile-icon">${rewardIcon(reward.type, reward, reward.label)}</div>`;
   return `${icon}<div class="tile-label">${escapeHtml(reward.label)}</div>`;
 }
 
@@ -858,7 +872,7 @@ let oxRun = 0; // crește la fiecare deschidere / închidere — oprește bucla 
 function oxCardHtml(w) {
   const visual = (w.type === 'vehicle' && w.model)
     ? `<img class="ox-photo" src="assets/vip-cars/${escapeHtml(w.model)}.png" alt="" onerror="this.outerHTML='<div class=&quot;ox-icon&quot;>🚗</div>'">`
-    : `<div class="ox-icon">${REWARD_ICON[w.type] || '🎁'}</div>`;
+    : `<div class="ox-icon">${rewardIcon(w.type, w, w.label)}</div>`;
   return `${visual}<div class="ox-label">${escapeHtml(w.label)}</div><span class="ox-badge">${OX_LABEL[w.rarity] || ''}</span>`;
 }
 
@@ -1066,6 +1080,7 @@ async function openCase(caseId) {
       type: d.reward.type,
       label: d.reward.label,
       model: wonModel || undefined,
+      item: (d.reward.data && d.reward.data.item) || undefined,
       rarity: poolMatch ? rarityOf(Number(poolMatch.chancePercent) || 0) : 'common',
     };
 

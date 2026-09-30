@@ -1,5 +1,5 @@
 // „Sfera" jucătorilor online (30.09.2026) — pagina principală.
-// Când sunt mai mult de 24 de jucători, toată lista se pune pe o sferă 3D
+// Când sunt mai mult de 6 jucători (01.10.2026: înainte 24), toată lista se pune pe o sferă 3D
 // de aceeași mărime ca grila de dinainte. Se rotește cu rotița mouse-ului
 // (cât ține cursorul pe ea), trăgând cu mouse-ul / degetul sau cu săgețile.
 // La capete, rotița dă drumul paginii să meargă mai departe.
@@ -9,7 +9,8 @@
   const grid = document.getElementById('player-grid');
   if (!grid) return;
 
-  const STAFF = ['moderator', 'admin', 'co-fondator', 'owner'];
+  // doar adminii (admin, co-fondator, owner) — la fel ca pagina admin-jucatori.html
+  const STAFF = ['admin', 'co-fondator', 'owner'];
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
   const initials = name => (name || '??').trim().slice(0, 2).toUpperCase();
@@ -28,9 +29,33 @@
       if (!res.ok) return;
       const me = await res.json();
       isStaff = STAFF.includes(me.role);
-      if (isStaff && lastList) render(lastList, subEl, true);
+      if (isStaff) { grid.classList.add('staff-links'); markGridCards(); }
+      if (isStaff && lastList && lastList.length > 6) render(lastList, subEl, true);
     } catch { /* vizitator obișnuit */ }
   })();
+
+  // (01.10.2026) Și în grila simplă (puțini jucători), staff-ul poate
+  // deschide profilul cu un click pe card — ca în sferă.
+  const profileUrl = name => `admin-jucatori.html?profil=${encodeURIComponent(name)}`;
+  function markGridCards() {
+    if (!isStaff || grid.classList.contains('is-sfera')) return;
+    grid.querySelectorAll('.player[data-name]').forEach(c => {
+      c.tabIndex = 0;
+      c.setAttribute('role', 'link');
+      c.title = `Deschide profilul lui ${c.dataset.name}`;
+    });
+  }
+  new MutationObserver(markGridCards).observe(grid, { childList: true });
+  grid.addEventListener('click', e => {
+    if (!isStaff || grid.classList.contains('is-sfera')) return;
+    const card = e.target.closest('.player[data-name]');
+    if (card) window.open(profileUrl(card.dataset.name), '_blank', 'noopener');
+  });
+  grid.addEventListener('keydown', e => {
+    if (e.key !== 'Enter' || !isStaff || grid.classList.contains('is-sfera')) return;
+    const card = e.target.closest('.player[data-name]');
+    if (card) window.open(profileUrl(card.dataset.name), '_blank', 'noopener');
+  });
 
   function layout(n) {
     const w = grid.clientWidth || 1100;
@@ -39,9 +64,10 @@
     const cardH = mobile ? 74 : 84;
     const gap = mobile ? 10 : 14;
     const maxRows = mobile ? 6 : 8;
-    const rows = clamp(Math.round(n / (mobile ? 5 : 9)), mobile ? 4 : 4, maxRows);
+    // puțini jucători = mai puține rânduri, ca sfera să aibă coloane de rotit
+    const rows = clamp(Math.round(n / (mobile ? 5 : 9)), 3, maxRows);
     // +2 coloane goale: un gol vizibil între ultimul și primul jucător
-    const cols = Math.max(Math.ceil(n / rows) + 2, mobile ? 6 : 8);
+    const cols = Math.max(Math.ceil(n / rows) + 2, 6);
     const step = 360 / cols;
     const R = Math.max((cols * (cardW + gap)) / (2 * Math.PI), mobile ? 260 : 520);
     const dPhi = ((cardH + gap) / R) * (180 / Math.PI); // grade între rânduri
@@ -59,7 +85,7 @@
     const staffLink = isStaff;
     const c = el(staffLink ? 'a' : 'div', 'player sf-card');
     if (staffLink) {
-      c.href = `admin-jucatori.html?profil=${encodeURIComponent(p.name)}`;
+      c.href = profileUrl(p.name);
       c.target = '_blank';
       c.rel = 'noopener';
       c.title = `Deschide profilul lui ${p.name}`;
@@ -277,7 +303,7 @@
 
   window.MRPSfera = { render, reset };
   // dacă lista a venit deja înainte să se încarce acest fișier
-  if (Array.isArray(window.__mrpPlayers) && window.__mrpPlayers.length > 24) {
+  if (Array.isArray(window.__mrpPlayers) && window.__mrpPlayers.length > 6) {
     render(window.__mrpPlayers, document.getElementById('player-grid-sub'));
   }
 })();

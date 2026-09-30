@@ -36,3 +36,9 @@ a.sf-card:focus-visible{outline:2px solid var(--orange,#ff8a1f);outline-offset:2
   .sfera-ctrl{height:92px;flex-wrap:wrap;align-content:center;row-gap:10px}
   .sfera-search{position:static;transform:none;width:100%;order:4}
 }
+
+/* grila simplă (≤ 6 jucători): staff-ul deschide profilul cu click (01.10.2026) */
+.player-grid.staff-links:not(.is-sfera) .player[data-name]{cursor:pointer;position:relative}
+.player-grid.staff-links:not(.is-sfera) .player[data-name]:hover,.player-grid.staff-links:not(.is-sfera) .player[data-name]:focus-visible{border-color:rgba(255,138,31,.6);outline:none}
+.player-grid.staff-links:not(.is-sfera) .player[data-name]:hover .online-badge,.player-grid.staff-links:not(.is-sfera) .player[data-name]:focus-visible .online-badge{visibility:hidden}
+.player-grid.staff-links:not(.is-sfera) .player[data-name]:hover::after,.player-grid.staff-links:not(.is-sfera) .player[data-name]:focus-visible::after{content:'Profil ↗';position:absolute;right:16px;top:50%;transform:translateY(-50%);padding:4px 9px;border-radius:999px;background:rgba(255,138,31,.16);color:var(--orange,#ff8a1f);font-size:10px;font-weight:900;letter-spacing:.05em;text-transform:uppercase}

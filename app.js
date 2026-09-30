@@ -67,10 +67,10 @@ if (playerGrid) {
         if (sub) sub.textContent = 'Niciun jucător conectat momentan.';
         return;
       }
-      // Peste 24 de jucători (30.09.2026): lista completă intră în „sfera"
+      // Peste 6 jucători (01.10.2026; înainte 24): lista completă intră în „sfera"
       // 3D din sfera.js, care se rotește cu rotița mouse-ului / cu degetul.
       window.__mrpPlayers = d.list;
-      if (window.MRPSfera && d.list.length > 24) {
+      if (window.MRPSfera && d.list.length > 6) {
         window.MRPSfera.render(d.list, sub);
         return;
       }
@@ -78,7 +78,7 @@ if (playerGrid) {
       const SHOWN = 24;
       const shown = d.list.slice(0, SHOWN);
       playerGrid.innerHTML = shown.map(p => `
-        <div class="player">
+        <div class="player" data-name="${escapeHtml(p.name)}">
           <div class="avatar">${escapeHtml(initials(p.name))}</div>
           <div><strong>${escapeHtml(p.name)}${p.group ? ` <span class="staff-badge">${escapeHtml(p.group)}</span>` : ''}</strong><small>Slot server #${escapeHtml(p.id)}</small></div>
           <span class="online-badge">ONLINE</span>

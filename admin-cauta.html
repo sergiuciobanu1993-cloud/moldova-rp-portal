@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Caută jucător — Admin Moldova RP</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="admin.css">
+<style>
+  .search-hero{display:flex;gap:10px;flex-wrap:wrap;padding:0 22px 20px}
+  .search-hero input{flex:1;min-width:240px;padding:14px 16px;border:1px solid var(--line);background:var(--bg);color:var(--text);border-radius:10px;font:inherit;font-size:16px;outline:0}
+  .search-hero input:focus{border-color:var(--orange);box-shadow:0 0 0 3px rgba(255,138,31,.12)}
+  .hint{padding:0 22px 16px;color:var(--muted);font-size:12px;margin:0}
+  tr.result-row{cursor:pointer}
+  .sid{font-variant-numeric:tabular-nums;font-weight:900;color:var(--orange)}
+</style></head>
+<body>
+<aside class="side"><a class="brand" href="index.html"><img src="assets/logo.png" alt=""><b>MOLDOVA<span>RP</span></b></a><p>ADMINISTRAȚIE</p><a href="admin.html">▦ Dashboard</a><a href="admin-utilizatori.html">👤 Utilizatori</a><a href="admin-jucatori.html">♙ Jucători</a><a class="sel" href="admin-cauta.html">🔎 Caută jucător</a><a href="admin-financiar.html">◆ Facțiuni</a><a href="admin-sanctiuni.html">⚠ Sancțiuni</a><a>▤ Reclamații</a><a>⚖ CK</a><a href="admin-regulamente.html">📚 Regulamente</a><a href="admin-continut.html">📝 Conținut pagini</a><a href="admin-anunturi.html">◉ Anunțuri</a><a href="admin-actualizari.html">🆕 Actualizări</a><a href="admin-tichete.html">🎫 Tichete</a><a href="vip-shop.html">🎁 VIP Shop</a><a href="admin-vip-shop.html">🛠 Editor VIP Shop</a><a href="admin-loguri.html">🗂 Loguri</a><a href="admin-kill-logs.html">🔪 Kill Logs</a><a>⌁ Audit Logs</a><a href="admin-txadmin.html" id="nav-txadmin">🖥 txAdmin</a><a class="back" href="dashboard.html">← Contul meu</a><a class="back" href="index.html">← Site public</a></aside>
+<main>
+<header><div><small>PANEL ADMINISTRATIV</small><h1>Caută jucător</h1></div><a class="admin" href="dashboard.html" title="Înapoi la contul meu" style="text-decoration:none"><span id="admin-name">…</span> <i></i></a></header>
+
+<section class="tablebox">
+  <div class="title"><h2>Găsește orice jucător de pe server</h2></div>
+  <form class="search-hero" id="search-form">
+    <input id="q" type="search" autocomplete="off" placeholder="ID static (#336), ID server (91), nume RP sau nume de pe site" autofocus>
+    <button type="submit" class="btn-primary">Caută</button>
+  </form>
+  <p class="hint">Merge și pentru jucătorii offline, inclusiv cei fără cont pe site. Apasă pe un rezultat ca să-i deschizi profilul complet.</p>
+  <div style="overflow-x:auto"><table><thead><tr><th>PERSONAJ</th><th>ID STATIC</th><th>STATUS</th><th>JOB</th><th>CONT SITE</th><th></th></tr></thead>
+  <tbody id="results"><tr><td colspan="6" class="muted">Scrie ceva mai sus și apasă Caută.</td></tr></tbody></table></div>
+</section>
+</main>
+<script src="auth-client.js"></script>
+<script src="player-profile-modal.js"></script>
+<script>
+const esc = v => (v ?? '').toString().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+let lastResults = [];
+
+function fmtDate(d) {
+  if (!d) return '';
+  const t = typeof d === 'number' || /^\d+$/.test(String(d)) ? new Date(Number(d)) : new Date(d);
+  return isNaN(t) ? String(d) : t.toLocaleString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function openResult(r) {
+  const name = r.cfx_name || r.rp_name || r.display_name || '?';
+  window.openPlayerProfile(name, {
+    identifier: r.identifier || undefined,
+    rpName: r.rp_name || undefined,
+    userId: r.user_id || undefined,
+  });
+}
+
+async function search(q) {
+  const tbody = document.getElementById('results');
+  q = (q || '').trim();
+  if (!q) { tbody.innerHTML = '<tr><td colspan="6" class="muted">Scrie ceva mai sus și apasă Caută.</td></tr>'; return; }
+  history.replaceState(null, '', '?q=' + encodeURIComponent(q));
+  tbody.innerHTML = '<tr><td colspan="6" class="muted">Se caută…</td></tr>';
+  try {
+    const res = await apiFetch('/api/admin/players/search?q=' + encodeURIComponent(q));
+    if (!res.ok) throw new Error();
+    lastResults = await res.json();
+    if (!lastResults.length) {
+      tbody.innerHTML = `<tr><td colspan="6" class="muted">Niciun jucător găsit pentru „${esc(q)}”. La nume RP trebuie cel puțin 3 litere; la ID static, numărul exact.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = lastResults.map((r, i) => `
+      <tr class="result-row" data-i="${i}" tabindex="0">
+        <td><strong>${esc(r.rp_name || r.display_name || r.cfx_name || '—')}</strong>${r.cfx_name && r.cfx_name !== r.rp_name ? `<br><small class="muted">CFX: ${esc(r.cfx_name)}</small>` : ''}</td>
+        <td>${r.static_id ? `<span class="sid">#${esc(r.static_id)}</span>` : '<span class="muted">—</span>'}</td>
+        <td>${r.online
+          ? `<span class="pill on">ONLINE</span>${r.server_id != null ? ` <small class="muted">ID ${esc(r.server_id)}</small>` : ''}`
+          : `<span class="pill off">OFFLINE</span>${r.last_seen ? `<br><small class="muted">văzut: ${esc(fmtDate(r.last_seen))}</small>` : ''}`}</td>
+        <td>${esc(r.job || '—')}</td>
+        <td>${r.user_id ? `<span class="pill info">ARE CONT</span>${r.display_name ? ` <small class="muted">${esc(r.display_name)}</small>` : ''}` : '<span class="muted">—</span>'}</td>
+        <td class="rowactions"><button type="button" data-open="${i}">Profil</button></td>
+      </tr>`).join('');
+    if (lastResults.length === 1) openResult(lastResults[0]);
+  } catch {
+    tbody.innerHTML = '<tr><td colspan="6" class="muted">Nu am putut căuta — încearcă din nou.</td></tr>';
+  }
+}
+
+document.getElementById('search-form').addEventListener('submit', (e) => { e.preventDefault(); search(document.getElementById('q').value); });
+document.getElementById('results').addEventListener('click', (e) => {
+  const row = e.target.closest('[data-i]');
+  if (row) openResult(lastResults[Number(row.dataset.i)]);
+});
+document.getElementById('results').addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter') return;
+  const row = e.target.closest('[data-i]');
+  if (row) openResult(lastResults[Number(row.dataset.i)]);
+});
+
+(async () => {
+  const me = await requireRole('moderator', 'admin', 'co-fondator', 'owner');
+  if (!me) return;
+  document.getElementById('admin-name').textContent = me.username;
+  const q = new URLSearchParams(location.search).get('q');
+  if (q) { document.getElementById('q').value = q; search(q); }
+})();
+</script>
+</body></html>

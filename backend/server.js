@@ -2825,18 +2825,20 @@ async function fetchGamePlayerSearch(q) {
     clearTimeout(timeout);
   }
 }
-app.get("/api/players/search", auth, asyncRoute(async (req, res) => {
-  const q = String(req.query.q || "").trim().slice(0, 64).replace(/^#\s*/, "");
+// (29.09.2026) Căutarea comună; câmpurile "priv" (identificator, nume CFX,
+// job, cont site) le primește doar staff-ul — vezi /api/admin/players/search.
+async function searchPlayers(rawQ, limit = 10) {
+  const q = String(rawQ || "").trim().slice(0, 64).replace(/^#\s*/, "");
   const isNum = /^\d+$/.test(q);
-  if (!q || (!isNum && q.length < 2)) return res.json([]);
+  if (!q || (!isNum && q.length < 2)) return [];
   const lower = q.toLowerCase();
   const [{ rows }, detail, gameHits] = await Promise.all([
     pool.query(
-      `SELECT p.id, p.display_name, p.game_id, p.last_rp_name, p.last_static_id, p.last_identifier
+      `SELECT p.id, p.user_id, p.display_name, p.game_id, p.last_rp_name, p.last_static_id, p.last_identifier, p.last_job_label, p.last_grade_label, p.last_synced_at
        FROM players p
        WHERE p.display_name ILIKE $1 OR p.last_rp_name ILIKE $1
           OR p.last_static_id = $2 OR CAST(p.game_id AS TEXT) ILIKE $1
-       ORDER BY p.last_synced_at DESC NULLS LAST LIMIT 10`,
+       ORDER BY p.last_synced_at DESC NULLS LAST LIMIT ${limit}`,
       [`%${likeEscape(q)}%`, q]
     ),
     getPlayersDetail(),
@@ -2854,10 +2856,13 @@ app.get("/api/players/search", auth, asyncRoute(async (req, res) => {
       rp_name: pl?.serverName || r.last_rp_name || null,
       static_id: staticIdOf(pl) || r.last_static_id || null,
       server_id: pl ? pl.id : null, online: !!pl,
+      priv: { identifier: pl?.license || r.last_identifier || null, cfx_name: pl?.name || null, user_id: r.user_id,
+              job: pl ? [pl.jobLabel || pl.job, pl.gradeLabel].filter(Boolean).join(" · ") : [r.last_job_label, r.last_grade_label].filter(Boolean).join(" · ") || null,
+              last_seen: pl ? null : r.last_synced_at },
     });
   }
   for (const pl of online) {
-    if (out.length >= 10) break;
+    if (out.length >= limit) break;
     if (pl.license && seenLicenses.has(pl.license)) continue;
     const sid = staticIdOf(pl);
     const hit = (isNum && (String(pl.id) === q || sid === q))
@@ -2868,21 +2873,38 @@ app.get("/api/players/search", auth, asyncRoute(async (req, res) => {
     out.push({
       id: null, display_name: pl.name || null, game_id: null,
       rp_name: pl.serverName || null, static_id: sid, server_id: pl.id, online: true,
+      priv: { identifier: pl.license || null, cfx_name: pl.name || null, user_id: null,
+              job: [pl.jobLabel || pl.job, pl.gradeLabel].filter(Boolean).join(" · ") || null, last_seen: null },
     });
   }
   // Rezultatele din baza jocului (inclusiv offline, fără cont pe site).
   // Identificatorul îl folosim doar ca să nu dublăm pe cineva deja găsit.
   for (const g of gameHits) {
-    if (out.length >= 10) break;
+    if (out.length >= limit) break;
     if (g.identifier && seenLicenses.has(g.identifier)) continue;
     if (g.identifier) seenLicenses.add(g.identifier);
     out.push({
       id: null, display_name: null, game_id: null,
       rp_name: g.rpName || null, static_id: staticIdOf(g),
       server_id: g.online && g.serverId != null ? g.serverId : null, online: !!g.online,
+      priv: { identifier: g.identifier || null, cfx_name: null, user_id: null,
+              job: [g.jobLabel || g.job, g.gradeLabel || (g.grade != null ? `grad ${g.grade}` : null)].filter(Boolean).join(" · ") || null,
+              last_seen: g.lastSeen || null },
     });
   }
-  res.json(out.slice(0, 10));
+  return out.slice(0, limit);
+}
+
+app.get("/api/players/search", auth, asyncRoute(async (req, res) => {
+  const out = await searchPlayers(req.query.q, 10);
+  res.json(out.map(({ priv, ...pub }) => pub));
+}));
+
+// Pagina „Caută jucător” (staff): aceleași rezultate + identificator, nume
+// CFX, job și cont site, ca profilul să se deschidă exact pe personajul găsit.
+app.get("/api/admin/players/search", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
+  const out = await searchPlayers(req.query.q, 25);
+  res.json(out.map(({ priv, ...pub }) => ({ ...pub, ...priv })));
 }));
 
 // (20.09.2026) Reclamantul scrie ID-ul/numele jucătorului reclamat ca text

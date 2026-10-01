@@ -38,12 +38,37 @@ app.use((req, res, next) => {
   if (PRIVATE_PATHS.test(p.replace(/\/{2,}/g, "/"))) return res.status(404).end();
   next();
 });
+// (01.10.2026) Aplicația Android descărcată direct de pe site (fără Google Play).
+// Fișierele stau în folderul /aplicatie: moldova-rp.apk (pachetul generat pe
+// pwabuilder.com) și assetlinks.json (dovada că aplicația e a lui moldovarp.md —
+// fără el aplicația se deschide cu bara de adresă a browserului sus).
+const APP_DIR = path.join(__dirname, "..", "aplicatie");
+app.get("/.well-known/assetlinks.json", (_req, res) => {
+  const f = path.join(APP_DIR, "assetlinks.json");
+  require("fs").access(f, err => {
+    if (err) return res.status(404).json([]);
+    res.set("Cache-Control", "no-cache");
+    res.type("application/json").sendFile(f);
+  });
+});
+app.get("/api/aplicatie", (_req, res) => {
+  require("fs").stat(path.join(APP_DIR, "moldova-rp.apk"), (err, st) => {
+    res.set("Cache-Control", "no-cache");
+    if (err || !st.isFile() || st.size < 1024) return res.json({ android: null });
+    res.json({ android: { url: "/aplicatie/moldova-rp.apk", sizeMb: Math.round(st.size / 1048576 * 10) / 10, updatedAt: st.mtime.toISOString() } });
+  });
+});
 app.use(express.static(path.join(__dirname, ".."), {
   setHeaders: (res, filePath) => {
     // sw.js și manifestul aplicației trebuie verificate mereu, ca telefoanele
     // să ia imediat versiunea nouă a aplicației (PWA, 30.09.2026).
     if (filePath.endsWith(".html") || filePath.endsWith("sw.js") || filePath.endsWith(".webmanifest")) res.set("Cache-Control", "no-cache");
     if (filePath.endsWith(".webmanifest")) res.type("application/manifest+json");
+    if (filePath.endsWith(".apk")) {
+      res.type("application/vnd.android.package-archive");
+      res.set("Content-Disposition", 'attachment; filename="Moldova-RP.apk"');
+      res.set("Cache-Control", "no-cache");
+    }
   },
 }));
 
@@ -2590,11 +2615,21 @@ app.delete("/api/admin/vip-shop/cutii/:id", auth, requireRole(...ADMIN_ROLES), a
   res.json(result.data);
 }));
 
+// (01.10.2026) „Gloanțe incluse" la o armă: câmpul „ammo" (0–1000) al unei
+// recompense de tip item. Serverul de joc îl salvează cu recompensa și, la
+// /recompense, dă și muniția potrivită armei (ammoname din ox_inventory).
+// Pleacă doar când editorul îl trimite (gloanțe puse, sau scoase = 0).
+function rewardAmmoField(body) {
+  if (!body || body.type !== "item" || body.ammo === undefined || body.ammo === null) return {};
+  const n = Math.floor(Number(body.ammo) || 0);
+  return { ammo: Math.max(0, Math.min(1000, n)) };
+}
+
 app.post("/api/admin/vip-shop/cutii/:id/recompense", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
   const { type, label, weight, amount, account, item, count, model } = req.body || {};
   if (!type || !label || !String(label).trim()) return res.status(400).json({ error: "Tipul și eticheta recompensei sunt obligatorii." });
   const result = await vipShopAdminRequest("POST", `/cases/admin/${encodeURIComponent(req.params.id)}/rewards`, {
-    type, label: String(label).trim(), weight: Number(weight) || 10, amount, account, item, count, model,
+    type, label: String(label).trim(), weight: Number(weight) || 10, amount, account, item, count, model, ...rewardAmmoField(req.body),
   });
   if (!result.ok) return vipShopAdminError(res, result);
   await logAction(req.user.sub, "vip_shop.reward.create", "vip_shop_reward", result.data?.id, { caseId: req.params.id, type, label }, req.ip);
@@ -2607,7 +2642,7 @@ app.put("/api/admin/vip-shop/cutii/:id/recompense/:rewardId", auth, requireRole(
   const result = await vipShopAdminRequest(
     "PUT",
     `/cases/admin/${encodeURIComponent(req.params.id)}/rewards/${encodeURIComponent(req.params.rewardId)}`,
-    { type, label: String(label).trim(), weight: Number(weight) || 10, amount, account, item, count, model }
+    { type, label: String(label).trim(), weight: Number(weight) || 10, amount, account, item, count, model, ...rewardAmmoField(req.body) }
   );
   if (!result.ok) return vipShopAdminError(res, result);
   await logAction(req.user.sub, "vip_shop.reward.update", "vip_shop_reward", req.params.rewardId, { caseId: req.params.id, type, label }, req.ip);

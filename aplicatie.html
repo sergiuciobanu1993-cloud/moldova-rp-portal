@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="ro">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ff8a1f">
+  <meta name="description" content="Moldova RP pe telefon — descarcă aplicația pentru Android direct de pe site sau instaleaz-o pe iPhone din Safari.">
+  <title>Aplicația Moldova RP</title>
+  <link rel="icon" href="assets/favicon.png">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/assets/app/apple-touch-icon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black"><meta name="apple-mobile-web-app-title" content="Moldova RP"><script src="/pwa.js" defer></script>
+  <style>
+    .app-wrap{max-width:1040px;margin:0 auto;padding:0 5vw 80px}
+    .app-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+    @media(max-width:820px){.app-grid{grid-template-columns:1fr}}
+    .app-card{position:relative;display:flex;flex-direction:column;gap:14px;padding:24px;border-radius:16px;background:rgba(16,18,20,.92);border:1px solid var(--line)}
+    .app-card.is-you{border-color:rgba(255,138,31,.55);box-shadow:0 18px 50px rgba(255,138,31,.08)}
+    .app-card .you{position:absolute;top:18px;right:18px;padding:4px 10px;border-radius:999px;background:rgba(255,138,31,.14);color:var(--orange);font-size:10px;font-weight:900;letter-spacing:.12em}
+    .app-card h2{display:flex;align-items:center;gap:12px;margin:0;font-size:22px}
+    .app-card h2 .os{display:grid;place-items:center;width:44px;height:44px;border-radius:12px;background:rgba(255,255,255,.05);border:1px solid var(--line);font-size:22px}
+    .app-card p{margin:0;color:#c5c9cd}
+    .app-meta{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
+    .app-card .btn{align-self:flex-start;gap:10px}
+    .app-wrap [hidden]{display:none!important}
+    .app-card button.btn{color:#fff;font-family:inherit;cursor:pointer}
+    .app-soon{padding:12px 14px;border-radius:10px;background:rgba(255,255,255,.03);border:1px dashed rgba(255,255,255,.14);color:var(--muted);font-size:13px}
+    .app-steps{margin:0;padding:0;list-style:none;counter-reset:st;display:grid;gap:10px}
+    .app-steps li{counter-increment:st;display:grid;grid-template-columns:28px 1fr;gap:12px;align-items:start;color:#d5d8db;font-size:14px}
+    .app-steps li::before{content:counter(st);display:grid;place-items:center;width:28px;height:28px;border-radius:50%;background:rgba(255,138,31,.14);color:var(--orange);font-weight:900;font-size:13px}
+    .app-steps b{color:#fff}
+    .app-note{margin-top:4px;padding:12px 14px;border-radius:10px;background:rgba(61,220,132,.06);border:1px solid rgba(61,220,132,.25);color:#cfe9d9;font-size:13px}
+    .app-faq{margin-top:34px;display:grid;gap:10px}
+    .app-faq details{padding:14px 18px;border-radius:12px;background:rgba(16,18,20,.86);border:1px solid var(--line)}
+    .app-faq summary{cursor:pointer;font-weight:800}
+    .app-faq details p{margin:10px 0 0;color:#c5c9cd}
+    .app-desktop{margin:0 0 18px;padding:14px 16px;border-radius:12px;background:rgba(255,255,255,.03);border:1px solid var(--line);color:#c5c9cd;font-size:14px}
+    .app-desktop b{color:var(--orange)}
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="index.html" aria-label="Moldova RP - Acasă">
+      <img src="assets/logo.png" alt="Moldova RP">
+      <span>MOLDOVA<span class="accent">RP</span></span>
+    </a>
+    <button class="menu-toggle" aria-label="Deschide meniul" aria-expanded="false">☰</button>
+    <nav class="nav">
+      <a href="index.html">Acasă</a>
+      <a href="regulamente.html">Regulamente</a>
+      <a href="index.html#jucatori">Jucători</a>
+      <a href="index.html#factiuni">Facțiuni</a>
+      <a href="joburi.html">Joburi</a>
+      <a href="tichete.html">Tichete</a>
+      <a class="active" href="aplicatie.html">Aplicația</a>
+      <a class="nav-login" href="login.html">Autentificare</a>
+    </nav>
+  </header>
+
+  <main>
+    <div class="page-hero">
+      <a class="back-link" href="index.html">← Înapoi la pagina principală</a>
+      <p class="eyebrow" style="margin-top:22px">APLICAȚIA</p>
+      <h1>Moldova RP pe telefon</h1>
+      <p class="muted" style="max-width:640px;margin-top:14px">
+        Contul tău, tichetele, VIP Shop-ul și jucătorii online, cu o singură atingere de pe ecranul telefonului. Primești notificări pe Discord sau pe email, iar aplicația se actualizează singură, odată cu site-ul.
+      </p>
+    </div>
+
+    <div class="app-wrap">
+      <p class="app-desktop" id="app-desktop" hidden>Ești pe calculator. Deschide <b>moldovarp.md/aplicatie.html</b> pe telefon ca să instalezi aplicația.</p>
+
+      <div class="app-grid">
+        <section class="app-card" id="card-android" aria-labelledby="h-android">
+          <h2 id="h-android"><span class="os" aria-hidden="true">🤖</span>Android</h2>
+          <p>Descarci fișierul aplicației direct de la noi, fără Google Play.</p>
+          <a class="btn btn-primary" id="apk-btn" href="/aplicatie/moldova-rp.apk" download hidden>⬇ Descarcă aplicația</a>
+          <span class="app-meta" id="apk-meta" hidden></span>
+          <div class="app-soon" id="apk-soon">Fișierul pentru Android apare aici în curând. Până atunci, o poți instala din Chrome:
+            <button type="button" class="btn btn-ghost" data-install-app style="margin-top:10px;min-height:40px">📲 Instalează din browser</button>
+          </div>
+          <ol class="app-steps" id="apk-steps" hidden>
+            <li><span>Apasă <b>Descarcă aplicația</b> și așteaptă să se termine descărcarea.</span></li>
+            <li><span>Deschide fișierul <b>Moldova-RP.apk</b> din notificare sau din „Descărcări”.</span></li>
+            <li><span>Dacă telefonul întreabă, permite <b>„Instalează aplicații necunoscute”</b> pentru browser, apoi revino.</span></li>
+            <li><span>Apasă <b>Instalează</b>. Aplicația apare pe ecran cu sigla Moldova RP.</span></li>
+          </ol>
+          <p class="app-note" id="apk-note" hidden>Dacă Google Play Protect zice că aplicația e necunoscută, alege <b>Instalează oricum</b>. Avertismentul apare la orice aplicație care nu vine din Google Play. Aplicația deschide doar site-ul Moldova RP.</p>
+        </section>
+
+        <section class="app-card" id="card-ios" aria-labelledby="h-ios">
+          <h2 id="h-ios"><span class="os" aria-hidden="true">🍎</span>iPhone</h2>
+          <p>Pe iPhone, Apple nu lasă instalarea de fișiere de pe site-uri, așa că aplicația se adaugă din Safari. Durează 10 secunde.</p>
+          <ol class="app-steps">
+            <li><span>Deschide <b>moldovarp.md</b> în <b>Safari</b>.</span></li>
+            <li><span>Apasă butonul <b>Partajează</b> (pătratul cu săgeata în sus).</span></li>
+            <li><span>Alege <b>„Adaugă pe ecranul principal”</b>, apoi <b>Adaugă</b>.</span></li>
+          </ol>
+          <button type="button" class="btn btn-ghost" data-install-app id="ios-btn" hidden>Arată-mi pașii</button>
+        </section>
+      </div>
+
+      <div class="app-faq">
+        <details>
+          <summary>De ce nu e în Google Play sau App Store?</summary>
+          <p>Aplicația e chiar site-ul Moldova RP, deschis ca aplicație. Așa o ții mereu la zi fără update-uri din magazin: orice schimbare de pe site apare imediat și în aplicație.</p>
+        </details>
+        <details>
+          <summary>Trebuie să o actualizez?</summary>
+          <p>Nu. Paginile vin direct de pe site, deci vezi mereu versiunea nouă. Doar foarte rar, dacă se schimbă sigla sau numele, poți descărca fișierul din nou de aici.</p>
+        </details>
+        <details>
+          <summary>Mă loghez la fel?</summary>
+          <p>Da, cu Discord sau cu contul de pe site, exact ca în browser.</p>
+        </details>
+        <details>
+          <summary>Cum o dezinstalez?</summary>
+          <p>Ca pe orice aplicație: ține apăsat pe iconiță și alege „Dezinstalează” (Android) sau „Elimină aplicația” (iPhone).</p>
+        </details>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <div class="footer-brand"><img src="assets/logo.png" alt="Moldova RP"><div><strong>MOLDOVA<span class="accent">RP</span></strong><small>Portal oficial al comunității</small></div></div>
+    <div class="footer-links"><a href="index.html#regulamente">Regulamente</a><a href="index.html#jucatori">Jucători</a><a href="index.html#factiuni">Facțiuni</a><a href="joburi.html">Joburi</a><a href="tichete.html">Tichete</a><a href="aplicatie.html">📲 Aplicația pe telefon</a></div>
+  </footer>
+
+  <script>
+  (() => {
+    const ua = navigator.userAgent || '';
+    const isIOS = /iphone|ipad|ipod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const isAndroid = /android/i.test(ua);
+    const you = id => {
+      const c = document.getElementById(id);
+      c.classList.add('is-you');
+      c.insertAdjacentHTML('afterbegin', '<span class="you">TELEFONUL TĂU</span>');
+      c.parentNode.prepend(c);
+    };
+    if (isAndroid) you('card-android');
+    else if (isIOS) { you('card-ios'); document.getElementById('ios-btn').hidden = false; }
+    else document.getElementById('app-desktop').hidden = false;
+
+    const date = iso => { try { return new Date(iso).toLocaleDateString('ro-RO', { day: '2-digit', month: 'long', year: 'numeric' }); } catch { return ''; } };
+    fetch('/api/aplicatie', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(d => {
+      const a = d && d.android;
+      if (!a) return;
+      document.getElementById('apk-soon').hidden = true;
+      ['apk-btn', 'apk-steps', 'apk-note', 'apk-meta'].forEach(id => { document.getElementById(id).hidden = false; });
+      document.getElementById('apk-btn').href = a.url;
+      document.getElementById('apk-meta').textContent = `Fișier .apk · ${String(a.sizeMb).replace('.', ',')} MB · actualizat ${date(a.updatedAt)}`;
+    }).catch(() => {});
+
+  })();
+  </script>
+  <script src="app.js"></script>
+</body>
+</html>

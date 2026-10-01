@@ -150,6 +150,8 @@
 
         <div class="field rf-item wide"><label>Item (numele exact din ox_inventory)</label><input id="rf-item" placeholder="ex: WEAPON_AKVVSGOLD" list="known-items"></div>
         <div class="field rf-item"><label>Cantitate</label><input id="rf-count" type="number" min="1" step="1" value="1"></div>
+        <div class="field rf-item"><label>Gloanțe incluse (doar la arme)</label><input id="rf-ammo" type="number" min="0" max="1000" step="1" placeholder="ex: 100"><small class="hint">Câte gloanțe primește jucătorul odată cu arma, la <code>/recompense</code>. Serverul alege singur tipul de muniție potrivit armei. Lasă gol = fără gloanțe.</small></div>
+        <div class="rf-item wide rf-wpn-preview" id="rf-wpn-preview" style="grid-column:1/-1" hidden></div>
 
         <div class="field rf-sell"><label>Valoare în coins</label><input id="rf-value-coins" type="number" min="0" step="1" placeholder="ex: 100"></div>
         <div class="field rf-sell"><label>Valoare în bani din joc ($)</label><input id="rf-value-money" type="number" min="0" step="1000" placeholder="ex: 2000000"></div>
@@ -169,6 +171,7 @@
 
 </main>
 <script src="auth-client.js"></script>
+<script src="vip-weapons.js?v=20261001a"></script>
 <script>
 const THEMES = {
   rare: { img: 'assets/vip-cases/rare.webp', label: 'Rare' },
@@ -192,12 +195,18 @@ function computePercents(pool) {
   return pool.map(r => ({ ...r, percent: total > 0 ? Math.round((Number(r.weight) || 0) / total * 10000) / 100 : 0 }));
 }
 
+// (01.10.2026) poza armei VVS lângă etichetă (vezi vip-weapons.js)
+function wpnOf(r) { return (r && r.type === 'item' && window.MRPWeapons) ? MRPWeapons.find(r.item, r.label) : null; }
+function wpnThumb(r) {
+  const w = wpnOf(r);
+  return w ? `<img src="${w.src}" alt="" loading="lazy" style="width:44px;height:28px;object-fit:contain;vertical-align:middle;margin-right:8px;filter:drop-shadow(0 0 5px ${w.accent}88)">` : '';
+}
 function rewardDetailHtml(r) {
   if (r.type === 'cash') return `$${Number(r.amount || 0).toLocaleString('ro-RO')} → ${escapeHtml(ACCOUNT_LABEL[r.account] || r.account || 'bank')}`;
   const sell = (r.value_coins || r.value_money)
     ? `<br><span style="color:var(--green)">💱 se vinde cu ${[r.value_coins ? `${Math.floor(r.value_coins / 2)} coins` : '', r.value_money ? fmtUsd(Math.floor(r.value_money / 2)) : ''].filter(Boolean).join(' sau ')}</span>`
     : '';
-  if (r.type === 'item') return `${escapeHtml(r.item || '—')} × ${r.count || 1}${sell}`;
+  if (r.type === 'item') return `${escapeHtml(r.item || '—')} × ${r.count || 1}${Number(r.ammo) > 0 ? ` <span style="color:#ffd874">+ ${Number(r.ammo)} gloanțe</span>` : ''}${sell}`;
   if (r.type === 'vehicle') return `model: ${escapeHtml(r.model || '—')}${sell}`;
   if (r.type === 'coins') return `🪙 ${Number(r.amount || 0)} coins înapoi`;
   return '';
@@ -252,7 +261,7 @@ function renderCases() {
             <td><span class="drag-handle" title="Trage ca să muți">⠿</span></td>
             <td><span class="percent-bar"><i style="width:${Math.min(100, r.percent)}%"></i></span>${r.percent}%</td>
             <td>${TYPE_ICON[r.type] || ''} ${r.type}</td>
-            <td>${escapeHtml(r.label)}</td>
+            <td>${wpnThumb(r)}${escapeHtml(r.label)}</td>
             <td class="reward-detail">${rewardDetailHtml(r)}</td>
             <td class="rowactions">
               <button type="button" data-move="-1" data-rid="${r.id}" data-case="${escapeHtml(c.id)}" title="Mută mai sus">↑</button>
@@ -473,6 +482,14 @@ document.getElementById('case-form').addEventListener('submit', async (e) => {
   }
 });
 
+// previzualizarea pozei când scrii numele armei în formular
+function updateWpnPreview() {
+  const box = document.getElementById('rf-wpn-preview');
+  if (!box) return;
+  const w = window.MRPWeapons ? MRPWeapons.find(document.getElementById('rf-item').value.trim(), document.getElementById('rf-label').value) : null;
+  box.hidden = !w;
+  if (w) box.innerHTML = `<div style="display:flex;align-items:center;gap:14px;padding:10px 14px;border:1px solid var(--line);border-radius:10px;background:radial-gradient(ellipse at 15% 50%,${w.accent}22,transparent 60%)"><img src="${w.src}" alt="" style="width:120px;height:80px;object-fit:contain;filter:drop-shadow(0 0 10px ${w.accent}77)"><div><b>${escapeHtml(w.name)}</b><br><small class="muted">Poza apare automat în VIP Shop pentru <code>${escapeHtml(w.item)}</code></small></div></div>`;
+}
 // ---------- Modal recompensă ----------
 function updateRewardTypeFields() {
   const type = document.getElementById('rf-type').value;
@@ -496,7 +513,7 @@ function updatePercentPreview() {
 }
 
 function openRewardModal(caseId, rewardId) {
-  editingReward = { caseId, id: rewardId || null };
+  editingReward = { caseId, id: rewardId || null, hadAmmo: false };
   const c = casesCache.find(x => x.id === caseId);
   const r = (rewardId && c) ? (c.pool || []).find(x => String(x.id) === String(rewardId)) : null;
   document.getElementById('reward-modal-title').textContent = r ? `Editează recompensă — ${c.name}` : `Recompensă nouă — ${c ? c.name : ''}`;
@@ -507,6 +524,9 @@ function openRewardModal(caseId, rewardId) {
   document.getElementById('rf-account').value = (r && r.account) || 'bank';
   document.getElementById('rf-item').value = (r && r.item) || '';
   document.getElementById('rf-count').value = r ? (r.count || 1) : 1;
+  document.getElementById('rf-ammo').value = (r && Number(r.ammo) > 0) ? Number(r.ammo) : '';
+  editingReward.hadAmmo = !!(r && Number(r.ammo) > 0);
+  updateWpnPreview();
   document.getElementById('rf-model').value = (r && r.model) || '';
   document.getElementById('rf-value-coins').value = (r && r.value_coins) || '';
   document.getElementById('rf-value-money').value = (r && r.value_money) || '';
@@ -523,6 +543,8 @@ function closeRewardModal() {
 
 document.getElementById('rf-type').addEventListener('change', () => { updateRewardTypeFields(); updatePercentPreview(); });
 document.getElementById('rf-weight').addEventListener('input', updatePercentPreview);
+document.getElementById('rf-item').addEventListener('input', updateWpnPreview);
+document.getElementById('rf-label').addEventListener('input', updateWpnPreview);
 document.getElementById('reward-modal-close').addEventListener('click', closeRewardModal);
 document.getElementById('reward-cancel-btn').addEventListener('click', closeRewardModal);
 document.getElementById('reward-overlay').addEventListener('click', (e) => { if (e.target.id === 'reward-overlay') closeRewardModal(); });
@@ -542,6 +564,10 @@ document.getElementById('reward-form').addEventListener('submit', async (e) => {
     count: Number(document.getElementById('rf-count').value) || 1,
     model: document.getElementById('rf-model').value.trim(),
   };
+  // „ammo" pleacă spre serverul de joc doar când e cazul (gloanțe puse acum
+  // sau scoase de la o armă care le avea) — restul recompenselor rămân neatinse
+  const ammo = type === 'item' ? Math.max(0, Math.min(1000, Math.floor(Number(document.getElementById('rf-ammo').value) || 0))) : 0;
+  if (ammo > 0 || (type === 'item' && editingReward.hadAmmo)) body.ammo = ammo;
   if (type === 'item' && !body.item) { msg.textContent = 'Completează numele item-ului.'; msg.className = 'formmsg error'; msg.hidden = false; return; }
   if (type === 'coins' && !(body.amount >= 1)) { msg.textContent = 'Completează numărul de coins (minim 1).'; msg.className = 'formmsg error'; msg.hidden = false; return; }
   if (type === 'vehicle' && !body.model) { msg.textContent = 'Completează modelul vehiculului.'; msg.className = 'formmsg error'; msg.hidden = false; return; }
@@ -568,6 +594,15 @@ document.getElementById('reward-form').addEventListener('submit', async (e) => {
         }),
       });
       if (!vres.ok) { const vd = await vres.json().catch(() => ({})); throw new Error('Recompensa s-a salvat, dar valoarea nu: ' + (vd.error || 'eroare')); }
+    }
+    // serverul de joc trebuie să știe de câmpul „ammo" — dacă nu-l întoarce, îl ignoră încă
+    if (body.ammo > 0 && !(Number(data.ammo ?? data.reward?.ammo) > 0)) {
+      await loadCases();
+      const pool = casesCache.find(x => x.id === caseId)?.pool || [];
+      const saved = pool.find(x => String(x.id) === String(rewardId || data.id || data.reward?.id)) || pool.find(x => x.type === 'item' && x.item === body.item && x.label === body.label);
+      if (!saved || !(Number(saved.ammo) > 0)) alert('Recompensa s-a salvat, dar serverul de joc nu ține încă minte gloanțele (trebuie update-ul de la coleg). Până atunci arma se dă fără gloanțe.');
+      closeRewardModal();
+      return;
     }
     closeRewardModal();
     loadCases();

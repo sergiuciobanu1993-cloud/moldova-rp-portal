@@ -1,0 +1,8 @@
+Folderul aplicației Android (descărcare directă de pe site, fără Google Play).
+
+Aici se pun DOUĂ fișiere din arhiva generată pe pwabuilder.com:
+  moldova-rp.apk     (în arhivă se numește de obicei „Moldova RP.apk” sau app-release-signed.apk — redenumește-l exact așa)
+  assetlinks.json    (exact cum e în arhivă)
+
+NU pune aici signing.keystore sau signing-key-info.txt — alea sunt cheia
+aplicației, se păstrează în privat (fără ele nu mai poți face update la aplicație).

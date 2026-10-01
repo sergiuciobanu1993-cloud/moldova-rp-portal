@@ -164,7 +164,7 @@ async function sendDiscordDm(discordId, { title, message, link }) {
   if (!DISCORD_LOGS_BOT_TOKEN || !discordId) return false;
   try {
     const ch = await discordBotRequest("POST", "/users/@me/channels", { recipient_id: String(discordId) });
-    if (!ch.ok) return false;
+    if (!ch.ok) { console.warn(`Discord DM: nu pot deschide conversația (HTTP ${ch.status}).`); return false; }
     const { id } = await ch.json();
     const url = absoluteSiteLink(link);
     const msg = await discordBotRequest("POST", `/channels/${id}/messages`, {
@@ -177,8 +177,11 @@ async function sendDiscordDm(discordId, { title, message, link }) {
         timestamp: new Date().toISOString(),
       }],
     });
-    return msg.ok; // 403 / cod 50007 = DM-uri închise → încercăm email
-  } catch {
+    // 403 / cod 50007 = DM-uri închise sau botul nu e pe niciun server comun
+    if (!msg.ok) console.warn(`Discord DM: mesajul nu a ajuns (HTTP ${msg.status}).`);
+    return msg.ok;
+  } catch (err) {
+    console.warn("Discord DM eșuat:", err.message);
     return false;
   }
 }
@@ -218,8 +221,17 @@ async function deliverExternal(userId, { title, message, link, emailFallback = t
   );
   const u = rows[0];
   if (!u) return;
-  if (u.notify_discord && u.discord_id && await sendDiscordDm(u.discord_id, { title, message, link })) return;
-  if (emailFallback && u.notify_email && u.email) await sendNotificationEmail(u.email, { title, message, link });
+  // jurnal scurt (fără date personale) ca să vedem în Railway ce s-a întâmplat
+  const tag = `Notificare externă (cont #${userId}, „${String(title || "").slice(0, 40)}”)`;
+  if (u.notify_discord && u.discord_id) {
+    if (await sendDiscordDm(u.discord_id, { title, message, link })) { console.log(`${tag}: trimisă pe Discord.`); return; }
+  }
+  if (emailFallback && u.notify_email && u.email) {
+    const ok = await sendNotificationEmail(u.email, { title, message, link }).catch(() => false);
+    console.log(`${tag}: ${ok ? "trimisă pe email" : "emailul nu a plecat"}.`);
+    return;
+  }
+  console.log(`${tag}: nu s-a trimis — ${!u.discord_id ? "cont fără Discord legat" : !u.notify_discord ? "Discord oprit din setări" : "DM eșuat"}, ${!u.email ? "fără email" : !u.notify_email ? "email oprit din setări" : "fără email de rezervă"}.`);
 }
 
 // (01.10.2026, cerut de Sergiu) Staff-ul NU primește mesaje private: tot ce
@@ -266,6 +278,28 @@ async function staffMentionRoles() {
   }
   return staffRolesCache.ids;
 }
+// (01.10.2026) La pornire verificăm dacă botul site-ului e pe serverul de
+// Discord al comunității (cel cu webhook-ul de staff). Fără asta: nu poate
+// eticheta rolul de admin și NU poate trimite mesaje private jucătorilor
+// (Discord cere un server comun). Dacă lipsește, scriem în jurnal linkul de invitare.
+async function checkStaffDiscordSetup() {
+  const hook = staffWebhookUrl();
+  if (!hook || !DISCORD_LOGS_BOT_TOKEN) return;
+  try {
+    const wr = await fetch(hook);
+    const guildId = wr.ok ? (await wr.json()).guild_id : null;
+    const me = await discordBotRequest("GET", "/users/@me");
+    const botId = me.ok ? (await me.json()).id : null;
+    if (!guildId || !botId) return;
+    const g = await discordBotRequest("GET", `/guilds/${guildId}`);
+    if (g.ok) { console.log("Discord: botul site-ului e pe serverul comunității — tag-ul de admin și mesajele private pot funcționa."); return; }
+    console.warn(`Discord: botul site-ului NU e pe serverul comunității (HTTP ${g.status}). Fără el nu merg tag-ul de admin și mesajele private. Invită-l: https://discord.com/oauth2/authorize?client_id=${botId}&scope=bot&permissions=0`);
+  } catch (err) {
+    console.warn("Discord: verificarea botului a eșuat:", err.message);
+  }
+}
+setTimeout(checkStaffDiscordSetup, 15 * 1000);
+
 async function postStaffChannel({ title, message, link, color = 0xff8a1f, mentionAdmins = false }) {
   const url = absoluteSiteLink(link);
   const roles = mentionAdmins ? await staffMentionRoles() : [];
@@ -3628,11 +3662,15 @@ app.post("/api/tickets", auth, asyncRoute(async (req, res) => {
   // răzbunat de cel reclamat înainte ca staff să apuce să verifice. Doar
   // dacă am reușit să legăm structurat reclamația de un cont real (vezi
   // resolveReportedPlayer) — un text liber nepotrivit nu are cont de
-  // notificat. Nu notificăm dacă cineva se reclamă cumva pe sine însuși.
+  // notificat. (01.10.2026) Și când cineva se reclamă pe sine (ex. un test
+  // făcut de staff) primește mesajul — altfel testul pare stricat.
+  if (!reportedId && v.category === "reclamatie")
+    console.log(`Reclamație #${rows[0].id}: „${String(reportedLabel).slice(0, 40)}” nu e legat de niciun cont de pe site — nu anunț pe nimeni.`);
   if (reportedId) {
     const { rows: rp } = await pool.query(`SELECT user_id FROM players WHERE id = $1`, [reportedId]);
     const reportedUserId = rp[0]?.user_id;
-    if (reportedUserId && reportedUserId !== req.user.sub) {
+    console.log(`Reclamație #${rows[0].id}: jucător găsit${reportedUserId ? `, anunț contul #${reportedUserId}` : ", dar fără cont pe site"}.`);
+    if (reportedUserId) {
       await notifyUser(reportedUserId, {
         type: "ticket_reported",
         title: "Ai fost reclamat",

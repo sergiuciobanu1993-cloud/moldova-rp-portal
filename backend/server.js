@@ -1463,25 +1463,51 @@ function exchangeOfferFor(settings, isLegal, type, data) {
 // Lista publică (/cases) nu are id-uri, dar vine în aceeași ordine ca lista de
 // admin (/cases/admin) — le potrivim după poziție și verificăm tip+etichetă;
 // dacă ceva nu se potrivește, lăsăm cutia în ordinea de pe server.
-async function applyOrderToPublicCases(cases) {
-  const orders = await loadRewardOrders();
-  if (!orders.size || !cases.length) return cases;
+// (01.10.2026) Lista publică a jocului (/cases) nu spune ce item e o armă,
+// câte gloanțe vine cu ea sau suma exactă — doar eticheta. Le luăm din lista
+// de admin (ținută 20 s în memorie) și le lipim pe fiecare recompensă, ca
+// VIP Shop-ul să poată arăta poza armei, „+ N gloanțe" și sumele formatate.
+let adminCasesCache = { at: 0, cases: null };
+async function adminCasesCached() {
+  if (adminCasesCache.cases && Date.now() - adminCasesCache.at < 20_000) return adminCasesCache.cases;
   const admin = await vipShopAdminRequest("GET", "/cases/admin");
-  if (!admin.ok) return cases;
-  const adminById = new Map((admin.data?.cases || []).map(c => [c.id, c]));
+  if (!admin.ok) return adminCasesCache.cases;
+  adminCasesCache = { at: Date.now(), cases: admin.data?.cases || [] };
+  return adminCasesCache.cases;
+}
+function publicRewardExtras(a) {
+  if (!a) return {};
+  const x = {};
+  if (a.type === "item" && a.item) { x.item = a.item; if (Number(a.ammo) > 0) x.ammo = Math.floor(Number(a.ammo)); }
+  if (a.type === "cash" || a.type === "coins") { if (a.amount != null) x.amount = a.amount; if (a.account) x.account = a.account; }
+  return x;
+}
+async function applyOrderToPublicCases(cases) {
+  if (!cases.length) return cases;
+  const orders = await loadRewardOrders();
+  const adminCases = await adminCasesCached();
+  if (!adminCases) return cases;
+  const adminById = new Map(adminCases.map(c => [c.id, c]));
   return cases.map(c => {
     const ids = orders.get(c.id);
     const ac = adminById.get(c.id);
     const pubPool = c.pool || [];
     const admPool = ac?.pool || [];
-    if (!ids || pubPool.length !== admPool.length) return c;
-    const aligned = pubPool.every((r, i) => r.type === admPool[i].type && r.label === admPool[i].label);
-    if (!aligned) return c;
-    return { ...c, pool: sortByOrder(pubPool, ids, (_r, i) => admPool[i].id) };
+    if (!ac) return c;
+    const aligned = pubPool.length === admPool.length
+      && pubPool.every((r, i) => r.type === admPool[i].type && r.label === admPool[i].label);
+    if (!aligned) {
+      // ordinea nu se potrivește: potrivim doar după tip + etichetă, fără reordonare
+      return { ...c, pool: pubPool.map(r => ({ ...publicRewardExtras(admPool.find(a => a.type === r.type && a.label === r.label)), ...r })) };
+    }
+    const pool = pubPool.map((r, i) => ({ ...publicRewardExtras(admPool[i]), ...r }));
+    return { ...c, pool: ids ? sortByOrder(pool, ids, (_r, i) => admPool[i].id) : pool };
   });
 }
 
 async function vipShopAdminRequest(method, path, body) {
+  // orice modificare din editor → lista de admin din memorie se reîncarcă
+  if (method !== "GET" && path.startsWith("/cases/admin")) adminCasesCache.at = 0;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8000);
   try {

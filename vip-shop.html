@@ -302,7 +302,7 @@
 
 </main>
 <script src="auth-client.js"></script>
-<script src="vip-weapons.js?v=20261001a"></script>
+<script src="vip-weapons.js?v=20261001b"></script>
 <script>
 const escapeHtml = s => (s ?? '').toString()
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -337,6 +337,21 @@ function rewardThumb(type, data, label) {
   const w = weaponOf(type, data, label);
   if (w) return `<img class="wpn-thumb" src="${w.src}" alt="" loading="lazy" style="--wa:${w.accent}" onerror="this.outerHTML='<span style=&quot;width:18px;text-align:center;flex:none&quot;>🔫</span>'">`;
   return `<span style="width:18px;text-align:center;flex:none">${rewardIcon(type, data, label)}</span>`;
+}
+// (01.10.2026) Etichete scrise în editor doar ca număr („370000", „15") le
+// arătăm ca sumă: „$370.000 în bancă" / „$370.000 bani murdari" / „15 coins".
+// Etichetele scrise cu text rămân exact cum sunt.
+function niceLabel(type, label, data) {
+  const raw = String(label == null ? '' : label).trim();
+  if (!/^\$?\s*\d[\d\s.,]*$/.test(raw)) return raw;
+  const n = Number(raw.replace(/[^\d]/g, ''));
+  if (!Number.isFinite(n) || n <= 0) return raw;
+  if (type === 'coins') return `${n.toLocaleString('ro-RO')} coins`;
+  if (type === 'cash') {
+    const acc = data && data.account;
+    return `$${n.toLocaleString('ro-RO')}${acc === 'black_money' ? ' bani murdari' : acc ? ' în bancă' : ''}`;
+  }
+  return raw;
 }
 // „+ N gloanțe" lângă o armă care vine cu muniție (câmpul „ammo" al recompensei)
 function ammoNote(data) {
@@ -427,7 +442,7 @@ function renderPending(pending) {
     <div style="display:flex;flex-direction:column;gap:8px">
       ${pending.map(p => `
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 14px;background:rgba(255,255,255,.04);border-radius:8px;flex-wrap:wrap">
-          <span style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">${rewardThumb(p.reward_type, rewardDataOf(p.reward_data), p.reward_label)} <strong>${escapeHtml(p.reward_label || p.reward_type)}</strong>${ammoNote(rewardDataOf(p.reward_data))} <span class="muted">(${escapeHtml(p.case_name || '')})</span></span>
+          <span style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">${rewardThumb(p.reward_type, rewardDataOf(p.reward_data), p.reward_label)} <strong>${escapeHtml(niceLabel(p.reward_type, p.reward_label, rewardDataOf(p.reward_data)) || p.reward_type)}</strong>${ammoNote(rewardDataOf(p.reward_data))} <span class="muted">(${escapeHtml(p.case_name || '')})</span></span>
           <span style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
             ${p.sellOffer?.coins ? `<button type="button" class="btn-ghost" style="padding:7px 12px;font-size:12px" data-sell="${Number(p.id)}" data-currency="coins" data-label="${escapeHtml(p.reward_label || '')}" data-amount="${p.sellOffer.coins}">Vinde pe 🪙 ${p.sellOffer.coins} coins</button>` : ''}
             ${p.sellOffer?.money ? `<button type="button" class="btn-ghost" style="padding:7px 12px;font-size:12px" data-sell="${Number(p.id)}" data-currency="money" data-label="${escapeHtml(p.reward_label || '')}" data-amount="${p.sellOffer.money}">Vinde pe $${Number(p.sellOffer.money).toLocaleString('ro-RO')}</button>` : ''}
@@ -512,7 +527,7 @@ function renderLog(log) {
             ${thumb}
             <span>
               <a href="admin-jucatori.html?profil=${encodeURIComponent(entry.playerName || '')}&id=${encodeURIComponent(entry.identifier || '')}" target="_blank" rel="noopener" title="Deschide profilul jucătorului" style="color:inherit;text-decoration:underline;text-decoration-color:rgba(255,255,255,.3)"><strong>${escapeHtml(entry.playerName || entry.identifier || 'necunoscut')}</strong></a>
-              <span class="muted"> · ${escapeHtml(entry.caseName || '')} · ${escapeHtml(entry.rewardLabel || '')}</span>
+              <span class="muted"> · ${escapeHtml(entry.caseName || '')} · ${escapeHtml(niceLabel(entry.rewardType, entry.rewardLabel, data))}</span>
               ${data.model ? `<br><small class="muted" title="Codul de spawn salvat la deschidere — cu el se pune mașina în garaj">model: <code>${escapeHtml(data.model)}</code></small>` : ''}${data.item ? `<br><small class="muted">item: <code>${escapeHtml(data.item)}</code></small>` : ''}
             </span>
           </span>
@@ -593,7 +608,7 @@ function renderHistory(history) {
           <span style="display:flex;align-items:center;gap:8px;min-width:220px">
             ${thumb}
             <span>
-              <strong>${escapeHtml(entry.rewardLabel || '')}</strong>
+              <strong>${escapeHtml(niceLabel(entry.rewardType, entry.rewardLabel, data))}</strong>
               <span class="muted"> · ${escapeHtml(entry.caseName || '')}</span>
             </span>
           </span>
@@ -633,7 +648,7 @@ function poolRowsHtml(pool) {
     const dot = `<span class="odds-dot ${rarityOf(r.chancePercent)}"></span>`;
     return `
     <div style="display:flex;align-items:center;gap:8px;font-size:12px">
-      <span class="muted" style="display:flex;align-items:center;gap:6px">${dot}${thumb}${escapeHtml(r.label)}${ammoNote(r)}</span>
+      <span class="muted" style="display:flex;align-items:center;gap:6px">${dot}${thumb}${escapeHtml(niceLabel(r.type, r.label, r))}${ammoNote(r)}</span>
     </div>`;
   }).join('');
 }
@@ -654,7 +669,7 @@ function previewPoolHtml(pool) {
     <div class="prize-tile ${kind}" data-rarity="${rarityOf(r.chancePercent)}" style="--wa:${accent}">
       <span class="odds-dot ${rarityOf(r.chancePercent)}"></span>
       <div class="prize-img"><img src="${src}" alt="" loading="lazy" onerror="this.closest('.prize-tile').classList.add('no-img')"></div>
-      <div class="prize-name">${escapeHtml(r.label)}${ammoNote(r)}</div>
+      <div class="prize-name">${escapeHtml(niceLabel(r.type, r.label, r))}${ammoNote(r)}</div>
     </div>`).join('');
   return `<div class="prize-grid">${tiles}</div>${rest.length ? poolRowsHtml(rest) : ''}`;
 }
@@ -795,7 +810,7 @@ function reelTileHtml(reward) {
     ? `<div class="tile-icon has-photo"><img src="assets/vip-cars/${escapeHtml(reward.model)}.png" alt="" loading="lazy"></div>`
     : wpn ? `<div class="tile-icon has-photo is-wpn" style="--wa:${wpn.accent}"><img src="${wpn.src}" alt="" loading="lazy"></div>`
     : `<div class="tile-icon">${rewardIcon(reward.type, reward, reward.label)}</div>`;
-  return `${icon}<div class="tile-label">${escapeHtml(reward.label)}</div>`;
+  return `${icon}<div class="tile-label">${escapeHtml(niceLabel(reward.type, reward.label, reward))}</div>`;
 }
 
 function reelBuildTrack(track, winner, pool) {
@@ -935,7 +950,7 @@ function oxCardHtml(w) {
     ? `<img class="ox-photo" src="assets/vip-cars/${escapeHtml(w.model)}.png" alt="" onerror="this.outerHTML='<div class=&quot;ox-icon&quot;>🚗</div>'">`
     : wpn ? `<div class="ox-wpn" style="--wa:${wpn.accent}"><img class="ox-photo" src="${wpn.src}" alt="" onerror="this.parentNode.outerHTML='<div class=&quot;ox-icon&quot;>🔫</div>'"></div>`
     : `<div class="ox-icon">${rewardIcon(w.type, w, w.label)}</div>`;
-  return `${visual}<div class="ox-label">${escapeHtml(w.label)}${ammoNote(w)}</div><span class="ox-badge">${OX_LABEL[w.rarity] || ''}</span>`;
+  return `${visual}<div class="ox-label">${escapeHtml(niceLabel(w.type, w.label, w))}${ammoNote(w)}</div><span class="ox-badge">${OX_LABEL[w.rarity] || ''}</span>`;
 }
 
 function crateOpenTo(winner, caseObj) {
@@ -1137,6 +1152,7 @@ async function openCase(caseId) {
     const c = currentCasesById[caseId];
     const pool = (c && c.pool) || [];
     const poolMatch = pool.find(r => r.type === d.reward.type && r.label === d.reward.label);
+    const wonLabel = niceLabel(d.reward.type, d.reward.label, d.reward.data || poolMatch || {});
     const wonModel = d.reward.type === 'vehicle' && d.reward.data && d.reward.data.model;
     const winner = {
       type: d.reward.type,
@@ -1144,6 +1160,7 @@ async function openCase(caseId) {
       model: wonModel || undefined,
       item: (d.reward.data && d.reward.data.item) || undefined,
       ammo: (d.reward.data && d.reward.data.ammo) || undefined,
+      account: (d.reward.data && d.reward.data.account) || undefined,
       rarity: poolMatch ? rarityOf(Number(poolMatch.chancePercent) || 0) : 'common',
     };
 
@@ -1152,12 +1169,12 @@ async function openCase(caseId) {
 
     title.textContent = 'Felicitări!';
     text.textContent = d.reward.type === 'coins'
-      ? `Ai câștigat: ${d.reward.label}. Au fost adăugați direct în contul tău de coins.`
-      : `Ai câștigat: ${d.reward.label}. Intră pe server și scrie /recompense ca să-l ridici.`;
+      ? `Ai câștigat: ${wonLabel}. Au fost adăugați direct în contul tău de coins.`
+      : `Ai câștigat: ${wonLabel}. Intră pe server și scrie /recompense ca să-l ridici.`;
     // (29.09.2026) Mașină/armă cu valoare setată: alege imediat — o păstrezi
     // (o ridici din joc) sau o vinzi înapoi pentru 50% din valoare.
     if (d.sell && (d.sell.coins || d.sell.money)) {
-      text.textContent = `Ai câștigat: ${d.reward.label}. O păstrezi sau o vinzi înapoi pentru ${d.sell.pct}% din valoare?`;
+      text.textContent = `Ai câștigat: ${wonLabel}. O păstrezi sau o vinzi înapoi pentru ${d.sell.pct}% din valoare?`;
       actions.innerHTML = `
         ${d.sell.coins ? `<button type="button" class="btn-ghost" data-rsell="coins" data-amount="${d.sell.coins}">Vinde pe 🪙 ${d.sell.coins} coins</button>` : ''}
         ${d.sell.money ? `<button type="button" class="btn-ghost" data-rsell="money" data-amount="${d.sell.money}">Vinde pe $${Number(d.sell.money).toLocaleString('ro-RO')}</button>` : ''}`;
@@ -1192,7 +1209,7 @@ async function openCase(caseId) {
     // schimbă pe loc în bani curați, în bancă, la procentul setat de staff.
     if (d.exchange && d.exchange.amount) {
       const clean = `$${Number(d.exchange.amount).toLocaleString('ro-RO')}`;
-      text.textContent = `Ai câștigat: ${d.reward.label}. Ești într-o facțiune legală — îi poți schimba acum în ${clean} curați, în bancă (${d.exchange.pct}%).`;
+      text.textContent = `Ai câștigat: ${wonLabel}. Ești într-o facțiune legală — îi poți schimba acum în ${clean} curați, în bancă (${d.exchange.pct}%).`;
       actions.innerHTML = `<button type="button" class="btn-primary" data-rexch="1">🧼 Schimbă în ${clean} curați</button>`;
       actions.style.display = 'flex';
       closeBtn.textContent = 'Păstrez banii murdari';

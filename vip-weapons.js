@@ -117,23 +117,26 @@
   "WEAPON_VELVVS": ["#ffe22d", "VEL VVS"],
   "WEAPON_YELLOWARP": ["#ffd60a", "ARP YELLOW VVS"]
   };
+  const COLORS = ['BLACK', 'BLUE', 'BLUE2', 'GOLD', 'GREEN', 'ORANGE', 'PINK', 'PLATINUM', 'PLAT', 'PURPLE', 'RED', 'ROSE', 'ROSEGOLD', 'YELLOW', 'WHITE'];
   const norm = s => String(s || '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim();
   const tokens = s => norm(s).split(' ').filter(t => t && t !== 'VVS');
+  const key = t => t.slice().sort().join(' ');
+  // numele din joc, plus varianta cu „GOLD" pentru armele de bază fără culoare
+  // în nume (ex. itemul WEAPON_MP5VVS = „MP5 VVS", dar în cutie scrie „MP5 Gold VVS")
   const byName = {};
-  for (const k in W) byName[tokens(W[k][1]).join(' ')] = k;
+  for (const k in W) {
+    const t = tokens(W[k][1]);
+    if (!(key(t) in byName)) byName[key(t)] = k;
+    if (!t.some(x => COLORS.includes(x))) { const g = key(t.concat('GOLD')); if (!(g in byName)) byName[g] = k; }
+  }
   const out = k => ({ item: k, src: 'assets/vip-weapons/' + k.toLowerCase() + '.webp', accent: W[k][0], name: W[k][1] });
   function find(item, label) {
     const k = String(item || '').toUpperCase().trim();
     if (W[k]) return out(k);
+    if (k) return null;            // itemul e cunoscut, dar nu are poză — nu ghicim după etichetă
     const t = tokens(label);
     if (!t.length) return null;
-    if (byName[t.join(' ')]) return out(byName[t.join(' ')]);
-    // aceleași cuvinte în altă ordine, sau eticheta conține toate cuvintele numelui (o singură potrivire)
-    const set = new Set(t);
-    const hits = Object.keys(W).filter(key => { const n = tokens(W[key][1]); return n.length > 1 && n.every(x => set.has(x)); });
-    if (hits.length === 1) return out(hits[0]);
-    if (hits.length > 1) { hits.sort((a, b) => tokens(W[b][1]).length - tokens(W[a][1]).length); if (tokens(W[hits[0]][1]).length > tokens(W[hits[1]][1]).length) return out(hits[0]); }
-    return null;
+    return byName[key(t)] ? out(byName[key(t)]) : null;
   }
   window.MRPWeapons = { find, all: () => Object.keys(W).map(out) };
 })();

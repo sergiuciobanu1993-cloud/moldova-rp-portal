@@ -2335,6 +2335,7 @@ app.post("/api/vip-shop/vinde", auth, asyncRoute(async (req, res) => {
   if (!result.ok) {
     const messages = {
       nu_se_poate: "Recompensa nu mai poate fi vândută (poate ai ridicat-o deja).",
+      limita_zilnica: "Ai atins limita de vânzări pe azi. Recompensa rămâne în așteptare: o poți vinde mâine sau o ridici în joc.",
       server_offline: "Serverul de joc nu răspunde momentan.",
     };
     if (result.status === 404) gameRouteReady.sell = false;
@@ -2377,6 +2378,7 @@ app.post("/api/vip-shop/schimba", auth, asyncRoute(async (req, res) => {
   if (!result.ok) {
     const messages = {
       nu_se_poate: "Recompensa nu mai poate fi schimbată (poate ai ridicat-o deja).",
+      limita_zilnica: "Ai atins limita de schimburi pe azi. Banii rămân în așteptare: îi poți schimba mâine sau îi ridici murdari în joc.",
       server_offline: "Serverul de joc nu răspunde momentan.",
     };
     if (result.status === 404) gameRouteReady.convert = false;

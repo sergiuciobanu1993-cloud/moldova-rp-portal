@@ -1,5 +1,12 @@
 <!doctype html>
 <html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Dashboard — Moldova RP</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="dashboard.css"><link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/assets/app/apple-touch-icon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black"><meta name="apple-mobile-web-app-title" content="Moldova RP"><script src="/pwa.js" defer></script><meta name="theme-color" content="#090a0b">
+<style>
+.notify-opts{display:flex;gap:12px;flex-wrap:wrap}
+.notify-opt{flex:1 1 260px;display:flex;gap:12px;align-items:flex-start;padding:14px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.03);cursor:pointer}
+.notify-opt input{width:18px;height:18px;margin:2px 0 0;flex:none;accent-color:var(--orange)}
+.notify-opt strong{display:block}
+.notify-opt small{display:block;color:var(--muted);font-size:12px;margin-top:3px}
+</style>
 </head>
 <body>
 <header><a class="brand" href="index.html"><img src="assets/logo.png" alt="">MOLDOVA<span>RP</span></a><nav id="dash-nav"><a href="index.html">Acasă</a><a href="index.html#regulamente">Regulamente</a><a href="tichete.html">Tichete</a><a href="vip-shop.html" id="vipshop-nav-link" hidden>VIP Shop</a><a href="mdt-fib.html" id="mdt-nav-link" hidden>MDT FIB</a><a href="#profil">Profil</a></nav><div id="notif-wrap" style="position:relative;margin-left:auto"><button type="button" id="notif-bell" class="btn-ghost" style="position:relative;padding:9px 12px" aria-haspopup="true" aria-expanded="false" aria-label="Notificări">🔔<span id="notif-badge" class="pill warn" style="position:absolute;top:-7px;right:-7px;padding:1px 6px" hidden>0</span></button><div id="notif-dropdown" class="player-search-dropdown" style="width:320px;right:0;left:auto" hidden></div></div><button class="menu-toggle" id="dash-menu-toggle" type="button" aria-label="Deschide meniul" aria-expanded="false">☰</button><a class="logout" href="login.html" id="logout-link">Deconectare</a></header>
@@ -59,6 +66,18 @@
       <button type="submit">Leagă contul</button>
     </form>
     <p id="game-link-msg" class="muted" style="margin:10px 0 0" hidden></p>
+  </div>
+</section>
+<section class="panel" id="notify-panel" style="margin-top:20px" hidden>
+  <div class="head"><h2>🔔 Notificări pe Discord și email</h2><span id="notify-status" class="muted"></span></div>
+  <p class="muted" style="margin:0 0 14px">Când primești o reclamație, un răspuns la tichet sau o decizie a staff-ului, îți scriem întâi pe Discord (mesaj privat de la botul Moldova RP). Dacă nu se poate, îți trimitem un email.</p>
+  <div class="notify-opts">
+    <label class="notify-opt"><input type="checkbox" id="notify-discord"><span><strong>Pe Discord</strong><small id="notify-discord-hint"></small></span></label>
+    <label class="notify-opt"><input type="checkbox" id="notify-email"><span><strong>Pe email</strong><small id="notify-email-hint"></small></span></label>
+  </div>
+  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:14px">
+    <button type="button" class="btn-ghost" id="notify-test">Trimite-mi un mesaj de test</button>
+    <span id="notify-msg" class="muted"></span>
   </div>
 </section>
 <section class="panel" id="streamer-panel" style="margin-top:20px;border-color:#3ddc84" hidden>
@@ -307,7 +326,54 @@ function renderGameLink(me) {
   document.getElementById('game-link-status').textContent = me.gameLinked ? 'legat' : 'nelegat';
   document.getElementById('game-link-panel').hidden = false;
   loadVipHistory();
+  renderNotifySettings(me);
 }
+
+// Notificări pe Discord / email (01.10.2026)
+function renderNotifySettings(me) {
+  const n = me.notifications;
+  if (!n) return;
+  const d = document.getElementById('notify-discord');
+  const e = document.getElementById('notify-email');
+  d.checked = !!n.discord; e.checked = !!n.email;
+  document.getElementById('notify-discord-hint').textContent = !n.discordReady
+    ? 'Momentan indisponibil pe server.'
+    : n.hasDiscord ? `Mesaj privat către ${me.discord_username || 'contul tău de Discord'}. Trebuie să fii pe serverul de Discord Moldova RP.`
+    : 'Nu ai Discord legat — intră o dată pe site cu „Login cu Discord”.';
+  document.getElementById('notify-email-hint').textContent = !n.emailReady
+    ? 'Momentan indisponibil pe server.'
+    : n.hasEmail ? `La ${me.email}` : 'Contul tău nu are email.';
+  const on = (n.discord && n.hasDiscord) || (n.email && n.hasEmail);
+  document.getElementById('notify-status').textContent = on ? 'active' : 'oprite';
+  document.getElementById('notify-panel').hidden = false;
+}
+async function saveNotifySettings() {
+  const msg = document.getElementById('notify-msg');
+  const body = { discord: document.getElementById('notify-discord').checked, email: document.getElementById('notify-email').checked };
+  try {
+    const res = await apiFetch('/api/me/notificari', { method: 'PUT', body: JSON.stringify(body) });
+    if (!res.ok) throw new Error();
+    if (meCache?.notifications) { meCache.notifications.discord = body.discord; meCache.notifications.email = body.email; renderNotifySettings(meCache); }
+    msg.style.color = 'var(--green)'; msg.textContent = '✓ Salvat';
+  } catch {
+    msg.style.color = '#ff8a8a'; msg.textContent = 'Nu am putut salva. Încearcă din nou.';
+  }
+}
+document.getElementById('notify-discord').addEventListener('change', saveNotifySettings);
+document.getElementById('notify-email').addEventListener('change', saveNotifySettings);
+document.getElementById('notify-test').addEventListener('click', async () => {
+  const msg = document.getElementById('notify-msg');
+  msg.style.color = ''; msg.textContent = 'Se trimite…';
+  try {
+    const res = await apiFetch('/api/me/notificari/test', { method: 'POST' });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(d.error || 'Nu am putut trimite.');
+    msg.style.color = 'var(--green)';
+    msg.textContent = d.via === 'discord' ? '✓ Trimis pe Discord — verifică mesajele private.' : '✓ Trimis pe email — verifică și Spam.';
+  } catch (err) {
+    msg.style.color = '#ff8a8a'; msg.textContent = err.message;
+  }
+});
 document.getElementById('game-link-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const msg = document.getElementById('game-link-msg');

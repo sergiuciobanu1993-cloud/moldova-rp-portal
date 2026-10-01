@@ -114,7 +114,9 @@ async function logAction(actorId, action, entityType, entityId, metadata, ip) {
 // insert-ul eșuează dintr-un motiv oarecare, NU trebuie să pice acțiunea
 // principală (ex. crearea unui tichet) doar pentru că notificarea n-a mers —
 // de-aia apelanții o cheamă fără await pe eroare (catch local, doar log).
-async function notifyUser(userId, { type, title, message, link }) {
+// (01.10.2026) external: true = trimite și în afara site-ului (Discord sau
+// email, vezi deliverExternal mai jos). emailFallback: false = doar Discord.
+async function notifyUser(userId, { type, title, message, link, external = false, emailFallback = true, dedupeKey = null }) {
   if (!userId) return;
   try {
     await pool.query(
@@ -123,6 +125,191 @@ async function notifyUser(userId, { type, title, message, link }) {
     );
   } catch (err) {
     console.error("notifyUser a eșuat:", err.message);
+  }
+  if (external) {
+    // în fundal — nu ținem cererea jucătorului după Discord/Brevo
+    deliverExternal(userId, { title, message, link, emailFallback, dedupeKey })
+      .catch(err => console.error("Notificare externă eșuată:", err.message));
+  }
+}
+
+// ---- Notificări în afara site-ului: Discord (DM) + email (01.10.2026) ----
+// Întâi un mesaj privat pe Discord de la botul serverului (dacă contul are
+// Discord legat și jucătorul n-a oprit asta din Contul meu). Dacă nu se
+// poate (fără Discord, DM-uri închise, bot nesetat), trimitem pe email
+// prin Brevo — doar conturile cu email. Același tichet nu trimite mai des
+// de o dată la 10 minute aceluiași om (ex. 5 răspunsuri la rând = 1 mesaj).
+const externalSentAt = new Map();
+const EXTERNAL_COOLDOWN_MS = 10 * 60 * 1000;
+function absoluteSiteLink(link) {
+  if (!link) return `${SITE_URL}/`;
+  return /^https?:\/\//i.test(link) ? link : `${SITE_URL}/${String(link).replace(/^\/+/, "")}`;
+}
+async function discordBotRequest(method, path, body) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    return await fetch(`${DISCORD_API_BASE}${path}`, {
+      method,
+      headers: { Authorization: `Bot ${DISCORD_LOGS_BOT_TOKEN}`, "Content-Type": "application/json" },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+// Trimite un mesaj privat; întoarce true doar dacă a ajuns.
+async function sendDiscordDm(discordId, { title, message, link }) {
+  if (!DISCORD_LOGS_BOT_TOKEN || !discordId) return false;
+  try {
+    const ch = await discordBotRequest("POST", "/users/@me/channels", { recipient_id: String(discordId) });
+    if (!ch.ok) return false;
+    const { id } = await ch.json();
+    const url = absoluteSiteLink(link);
+    const msg = await discordBotRequest("POST", `/channels/${id}/messages`, {
+      embeds: [{
+        title: String(title || "Moldova RP").slice(0, 250),
+        description: `${String(message || "").slice(0, 1800)}\n\n[Deschide pe site →](${url})`,
+        url,
+        color: 0xff8a1f,
+        footer: { text: "Moldova RP · poți opri aceste mesaje din Contul meu" },
+        timestamp: new Date().toISOString(),
+      }],
+    });
+    return msg.ok; // 403 / cod 50007 = DM-uri închise → încercăm email
+  } catch {
+    return false;
+  }
+}
+async function sendNotificationEmail(to, { title, message, link }) {
+  if (!emailApiConfigured() || !to) return false;
+  const url = absoluteSiteLink(link);
+  const esc = v => String(v || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+    method: "POST",
+    headers: { accept: "application/json", "content-type": "application/json", "api-key": process.env.BREVO_API_KEY },
+    body: JSON.stringify({
+      sender: { email: process.env.EMAIL_FROM, name: "Moldova RP" },
+      to: [{ email: to }],
+      subject: `Moldova RP — ${String(title || "Notificare").slice(0, 150)}`,
+      textContent: `${message || ""}\n\nDeschide pe site: ${url}\n\nPoți opri aceste emailuri din Contul meu → Notificări.`,
+      htmlContent: `<div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;padding:24px;background:#0f1112;color:#f2f2f2;border-radius:14px">
+        <p style="margin:0 0 6px;color:#ff8a1f;font-weight:bold;letter-spacing:2px;font-size:11px">MOLDOVA RP</p>
+        <h2 style="margin:0 0 12px;font-size:20px">${esc(title)}</h2>
+        <p style="margin:0 0 20px;line-height:1.6;color:#c9ccd0">${esc(message)}</p>
+        <p style="margin:0 0 20px"><a href="${esc(url)}" style="display:inline-block;padding:12px 18px;background:#ff8a1f;color:#0b0b0b;text-decoration:none;font-weight:bold;border-radius:10px">Deschide pe site</a></p>
+        <p style="margin:0;font-size:11px;color:#8f949a">Poți opri aceste emailuri din Contul meu → Notificări.</p>
+      </div>`,
+    }),
+  });
+  return res.ok;
+}
+async function deliverExternal(userId, { title, message, link, emailFallback = true, dedupeKey = null }) {
+  if (dedupeKey) {
+    const k = `${userId}|${dedupeKey}`;
+    const last = externalSentAt.get(k) || 0;
+    if (Date.now() - last < EXTERNAL_COOLDOWN_MS) return;
+    externalSentAt.set(k, Date.now());
+    if (externalSentAt.size > 5000) externalSentAt.clear();
+  }
+  const { rows } = await pool.query(
+    `SELECT email, discord_id, notify_discord, notify_email FROM users WHERE id = $1`, [userId]
+  );
+  const u = rows[0];
+  if (!u) return;
+  if (u.notify_discord && u.discord_id && await sendDiscordDm(u.discord_id, { title, message, link })) return;
+  if (emailFallback && u.notify_email && u.email) await sendNotificationEmail(u.email, { title, message, link });
+}
+
+// Tichet nou → anunțăm staff-ul. Dacă e setat DISCORD_TICKETS_WEBHOOK (un
+// webhook dintr-un canal de staff), postăm acolo o singură dată; altfel
+// trimitem mesaj privat fiecărui moderator/admin cu Discord legat.
+async function notifyStaffNewTicket(ticket, authorName) {
+  const cat = { general: "General", bug: "Bug", reclamatie: "Reclamație", ban_appeal: "Contestație" }[ticket.category] || ticket.category;
+  const title = `🎫 Tichet nou: ${String(ticket.subject || "").slice(0, 120)}`;
+  const message = `${cat} · deschis de ${authorName || "un jucător"}${ticket.reported_player_label ? ` · despre ${ticket.reported_player_label}` : ""}`;
+  const link = `admin-tichete.html?id=${ticket.id}`;
+  const hook = process.env.DISCORD_TICKETS_WEBHOOK || "";
+  if (/^https:\/\/(\w+\.)?discord(app)?\.com\/api\/webhooks\//i.test(hook)) {
+    try {
+      await fetch(hook, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ embeds: [{ title, description: `${message}\n\n[Deschide în panou →](${absoluteSiteLink(link)})`, url: absoluteSiteLink(link), color: 0xff8a1f, timestamp: new Date().toISOString() }] }),
+      });
+    } catch (err) { console.error("Webhook tichete eșuat:", err.message); }
+    return;
+  }
+  const { rows } = await pool.query(
+    `SELECT u.id FROM users u JOIN roles r ON r.id = u.role_id WHERE r.name = ANY($1) AND u.discord_id IS NOT NULL AND u.notify_discord`,
+    [MOD_ROLES]
+  );
+  for (const r of rows) {
+    deliverExternal(r.id, { title, message, link, emailFallback: false }).catch(() => {});
+  }
+}
+
+async function reportedUserIdOf(ticket) {
+  if (ticket.category !== "reclamatie" || !ticket.reported_player_id) return null;
+  const { rows } = await pool.query(`SELECT user_id FROM players WHERE id = $1`, [ticket.reported_player_id]);
+  return rows[0]?.user_id || null;
+}
+
+// Tichet rezolvat / închis → autorul și (la reclamație) jucătorul reclamat.
+async function notifyTicketDecision(ticket, staffId) {
+  const word = ticket.status === "resolved" ? "rezolvat" : "închis";
+  const subject = String(ticket.subject || "").slice(0, 120);
+  const link = `tichet.html?id=${ticket.id}`;
+  if (ticket.user_id && ticket.user_id !== staffId) {
+    await notifyUser(ticket.user_id, {
+      type: "ticket_status",
+      title: `Tichetul tău a fost ${word}`,
+      message: `Staff-ul a marcat tichetul „${subject}” ca ${word}. Vezi decizia pe site.`,
+      link, external: true, dedupeKey: `status:${ticket.id}:${ticket.status}`,
+    });
+  }
+  const reportedUserId = await reportedUserIdOf(ticket);
+  if (reportedUserId && reportedUserId !== staffId && reportedUserId !== ticket.user_id) {
+    await notifyUser(reportedUserId, {
+      type: "ticket_status",
+      title: `Reclamația despre tine a fost ${ticket.status === "resolved" ? "rezolvată" : "închisă"}`,
+      message: "Staff-ul a luat o decizie în reclamația depusă despre tine. Vezi detaliile pe site.",
+      link, external: true, dedupeKey: `status:${ticket.id}:${ticket.status}`,
+    });
+  }
+}
+
+// Răspuns nou într-un tichet → autorul, jucătorul reclamat și staff-ul
+// care l-a preluat (oricine în afară de cel care a scris răspunsul).
+async function notifyTicketReply(ticketId, ticket, replierId, { fromStaff }) {
+  const subject = String(ticket.subject || "").slice(0, 120);
+  const link = `tichet.html?id=${ticketId}`;
+  const targets = new Map();
+  if (ticket.user_id && ticket.user_id !== replierId) {
+    targets.set(ticket.user_id, {
+      title: fromStaff ? "Staff-ul ți-a răspuns la tichet" : "Răspuns nou la tichetul tău",
+      message: `Ai un răspuns nou la tichetul „${subject}”.`,
+      link,
+    });
+  }
+  const reportedUserId = await reportedUserIdOf(ticket);
+  if (reportedUserId && reportedUserId !== replierId && !targets.has(reportedUserId)) {
+    targets.set(reportedUserId, {
+      title: "Răspuns nou la reclamația despre tine",
+      message: "A apărut un răspuns nou în reclamația depusă despre tine.",
+      link,
+    });
+  }
+  if (!fromStaff && ticket.assigned_to && ticket.assigned_to !== replierId && !targets.has(ticket.assigned_to)) {
+    targets.set(ticket.assigned_to, {
+      title: "Răspuns nou într-un tichet preluat de tine",
+      message: `Jucătorul a răspuns în tichetul „${subject}”.`,
+      link: `admin-tichete.html?id=${ticketId}`,
+    });
+  }
+  for (const [uid, n] of targets) {
+    await notifyUser(uid, { type: "ticket_reply", ...n, external: true, dedupeKey: `reply:${ticketId}` });
   }
 }
 
@@ -2839,6 +3026,7 @@ app.get("/api/me", auth, asyncRoute(async (req, res) => {
     `SELECT u.id,u.username,u.email,r.name db_role,(u.password_hash IS NOT NULL) has_password,
             u.discord_id, u.discord_username, u.discord_avatar, u.referral_code,
             (u.game_identifier IS NOT NULL) game_linked, u.game_identifier_name,
+            u.notify_discord, u.notify_email,
             (SELECT COUNT(*)::int FROM users ref WHERE ref.referred_by_user_id=u.id) referral_count,
             p.id player_id,p.game_id,p.display_name,p.playtime_minutes,p.last_server_playtime,p.status,
             f.id faction_id, f.name faction_name, fr.id rank_id, fr.name rank_name
@@ -2883,7 +3071,35 @@ app.get("/api/me", auth, asyncRoute(async (req, res) => {
     ...row, role: req.user.role, dbRole: row.db_role, hasPassword: row.has_password,
     referralCode: row.referral_code, referralCount: row.referral_count, referrals,
     gameLinked: row.game_linked, gameName: row.game_identifier_name,
+    notifications: {
+      discord: row.notify_discord !== false, email: row.notify_email !== false,
+      hasDiscord: !!row.discord_id, hasEmail: !!row.email,
+      discordReady: !!DISCORD_LOGS_BOT_TOKEN, emailReady: emailApiConfigured(),
+    },
   });
+}));
+
+// Setările de notificări pe Discord / email (01.10.2026) — din Contul meu.
+app.put("/api/me/notificari", auth, asyncRoute(async (req, res) => {
+  const discord = req.body?.discord !== false;
+  const email = req.body?.email !== false;
+  await pool.query(`UPDATE users SET notify_discord = $1, notify_email = $2 WHERE id = $3`, [discord, email, req.user.sub]);
+  res.json({ ok: true, discord, email });
+}));
+
+// Mesaj de test (doar pentru tine), ca să verifici că ajunge.
+app.post("/api/me/notificari/test", auth, asyncRoute(async (req, res) => {
+  const k = `test|${req.user.sub}`;
+  if (Date.now() - (externalSentAt.get(k) || 0) < 60_000) return res.status(429).json({ error: "Așteaptă un minut între teste." });
+  externalSentAt.set(k, Date.now());
+  const { rows } = await pool.query(`SELECT email, discord_id, notify_discord, notify_email FROM users WHERE id = $1`, [req.user.sub]);
+  const u = rows[0];
+  const msg = { title: "Test notificări", message: "Dacă vezi mesajul ăsta, notificările de la Moldova RP ajung la tine. 👍", link: "dashboard.html" };
+  let via = null;
+  if (u?.notify_discord && u.discord_id && await sendDiscordDm(u.discord_id, msg)) via = "discord";
+  else if (u?.notify_email && u.email && await sendNotificationEmail(u.email, msg).catch(() => false)) via = "email";
+  if (!via) return res.status(400).json({ error: "Nu am putut trimite: nu ai Discord legat (sau ai DM-urile închise) și nici email, sau le-ai oprit pe amândouă." });
+  res.json({ ok: true, via });
 }));
 
 app.get("/api/regulations", asyncRoute(async (_req, res) => {
@@ -3177,9 +3393,16 @@ app.post("/api/tickets", auth, asyncRoute(async (req, res) => {
         title: "Ai fost reclamat",
         message: "A fost depusă o reclamație despre tine. Un membru al staff-ului o va analiza în curând.",
         link: null,
+        // (01.10.2026) și pe Discord / email — tot fără detalii despre reclamant
+        external: true,
+        dedupeKey: `reported:${rows[0].id}`,
       });
     }
   }
+  // (01.10.2026) staff-ul află imediat de tichetul nou
+  pool.query(`SELECT COALESCE(discord_username, username) AS name FROM users WHERE id = $1`, [req.user.sub])
+    .then(r => notifyStaffNewTicket(rows[0], r.rows[0]?.name))
+    .catch(err => console.error("Anunț staff tichet nou eșuat:", err.message));
 
   res.status(201).json(rows[0]);
 }));
@@ -3255,7 +3478,7 @@ app.post("/api/tickets/:id/replies", auth, asyncRoute(async (req, res) => {
   const { message } = req.body;
   if (!message?.trim()) return res.status(400).json({ error: "Mesajul nu poate fi gol." });
   const ticket = await pool.query(
-    "SELECT status FROM tickets WHERE id=$1 AND user_id=$2 LIMIT 1",
+    "SELECT status, subject, category, assigned_to, reported_player_id FROM tickets WHERE id=$1 AND user_id=$2 LIMIT 1",
     [req.params.id, req.user.sub]
   );
   if (!ticket.rows[0]) return res.status(404).json({ error: "Tichetul nu există sau nu îți aparține — doar autorul și staff-ul pot răspunde." });
@@ -3266,6 +3489,10 @@ app.post("/api/tickets/:id/replies", auth, asyncRoute(async (req, res) => {
     [req.params.id, req.user.sub, message.trim()]
   );
   await pool.query("UPDATE tickets SET updated_at=NOW() WHERE id=$1", [req.params.id]);
+  // (01.10.2026) Anunțăm staff-ul care a preluat tichetul și, la o
+  // reclamație, pe jucătorul reclamat (are voie să vadă reclamația publică).
+  notifyTicketReply(req.params.id, ticket.rows[0], req.user.sub, { fromStaff: false })
+    .catch(err => console.error("Notificare răspuns eșuată:", err.message));
   res.status(201).json(rows[0]);
 }));
 
@@ -4713,6 +4940,7 @@ app.put("/api/admin/tickets/:id", auth, requireRole(...MOD_ROLES), asyncRoute(as
     return res.status(400).json({ error: "Categorie invalidă." });
   if (evidence_url && !/^https?:\/\/\S+$/i.test(evidence_url.trim()))
     return res.status(400).json({ error: "Linkul trebuie să înceapă cu http:// sau https://." });
+  const before = await pool.query("SELECT status FROM tickets WHERE id=$1", [id]);
   const { rows } = await pool.query(
     `UPDATE tickets SET
        status = COALESCE($1, status),
@@ -4727,6 +4955,13 @@ app.put("/api/admin/tickets/:id", auth, requireRole(...MOD_ROLES), asyncRoute(as
   );
   if (!rows[0]) return res.status(404).json({ error: "Tichetul nu există." });
   await logAction(req.user.sub, "ticket.update", "ticket", id, req.body, req.ip);
+  // (01.10.2026) Decizie: tichet rezolvat / închis → anunțăm autorul și,
+  // la o reclamație, jucătorul reclamat.
+  const oldStatus = before.rows[0]?.status;
+  if (status && status !== oldStatus && ["resolved", "closed"].includes(status)) {
+    notifyTicketDecision(rows[0], req.user.sub)
+      .catch(err => console.error("Notificare decizie eșuată:", err.message));
+  }
   res.json(rows[0]);
 }));
 
@@ -4741,7 +4976,7 @@ app.delete("/api/admin/tickets/:id", auth, requireRole(...MOD_ROLES), asyncRoute
 app.post("/api/admin/tickets/:id/replies", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
   const { message } = req.body;
   if (!message?.trim()) return res.status(400).json({ error: "Mesajul nu poate fi gol." });
-  const ticket = await pool.query("SELECT id FROM tickets WHERE id=$1", [req.params.id]);
+  const ticket = await pool.query("SELECT id, user_id, subject, category, assigned_to, reported_player_id FROM tickets WHERE id=$1", [req.params.id]);
   if (!ticket.rows[0]) return res.status(404).json({ error: "Tichetul nu există." });
   const { rows } = await pool.query(
     "INSERT INTO ticket_replies(ticket_id, author_id, message) VALUES($1,$2,$3) RETURNING *",
@@ -4752,6 +4987,8 @@ app.post("/api/admin/tickets/:id/replies", auth, requireRole(...MOD_ROLES), asyn
     [req.params.id]
   );
   await logAction(req.user.sub, "ticket.reply", "ticket", req.params.id, null, req.ip);
+  notifyTicketReply(req.params.id, ticket.rows[0], req.user.sub, { fromStaff: true })
+    .catch(err => console.error("Notificare răspuns eșuată:", err.message));
   res.status(201).json(rows[0]);
 }));
 

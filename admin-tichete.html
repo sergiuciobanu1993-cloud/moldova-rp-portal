@@ -228,6 +228,9 @@ document.getElementById('reply-form').addEventListener('submit', async (e) => {
   if (!me) return;
   document.getElementById('admin-name').textContent = me.username;
   loadList();
+  // (01.10.2026) Link direct din mesajele pe Discord: admin-tichete.html?id=<tichet>
+  const openId = new URLSearchParams(location.search).get('id');
+  if (openId && /^[\w-]{1,64}$/.test(openId)) openTicket(openId);
 })();
 </script>
 </body></html>

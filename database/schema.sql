@@ -588,3 +588,10 @@ CREATE TABLE IF NOT EXISTS vip_settings (
   value JSONB NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Notificări pe Discord / email (01.10.2026). Când primești o reclamație,
+-- un răspuns la tichet sau o decizie, site-ul îți scrie întâi pe Discord
+-- (mesaj privat de la botul serverului) și, dacă nu se poate, pe email.
+-- Fiecare le poate opri din Contul meu.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS notify_discord BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS notify_email BOOLEAN NOT NULL DEFAULT TRUE;

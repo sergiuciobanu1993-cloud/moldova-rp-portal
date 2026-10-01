@@ -150,7 +150,7 @@
 
         <div class="field rf-item wide"><label>Item (numele exact din ox_inventory)</label><input id="rf-item" placeholder="ex: WEAPON_AKVVSGOLD" list="known-items"></div>
         <div class="field rf-item"><label>Cantitate</label><input id="rf-count" type="number" min="1" step="1" value="1"></div>
-        <div class="field rf-item"><label>Gloanțe incluse (doar la arme)</label><input id="rf-ammo" type="number" min="0" max="1000" step="1" placeholder="ex: 100"><small class="hint">Câte gloanțe primește jucătorul odată cu arma, la <code>/recompense</code>. Serverul alege singur tipul de muniție potrivit armei. Lasă gol = fără gloanțe.</small></div>
+        <div class="field rf-item"><label>Gloanțe incluse (doar la arme)</label><input id="rf-ammo" type="number" min="0" max="1000" step="1" placeholder="ex: 100"><small class="hint" id="rf-ammo-hint">Câte gloanțe primește jucătorul cu acest premiu, la <code>/recompense</code> — în total, nu pe fiecare armă. Serverul alege singur muniția potrivită armei. Gol = fără gloanțe, maxim 1000.</small><small class="hint" id="rf-ammo-warn" style="color:var(--orange)" hidden></small></div>
         <div class="rf-item wide rf-wpn-preview" id="rf-wpn-preview" style="grid-column:1/-1" hidden></div>
 
         <div class="field rf-sell"><label>Valoare în coins</label><input id="rf-value-coins" type="number" min="0" step="1" placeholder="ex: 100"></div>
@@ -482,6 +482,25 @@ document.getElementById('case-form').addEventListener('submit', async (e) => {
   }
 });
 
+// (02.10.2026) Avertismente lângă „Gloanțe incluse":
+// - serverul de joc întoarce câmpul „ammo" pe fiecare recompensă abia după
+//   update-ul din 02.10 + restart; dacă lipsește, ce scrii aici nu se salvează;
+// - gloanțele de pușcă cu alice sunt grele (38 g bucata, inventarul are 40 kg).
+const HEAVY_AMMO_ITEMS = ['WEAPON_SOS', 'WEAPON_JAK12'];
+function updateAmmoWarn() {
+  const warn = document.getElementById('rf-ammo-warn');
+  if (!warn) return;
+  const all = casesCache.flatMap(c => c.pool || []);
+  const serverKnows = !all.length || all.some(r => 'ammo' in r);
+  const n = Math.floor(Number(document.getElementById('rf-ammo').value) || 0);
+  const item = document.getElementById('rf-item').value.trim().toUpperCase();
+  let msg = '';
+  if (!serverKnows) msg = '⚠ Serverul de joc nu ține încă minte gloanțele (trebuie pus update-ul și dat restart la moldovarp-api). Ce scrii aici nu se salvează deocamdată.';
+  else if (n > 1000) msg = '⚠ Maxim 1000 de gloanțe.';
+  else if (n > 100 && HEAVY_AMMO_ITEMS.includes(item)) msg = '⚠ Gloanțele de pușcă sunt grele (38 g bucata, inventarul are 40 kg). Pune cel mult ~100, altfel nu încap toate și jucătorul primește doar o parte.';
+  warn.textContent = msg;
+  warn.hidden = !msg;
+}
 // previzualizarea pozei când scrii numele armei în formular
 function updateWpnPreview() {
   const box = document.getElementById('rf-wpn-preview');
@@ -529,6 +548,7 @@ function openRewardModal(caseId, rewardId) {
   document.getElementById('rf-count').value = r ? (r.count || 1) : 1;
   document.getElementById('rf-ammo').value = (r && Number(r.ammo) > 0) ? Number(r.ammo) : '';
   editingReward.hadAmmo = !!(r && Number(r.ammo) > 0);
+  updateAmmoWarn();
   updateWpnPreview();
   document.getElementById('rf-model').value = (r && r.model) || '';
   document.getElementById('rf-value-coins').value = (r && r.value_coins) || '';
@@ -547,6 +567,8 @@ function closeRewardModal() {
 document.getElementById('rf-type').addEventListener('change', () => { updateRewardTypeFields(); updatePercentPreview(); });
 document.getElementById('rf-weight').addEventListener('input', updatePercentPreview);
 document.getElementById('rf-item').addEventListener('input', updateWpnPreview);
+document.getElementById('rf-item').addEventListener('input', updateAmmoWarn);
+document.getElementById('rf-ammo').addEventListener('input', updateAmmoWarn);
 document.getElementById('rf-label').addEventListener('input', updateWpnPreview);
 document.getElementById('reward-modal-close').addEventListener('click', closeRewardModal);
 document.getElementById('reward-cancel-btn').addEventListener('click', closeRewardModal);

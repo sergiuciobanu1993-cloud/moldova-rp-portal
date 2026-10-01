@@ -1696,7 +1696,7 @@ async function buildPlayerProfile(name, opts = {}) {
       `SELECT p.id, p.game_id, p.display_name, p.playtime_minutes, p.status, p.created_at,
               p.last_cash, p.last_bank, p.last_black_money, p.last_job, p.last_job_label,
               p.last_vehicles, p.last_synced_at, p.last_identifier, p.last_rp_name, p.last_static_id, p.last_server_playtime, p.last_grade_label,
-              u.id AS user_id, u.username, u.email, u.game_identifier, u.game_identifier_name,
+              u.id AS user_id, u.username, u.email, u.game_identifier, u.game_identifier_name, u.discord_id,
               f.name AS faction_name, fr.name AS rank_name
        FROM players p
        JOIN users u ON u.id = p.user_id
@@ -1725,23 +1725,33 @@ async function buildPlayerProfile(name, opts = {}) {
     fetchLuxuModeration({ player: cleanName }),
   ]);
 
+  const account = accountResult.rows[0] || null;
+
+  // (01.10.2026) Cont de site NELEGAT cu /leagacont, dar logat cu Discord:
+  // îi găsim personajul după Discord și îl folosim ca și cum ar fi legat.
+  let discordCharacters = [];
+  let effIdentifier = opts.identifier || null;
+  if (!effIdentifier && account && !account.game_identifier && account.discord_id) {
+    discordCharacters = await fetchGameCharsByDiscord(account.discord_id, liveDetail);
+    if (discordCharacters.length) effIdentifier = discordCharacters[0].identifier;
+  }
+
   const live = liveDetail.online
-    ? (liveDetail.players || []).find(p => opts.identifier
-        ? p.license === opts.identifier
+    ? (liveDetail.players || []).find(p => effIdentifier
+        ? p.license === effIdentifier
         : (p.name || "").toLowerCase().trim() === lower) || null
     : null;
-
-  const account = accountResult.rows[0] || null;
 
   // (29.09.2026) Offline și fără poză salvată pe site → căutăm în baza jocului,
   // ca profilul să arate ceva oriunde dai click pe un jucător.
   // Numele RP îl putem afla și din logurile lui din joc (fiecare log are
   // identificatorul și numele RP) — util când nu avem altă sursă.
-  const knownIdentifier = opts.identifier || account?.game_identifier || account?.last_identifier || null;
+  const knownIdentifier = effIdentifier || account?.game_identifier || account?.last_identifier || null;
   const ownLogs = (activityResult.logs || []).filter(l => !knownIdentifier || l.identifier === knownIdentifier);
   const rpFromLogs = ownLogs.find(l => l.rpName)?.rpName || null;
-  const gameHit = (!live && !(account && account.last_synced_at))
-    ? await fetchGamePlayerLookup({ identifier: knownIdentifier, name: opts.rpName || rpFromLogs || cleanName })
+  const discordPrimary = discordCharacters[0] || null;
+  const gameHit = (!live && (!(account && account.last_synced_at) || discordPrimary))
+    ? await fetchGamePlayerLookup({ identifier: knownIdentifier, name: opts.rpName || discordPrimary?.rpName || rpFromLogs || cleanName })
     : null;
   // Ultima dată văzut pe server, după loguri (dacă n-avem altă sursă).
   const lastSeenFromLogs = (activityResult.logs || []).reduce((m, l) => (l.at && (!m || new Date(l.at) > new Date(m))) ? l.at : m, null);
@@ -1770,13 +1780,13 @@ async function buildPlayerProfile(name, opts = {}) {
   // fără soluție posibilă fără ca jucătorul să-și facă cont sau să fie online.
   const assetsResult = await fetchAssets({
     player: cleanName,
-    identifier: live?.license || opts.identifier || gameHit?.identifier || account?.last_identifier || account?.game_identifier || undefined,
+    identifier: live?.license || effIdentifier || gameHit?.identifier || account?.last_identifier || account?.game_identifier || undefined,
     rpName: live?.serverName || gameHit?.rpName || account?.last_rp_name || account?.game_identifier_name || undefined,
   });
 
   // Cutiile deschise în VIP Shop (29.09.2026) — după identificatorul exact al
   // personajului (cel cu care se deschid cutiile pe site).
-  const vipIdentifier = live?.license || opts.identifier || gameHit?.identifier || account?.game_identifier || account?.last_identifier || null;
+  const vipIdentifier = live?.license || effIdentifier || gameHit?.identifier || account?.game_identifier || account?.last_identifier || null;
   const vipResult = vipIdentifier ? await fetchCaseHistory(vipIdentifier, 50) : { online: true, history: [] };
 
   let tickets = [];
@@ -1834,7 +1844,7 @@ async function buildPlayerProfile(name, opts = {}) {
 
   // Pentru un cont legat, arătăm poza salvată doar dacă e chiar a
   // personajului legat (nu una rămasă dintr-o potrivire veche după nume).
-  const snapshotIsOurs = !opts.identifier || !account?.last_identifier || account.last_identifier === opts.identifier;
+  const snapshotIsOurs = !effIdentifier || !account?.last_identifier || account.last_identifier === effIdentifier;
   let lastKnown = (!live && account && account.last_synced_at && snapshotIsOurs) ? {
     cash: account.last_cash, bank: account.last_bank, blackMoney: account.last_black_money,
     job: account.last_job, jobLabel: account.last_job_label,
@@ -1898,6 +1908,8 @@ async function buildPlayerProfile(name, opts = {}) {
     vipHistory: vipResult.online ? vipResult.history : null,
     lastSeenFromLogs,
     otherCharacters,
+    // personajele găsite după Discord (doar pentru conturi nelegate)
+    discordCharacters: discordCharacters.length ? discordCharacters : undefined,
   };
 }
 
@@ -2016,6 +2028,35 @@ app.post("/api/cont/leaga-joc", auth, asyncRoute(async (req, res) => {
     [result.identifier, result.name || null, req.user.sub]
   );
   res.json({ ok: true, name: result.name || null });
+}));
+
+// (01.10.2026) Legare fără cod, prin Discord: dacă te-ai logat pe site cu
+// Discord, îți arătăm personajele din joc care au același Discord și îl
+// alegi pe al tău. Verificăm din nou pe server la legare (nu ne bazăm pe ce
+// trimite browserul).
+app.get("/api/cont/personaje-discord", auth, asyncRoute(async (req, res) => {
+  const { rows } = await pool.query(`SELECT discord_id FROM users WHERE id = $1`, [req.user.sub]);
+  const discordId = rows[0]?.discord_id;
+  if (!discordId) return res.json({ hasDiscord: false, characters: [] });
+  const chars = await fetchGameCharsByDiscord(discordId);
+  res.json({ hasDiscord: true, characters: chars.map(c => ({ identifier: c.identifier, rpName: c.rpName, staticId: c.staticId, jobLabel: c.jobLabel || c.job, online: c.online, lastSeen: c.lastSeen })) });
+}));
+
+app.post("/api/cont/leaga-discord", auth, asyncRoute(async (req, res) => {
+  const identifier = String(req.body?.identifier || "").trim().slice(0, 120);
+  if (!identifier) return res.status(400).json({ error: "Alege un personaj." });
+  const { rows } = await pool.query(`SELECT discord_id FROM users WHERE id = $1`, [req.user.sub]);
+  const discordId = rows[0]?.discord_id;
+  if (!discordId) return res.status(400).json({ error: "Contul tău nu e logat cu Discord — folosește codul din joc (/leagacont)." });
+  const chars = await fetchGameCharsByDiscord(discordId);
+  const hit = chars.find(c => c.identifier === identifier);
+  if (!hit) return res.status(400).json({ error: "Personajul nu e legat de Discord-ul tău. Folosește codul din joc (/leagacont)." });
+  await pool.query(
+    `UPDATE users SET game_identifier = $1, game_identifier_name = $2 WHERE id = $3`,
+    [hit.identifier, hit.rpName || null, req.user.sub]
+  );
+  await logAction(req.user.sub, "account.link_game_discord", "user", req.user.sub, { identifier: hit.identifier, rpName: hit.rpName }, req.ip);
+  res.json({ ok: true, name: hit.rpName || null });
 }));
 
 app.post("/api/cont/dezleaga-joc", auth, asyncRoute(async (req, res) => {
@@ -3188,6 +3229,46 @@ function likeEscape(s) { return s.replace(/[\\%_]/g, "\\$&"); }
 // (29.09.2026) Profilul unui jucător OFFLINE, fără cont pe site: îl căutăm în
 // baza jocului — după identificator (dacă serverul știe "?identifier="), altfel
 // după numele RP exact. Întoarce null dacă nu găsim nimic sigur.
+// (01.10.2026) Personajele unui jucător după ID-ul lui de Discord. FiveM
+// știe Discord-ul fiecărui jucător (identificatorul „discord:…"), iar site-ul
+// îl știe din login — așa găsim personajul și pentru conturile nelegate cu
+// /leagacont. Online: din /players (câmpul „discord"); offline: din
+// /players/search?discord=<id>. Acceptăm doar rezultatele al căror câmp
+// „discord" chiar se potrivește, ca să nu legăm pe cineva greșit.
+const normDiscordId = v => String(v || "").replace(/^discord:/i, "").trim();
+async function fetchGameCharsByDiscord(discordId, liveDetail) {
+  const id = normDiscordId(discordId);
+  if (!/^\d{5,25}$/.test(id)) return [];
+  const byId = new Map();
+  const detail = liveDetail || await getPlayersDetail();
+  for (const p of detail.players || []) {
+    if (normDiscordId(p.discord) !== id || !p.license) continue;
+    byId.set(p.license, {
+      identifier: p.license, rpName: p.serverName || null, staticId: staticIdOf(p),
+      job: p.job || null, jobLabel: p.jobLabel || null, online: true, serverId: p.id ?? null, lastSeen: null,
+    });
+  }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
+  try {
+    const r = await fetch(`http://${FIVEM_ADDRESS}/moldovarp-api/players/search?discord=${encodeURIComponent(id)}`, {
+      headers: { "x-api-key": FIVEM_API_SECRET }, signal: controller.signal,
+    });
+    if (r.ok) {
+      const body = await r.json();
+      for (const p of Array.isArray(body.players) ? body.players : []) {
+        if (normDiscordId(p.discord) !== id || !p.identifier || byId.has(p.identifier)) continue;
+        byId.set(p.identifier, {
+          identifier: p.identifier, rpName: p.rpName || null, staticId: p.staticId != null ? String(p.staticId) : null,
+          job: p.job || null, jobLabel: p.jobLabel || null, online: !!p.online, serverId: p.serverId ?? null, lastSeen: p.lastSeen || null,
+        });
+      }
+    }
+  } catch { /* serverul nu răspunde — rămânem cu ce e online */ } finally { clearTimeout(timeout); }
+  // online întâi, apoi cel mai recent văzut
+  return [...byId.values()].sort((a, b) => (b.online - a.online) || (new Date(b.lastSeen || 0) - new Date(a.lastSeen || 0)));
+}
+
 async function fetchGamePlayerLookup({ identifier, name } = {}) {
   const get = async (qs) => {
     const controller = new AbortController();

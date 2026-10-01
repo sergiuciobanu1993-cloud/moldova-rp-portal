@@ -66,6 +66,10 @@
       <button type="submit">Leagă contul</button>
     </form>
     <p id="game-link-msg" class="muted" style="margin:10px 0 0" hidden></p>
+    <div id="discord-link-box" style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line)" hidden>
+      <p style="margin:0 0 10px"><b>Sau leagă-l direct, fără cod:</b> <span class="muted">am găsit personajele tale din joc după Discord.</span></p>
+      <div id="discord-link-list" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+    </div>
   </div>
 </section>
 <section class="panel" id="notify-panel" style="margin-top:20px" hidden>
@@ -327,6 +331,44 @@ function renderGameLink(me) {
   document.getElementById('game-link-panel').hidden = false;
   loadVipHistory();
   renderNotifySettings(me);
+  loadDiscordCharacters(me);
+}
+
+// (01.10.2026) Legare fără cod, prin Discord — doar pentru conturi
+// nelegate care s-au logat cu Discord.
+async function loadDiscordCharacters(me) {
+  const box = document.getElementById('discord-link-box');
+  box.hidden = true;
+  if (me.gameLinked || !me.discord_id) return;
+  try {
+    const res = await apiFetch('/api/cont/personaje-discord');
+    if (!res.ok) return;
+    const d = await res.json();
+    const list = document.getElementById('discord-link-list');
+    if (!d.characters || !d.characters.length) return;
+    list.innerHTML = '';
+    d.characters.forEach(c => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'btn-ghost';
+      b.textContent = `Leagă ${c.rpName || 'personajul'}${c.staticId ? ` #${c.staticId}` : ''}${c.online ? ' (online)' : ''}`;
+      b.addEventListener('click', async () => {
+        const msg = document.getElementById('game-link-msg');
+        list.querySelectorAll('button').forEach(x => { x.disabled = true; });
+        try {
+          const r = await apiFetch('/api/cont/leaga-discord', { method: 'POST', body: JSON.stringify({ identifier: c.identifier }) });
+          const rd = await r.json().catch(() => ({}));
+          if (!r.ok) throw new Error(rd.error || 'Nu am putut lega personajul.');
+          renderGameLink({ ...meCache, gameLinked: true, gameName: rd.name || c.rpName });
+        } catch (err) {
+          msg.hidden = false; msg.style.color = '#ff8a8a'; msg.textContent = err.message;
+          list.querySelectorAll('button').forEach(x => { x.disabled = false; });
+        }
+      });
+      list.appendChild(b);
+    });
+    box.hidden = false;
+  } catch { /* fără Discord / server oprit — rămâne doar codul */ }
 }
 
 // Notificări pe Discord / email (01.10.2026)

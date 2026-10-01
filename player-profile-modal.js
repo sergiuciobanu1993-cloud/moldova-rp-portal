@@ -250,7 +250,9 @@ window.openPlayerProfile = (function () {
         ${p.account.playtime_minutes != null ? ` · ${Math.round(p.account.playtime_minutes / 60)}h jucate` : ''}
         <br>${p.account.game_linked
           ? `<span class="pill on">LEGAT DE JOC</span> <span class="muted">personaj: ${escapeHtml(p.account.game_name || '—')}</span>`
-          : `<span class="pill warn">NELEGAT DE JOC</span> <span class="muted">— n-a folosit încă /leagacont</span>`}
+          : (p.discordCharacters || []).length
+            ? `<span class="pill info">GĂSIT DUPĂ DISCORD</span> <span class="muted">— n-a folosit /leagacont, dar personajele cu același Discord sunt: ${p.discordCharacters.map(c => `<b>${escapeHtml(c.rpName || c.identifier)}</b>${c.staticId ? ` #${escapeHtml(c.staticId)}` : ''}${c.online ? ' (online)' : ''}`).join(', ')}. Mai sus sunt datele ${p.discordCharacters.length > 1 ? 'primului' : 'lui'}.</span>`
+            : `<span class="pill warn">NELEGAT DE JOC</span> <span class="muted">— n-a folosit încă /leagacont</span>`}
       </p>` : `<p class="muted" style="margin:0 0 18px">Jucătorul nu are (încă) cont pe site.</p>`;
 
     const punishments = p.punishments.length ? `<table><thead><tr><th>TIP</th><th>MOTIV</th><th>DE CINE</th><th>CÂND</th></tr></thead><tbody>${

@@ -28,3 +28,12 @@
   .hero-imx .hx-scene{transform:none!important}
   .hero-imx .hx-smoke::before,.hero-imx .hx-smoke::after,.hero-imx .hx-grain{animation:none}
 }
+
+/* Buton mare „Deschide un tichet" în caseta din bannerul de sus (01.10.2026) */
+.hero-ticket-cta{display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:12px;border:1px solid rgba(255,138,31,.55);background:linear-gradient(135deg,rgba(255,138,31,.22),rgba(255,138,31,.06));color:#fff;text-decoration:none;transition:transform .18s ease,border-color .18s ease,background .18s ease;box-shadow:0 10px 26px rgba(255,138,31,.14)}
+.hero-ticket-cta:hover{transform:translateY(-2px);border-color:var(--orange,#ff8a1f);background:linear-gradient(135deg,rgba(255,138,31,.32),rgba(255,138,31,.1))}
+.hero-ticket-cta:focus-visible{outline:2px solid var(--orange,#ff8a1f);outline-offset:3px}
+.hero-ticket-icon{display:grid;place-items:center;width:42px;height:42px;border-radius:10px;background:var(--orange,#ff8a1f);font-size:22px;flex:none}
+.hero-ticket-cta strong{display:block;font-size:15px;line-height:1.2}
+.hero-ticket-cta small{display:block;margin-top:3px;color:#c8ccd0;font-size:11px;line-height:1.35}
+.hero-ticket-arrow{margin-left:auto;font-size:20px;font-weight:900;color:var(--orange,#ff8a1f)}

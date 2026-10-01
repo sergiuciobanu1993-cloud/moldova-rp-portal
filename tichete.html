@@ -1,5 +1,15 @@
 <!doctype html>
-<html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Tichetele mele — Moldova RP</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="dashboard.css"><link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/assets/app/apple-touch-icon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black"><meta name="apple-mobile-web-app-title" content="Moldova RP"><script src="/pwa.js" defer></script><meta name="theme-color" content="#090a0b">
+<html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Tichetele mele — Moldova RP</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="dashboard.css"><style>
+.ticket-rules{border-color:rgba(255,138,31,.35);background:linear-gradient(145deg,rgba(255,138,31,.08),transparent 60%),var(--panel)}
+.ticket-rules-lead{margin:0 0 12px;color:var(--text);font-weight:700}
+.ticket-rules-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.ticket-rules-list li{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border-radius:10px;background:rgba(255,255,255,.03);border:1px solid var(--line);line-height:1.5}
+.ticket-rules-list li span{font-size:18px;line-height:1.3;flex:none}
+.ticket-rules-list b{color:var(--orange)}
+.field .rules-check{display:flex;gap:10px;align-items:flex-start;cursor:pointer;text-transform:none;letter-spacing:0;font-weight:500;font-size:13px;line-height:1.5;color:var(--text)}
+.field .rules-check input{width:18px;height:18px;margin:2px 0 0;flex:none;accent-color:var(--orange)}
+.rules-check a{color:var(--orange)}
+</style><link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/assets/app/apple-touch-icon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black"><meta name="apple-mobile-web-app-title" content="Moldova RP"><script src="/pwa.js" defer></script><meta name="theme-color" content="#090a0b">
 </head>
 <body>
 <header><a class="brand" href="index.html"><img src="assets/logo.png" alt="">MOLDOVA<span>RP</span></a><nav><a href="index.html">Acasă</a><a href="dashboard.html">Dashboard</a><a href="index.html#regulamente">Regulamente</a></nav><a class="logout" href="login.html" id="logout-link">Deconectare</a></header>
@@ -11,6 +21,16 @@
 <section class="welcome" style="margin-top:16px">
   <div><p>SUPORT</p><h1>Tichete</h1><small>Raportează probleme, reclamații sau cereri către staff.</small></div>
   <button class="btn-primary" id="new-btn">+ Tichet nou</button>
+</section>
+
+<section class="panel ticket-rules" style="margin-top:24px" aria-labelledby="rules-title">
+  <div class="head"><h2 id="rules-title">📋 Condiții de acceptare</h2></div>
+  <p class="ticket-rules-lead">Tichetele se acceptă doar dacă respectă următoarele condiții:</p>
+  <ul class="ticket-rules-list">
+      <li><span>🎬</span><div>Filmarea conține <b>începutul RP-ului</b> cu persoana raportată. Orice filmare care nu are contextul întreg <b>nu poate fi acceptată</b>.</div></li>
+      <li><span>⏱️</span><div>Dacă RP-ul este <b>mai lung de 5 minute</b>, filmarea trebuie să fie de <b>minimum 5 minute</b>.</div></li>
+      <li><span>⏱️</span><div>Dacă RP-ul <b>nu este mai lung de 5 minute</b>, filmarea trebuie să fie de <b>minimum 2 minute</b> (de la începutul RP-ului).</div></li>
+  </ul>
 </section>
 
 <section class="panel" id="form-box" hidden style="margin-top:24px">
@@ -37,6 +57,9 @@
       <label>Link dovadă (obligatoriu)</label>
       <input id="f-evidence" type="url" required placeholder="https://streamable.com/... sau link Discord/YouTube">
       <small class="hint">Încarcă filmarea/poza pe Streamable, YouTube (nelistat) sau Discord, apoi lipește linkul aici. Tichetul nu poate fi trimis fără o dovadă.</small>
+    </div>
+    <div class="field rules-confirm" id="f-rules-wrap" hidden>
+      <label class="rules-check"><input type="checkbox" id="f-rules-ok"> <span>Am citit <a href="#rules-title">condițiile de acceptare</a>, iar filmarea mea conține începutul RP-ului și durata cerută (minimum 5 minute, sau minimum 2 minute dacă RP-ul a fost mai scurt).</span></label>
     </div>
     <p class="formmsg" id="form-msg" hidden></p>
     <div style="display:flex;gap:10px">
@@ -66,11 +89,14 @@ function hideForm() {
   document.getElementById('form-box').hidden = true;
   document.getElementById('ticket-form').reset();
   document.getElementById('f-reported-wrap').hidden = true;
+  document.getElementById('f-rules-wrap').hidden = true;
 }
 
 document.getElementById('f-category').addEventListener('change', (e) => {
   const isReclamatie = e.target.value === 'reclamatie';
   document.getElementById('f-reported-wrap').hidden = !isReclamatie;
+  document.getElementById('f-rules-wrap').hidden = !isReclamatie;
+  if (!isReclamatie) document.getElementById('f-rules-ok').checked = false;
   if (!isReclamatie) document.getElementById('f-reported-label').value = '';
 });
 
@@ -175,6 +201,12 @@ document.getElementById('ticket-form').addEventListener('submit', async (e) => {
   }
   const category = document.getElementById('f-category').value;
   const reportedLabel = document.getElementById('f-reported-label').value.trim();
+  if (category === 'reclamatie' && !document.getElementById('f-rules-ok').checked) {
+    msg.textContent = 'Bifează că filmarea respectă condițiile de acceptare (începutul RP-ului și durata minimă).';
+    msg.className = 'formmsg error';
+    msg.hidden = false;
+    return;
+  }
   if (category === 'reclamatie' && !reportedLabel) {
     msg.textContent = 'Scrie ID-ul sau numele jucătorului reclamat.';
     msg.className = 'formmsg error';

@@ -1408,11 +1408,18 @@ async function isLegalFactionMember(identifier, settings) {
 // primesc doar „nu e încă activ". Verificăm singuri la pornire și la 15 min;
 // cererea de verificare n-are identificator, deci nu poate face nimic în joc.
 const gameRouteReady = { sell: null, convert: null };
+let gameRoutesCheckedAt = null;
 async function probeGameRoutes() {
   for (const [key, path] of [["sell", "/cases/sell"], ["convert", "/cases/convert"]]) {
     const r = await vipShopAdminRequest("POST", path, {});
     if (r.status === 503) continue; // server oprit — nu știm, păstrăm ce aveam
-    gameRouteReady[key] = r.status !== 404;
+    const ready = r.status !== 404;
+    // (01.10.2026) scriem în jurnal când se schimbă starea, ca să vedem când
+    // colegul a pornit rutele pe serverul de joc
+    if (gameRouteReady[key] !== ready)
+      console.log(`Rută joc ${path}: ${ready ? `activă (răspuns HTTP ${r.status})` : "lipsește (404) — butoanele rămân ascunse"}.`);
+    gameRouteReady[key] = ready;
+    gameRoutesCheckedAt = new Date().toISOString();
   }
 }
 setTimeout(() => probeGameRoutes().catch(() => {}), 20_000);
@@ -2501,7 +2508,10 @@ app.get("/api/admin/vip-shop/schimb-legal", auth, requireRole(...ADMIN_ROLES), a
     );
     jobs = rows;
   } catch { /* fără listă — se pot adăuga manual */ }
-  res.json({ settings, jobs });
+  // starea rutelor din joc (vânzare / schimb) — verificată din nou dacă e mai veche de un minut
+  if (!gameRoutesCheckedAt || Date.now() - new Date(gameRoutesCheckedAt) > 60_000)
+    await probeGameRoutes().catch(() => {});
+  res.json({ settings, jobs, gameRoutes: { sell: gameRouteReady.sell, convert: gameRouteReady.convert, checkedAt: gameRoutesCheckedAt } });
 }));
 
 app.put("/api/admin/vip-shop/schimb-legal", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {

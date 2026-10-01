@@ -142,7 +142,9 @@ async function loadFinancial(force) {
     }
 
     offlineHelp.hidden = true;
-    statusNote.textContent = d.stale
+    statusNote.textContent = d.snapshot
+      ? `📦 Serverul de joc e offline — afișez ultimele date salvate (${new Date(d.savedAt).toLocaleString('ro-RO')}).`
+      : d.stale
       ? 'Date live (posibil ușor întârziate — ultima citire reușită de pe server).'
       : 'Date live, direct de pe serverul de joc.';
 

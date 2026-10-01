@@ -450,12 +450,40 @@ async function fetchFactionSnapshot() {
   }
 }
 
+// ---- Ultimele date bune, salvate în baza site-ului (01.10.2026) ----
+// Când serverul de joc e oprit, paginile de admin arată ultima poză reușită
+// (cu ora la care a fost salvată), nu „datele live nu sunt disponibile".
+// Salvăm cel mult o dată pe minut și NU salvăm o listă goală (ex. imediat
+// după un restart, cu 0 jucători), ca să nu ștergem poza bună de dinainte.
+const liveSnapshotSavedAt = new Map();
+function saveLiveSnapshot(key, data) {
+  const last = liveSnapshotSavedAt.get(key) || 0;
+  if (Date.now() - last < 60_000) return;
+  liveSnapshotSavedAt.set(key, Date.now());
+  const { stale, snapshot, savedAt, ...clean } = data || {};
+  pool.query(
+    `INSERT INTO live_snapshots(key, data, saved_at) VALUES ($1, $2, NOW())
+     ON CONFLICT (key) DO UPDATE SET data = EXCLUDED.data, saved_at = NOW()`,
+    [key, JSON.stringify(clean)]
+  ).catch(err => console.error(`Salvare snapshot ${key} eșuată:`, err.message));
+}
+async function loadLiveSnapshot(key) {
+  try {
+    const { rows } = await pool.query(`SELECT data, saved_at FROM live_snapshots WHERE key = $1`, [key]);
+    if (!rows[0]) return null;
+    return { ...rows[0].data, online: true, stale: true, snapshot: true, savedAt: rows[0].saved_at };
+  } catch {
+    return null;
+  }
+}
+
 async function getFactionSnapshot(force) {
   const age = Date.now() - factionCache.fetchedAt;
   if (!force && factionCache.data && age < FACTIONS_CACHE_MS) return factionCache.data;
   try {
     const data = await fetchFactionSnapshot();
     factionCache = { data, fetchedAt: Date.now() };
+    if (data.online && (data.factions || []).some(f => f.online > 0)) saveLiveSnapshot("factions", data);
     return data;
   } catch {
     if (factionCache.data) return { ...factionCache.data, stale: true };
@@ -479,7 +507,8 @@ app.get("/api/live/factions", asyncRoute(async (_req, res) => {
 }));
 
 app.get("/api/admin/live/factions", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
-  res.json(await getFactionSnapshot(req.query.force === "1"));
+  const data = await getFactionSnapshot(req.query.force === "1");
+  res.json(data.online ? data : (await loadLiveSnapshot("factions")) || data);
 }));
 
 // Detaliu per-jucător (bani + vehicule), tot din moldovarp-api — vezi
@@ -526,6 +555,7 @@ async function getPlayersDetail(force) {
   try {
     const data = await fetchPlayersDetail();
     playersDetailCache = { data, fetchedAt: Date.now() };
+    if ((data.players || []).length) saveLiveSnapshot("players", data);
     return data;
   } catch {
     if (playersDetailCache.data) return { ...playersDetailCache.data, stale: true };
@@ -534,7 +564,9 @@ async function getPlayersDetail(force) {
 }
 
 app.get("/api/admin/live/players", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
-  res.json(await getPlayersDetail(req.query.force === "1"));
+  const data = await getPlayersDetail(req.query.force === "1");
+  // doar pentru admin: pe site-ul public NU arătăm jucători „online" vechi
+  res.json(data.online ? data : (await loadLiveSnapshot("players")) || data);
 }));
 
 // "Ultima dată văzut" — la fiecare 60 de secunde, indiferent dacă cineva se
@@ -825,10 +857,11 @@ app.get("/api/admin/live/jobs", auth, requireRole(...ADMIN_ROLES), asyncRoute(as
     const body = await r.json();
     const data = { online: true, jobs: body.jobs || [] };
     jobsCache = { data, fetchedAt: Date.now() };
+    if (data.jobs.length) saveLiveSnapshot("jobs", data);
     res.json(data);
   } catch {
     if (jobsCache.data) return res.json({ ...jobsCache.data, stale: true });
-    res.json({ online: false, jobs: [] });
+    res.json((await loadLiveSnapshot("jobs")) || { online: false, jobs: [] });
   } finally {
     clearTimeout(timeout);
   }
@@ -1659,7 +1692,22 @@ app.get("/api/admin/live/moderation", auth, requireRole(...MOD_ROLES), asyncRout
 app.get("/api/admin/live/assets", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
   const player = req.query.player ? String(req.query.player).trim().slice(0, 64) : "";
   const result = await fetchAssets({ player });
-  res.json(result);
+  if (result.online) {
+    const any = ["houses", "businesses", "gasStations", "stores", "gangs"].some(k => (result[k] || []).length);
+    if (!player && any) saveLiveSnapshot("assets", result);
+    return res.json(result);
+  }
+  // Server oprit → ultima listă completă salvată; cu filtru, o filtrăm aici
+  // după numele proprietarului / creatorului / găștii.
+  const snap = await loadLiveSnapshot("assets");
+  if (!snap) return res.json(result);
+  if (player) {
+    const q = player.toLowerCase();
+    const has = v => String(v || "").toLowerCase().includes(q);
+    const match = o => o && Object.entries(o).some(([k, v]) => /owner|name|creator|nick|label|member|leader/i.test(k) && (typeof v === "string" ? has(v) : Array.isArray(v) && v.some(x => typeof x === "string" ? has(x) : x && Object.values(x).some(has))));
+    for (const k of ["houses", "businesses", "gasStations", "stores", "gangs"]) snap[k] = (snap[k] || []).filter(match);
+  }
+  res.json(snap);
 }));
 
 // ---------------------------------------------------------------------------

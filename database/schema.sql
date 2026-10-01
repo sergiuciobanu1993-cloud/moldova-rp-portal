@@ -595,3 +595,13 @@ CREATE TABLE IF NOT EXISTS vip_settings (
 -- Fiecare le poate opri din Contul meu.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS notify_discord BOOLEAN NOT NULL DEFAULT TRUE;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS notify_email BOOLEAN NOT NULL DEFAULT TRUE;
+
+-- Ultimele date live salvate (01.10.2026). Când serverul de joc e oprit sau
+-- resursa moldovarp-api nu răspunde, paginile de admin arată ultima poză
+-- bună (jucători, facțiuni, joburi, proprietăți) în loc de „nu sunt date".
+-- key: 'players' | 'factions' | 'jobs' | 'assets'
+CREATE TABLE IF NOT EXISTS live_snapshots (
+  key VARCHAR(40) PRIMARY KEY,
+  data JSONB NOT NULL,
+  saved_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

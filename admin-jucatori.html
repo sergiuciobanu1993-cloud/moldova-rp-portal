@@ -191,7 +191,9 @@ async function loadPlayers(force) {
     }
 
     offlineHelp.hidden = true;
-    statusNote.textContent = d.stale
+    statusNote.textContent = d.snapshot
+      ? `📦 Serverul de joc e offline — afișez ultimele date salvate (${fmtDate(d.savedAt)}): ${d.players.length} jucători erau online atunci.`
+      : d.stale
       ? `${d.players.length} jucători online — date posibil ușor întârziate.`
       : `${d.players.length} jucători online — date live.`;
 
@@ -220,7 +222,7 @@ async function loadJobs() {
       tbody.innerHTML = '<tr><td colspan="2">Fără date momentan.</td></tr>';
       return;
     }
-    countNote.textContent = `${d.jobs.length} joburi`;
+    countNote.textContent = d.snapshot ? `${d.jobs.length} joburi · salvate ${fmtDate(d.savedAt)}` : `${d.jobs.length} joburi`;
     tbody.innerHTML = d.jobs.map(j => `
       <tr><td><code>${j.name}</code></td><td>${j.label || '<span class="muted">—</span>'}</td></tr>`).join('');
   } catch {
@@ -249,7 +251,8 @@ async function loadHouses() {
     const res = await apiFetch(`/api/admin/live/assets${qs}`);
     if (!res.ok) throw new Error();
     const d = await res.json();
-    offlineNote.hidden = d.online !== false;
+    offlineNote.hidden = d.online !== false && !d.snapshot;
+    if (d.snapshot) offlineNote.textContent = `📦 Serverul de joc e offline — ultimele date salvate (${fmtDate(d.savedAt)}).`;
     const houses = d.houses || [];
     tbody.innerHTML = houses.length ? houses.map(h => `
       <tr>
@@ -285,7 +288,8 @@ async function loadBusinesses() {
     const res = await apiFetch('/api/admin/live/assets');
     if (!res.ok) throw new Error();
     const d = await res.json();
-    offlineNote.hidden = d.online !== false;
+    offlineNote.hidden = d.online !== false && !d.snapshot;
+    if (d.snapshot) offlineNote.textContent = `📦 Serverul de joc e offline — ultimele date salvate (${fmtDate(d.savedAt)}).`;
 
     const businesses = d.businesses || [];
     tbody.innerHTML = businesses.length ? businesses.map(b => `
@@ -333,7 +337,8 @@ async function loadGangs() {
     const res = await apiFetch(`/api/admin/live/assets${qs}`);
     if (!res.ok) throw new Error();
     const d = await res.json();
-    offlineNote.hidden = d.online !== false;
+    offlineNote.hidden = d.online !== false && !d.snapshot;
+    if (d.snapshot) offlineNote.textContent = `📦 Serverul de joc e offline — ultimele date salvate (${fmtDate(d.savedAt)}).`;
     const gangs = d.gangs || [];
     tbody.innerHTML = gangs.length ? gangs.map(g => `
       <tr>

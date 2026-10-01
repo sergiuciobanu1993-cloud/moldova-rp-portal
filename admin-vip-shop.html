@@ -171,7 +171,7 @@
 
 </main>
 <script src="auth-client.js"></script>
-<script src="vip-weapons.js?v=20261001b"></script>
+<script src="vip-weapons.js?v=20261001c"></script>
 <script>
 const THEMES = {
   rare: { img: 'assets/vip-cases/rare.webp', label: 'Rare' },
@@ -487,7 +487,10 @@ function updateWpnPreview() {
   const box = document.getElementById('rf-wpn-preview');
   if (!box) return;
   const w = window.MRPWeapons ? MRPWeapons.find(document.getElementById('rf-item').value.trim(), document.getElementById('rf-label').value) : null;
-  box.hidden = !w;
+  const itemTxt = document.getElementById('rf-item').value.trim();
+  const noPhoto = !w && /^weapon_/i.test(itemTxt);
+  box.hidden = !w && !noPhoto;
+  if (noPhoto) box.innerHTML = `<div style="padding:10px 14px;border:1px dashed var(--line);border-radius:10px;color:var(--muted);font-size:12px">Pentru <code>${escapeHtml(itemTxt)}</code> nu există încă o poză pe site — în VIP Shop apare cu 🔫. Trimite poza armei din inventar ca să fie adăugată.</div>`;
   if (w) box.innerHTML = `<div style="display:flex;align-items:center;gap:14px;padding:10px 14px;border:1px solid var(--line);border-radius:10px;background:radial-gradient(ellipse at 15% 50%,${w.accent}22,transparent 60%)"><img src="${w.src}" alt="" style="width:120px;height:80px;object-fit:contain;filter:drop-shadow(0 0 10px ${w.accent}77)"><div><b>${escapeHtml(w.name)}</b><br><small class="muted">Poza apare automat în VIP Shop pentru <code>${escapeHtml(w.item)}</code></small></div></div>`;
 }
 // ---------- Modal recompensă ----------

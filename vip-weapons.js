@@ -7,6 +7,7 @@
 // recompensa nu are itemul, după eticheta ei (ex. „Draco Gold VVS").
 (() => {
   const W = {
+  "WEAPON_300BOVVSGOLD": ["#ffc93c", "300 BLACKOUT GOLD VVS"],
   "WEAPON_AKV9": ["#ffe22d", "AKV9 VVS"],
   "WEAPON_AUGVVSBLACK": ["#aab3c2", "AUG BLACK VVS"],
   "WEAPON_AUGVVSBLUE": ["#3b6dff", "AUG BLUE VVS"],

@@ -222,32 +222,92 @@ async function deliverExternal(userId, { title, message, link, emailFallback = t
   if (emailFallback && u.notify_email && u.email) await sendNotificationEmail(u.email, { title, message, link });
 }
 
-// Tichet nou → anunțăm staff-ul. Dacă e setat DISCORD_TICKETS_WEBHOOK (un
-// webhook dintr-un canal de staff), postăm acolo o singură dată; altfel
-// trimitem mesaj privat fiecărui moderator/admin cu Discord legat.
-async function notifyStaffNewTicket(ticket, authorName) {
-  const cat = { general: "General", bug: "Bug", reclamatie: "Reclamație", ban_appeal: "Contestație" }[ticket.category] || ticket.category;
-  const title = `🎫 Tichet nou: ${String(ticket.subject || "").slice(0, 120)}`;
-  const message = `${cat} · deschis de ${authorName || "un jucător"}${ticket.reported_player_label ? ` · despre ${ticket.reported_player_label}` : ""}`;
-  const link = `admin-tichete.html?id=${ticket.id}`;
+// (01.10.2026, cerut de Sergiu) Staff-ul NU primește mesaje private: tot ce
+// e pentru staff (tichet nou, răspuns de la jucător) merge într-un singur
+// canal de staff pe Discord. Mesajele private sunt doar pentru jucători
+// (cel reclamat, autorul tichetului).
+// Canalul: webhook-ul din DISCORD_TICKETS_WEBHOOK (făcut de Sergiu în canalul
+// de staff) are prioritate; dacă lipsește sau pică, botul site-ului scrie în
+// canalul DISCORD_STAFF_CHANNEL_ID. La tichet nou sunt etichetați
+// administratorii: rolurile din DISCORD_STAFF_ROLE_IDS (id-uri separate prin
+// virgulă) sau, dacă nu e setat, rolurile din server care au „admin” în nume.
+const STAFF_CHANNEL_ID = String(process.env.DISCORD_STAFF_CHANNEL_ID || "1516940531697979565").replace(/\D/g, "");
+function staffWebhookUrl() {
   const hook = process.env.DISCORD_TICKETS_WEBHOOK || "";
-  if (/^https:\/\/(\w+\.)?discord(app)?\.com\/api\/webhooks\//i.test(hook)) {
+  return /^https:\/\/(\w+\.)?discord(app)?\.com\/api\/webhooks\//i.test(hook) ? hook : null;
+}
+let staffRolesCache = { at: 0, ids: [] };
+async function staffMentionRoles() {
+  const fromEnv = String(process.env.DISCORD_STAFF_ROLE_IDS || "").split(/[\s,;]+/).map(x => x.replace(/\D/g, "")).filter(Boolean);
+  if (fromEnv.length) return fromEnv.slice(0, 10);
+  if (!DISCORD_LOGS_BOT_TOKEN) return [];
+  if (Date.now() - staffRolesCache.at < 60 * 60 * 1000) return staffRolesCache.ids;
+  staffRolesCache = { at: Date.now(), ids: [] };
+  try {
+    let guild_id = null;
+    const hook = staffWebhookUrl();
+    if (hook) {
+      const wr = await fetch(hook).catch(() => null);
+      if (wr && wr.ok) guild_id = (await wr.json()).guild_id || null;
+    }
+    if (!guild_id && STAFF_CHANNEL_ID) {
+      const ch = await discordBotRequest("GET", `/channels/${STAFF_CHANNEL_ID}`);
+      if (ch.ok) guild_id = (await ch.json()).guild_id || null;
+    }
+    if (!guild_id) { console.warn("Canal staff Discord: nu găsesc serverul de Discord pentru tag."); return []; }
+    const rr = await discordBotRequest("GET", `/guilds/${guild_id}/roles`);
+    if (!rr.ok) { console.warn(`Canal staff Discord: nu pot citi rolurile (HTTP ${rr.status}).`); return []; }
+    const roles = (await rr.json()).filter(r => /admin/i.test(r.name || "") && !r.managed);
+    staffRolesCache.ids = roles.map(r => r.id).slice(0, 10);
+    const names = roles.map(r => `„${r.name}”`).join(", ") || "(niciun rol cu „admin” în nume)";
+    console.log(`Canal staff Discord: etichetez rolurile ${names}.`);
+  } catch (err) {
+    console.warn("Canal staff Discord: rolurile nu s-au putut citi:", err.message);
+  }
+  return staffRolesCache.ids;
+}
+async function postStaffChannel({ title, message, link, color = 0xff8a1f, mentionAdmins = false }) {
+  const url = absoluteSiteLink(link);
+  const roles = mentionAdmins ? await staffMentionRoles() : [];
+  const payload = {
+    content: roles.length ? roles.map(id => `<@&${id}>`).join(" ") : undefined,
+    allowed_mentions: { parse: [], roles },
+    embeds: [{ title: String(title).slice(0, 250), description: `${String(message || "").slice(0, 1800)}\n\n[Deschide în panou →](${url})`, url, color, timestamp: new Date().toISOString() }],
+  };
+  const hook = staffWebhookUrl();
+  if (hook) {
     try {
-      await fetch(hook, {
+      const r = await fetch(hook, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ embeds: [{ title, description: `${message}\n\n[Deschide în panou →](${absoluteSiteLink(link)})`, url: absoluteSiteLink(link), color: 0xff8a1f, timestamp: new Date().toISOString() }] }),
+        body: JSON.stringify({ username: "Moldova RP · Tichete", ...payload }),
       });
-    } catch (err) { console.error("Webhook tichete eșuat:", err.message); }
-    return;
+      if (r.ok) return true;
+      console.warn(`Webhook staff Discord: HTTP ${r.status}.`);
+    } catch (err) {
+      console.warn("Webhook staff Discord eșuat:", err.message);
+    }
   }
-  const { rows } = await pool.query(
-    `SELECT u.id FROM users u JOIN roles r ON r.id = u.role_id WHERE r.name = ANY($1) AND u.discord_id IS NOT NULL AND u.notify_discord`,
-    [MOD_ROLES]
-  );
-  for (const r of rows) {
-    deliverExternal(r.id, { title, message, link, emailFallback: false }).catch(() => {});
+  if (DISCORD_LOGS_BOT_TOKEN && STAFF_CHANNEL_ID) {
+    try {
+      const r = await discordBotRequest("POST", `/channels/${STAFF_CHANNEL_ID}/messages`, payload);
+      if (r.ok) return true;
+      console.warn(`Canal staff Discord: botul nu poate scrie în canal (HTTP ${r.status}).`);
+    } catch (err) {
+      console.warn("Canal staff Discord eșuat:", err.message);
+    }
   }
+  return false;
+}
+
+async function notifyStaffNewTicket(ticket, authorName) {
+  const cat = { general: "General", bug: "Bug", reclamatie: "Reclamație", ban_appeal: "Contestație" }[ticket.category] || ticket.category;
+  await postStaffChannel({
+    title: `🎫 Tichet nou: ${String(ticket.subject || "").slice(0, 120)}`,
+    message: `**${cat}** · deschis de ${authorName || "un jucător"}${ticket.reported_player_label ? ` · despre **${ticket.reported_player_label}**` : ""}`,
+    link: `admin-tichete.html?id=${ticket.id}`,
+    mentionAdmins: true,
+  });
 }
 
 async function reportedUserIdOf(ticket) {
@@ -301,15 +361,30 @@ async function notifyTicketReply(ticketId, ticket, replierId, { fromStaff }) {
       link,
     });
   }
-  if (!fromStaff && ticket.assigned_to && ticket.assigned_to !== replierId && !targets.has(ticket.assigned_to)) {
-    targets.set(ticket.assigned_to, {
-      title: "Răspuns nou într-un tichet preluat de tine",
-      message: `Jucătorul a răspuns în tichetul „${subject}”.`,
-      link: `admin-tichete.html?id=${ticketId}`,
-    });
-  }
   for (const [uid, n] of targets) {
     await notifyUser(uid, { type: "ticket_reply", ...n, external: true, dedupeKey: `reply:${ticketId}` });
+  }
+  // Staff-ul: doar în panou (clopoțel) pentru cel care a preluat tichetul și
+  // un mesaj în canalul de staff — fără mesaje private.
+  if (!fromStaff) {
+    if (ticket.assigned_to && ticket.assigned_to !== replierId) {
+      await notifyUser(ticket.assigned_to, {
+        type: "ticket_reply",
+        title: "Răspuns nou într-un tichet preluat de tine",
+        message: `Jucătorul a răspuns în tichetul „${subject}”.`,
+        link: `admin-tichete.html?id=${ticketId}`,
+      });
+    }
+    const k = `staffreply|${ticketId}`;
+    if (Date.now() - (externalSentAt.get(k) || 0) >= EXTERNAL_COOLDOWN_MS) {
+      externalSentAt.set(k, Date.now());
+      await postStaffChannel({
+        title: `💬 Răspuns nou de la jucător: ${subject}`,
+        message: "Jucătorul a scris un răspuns nou în tichet.",
+        link: `admin-tichete.html?id=${ticketId}`,
+        color: 0x7db2ff,
+      });
+    }
   }
 }
 
@@ -3449,24 +3524,65 @@ app.get("/api/admin/players/search", auth, requireRole(...MOD_ROLES), asyncRoute
 // numeric sau nume exact) ca să legăm structurat tichetul de players — dacă
 // nu găsim nimic, tichetul se salvează oricum, cu textul scris de reclamant.
 async function resolveReportedPlayer(label) {
+  // (01.10.2026) Rescris după un test în care notificarea „ai fost reclamat"
+  // a ajuns la alt om: înainte, un număr scris de jucător (ex. ID-ul de pe
+  // server din F10) era comparat și cu ID-ul INTERN al contului de pe site
+  // (players.game_id), iar conturile vechi (fondator, developer) au ID-uri
+  // mici — deci „#2" sau „5" putea nimeri contul lor. Acum găsim întâi
+  // PERSONAJUL din joc (ID static sau ID de server, apoi numele RP exact) și
+  // abia apoi contul de site legat de acel personaj. Dacă nu suntem siguri,
+  // nu legăm reclamația de nimeni (mai bine nicio notificare decât una greșită).
   const text = (label || "").trim();
   if (!text) return null;
-  // "Santta Klauss #336" (formatul pus de lista de căutare) — ID-ul static
-  // are prioritate; altfel nume exact (de pe site sau RP) ori ID numeric.
   const staticMatch = text.match(/#\s*([A-Za-z0-9]+)/);
-  if (staticMatch) {
-    const { rows } = await pool.query(`SELECT id FROM players WHERE last_static_id = $1 LIMIT 1`, [staticMatch[1]]);
-    if (rows[0]) return rows[0].id;
-  }
+  const staticId = staticMatch ? staticMatch[1] : null;
   const name = text.replace(/#\s*[A-Za-z0-9]+/, "").replace(/\(.*?\)/g, "").trim();
-  if (!name) return null;
+  const bareNum = !staticId && /^\d+$/.test(name) ? name : null;
+  const num = staticId || bareNum;
+
+  let identifier = null;
+  const live = (await getPlayersDetail()).players || [];
+  if (num) {
+    // „#336" = ID static; un număr simplu („91") = ID-ul de pe server (F10)
+    // al unui jucător online acum, apoi ID static
+    const hit = bareNum
+      ? (live.find(p => String(p.id) === bareNum) || live.find(p => staticIdOf(p) === bareNum))
+      : live.find(p => staticIdOf(p) === num);
+    identifier = hit?.license || null;
+    if (!identifier) {
+      const g = (await fetchGamePlayerSearch(num)).find(p => p.staticId != null && String(p.staticId) === num);
+      identifier = g?.identifier || null;
+    }
+  } else if (name.length >= 3) {
+    const exact = live.filter(p => String(p.serverName || "").toLowerCase() === name.toLowerCase());
+    if (exact.length === 1) identifier = exact[0].license || null;
+    if (!identifier) identifier = (await fetchGamePlayerLookup({ name }))?.identifier || null;
+  }
+
+  if (identifier) {
+    const { rows } = await pool.query(
+      `SELECT p.id FROM players p LEFT JOIN users u ON u.id = p.user_id
+       WHERE u.game_identifier = $1 OR p.last_identifier = $1
+       ORDER BY COALESCE(u.game_identifier = $1, false) DESC, p.last_synced_at DESC NULLS LAST
+       LIMIT 1`,
+      [identifier]
+    );
+    // personaj găsit, dar fără cont pe site → nimeni de notificat
+    return rows[0]?.id || null;
+  }
+  // Serverul de joc nu răspunde: ne bazăm doar pe ce a salvat site-ul, și
+  // doar dacă potrivirea e UNICĂ.
+  // (un număr simplu fără „#" nu-l ghicim offline: poate fi un ID de server vechi)
+  if (staticId) {
+    const { rows } = await pool.query(`SELECT id FROM players WHERE last_static_id = $1 LIMIT 2`, [staticId]);
+    return rows.length === 1 ? rows[0].id : null;
+  }
+  if (!name || bareNum) return null;
   const { rows } = await pool.query(
-    `SELECT id FROM players
-     WHERE CAST(game_id AS TEXT) = $1 OR last_static_id = $1 OR display_name ILIKE $2 OR last_rp_name ILIKE $2
-     LIMIT 1`,
-    [name, likeEscape(name)]
+    `SELECT id FROM players WHERE last_rp_name ILIKE $1 OR display_name ILIKE $1 LIMIT 2`,
+    [likeEscape(name)]
   );
-  return rows[0]?.id || null;
+  return rows.length === 1 ? rows[0].id : null;
 }
 
 app.get("/api/tickets", auth, asyncRoute(async (req, res) => {

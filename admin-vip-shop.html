@@ -16,6 +16,30 @@
   .case-tier-badge.epic{background:rgba(120,170,255,.15);color:#7db2ff;border:1px solid rgba(120,170,255,.3)}
   .case-tier-badge.legendara{background:rgba(255,179,71,.15);color:#ffb347;border:1px solid rgba(255,179,71,.3)}
   .reward-detail{color:var(--muted);font-size:11px}
+  /* (02.10.2026) Pe telefon tabelul era tăiat în dreapta și nu se putea
+     derula (cutia avea overflow:hidden). Acum: tabelul se poate derula
+     lateral, iar sub 700px fiecare recompensă devine un card pe toată
+     lățimea, cu butoanele dedesubt — fără derulare în lateral. */
+  .case-table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  @media(max-width:700px){
+    .case-block-head{padding:14px 14px}
+    .reward-table{min-width:0!important;display:block}
+    .reward-table thead{display:none}
+    .reward-table tbody{display:block}
+    .reward-table tr{display:grid;grid-template-columns:22px minmax(0,1fr) auto;grid-template-areas:"drag label pct" "drag detail detail" "acts acts acts";column-gap:10px;row-gap:6px;padding:12px 14px;border-top:1px solid var(--line);align-items:center}
+    .reward-table td{padding:0;border:0;min-width:0}
+    .reward-table .rw-drag{grid-area:drag;align-self:start;padding-top:2px}
+    .reward-table .rw-label{grid-area:label;font-size:13px;font-weight:700;color:var(--text);overflow-wrap:anywhere}
+    .reward-table .rw-pct{grid-area:pct;white-space:nowrap;font-variant-numeric:tabular-nums}
+    .reward-table .rw-pct .percent-bar{width:34px}
+    .reward-table .rw-type{display:none}
+    .reward-table .reward-detail{grid-area:detail;overflow-wrap:anywhere}
+    .reward-table .rowactions{grid-area:acts;flex-wrap:wrap;margin-top:4px}
+    .reward-table .rowactions button{padding:8px 12px;min-height:36px}
+    .reward-table td[colspan]{grid-column:1/-1}
+    .add-reward-row{padding:12px 14px}
+    .lx-pct input[type=range]{width:100%;min-width:0;flex:1}
+  }
   .add-reward-row{padding:14px 22px}
   .percent-bar{display:inline-block;width:46px;height:5px;border-radius:3px;background:rgba(255,255,255,.08);overflow:hidden;vertical-align:1px;margin-right:7px}
   .percent-bar i{display:block;height:100%;background:var(--orange)}
@@ -254,14 +278,14 @@ function renderCases() {
           <button type="button" class="btn-ghost" data-del-case="${escapeHtml(c.id)}" style="color:#ff8a8a">Șterge cutia</button>
         </div>
       </div>
-      <table><thead><tr><th title="Trage de ⠿ ca să schimbi ordinea"></th><th>ȘANSĂ</th><th>TIP</th><th>ETICHETĂ</th><th>DETALII</th><th></th></tr></thead>
+      <div class="case-table-scroll"><table class="reward-table"><thead><tr><th title="Trage de ⠿ ca să schimbi ordinea"></th><th>ȘANSĂ</th><th>TIP</th><th>ETICHETĂ</th><th>DETALII</th><th></th></tr></thead>
       <tbody>
         ${rows.length ? rows.map(r => `
           <tr draggable="true" data-rid="${r.id}" data-case="${escapeHtml(c.id)}">
-            <td><span class="drag-handle" title="Trage ca să muți">⠿</span></td>
-            <td><span class="percent-bar"><i style="width:${Math.min(100, r.percent)}%"></i></span>${r.percent}%</td>
-            <td>${TYPE_ICON[r.type] || ''} ${r.type}</td>
-            <td>${wpnThumb(r)}${escapeHtml(r.label)}</td>
+            <td class="rw-drag"><span class="drag-handle" title="Trage ca să muți">⠿</span></td>
+            <td class="rw-pct"><span class="percent-bar"><i style="width:${Math.min(100, r.percent)}%"></i></span>${r.percent}%</td>
+            <td class="rw-type">${TYPE_ICON[r.type] || ''} ${r.type}</td>
+            <td class="rw-label">${wpnThumb(r)}${escapeHtml(r.label)}</td>
             <td class="reward-detail">${rewardDetailHtml(r)}</td>
             <td class="rowactions">
               <button type="button" data-move="-1" data-rid="${r.id}" data-case="${escapeHtml(c.id)}" title="Mută mai sus">↑</button>
@@ -270,7 +294,7 @@ function renderCases() {
               <button type="button" class="danger" data-del-reward="${r.id}" data-case="${escapeHtml(c.id)}">Șterge</button>
             </td>
           </tr>`).join('') : '<tr><td colspan="6" class="muted">Nicio recompensă încă în această cutie.</td></tr>'}
-      </tbody></table>
+      </tbody></table></div>
       <div class="add-reward-row"><button type="button" class="btn-ghost" data-add-reward="${escapeHtml(c.id)}">+ Adaugă recompensă</button><span class="order-saved" data-order-msg="${escapeHtml(c.id)}"></span></div>
     </div>`;
   }).join('');

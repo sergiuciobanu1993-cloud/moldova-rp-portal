@@ -126,7 +126,7 @@ document.getElementById('ann-form').addEventListener('submit', async (e) => {
 });
 
 (async () => {
-  const me = await requireRole('admin', 'co-fondator', 'owner');
+  const me = await requireRole('co-fondator', 'owner');
   if (!me) return;
   document.getElementById('admin-name').textContent = me.username;
   loadList();

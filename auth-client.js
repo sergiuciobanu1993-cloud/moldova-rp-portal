@@ -45,6 +45,56 @@ function requireAuth() {
   return auth;
 }
 
+// (03.10.2026, cerut de Sergiu) Cine vede ce în panoul de administrare:
+//   • moderator → Tichete, Loguri, Kill Logs, Caută jucător, Sancțiuni
+//   • admin     → tot ce are moderatorul + Jucători
+//   • co-fondator / fondator → toate paginile
+// Aceleași reguli sunt aplicate și pe server (backend/server.js), deci
+// ascunderea linkurilor de aici e doar ca meniul să arate curat — datele
+// sunt oricum refuzate de server pentru gradele fără acces.
+const PANEL_FOUNDERS = ["co-fondator", "owner"];
+const PANEL_ADMINS = ["admin", "co-fondator", "owner"];
+const PANEL_MODS = ["moderator", "admin", "co-fondator", "owner"];
+const PANEL_ACCESS = {
+  "admin-tichete.html": PANEL_MODS,
+  "admin-loguri.html": PANEL_MODS,
+  "admin-kill-logs.html": PANEL_MODS,
+  "admin-cauta.html": PANEL_MODS,
+  "admin-sanctiuni.html": PANEL_MODS,
+  "admin-jucatori.html": PANEL_ADMINS,
+};
+function panelRolesFor(file) {
+  return PANEL_ACCESS[file] || PANEL_FOUNDERS;   // orice altă pagină admin*.html = doar fondatorii
+}
+// Prima pagină din panou pe care o poate deschide un grad (pentru linkul
+// „Admin Panel" din Contul meu și pentru redirecționări).
+function panelHomeFor(role) {
+  if (PANEL_FOUNDERS.includes(role)) return "admin.html";
+  if (PANEL_MODS.includes(role)) return "admin-tichete.html";
+  return "dashboard.html";
+}
+// Ascunde din meniul din stânga linkurile la care gradul nu are acces
+// (le ascunde, nu le șterge — dacă gradul s-a schimbat între timp, a doua
+// trecere, cu gradul confirmat de server, le arată la loc).
+function filterPanelNav(role) {
+  document.querySelectorAll("aside.side > a:not(.brand):not(.back)").forEach(a => {
+    const href = a.getAttribute("href");
+    let allowed = true;
+    if (!href) allowed = PANEL_FOUNDERS.includes(role);                     // rubrici încă nefăcute (Reclamații, CK, Audit)
+    else {
+      const file = href.split(/[?#]/)[0];
+      if (/^admin[\w-]*\.html$/.test(file)) allowed = panelRolesFor(file).includes(role);   // restul (VIP Shop etc.) = pagini publice
+    }
+    a.style.display = allowed ? "" : "none";
+  });
+}
+// La încărcare, înainte de răspunsul serverului, filtrăm meniul după gradul
+// ținut minte de la login — ca linkurile interzise să nu clipească pe ecran.
+try {
+  const cachedRole = getAuth()?.user?.role;
+  if (cachedRole && document.querySelector("aside.side")) filterPanelNav(cachedRole);
+} catch { /* fără sesiune — requireRole trimite oricum la login */ }
+
 // Confirms the session against /api/me and enforces a role allow-list,
 // redirecting non-members back to the dashboard instead of the admin page.
 async function requireRole(...roles) {
@@ -66,20 +116,23 @@ async function requireRole(...roles) {
     return null;
   }
   const me = await res.json();
+  // ținem minte gradul confirmat, ca meniul să fie corect de la prima clipă data viitoare
+  try {
+    const auth = getAuth();
+    if (auth?.user && auth.user.role !== me.role) setAuth(auth.token, { ...auth.user, role: me.role });
+  } catch { /* stocare indisponibilă */ }
   if (!roles.includes(me.role)) {
-    window.location.href = "dashboard.html";
+    // staff fără acces la pagina asta → prima pagină din panou la care are voie
+    const home = panelHomeFor(me.role);
+    const here = location.pathname.split("/").pop();
+    window.location.href = home !== here ? home : "dashboard.html";
     return null;
   }
 
-  // Linkul din sidebar către txAdmin (control total pe serverul de joc) nu
-  // trebuie doar blocat la click — nu trebuie nici măcar VĂZUT de cineva
-  // fără gradul necesar. Verificarea de mai jos rulează pe orice pagină de
-  // admin (toate apelează requireRole la încărcare), deci acoperă tot
-  // panoul dintr-un singur loc, fără să repetăm logica în fiecare pagină.
-  const txadminLink = document.getElementById("nav-txadmin");
-  if (txadminLink && !["co-fondator", "owner"].includes(me.role)) {
-    txadminLink.remove();
-  }
+  // Meniul din stânga: doar paginile gradului (vezi PANEL_ACCESS mai sus).
+  // Rulează pe orice pagină de admin (toate apelează requireRole la
+  // încărcare), deci acoperă tot panoul dintr-un singur loc.
+  filterPanelNav(me.role);
 
   return me;
 }

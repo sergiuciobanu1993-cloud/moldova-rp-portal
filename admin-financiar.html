@@ -175,7 +175,7 @@ async function loadFinancial(force) {
 document.getElementById('refresh-btn').addEventListener('click', () => loadFinancial(true));
 
 (async () => {
-  const me = await requireRole('admin', 'co-fondator', 'owner');
+  const me = await requireRole('co-fondator', 'owner');
   if (!me) return;
   document.getElementById('admin-name').textContent = me.username;
   loadFinancial();

@@ -112,7 +112,7 @@ document.getElementById('audit-prev').addEventListener('click', () => { if (audi
 document.getElementById('audit-next').addEventListener('click', () => { auditState.page++; loadAudit(); });
 
 (async () => {
-  const me = await requireRole('admin', 'co-fondator', 'owner');
+  const me = await requireRole('co-fondator', 'owner');
   if (!me) return;
   document.getElementById('admin-name').textContent = me.username;
   try {

@@ -101,6 +101,14 @@ function requireRole(...roles) {
   };
 }
 
+// (03.10.2026, cerut de Sergiu) Accesul în panoul de administrare, pe grade:
+//   • moderator  → Tichete, Loguri, Kill Logs, Caută jucător, Sancțiuni   (MOD_ROLES)
+//   • admin      → tot ce are moderatorul + pagina Jucători               (ADMIN_ROLES)
+//   • co-fondator / fondator → tot restul: Dashboard, Utilizatori, Facțiuni,
+//     Regulamente, Conținut pagini, Anunțuri, Actualizări, Editor VIP Shop,
+//     jurnalul VIP Shop, txAdmin                                           (FOUNDER_ROLES)
+// Înainte, „admin" avea aproape tot. Aceleași reguli sunt și în auth-client.js
+// (ce linkuri vede fiecare grad în meniul din stânga) și în fiecare pagină.
 const MOD_ROLES = ["moderator", "admin", "co-fondator", "owner"];
 const ADMIN_ROLES = ["admin", "co-fondator", "owner"];
 // Rang nou, aproape de owner — acces la tot ce are admin, plus secțiunea
@@ -640,7 +648,7 @@ app.get("/api/live/factions", asyncRoute(async (_req, res) => {
   res.json(stripFactionMoney(await getFactionSnapshot()));
 }));
 
-app.get("/api/admin/live/factions", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+app.get("/api/admin/live/factions", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
   const data = await getFactionSnapshot(req.query.force === "1");
   res.json(data.online ? data : (await loadLiveSnapshot("factions")) || data);
 }));
@@ -1856,7 +1864,7 @@ app.get("/api/admin/live/moderation", auth, requireRole(...MOD_ROLES), asyncRout
 
 // Case, business-uri și găști — pagina Jucători, secțiunea "Proprietăți" (fără
 // filtru de jucător = tot ce există pe server, pentru răsfoire).
-app.get("/api/admin/live/assets", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
+app.get("/api/admin/live/assets", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
   const player = req.query.player ? String(req.query.player).trim().slice(0, 64) : "";
   const result = await fetchAssets({ player });
   if (result.online) {
@@ -2223,7 +2231,7 @@ app.post("/api/me/notifications/citeste-tot", auth, asyncRoute(async (req, res) 
 // fel ca /api/vip-shop + /api/vip-shop/deschide + /api/vip-shop/istoric.
 //
 // IMPORTANT: /api/vip-shop/log (jurnalul TUTUROR jucătorilor, mai jos) rămâne
-// restricționat la ADMIN_ROLES PERMANENT, cerut explicit (08.09.2026): e un
+// restricționat la FOUNDER_ROLES PERMANENT, cerut explicit (08.09.2026): e un
 // instrument de staff, nu un feature pentru jucători, deci nu se deblochează
 // odată cu restul. La fel și rutele de editor "/api/admin/vip-shop/cutii...".
 app.post("/api/cont/leaga-joc", auth, asyncRoute(async (req, res) => {
@@ -2468,7 +2476,7 @@ app.get("/api/vip-shop/istoric", auth, asyncRoute(async (req, res) => {
 
 // Jurnalul TUTUROR deschiderilor de cutii (toți jucătorii, nu doar cel logat)
 // — cerut de staff ca să vadă cine ce a câștigat cât timp VIP Shop e încă în
-// testare, și rămâne restricționat la ADMIN_ROLES chiar și după ce restul
+// testare, și rămâne restricționat la FOUNDER_ROLES chiar și după ce restul
 // feature-ului devine public (vezi comentariul de mai sus — e un instrument
 // de staff, nu un feature pentru jucători). Citit direct din
 // moldovarp_case_openings de pe serverul de joc, prin ruta "/cases/log" din
@@ -2476,7 +2484,7 @@ app.get("/api/vip-shop/istoric", auth, asyncRoute(async (req, res) => {
 // (29.09.2026) Pagini + căutare după jucător + filtru ridicat/în așteptare.
 // Dacă serverul de joc știe de "offset" (întoarce "total"), paginile merg
 // oricât de departe în istoric. Altfel luăm ultimele 200 și paginăm aici.
-app.get("/api/vip-shop/log", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+app.get("/api/vip-shop/log", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
   const per = Math.min(Math.max(parseInt(req.query.per ?? req.query.limit, 10) || 25, 1), 100);
   const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
   const q = String(req.query.q || "").trim().slice(0, 64);
@@ -2504,7 +2512,7 @@ app.get("/api/vip-shop/log", auth, requireRole(...ADMIN_ROLES), asyncRoute(async
 // ("/cases/admin..." — vezi server.lua v1.30.0), care ține config-ul real în
 // MySQL, și loghează acțiunea în audit_logs (Postgres, al site-ului) — la fel
 // ca orice altă acțiune de admin (regulamente, anunțuri etc.). Rămâne
-// restricționat la ADMIN_ROLES PERMANENT — spre deosebire de rutele de mai
+// restricționat la FOUNDER_ROLES PERMANENT — spre deosebire de rutele de mai
 // sus (deblocate pentru jucători la lansare, 10.09.2026), editorul de cutii/
 // recompense e un instrument de staff, nu un feature pentru jucători.
 const VIP_SHOP_ADMIN_ERRORS = {
@@ -2524,7 +2532,7 @@ function vipShopAdminError(res, result) {
   return res.status(result.status && result.status >= 400 && result.status < 600 ? result.status : 400).json({ error: message });
 }
 
-app.get("/api/admin/vip-shop/cutii", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (_req, res) => {
+app.get("/api/admin/vip-shop/cutii", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (_req, res) => {
   // Idem — editorul de admin trebuie să vadă mereu starea reală, imediat
   // după orice activare/dezactivare/editare, nu un 304 din cache-ul browserului.
   res.set("Cache-Control", "no-store");
@@ -2548,7 +2556,7 @@ app.get("/api/admin/vip-shop/cutii", auth, requireRole(...ADMIN_ROLES), asyncRou
 // Setările schimbului de bani murdari pentru facțiunile legale (30.09.2026).
 // GET întoarce și joburile văzute pe server (din sincronizarea jucătorilor),
 // ca staff-ul să bifeze din listă care sunt legale.
-app.get("/api/admin/vip-shop/schimb-legal", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (_req, res) => {
+app.get("/api/admin/vip-shop/schimb-legal", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (_req, res) => {
   const settings = await loadLegalExchange();
   let jobs = [];
   try {
@@ -2565,7 +2573,7 @@ app.get("/api/admin/vip-shop/schimb-legal", auth, requireRole(...ADMIN_ROLES), a
   res.json({ settings, jobs, gameRoutes: { sell: gameRouteReady.sell, convert: gameRouteReady.convert, checkedAt: gameRoutesCheckedAt } });
 }));
 
-app.put("/api/admin/vip-shop/schimb-legal", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+app.put("/api/admin/vip-shop/schimb-legal", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
   const pct = Math.floor(Number(req.body?.pct));
   if (!Number.isFinite(pct) || pct < 1 || pct > 100) return res.status(400).json({ error: "Procentul trebuie să fie între 1 și 100." });
   const settings = normalizeLegalExchange({ enabled: req.body?.enabled !== false, pct, jobs: req.body?.jobs });
@@ -2579,7 +2587,7 @@ app.put("/api/admin/vip-shop/schimb-legal", auth, requireRole(...ADMIN_ROLES), a
 }));
 
 // Valoarea unei mașini/arme (în coins și în bani din joc) — pentru vânzarea înapoi.
-app.put("/api/admin/vip-shop/valoare", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+app.put("/api/admin/vip-shop/valoare", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
   const k = valueKey(req.body?.kind, req.body?.kind === "vehicle" ? { model: req.body?.key } : { item: req.body?.key });
   if (!k || !String(req.body?.key || "").trim()) return res.status(400).json({ error: "Date invalide." });
   const toNum = v => { const n = Math.floor(Number(v)); return Number.isFinite(n) && n > 0 ? n : null; };
@@ -2600,7 +2608,7 @@ app.put("/api/admin/vip-shop/valoare", auth, requireRole(...ADMIN_ROLES), asyncR
 }));
 
 // Salvează ordinea recompenselor dintr-o cutie (tras cu mouse-ul în editor).
-app.put("/api/admin/vip-shop/cutii/:id/ordine", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+app.put("/api/admin/vip-shop/cutii/:id/ordine", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
   const caseId = String(req.params.id || "").slice(0, 40);
   const ids = Array.isArray(req.body?.ids) ? req.body.ids.map(String).filter(x => /^\d{1,12}$/.test(x)).slice(0, 200) : null;
   if (!caseId || !ids) return res.status(400).json({ error: "Ordine invalidă." });
@@ -2613,7 +2621,7 @@ app.put("/api/admin/vip-shop/cutii/:id/ordine", auth, requireRole(...ADMIN_ROLES
   res.json({ ok: true });
 }));
 
-app.post("/api/admin/vip-shop/cutii", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+app.post("/api/admin/vip-shop/cutii", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
   const { name, price, theme } = req.body || {};
   if (!name || !String(name).trim()) return res.status(400).json({ error: "Numele cutiei este obligatoriu." });
   const result = await vipShopAdminRequest("POST", "/cases/admin", { name: String(name).trim(), price: Number(price) || 0, theme });
@@ -2622,7 +2630,7 @@ app.post("/api/admin/vip-shop/cutii", auth, requireRole(...ADMIN_ROLES), asyncRo
   res.status(201).json(result.data);
 }));
 
-app.put("/api/admin/vip-shop/cutii/:id", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+app.put("/api/admin/vip-shop/cutii/:id", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
   const { name, price, theme, active } = req.body || {};
   if (!name || !String(name).trim()) return res.status(400).json({ error: "Numele cutiei este obligatoriu." });
   const sentActive = active !== false;
@@ -2634,7 +2642,7 @@ app.put("/api/admin/vip-shop/cutii/:id", auth, requireRole(...ADMIN_ROLES), asyn
   res.json(result.data);
 }));
 
-app.delete("/api/admin/vip-shop/cutii/:id", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+app.delete("/api/admin/vip-shop/cutii/:id", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
   const result = await vipShopAdminRequest("DELETE", `/cases/admin/${encodeURIComponent(req.params.id)}`);
   if (!result.ok) return vipShopAdminError(res, result);
   await logAction(req.user.sub, "vip_shop.case.delete", "vip_shop_case", req.params.id, null, req.ip);
@@ -2651,7 +2659,7 @@ function rewardAmmoField(body) {
   return { ammo: Math.max(0, Math.min(1000, n)) };
 }
 
-app.post("/api/admin/vip-shop/cutii/:id/recompense", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+app.post("/api/admin/vip-shop/cutii/:id/recompense", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
   const { type, label, weight, amount, account, item, count, model } = req.body || {};
   if (!type || !label || !String(label).trim()) return res.status(400).json({ error: "Tipul și eticheta recompensei sunt obligatorii." });
   const result = await vipShopAdminRequest("POST", `/cases/admin/${encodeURIComponent(req.params.id)}/rewards`, {
@@ -2662,7 +2670,7 @@ app.post("/api/admin/vip-shop/cutii/:id/recompense", auth, requireRole(...ADMIN_
   res.status(201).json(result.data);
 }));
 
-app.put("/api/admin/vip-shop/cutii/:id/recompense/:rewardId", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+app.put("/api/admin/vip-shop/cutii/:id/recompense/:rewardId", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
   const { type, label, weight, amount, account, item, count, model } = req.body || {};
   if (!type || !label || !String(label).trim()) return res.status(400).json({ error: "Tipul și eticheta recompensei sunt obligatorii." });
   const result = await vipShopAdminRequest(
@@ -2675,7 +2683,7 @@ app.put("/api/admin/vip-shop/cutii/:id/recompense/:rewardId", auth, requireRole(
   res.json(result.data);
 }));
 
-app.delete("/api/admin/vip-shop/cutii/:id/recompense/:rewardId", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+app.delete("/api/admin/vip-shop/cutii/:id/recompense/:rewardId", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
   const result = await vipShopAdminRequest(
     "DELETE",
     `/cases/admin/${encodeURIComponent(req.params.id)}/rewards/${encodeURIComponent(req.params.rewardId)}`
@@ -3852,7 +3860,7 @@ app.post("/api/tickets/:id/replies", auth, asyncRoute(async (req, res) => {
   res.status(201).json(rows[0]);
 }));
 
-app.get("/api/admin/stats", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (_req, res) => {
+app.get("/api/admin/stats", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (_req, res) => {
   const q = async sql => (await pool.query(sql)).rows[0].count;
   res.json({
     players: await q("SELECT COUNT(*) FROM players"),
@@ -3865,7 +3873,7 @@ app.get("/api/admin/stats", auth, requireRole(...ADMIN_ROLES), asyncRoute(async 
 // (29.09.2026) Filtre: implicit doar acțiunile STAFF-ului (nu și ale
 // jucătorilor obișnuiți) și fără autentificări; opțional toată lumea,
 // autentificările, un singur om (actor) și pagini.
-app.get("/api/admin/audit-logs", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+app.get("/api/admin/audit-logs", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
   const per = Math.min(Math.max(parseInt(req.query.per, 10) || 50, 1), 200);
   const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
   const where = [];
@@ -3907,7 +3915,7 @@ const VALID_ROLES = ["player", "moderator", "admin", "co-fondator", "owner", "st
 // reutilizează /api/admin/players/:id/faction de mai jos, care lucrează cu
 // player_id, nu user_id (fiecare user are exact un rând în players, creat la
 // signup, vezi INSERT INTO players din fluxul de Discord OAuth).
-app.get("/api/admin/users", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (_req, res) => {
+app.get("/api/admin/users", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (_req, res) => {
   const { rows } = await pool.query(
     `SELECT u.id, u.username, u.email, u.discord_id, u.discord_username, u.discord_avatar,
             u.is_active, u.created_at, r.name AS role, (u.password_hash IS NOT NULL) AS has_password,
@@ -3926,10 +3934,10 @@ app.get("/api/admin/users", auth, requireRole(...ADMIN_ROLES), asyncRoute(async 
 
 // Cod de referal (27.09.2026) — separat de schimbarea rangului (owner-only,
 // mai sus): setarea unui cod de referal nu e o escaladare de privilegii, doar
-// o etichetă de marketing, deci deschisă oricărui ADMIN_ROLES ca restul
+// o etichetă de marketing, deci deschisă oricărui FOUNDER_ROLES ca restul
 // operațiunilor curente de aici (dezactivare cont, atribuire facțiune etc).
 // Body gol/lipsă ȘTERGE codul (streamerul nu mai are unul activ).
-app.put("/api/admin/users/:id/referral-code", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+app.put("/api/admin/users/:id/referral-code", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
   const raw = (req.body.referralCode ?? "").toString().trim();
   const code = raw ? normalizeReferralCode(raw) : null;
   if (raw && !code)
@@ -3951,14 +3959,14 @@ app.put("/api/admin/users/:id/referral-code", auth, requireRole(...ADMIN_ROLES),
 }));
 
 // Staff: toate codurile de referal din joc, cu totaluri (GET /referal).
-app.get("/api/admin/referal", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+app.get("/api/admin/referal", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
   const result = await fetchReferal("/referal");
   const body = result.body || {};
   res.json({ online: result.online, generatLa: body.generatLa || null, coduri: Array.isArray(body.coduri) ? body.coduri : [] });
 }));
 
 // Staff: un singur cod, cu ultimele folosiri (GET /referal/<COD>, max 50).
-app.get("/api/admin/referal/:cod", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+app.get("/api/admin/referal/:cod", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
   const cod = String(req.params.cod || "");
   if (!REFERAL_CODE_RE.test(cod)) return res.status(400).json({ error: "Cod invalid." });
   const result = await fetchReferal(`/referal/${encodeURIComponent(cod)}`, { limit: 50 });
@@ -4011,7 +4019,7 @@ app.put("/api/admin/users/:id/role", auth, requireRole("owner"), asyncRoute(asyn
 // Dezactivare/reactivare cont (18.09.2026) — reversibilă, blochează login-ul
 // (vezi verificarea is_active din /api/auth/login) fără să șteargă nimic.
 // Deschisă oricărui admin/co-fondator/owner, ca faction-urile mai jos.
-app.put("/api/admin/users/:id/active", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+app.put("/api/admin/users/:id/active", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
   const isActive = !!req.body.is_active;
   if (req.params.id === req.user.sub && !isActive)
     return res.status(400).json({ error: "Nu îți poți dezactiva propriul cont." });
@@ -4028,7 +4036,7 @@ app.put("/api/admin/users/:id/active", auth, requireRole(...ADMIN_ROLES), asyncR
 }));
 
 // Ștergere definitivă cont (18.09.2026) — doar owner. Restricționată la owner
-// (nu tot ADMIN_ROLES) fiindcă e ireversibilă, spre deosebire de dezactivare.
+// (nu tot FOUNDER_ROLES) fiindcă e ireversibilă, spre deosebire de dezactivare.
 // FK-urile pe users(id) sunt ON DELETE SET NULL (istoric: anunțuri, sancțiuni,
 // dosare/mandate/rapoarte MDT etc. rămân, doar leagătura cu contul dispare) în
 // afară de players.user_id și tickets.user_id, care sunt CASCADE — deci contul
@@ -4052,7 +4060,7 @@ app.delete("/api/admin/users/:id", auth, requireRole("owner"), asyncRoute(async 
 // Players (v0.4)
 // ---------------------------------------------------------------------------
 
-app.get("/api/admin/players", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
+app.get("/api/admin/players", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
   const q = (req.query.q || "").trim();
   const limit = Math.min(Number(req.query.limit) || 50, 200);
   const offset = Math.max(Number(req.query.offset) || 0, 0);
@@ -4080,7 +4088,7 @@ app.get("/api/admin/players", auth, requireRole(...MOD_ROLES), asyncRoute(async 
   res.json(rows);
 }));
 
-app.get("/api/admin/players/:id", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
+app.get("/api/admin/players/:id", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
   const { id } = req.params;
   const { rows } = await pool.query(
     `SELECT p.*, u.username, u.email
@@ -4122,7 +4130,7 @@ app.get("/api/admin/players/:id", auth, requireRole(...MOD_ROLES), asyncRoute(as
   });
 }));
 
-app.put("/api/admin/players/:id", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+app.put("/api/admin/players/:id", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
   const { id } = req.params;
   const { display_name, status, game_id } = req.body;
   const allowedStatus = ["online", "offline", "banned"];
@@ -4145,7 +4153,7 @@ app.put("/api/admin/players/:id", auth, requireRole(...ADMIN_ROLES), asyncRoute(
   res.json(rows[0]);
 }));
 
-app.post("/api/admin/players/:id/faction", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+app.post("/api/admin/players/:id/faction", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
   const { id } = req.params;
   const { faction_id, rank_id } = req.body;
   if (!faction_id) return res.status(400).json({ error: "faction_id este obligatoriu." });
@@ -4170,7 +4178,7 @@ app.post("/api/admin/players/:id/faction", auth, requireRole(...ADMIN_ROLES), as
   }
 }));
 
-app.delete("/api/admin/players/:id/faction", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+app.delete("/api/admin/players/:id/faction", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
   const { id } = req.params;
   const { rowCount } = await pool.query("DELETE FROM faction_members WHERE player_id = $1", [id]);
   await logAction(req.user.sub, "player.faction_remove", "player", id, null, req.ip);
@@ -4238,7 +4246,7 @@ app.post("/api/admin/punishments", auth, requireRole(...MOD_ROLES), asyncRoute(a
 // Factions & ranks (v0.4)
 // ---------------------------------------------------------------------------
 
-app.get("/api/admin/factions/:id", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
+app.get("/api/admin/factions/:id", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
   const { id } = req.params;
   const { rows } = await pool.query("SELECT * FROM factions WHERE id=$1", [id]);
   const faction = rows[0];
@@ -4253,7 +4261,7 @@ app.get("/api/admin/factions/:id", auth, requireRole(...MOD_ROLES), asyncRoute(a
   res.json({ ...faction, ranks: ranks.rows, members: members.rows });
 }));
 
-app.post("/api/admin/factions", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+app.post("/api/admin/factions", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
   const { name, type, description } = req.body;
   if (!name || !type) return res.status(400).json({ error: "Numele și tipul facțiunii sunt obligatorii." });
   try {
@@ -4269,7 +4277,7 @@ app.post("/api/admin/factions", auth, requireRole(...ADMIN_ROLES), asyncRoute(as
   }
 }));
 
-app.put("/api/admin/factions/:id", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+app.put("/api/admin/factions/:id", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
   const { id } = req.params;
   const { name, type, description, is_active } = req.body;
   const { rows } = await pool.query(
@@ -4286,7 +4294,7 @@ app.put("/api/admin/factions/:id", auth, requireRole(...ADMIN_ROLES), asyncRoute
   res.json(rows[0]);
 }));
 
-app.post("/api/admin/factions/:id/ranks", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+app.post("/api/admin/factions/:id/ranks", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
   const { id } = req.params;
   const { name, level } = req.body;
   if (!name || level === undefined) return res.status(400).json({ error: "Numele și nivelul rank-ului sunt obligatorii." });
@@ -4304,7 +4312,7 @@ app.post("/api/admin/factions/:id/ranks", auth, requireRole(...ADMIN_ROLES), asy
   }
 }));
 
-app.put("/api/admin/factions/ranks/:rankId", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+app.put("/api/admin/factions/ranks/:rankId", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
   const { rankId } = req.params;
   const { name, level } = req.body;
   const { rows } = await pool.query(
@@ -4319,7 +4327,7 @@ app.put("/api/admin/factions/ranks/:rankId", auth, requireRole(...ADMIN_ROLES), 
   res.json(rows[0]);
 }));
 
-app.delete("/api/admin/factions/ranks/:rankId", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+app.delete("/api/admin/factions/ranks/:rankId", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
   const { rankId } = req.params;
   const { rowCount } = await pool.query("DELETE FROM faction_ranks WHERE id = $1", [rankId]);
   if (!rowCount) return res.status(404).json({ error: "Rank-ul nu există." });
@@ -4810,20 +4818,20 @@ function slugify(text) {
     .replace(/^-+|-+$/g, "");
 }
 
-app.get("/api/admin/regulations", auth, requireRole(...MOD_ROLES), asyncRoute(async (_req, res) => {
+app.get("/api/admin/regulations", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (_req, res) => {
   const { rows } = await pool.query(
     "SELECT * FROM regulations ORDER BY category, title"
   );
   res.json(rows);
 }));
 
-app.get("/api/admin/regulations/:id", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
+app.get("/api/admin/regulations/:id", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
   const { rows } = await pool.query("SELECT * FROM regulations WHERE id=$1", [req.params.id]);
   if (!rows[0]) return res.status(404).json({ error: "Regulamentul nu există." });
   res.json(rows[0]);
 }));
 
-app.post("/api/admin/regulations", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+app.post("/api/admin/regulations", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
   const { title, category, content, version, is_published, slug } = req.body;
   if (!title || !category || !content)
     return res.status(400).json({ error: "Titlu, categorie și conținut sunt obligatorii." });
@@ -4843,7 +4851,7 @@ app.post("/api/admin/regulations", auth, requireRole(...ADMIN_ROLES), asyncRoute
   }
 }));
 
-app.put("/api/admin/regulations/:id", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+app.put("/api/admin/regulations/:id", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
   const { id } = req.params;
   const { title, category, content, version, is_published, slug } = req.body;
   try {
@@ -4882,7 +4890,7 @@ app.put("/api/admin/regulations/:id", auth, requireRole(...ADMIN_ROLES), asyncRo
   }
 }));
 
-app.delete("/api/admin/regulations/:id", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+app.delete("/api/admin/regulations/:id", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
   const { id } = req.params;
   const { rowCount } = await pool.query("DELETE FROM regulations WHERE id = $1", [id]);
   if (!rowCount) return res.status(404).json({ error: "Regulamentul nu există." });
@@ -5131,7 +5139,7 @@ async function notifyDiscordRegulation(regulation, action, extra = {}) {
   }
 }
 
-app.get("/api/admin/announcements", auth, requireRole(...MOD_ROLES), asyncRoute(async (_req, res) => {
+app.get("/api/admin/announcements", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (_req, res) => {
   const { rows } = await pool.query(
     `SELECT a.*, u.username author FROM announcements a
      LEFT JOIN users u ON u.id = a.author_id
@@ -5140,13 +5148,13 @@ app.get("/api/admin/announcements", auth, requireRole(...MOD_ROLES), asyncRoute(
   res.json(rows);
 }));
 
-app.get("/api/admin/announcements/:id", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
+app.get("/api/admin/announcements/:id", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
   const { rows } = await pool.query("SELECT * FROM announcements WHERE id=$1", [req.params.id]);
   if (!rows[0]) return res.status(404).json({ error: "Anunțul nu există." });
   res.json(rows[0]);
 }));
 
-app.post("/api/admin/announcements", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+app.post("/api/admin/announcements", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
   const { title, content, category, is_published, image_url, video_url } = req.body;
   if (!title || !content)
     return res.status(400).json({ error: "Titlu și conținut sunt obligatorii." });
@@ -5163,7 +5171,7 @@ app.post("/api/admin/announcements", auth, requireRole(...ADMIN_ROLES), asyncRou
   res.status(201).json(rows[0]);
 }));
 
-app.put("/api/admin/announcements/:id", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+app.put("/api/admin/announcements/:id", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
   const { id } = req.params;
   const { title, content, category, is_published, image_url, video_url } = req.body;
   const before = await pool.query("SELECT is_published FROM announcements WHERE id=$1", [id]);
@@ -5192,7 +5200,7 @@ app.put("/api/admin/announcements/:id", auth, requireRole(...ADMIN_ROLES), async
   res.json(rows[0]);
 }));
 
-app.delete("/api/admin/announcements/:id", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+app.delete("/api/admin/announcements/:id", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
   const { id } = req.params;
   const { rowCount } = await pool.query("DELETE FROM announcements WHERE id = $1", [id]);
   if (!rowCount) return res.status(404).json({ error: "Anunțul nu există." });
@@ -5209,14 +5217,14 @@ app.delete("/api/admin/announcements/:id", auth, requireRole(...ADMIN_ROLES), as
 
 const CONTENT_TYPES = ["text", "richtext", "html", "list"];
 
-app.get("/api/admin/content/:page", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
+app.get("/api/admin/content/:page", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
   const { rows } = await pool.query(
     "SELECT * FROM page_blocks WHERE page=$1 ORDER BY sort_order", [req.params.page]
   );
   res.json(rows);
 }));
 
-app.put("/api/admin/content/:id", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+app.put("/api/admin/content/:id", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
   const { id } = req.params;
   const { type, content } = req.body;
   if (!CONTENT_TYPES.includes(type))

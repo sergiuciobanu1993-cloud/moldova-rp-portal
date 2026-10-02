@@ -128,7 +128,7 @@
   <div id="profile-extra-body"><p class="muted" style="margin:0">Se încarcă…</p></div>
 </section>
 
-<section class="quick"><h2>Acces rapid</h2><div class="quickgrid"><a href="index.html#regulamente">📚 <strong>Regulamente</strong><small>Toate regulamentele oficiale</small></a><a href="index.html#factiuni">◆ <strong>Facțiuni</strong><small>Organizații și rank-uri</small></a><a href="tichete.html">🎫 <strong>Tichete</strong><small>Raportează probleme sau reclamații</small></a><a href="vip-shop.html" id="vipshop-grid-link" hidden>🎁 <strong>VIP Shop</strong><small>Cheltuiește coins pe o recompensă cu șansă</small></a><a href="mdt-fib.html" id="mdt-grid-link" hidden>🗂 <strong>MDT FIB</strong><small>Dosare, mandate și probe</small></a><a href="admin.html" id="admin-link" hidden>⚙ <strong>Admin Panel</strong><small>Vizibil doar pentru moderator/admin/owner</small></a></div></section>
+<section class="quick"><h2>Acces rapid</h2><div class="quickgrid"><a href="index.html#regulamente">📚 <strong>Regulamente</strong><small>Toate regulamentele oficiale</small></a><a href="index.html#factiuni">◆ <strong>Facțiuni</strong><small>Organizații și rank-uri</small></a><a href="tichete.html">🎫 <strong>Tichete</strong><small>Raportează probleme sau reclamații</small></a><a href="vip-shop.html" id="vipshop-grid-link" hidden>🎁 <strong>VIP Shop</strong><small>Cheltuiește coins pe o recompensă cu șansă</small></a><a href="mdt-fib.html" id="mdt-grid-link" hidden>🗂 <strong>MDT FIB</strong><small>Dosare, mandate și probe</small></a><a href="admin.html" id="admin-link" hidden>⚙ <strong>Admin Panel</strong><small>Vizibil doar pentru staff</small></a></div></section>
 </main>
 <script src="auth-client.js"></script>
 <script>
@@ -499,7 +499,10 @@ async function loadStreamerIngameLog() {
     document.getElementById('profile-avatar').textContent = name.slice(0, 2).toUpperCase();
 
     if (['moderator', 'admin', 'co-fondator', 'owner'].includes(me.role)) {
-      document.getElementById('admin-link').hidden = false;
+      // (03.10.2026) fiecare grad intră pe prima pagină din panou la care are acces
+      const adminLink = document.getElementById('admin-link');
+      adminLink.href = panelHomeFor(me.role);
+      adminLink.hidden = false;
     }
 
     // LANSAT PUBLIC (10.09.2026): VIP Shop e vizibil oricărui cont logat, nu

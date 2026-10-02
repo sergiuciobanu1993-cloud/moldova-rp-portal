@@ -699,13 +699,23 @@ const PAGE_BLOCKS = [
   { page: "joburi", block_key: "videos_title", label: "Video — titlu", type: "text", content: "Cum arată pe server", sort_order: 4 },
   {
     page: "joburi", block_key: "videos", label: "Video — carduri", type: "list", sort_order: 5,
+    // (02.10.2026) Ghidurile filmate pe server, de pe canalul nostru de YouTube
+    // (@NapiCatOfficial). Titlul fiecărui card începe cu numele jobului exact
+    // ca în grila de mai jos — după el se leagă butonul „▶ Ghid video" de pe
+    // cardul jobului (vezi app.js).
     content: list([
-      { icon: "", title: "🚕 Taxi", text: "Preiei curse din peste 80 de locații de pe hartă, cu mai multe tipuri de misiuni și un sistem de rating al clienților. Există și variante de curse cu risc mai mare, pentru cei care vor mai multă acțiune.", url: "https://www.youtube.com/embed/-k1xXa8Lm_4" },
-      { icon: "", title: "🗑️ Gunoier", text: "Formezi o echipă de până la 4 persoane și alegi între mai multe tipuri de rute — containere, căutare sau curățarea străzii. Poți găsi obiecte de valoare ascunse prin gunoaie, iar cei mai activi din echipă primesc bonusuri.", url: "https://www.youtube.com/embed/TFEmlrYqx3E" },
-      { icon: "", title: "🚛 Camionagiu", text: "Lucrezi dintr-un depou logistic dedicat și alegi între mai multe tipuri de livrări — marfă paletizată, containere din port sau transport de vehicule. Urci în rang pe măsură ce faci curse, pentru livrări din ce în ce mai bine plătite.", url: "https://www.youtube.com/embed/-Owr5kznK5w" },
-      { icon: "", title: "🌾 Fermier", text: "Cultivi mai multe tipuri de culturi diferite, de la plantat și udat, până la recoltat cu utilaje agricole. Poți crește și animale — le hrănești, le mulgi — iar livrarea produselor se poate face inclusiv cu drona.", url: "https://www.youtube.com/embed/eI8imGEHgoE" },
-      { icon: "", title: "🏹 Vânător", text: "Vânezi în zone dedicate, cu animale de rarități diferite, apoi jupoi prada cu cuțitul. Sistemul de nivel și experiență crește recompensele pe măsură ce avansezi. Se joacă solo sau în grupuri de până la 4.", url: "https://www.youtube.com/embed/LDi63eVRS0s" },
-      { icon: "", title: "📦 Operator stivuitor", text: "Transporți marfă cu stivuitorul între rafturile depozitului. Poți lucra în tură de zi sau de noapte — noaptea plătește mai bine — solo sau împreună cu alți jucători.", url: "https://www.youtube.com/embed/2Ahq3SYcyms" }
+      {"icon": "", "title": "⛏️ Miner", "text": "Extragi minereuri din mină și le duci la topitorie. Pietrele prețioase găsite (diamant, rubin, safir, smarald) se șlefuiesc la stația marcată pe hartă.", "url": "https://www.youtube.com/embed/IzZXDx7s1Gc"},
+      {"icon": "", "title": "🎣 Pescar", "text": "Pescuiești pe chei și în larg, apoi vinzi recolta la piață. Ghid video filmat pe Moldova RP.", "url": "https://www.youtube.com/embed/JBAj8PRcdbw"},
+      {"icon": "", "title": "🪓 Pădurar", "text": "Tai lemne în pădure, le încarci cu macaraua și le transporți spre procesare. Ghid video filmat pe Moldova RP.", "url": "https://www.youtube.com/embed/W_uGg3zQgyI"},
+      {"icon": "", "title": "🌾 Fermier — partea 1", "text": "Prima parte a ghidului de fermier: cum începi jobul și ce ai de făcut la fermă.", "url": "https://www.youtube.com/embed/V545pECZu6s"},
+      {"icon": "", "title": "🌾 Fermier — partea 2: agricultura", "text": "A doua parte a ghidului: agricultura. Cultivi mai multe tipuri de culturi, de la plantat și udat până la recoltat cu utilaje agricole.", "url": "https://www.youtube.com/embed/KNsqax_8Tbo"},
+      {"icon": "", "title": "🏹 Vânător", "text": "Vânezi în zone dedicate, cu animale de rarități diferite, apoi jupoi prada cu cuțitul. Sistemul de nivel și experiență crește recompensele pe măsură ce avansezi. Se joacă solo sau în grupuri de până la 4.", "url": "https://www.youtube.com/embed/Rz5-UYV0oZ8"},
+      {"icon": "", "title": "🚛 Camionagiu (tirist)", "text": "Lucrezi dintr-un depou logistic dedicat și alegi între mai multe tipuri de livrări — marfă paletizată, containere din port sau transport de vehicule. Urci în rang pe măsură ce faci curse, pentru livrări din ce în ce mai bine plătite.", "url": "https://www.youtube.com/embed/mAPiF5Don6s"},
+      {"icon": "", "title": "🚕 Taximetrist", "text": "Preiei curse din peste 80 de locații de pe hartă, cu mai multe tipuri de misiuni și un sistem de rating al clienților. Există și variante de curse cu risc mai mare, pentru cei care vor mai multă acțiune.", "url": "https://www.youtube.com/embed/oX4WFgl8ERE"},
+      {"icon": "", "title": "📦 Operator stivuitor", "text": "Transporți marfă cu stivuitorul între rafturile depozitului. Poți lucra în tură de zi sau de noapte — noaptea plătește mai bine — solo sau împreună cu alți jucători.", "url": "https://www.youtube.com/embed/V3BnXLTKtog"},
+      {"icon": "", "title": "🏗️ Constructor", "text": "Ridici și renovezi clădiri pe șantierele orașului. Ghid video filmat pe Moldova RP.", "url": "https://www.youtube.com/embed/lu1g86vTTHE"},
+      {"icon": "", "title": "🚜 Excavatorist", "text": "Operezi utilaje grele pe șantierele de construcții. Ghid video filmat pe Moldova RP.", "url": "https://www.youtube.com/embed/LJ1Az8gbOm8"},
+      {"icon": "", "title": "🗑️ Gunoier", "text": "Formezi o echipă de până la 4 persoane și alegi între mai multe tipuri de rute — containere, căutare sau curățarea străzii. Poți găsi obiecte de valoare ascunse prin gunoaie, iar cei mai activi din echipă primesc bonusuri.", "url": "https://www.youtube.com/embed/lKIRWGimjaQ"}
     ])
   },
   {

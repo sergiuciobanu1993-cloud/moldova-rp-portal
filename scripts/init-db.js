@@ -131,6 +131,33 @@ async function run() {
       );
     });
 
+    // 02.10.2026 — ghidurile video de pe canalul nostru (@NapiCatOfficial) pe
+    // pagina Joburi. Blocul „videos" e conținut editabil din Admin → Conținut
+    // pagini, deci un redeploy obișnuit nu-l atinge; îl actualizăm o singură
+    // dată aici: cele 6 clipuri vechi de prezentare sunt înlocuite cu cele 12
+    // ghiduri noi, iar orice alt card adăugat de staff din admin rămâne.
+    await seedOnce("joburi_videos_2026_10_02", async () => {
+      const fresh = JSON.parse(PAGE_BLOCKS.find(b => b.page === "joburi" && b.block_key === "videos").content);
+      const OLD_IDS = ["-k1xXa8Lm_4", "TFEmlrYqx3E", "-Owr5kznK5w", "eI8imGEHgoE", "LDi63eVRS0s", "2Ahq3SYcyms"];
+      const idOf = u => (String(u || "").match(/(?:embed\/|[?&]v=|youtu\.be\/)([\w-]{11})/) || [])[1] || null;
+      const { rows } = await client.query(
+        "SELECT content FROM page_blocks WHERE page = 'joburi' AND block_key = 'videos'"
+      );
+      let current = [];
+      try { current = JSON.parse(rows[0]?.content || "[]"); } catch { current = []; }
+      if (!Array.isArray(current)) current = [];
+      const freshIds = new Set(fresh.map(x => idOf(x.url)));
+      const kept = current.filter(x => {
+        const id = idOf(x && x.url);
+        return id && !OLD_IDS.includes(id) && !freshIds.has(id);
+      });
+      await client.query(
+        "UPDATE page_blocks SET content = $1, updated_at = NOW() WHERE page = 'joburi' AND block_key = 'videos'",
+        [JSON.stringify([...fresh, ...kept])]
+      );
+      console.log(`Joburi: ${fresh.length} ghiduri video puse pe pagină (${kept.length} carduri adăugate de staff păstrate).`);
+    });
+
     console.log("Database init complete.");
   } finally {
     await client.end();

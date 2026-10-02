@@ -223,7 +223,48 @@ if (factionGrid) {
     } catch {
       // API indisponibil — pagina rămâne cu conținutul static din HTML.
     }
+    linkJobVideos();
   })();
+
+  // (02.10.2026) Pagina Joburi: fiecare job care are un ghid video primește
+  // pe cardul lui butonul „▶ Ghid video", care duce la clipul de sus. Legătura
+  // se face după nume: titlul cardului video începe cu numele jobului (ex.
+  // „🌾 Fermier — partea 2" → jobul „Fermier"), deci merge și pentru clipurile
+  // adăugate ulterior din Admin → Conținut pagini.
+  function linkJobVideos() {
+    if (page !== 'joburi') return;
+    const norm = t => (t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    const videos = [...document.querySelectorAll('.video-job-card')].map((card, i) => {
+      card.id = card.id || `ghid-video-${i + 1}`;
+      return { card, name: norm(card.querySelector('h3') && card.querySelector('h3').textContent) };
+    });
+    document.querySelectorAll('.job-card').forEach(job => {
+      job.querySelectorAll('.job-video-links').forEach(n => n.remove());
+      const h = job.querySelector('h3');
+      const name = norm(h && h.textContent);
+      if (!name) return;
+      const hits = videos.filter(v => v.name === name || v.name.startsWith(name + ' '));
+      if (!hits.length) return;
+      const wrap = document.createElement('div');
+      wrap.className = 'job-video-links';
+      hits.forEach((v, i) => {
+        const a = document.createElement('a');
+        a.className = 'job-video-link';
+        a.href = '#' + v.card.id;
+        a.textContent = hits.length > 1 ? `▶ Ghid video ${i + 1}` : '▶ Ghid video';
+        a.addEventListener('click', e => {
+          e.preventDefault();
+          v.card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          v.card.classList.remove('is-picked');
+          void v.card.offsetWidth;
+          v.card.classList.add('is-picked');
+        });
+        wrap.appendChild(a);
+      });
+      job.appendChild(wrap);
+      job.classList.add('has-video');
+    });
+  }
 })();
 
 // Ultimele anunțuri + Actualizări server, publicate de admin din panoul de

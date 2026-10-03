@@ -1,0 +1,60 @@
+/* Vitrina 3D din VIP Shop (03.10.2026).
+   Apeși pe o mașină sau pe o armă din cutie și se deschide mare: o tragi cu
+   degetul / mouse-ul și se rotește în spațiu. Două moduri (vezi vip-3d.js):
+   • „relief": o singură poză, îngroșată pe adâncime (straturi suprapuse) —
+     se înclină stânga-dreapta și sus-jos, dar arată mereu aceeași parte;
+   • „360": un set de poze din toate unghiurile (assets/vip-360/) — rotire
+     completă, ca într-un showroom. */
+
+.v3-overlay{position:fixed;inset:0;z-index:80;display:grid;place-items:center;padding:16px;background:rgba(3,4,5,.86);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.v3-overlay[hidden]{display:none}
+.v3-panel{--wa:#ff8a1f;position:relative;width:min(760px,100%);max-height:calc(100dvh - 32px);display:flex;flex-direction:column;border-radius:18px;border:1px solid color-mix(in srgb,var(--wa) 34%,rgba(255,255,255,.1));background:linear-gradient(180deg,#14161a,#0b0c0e);box-shadow:0 30px 90px rgba(0,0,0,.6),0 0 70px color-mix(in srgb,var(--wa) 16%,transparent);overflow:hidden}
+.v3-top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px 0}
+.v3-tier{display:inline-flex;align-items:center;gap:8px;font-size:10px;font-weight:900;letter-spacing:.2em;text-transform:uppercase;color:#aeb3ba}
+.v3-badge{padding:3px 9px;border-radius:999px;border:1px solid color-mix(in srgb,var(--wa) 50%,transparent);color:var(--wa);font-size:10px;font-weight:900;letter-spacing:.12em}
+.v3-close{flex:none;width:38px;height:38px;border-radius:50%;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.05);color:#fff;font-size:16px;cursor:pointer;transition:.15s ease}
+.v3-close:hover{border-color:var(--wa);color:var(--wa)}
+
+.v3-stage{position:relative;height:min(46vh,380px);min-height:230px;perspective:1100px;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;overflow:hidden}
+.v3-stage.is-drag{cursor:grabbing}
+.v3-glow{position:absolute;inset:8% 6% 14%;background:radial-gradient(ellipse 52% 46% at 50% 52%,color-mix(in srgb,var(--wa) 42%,transparent),transparent 72%);filter:blur(14px);pointer-events:none}
+.v3-grid{position:absolute;left:-20%;right:-20%;bottom:-6%;height:46%;background-image:linear-gradient(color-mix(in srgb,var(--wa) 22%,transparent) 1px,transparent 1px),linear-gradient(90deg,color-mix(in srgb,var(--wa) 22%,transparent) 1px,transparent 1px);background-size:46px 46px;transform:rotateX(74deg);transform-origin:50% 100%;-webkit-mask-image:radial-gradient(ellipse 60% 90% at 50% 100%,#000 10%,transparent 72%);mask-image:radial-gradient(ellipse 60% 90% at 50% 100%,#000 10%,transparent 72%);opacity:.5;pointer-events:none}
+.v3-shadow{position:absolute;left:50%;bottom:12%;width:54%;height:26px;margin-left:-27%;border-radius:50%;background:radial-gradient(ellipse at center,rgba(0,0,0,.7),transparent 70%);filter:blur(6px);transform:scaleX(var(--v3-sh,1));pointer-events:none}
+
+.v3-obj{position:absolute;left:50%;top:46%;width:min(78%,560px);aspect-ratio:var(--v3-ar,3/2);transform:translate(-50%,-50%) rotateX(var(--v3-rx,0deg)) rotateY(var(--v3-ry,0deg));transform-style:preserve-3d;will-change:transform;pointer-events:none}
+.v3-obj.is-car{width:min(118%,860px)}   /* pozele mașinilor au margini goale în jur */
+.v3-layer{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;backface-visibility:hidden;-webkit-user-drag:none}
+.v3-layer.is-back{filter:brightness(.34) saturate(.8)}
+.v3-layer.is-front{filter:drop-shadow(0 0 1px rgba(255,255,255,.45))}
+/* luciul care alunecă peste obiect când îl rotești (decupat pe forma pozei) */
+.v3-sheen{position:absolute;inset:0;transform:translateZ(1px);background:linear-gradient(105deg,transparent 38%,rgba(255,255,255,.34) 50%,transparent 62%);background-size:260% 100%;background-position:var(--v3-sx,50%) 0;-webkit-mask:var(--v3-mask) center/contain no-repeat;mask:var(--v3-mask) center/contain no-repeat;mix-blend-mode:screen;opacity:.85}
+.v3-frame{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;-webkit-user-drag:none;filter:drop-shadow(0 18px 22px rgba(0,0,0,.55))}
+
+.v3-hint{position:absolute;left:0;right:0;bottom:10px;text-align:center;font-size:10px;font-weight:800;letter-spacing:.2em;text-transform:uppercase;color:rgba(255,255,255,.5);pointer-events:none;transition:opacity .4s ease}
+.v3-stage.was-used .v3-hint{opacity:0}
+
+.v3-info{padding:4px 18px 14px;text-align:center}
+.v3-name{margin:0;font-size:22px;font-weight:900;line-height:1.2;text-wrap:balance}
+.v3-sub{margin:6px 0 0;color:#9ca1a8;font-size:12px}
+.v3-sub .ammo-note{margin-left:0}
+.v3-nav{display:flex;align-items:center;justify-content:center;gap:14px;padding:0 16px 16px}
+.v3-nav button{width:44px;height:40px;border-radius:10px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.05);color:#fff;font-size:20px;cursor:pointer;transition:.15s ease}
+.v3-nav button:hover{border-color:var(--wa);color:var(--wa)}
+.v3-nav span{min-width:64px;text-align:center;color:#9ca1a8;font-size:12px;font-weight:800;font-variant-numeric:tabular-nums}
+.v3-nav[hidden]{display:none}
+.v3-close:focus-visible,.v3-nav button:focus-visible{outline:2px solid var(--wa);outline-offset:2px}
+
+/* pe cardurile din cutie: semn că se pot deschide în 3D */
+.prize-tile[data-v3]{cursor:pointer;transition:transform .18s ease,border-color .18s ease}
+.prize-tile[data-v3]:hover{transform:translateY(-3px);border-color:color-mix(in srgb,var(--wa,#ff8a1f) 60%,transparent)}
+.prize-tile[data-v3]:focus-visible{outline:2px solid var(--wa,#ff8a1f);outline-offset:2px}
+.prize-3d{position:absolute;top:6px;right:6px;padding:2px 7px;border-radius:999px;background:rgba(0,0,0,.5);border:1px solid rgba(255,255,255,.16);color:#d5d8db;font-size:9px;font-weight:900;letter-spacing:.08em}
+.ox-card[data-v3]{cursor:pointer}
+.ox-3d{position:absolute;top:10px;right:10px;z-index:2;padding:3px 9px;border-radius:999px;background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.2);color:#fff;font-size:10px;font-weight:900;letter-spacing:.08em}
+
+@media(max-width:560px){
+  .v3-name{font-size:19px}
+  .v3-stage{height:min(42vh,300px)}
+  .v3-obj{width:88%}.v3-obj.is-car{width:128%}
+}
+@media (prefers-reduced-motion:reduce){.prize-tile[data-v3]{transition:none}}

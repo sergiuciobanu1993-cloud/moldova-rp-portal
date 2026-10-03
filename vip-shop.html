@@ -132,6 +132,7 @@
   background:linear-gradient(160deg,color-mix(in srgb,var(--ox) 34%,#16181b),#0c0e0f 72%);border:2px solid var(--ox);
   box-shadow:0 0 0 1px rgba(0,0,0,.6),0 0 46px color-mix(in srgb,var(--ox) 60%,transparent),inset 0 0 30px color-mix(in srgb,var(--ox) 18%,transparent);opacity:0;pointer-events:none}
 .ox-card.show{animation:oxCard .95s cubic-bezier(.2,1.3,.4,1) forwards}
+.ox-card.show[data-v3]{pointer-events:auto}
 .ox-card.instant{animation-duration:.01s}
 @keyframes oxCard{0%{opacity:0;transform:perspective(900px) rotateY(110deg) scale(.45)}55%{opacity:1}100%{opacity:1;transform:perspective(900px) rotateY(0) scale(1)}}
 .ox-card::after{content:'';position:absolute;inset:0;border-radius:inherit;background:linear-gradient(115deg,transparent 35%,rgba(255,255,255,.22) 50%,transparent 65%);background-size:250% 100%;animation:oxShine 2.6s ease-in-out 1s infinite;pointer-events:none}
@@ -170,6 +171,7 @@
   .ox-crate.drop,.ox-card.show{animation-duration:.01s}
 }
 </style>
+<link rel="stylesheet" href="vip-3d.css?v=20261003a">
   <link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/assets/app/apple-touch-icon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black"><meta name="apple-mobile-web-app-title" content="Moldova RP"><script src="/pwa.js" defer></script><meta name="theme-color" content="#090a0b">
 </head>
 <body>
@@ -303,6 +305,7 @@
 </main>
 <script src="auth-client.js"></script>
 <script src="vip-weapons.js?v=20261001c"></script>
+<script src="vip-3d.js?v=20261003a"></script>
 <script>
 const escapeHtml = s => (s ?? '').toString()
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -352,6 +355,20 @@ function niceLabel(type, label, data) {
     return `$${n.toLocaleString('ro-RO')}${acc === 'black_money' ? ' bani murdari' : acc ? ' în bancă' : ''}`;
   }
   return raw;
+}
+// (03.10.2026) Vitrina 3D (vip-3d.js): ce îi trebuie ca să arate o mașină sau
+// o armă mare și rotită. Întoarce null pentru recompensele fără poză.
+function v3ItemOf(r, rarity) {
+  if (!r) return null;
+  const rar = rarity || r.rarity || rarityOf(Number(r.chancePercent) || 0);
+  const base = { label: niceLabel(r.type, r.label, r), rarity: rar, tier: OX_LABEL[rar] || '', ammo: r.ammo };
+  const w = weaponOf(r.type, r, r.label);
+  if (w) return { ...base, kind: 'wpn', src: w.src, accent: w.accent, key: w.item.toLowerCase() };
+  if (r.type === 'vehicle' && r.model) {
+    const model = String(r.model);
+    return { ...base, kind: 'car', src: `assets/vip-cars/${model}.png`, hdSrc: `assets/vip-cars-hd/${model}.webp`, accent: OX_COLOR[rar] || '#ff8a1f', key: model.toLowerCase() };
+  }
+  return null;
 }
 // „+ N gloanțe" lângă o armă care vine cu muniție (câmpul „ammo" al recompensei)
 function ammoNote(data) {
@@ -657,6 +674,7 @@ function poolRowsHtml(pool) {
 // mașini) apar sus, ca vitrină — poză mare, lumină în culoarea armei, punctul
 // de raritate — iar restul (bani, coins, iteme fără poză) rămân rânduri simple.
 function previewPoolHtml(pool) {
+  previewPrizeItems = [];
   const prizes = [], rest = [];
   for (const r of pool) {
     const w = weaponOf(r.type, r, r.label);
@@ -665,14 +683,28 @@ function previewPoolHtml(pool) {
     else rest.push(r);
   }
   if (!prizes.length) return poolRowsHtml(pool);
-  const tiles = prizes.map(({ r, src, accent, kind }) => `
-    <div class="prize-tile ${kind}" data-rarity="${rarityOf(r.chancePercent)}" style="--wa:${accent}">
-      <span class="odds-dot ${rarityOf(r.chancePercent)}"></span>
+  const tiles = prizes.map(({ r, src, accent, kind }, i) => `
+    <div class="prize-tile ${kind}" data-rarity="${rarityOf(r.chancePercent)}" style="--wa:${accent}" data-v3="${i}" tabindex="0" role="button" aria-label="${escapeHtml(niceLabel(r.type, r.label, r))} — vezi în 3D">
+      <span class="odds-dot ${rarityOf(r.chancePercent)}"></span><span class="prize-3d" aria-hidden="true">3D ↻</span>
       <div class="prize-img"><img src="${src}" alt="" loading="lazy" onerror="this.closest('.prize-tile').classList.add('no-img')"></div>
       <div class="prize-name">${escapeHtml(niceLabel(r.type, r.label, r))}${ammoNote(r)}</div>
     </div>`).join('');
+  previewPrizeItems = prizes.map(({ r }) => v3ItemOf(r)).filter(Boolean);
   return `<div class="prize-grid">${tiles}</div>${rest.length ? poolRowsHtml(rest) : ''}`;
 }
+let previewPrizeItems = [];
+// click / Enter pe un premiu din fereastra cutiei → vitrina 3D, cu săgeți între premii
+document.getElementById('preview-pool').addEventListener('click', e => {
+  const t = e.target.closest('[data-v3]');
+  if (t && window.MRP3D && previewPrizeItems.length) MRP3D.open(previewPrizeItems, Number(t.dataset.v3) || 0);
+});
+document.getElementById('preview-pool').addEventListener('keydown', e => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const t = e.target.closest('[data-v3]');
+  if (!t) return;
+  e.preventDefault();
+  if (window.MRP3D && previewPrizeItems.length) MRP3D.open(previewPrizeItems, Number(t.dataset.v3) || 0);
+});
 
 function renderCases(cases, coins, linked) {
   const panel = document.getElementById('cases-panel');
@@ -984,6 +1016,12 @@ function crateOpenTo(winner, caseObj) {
     if (!img) crate.insertAdjacentHTML('beforeend', '<div class="ox-emoji">📦</div>');
     card.className = 'ox-card';
     card.innerHTML = oxCardHtml({ ...winner, rarity });
+    const wonItem = v3ItemOf(winner, rarity);
+    if (wonItem && window.MRP3D) {
+      card.dataset.v3 = '1';
+      card.insertAdjacentHTML('beforeend', '<span class="ox-3d" aria-hidden="true">3D ↻</span>');
+      card.onclick = e => { e.stopPropagation(); MRP3D.open([wonItem], 0); };
+    } else { delete card.dataset.v3; card.onclick = null; }
 
     // ---- particule (canvas) ----
     const dpr = Math.min(window.devicePixelRatio || 1, 2);

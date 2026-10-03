@@ -1,0 +1,4 @@
+{
+  "_cum_se_foloseste": "Pentru fiecare masina sau arma cu poze din toate unghiurile: pune pozele in assets/vip-360/<cheie>/01.webp, 02.webp ... si adauga aici un rand. Cheia = modelul masinii (ex. jesko) sau itemul armei cu litere mici (ex. weapon_dracovvsgold). frames = cate poze sunt; ext = extensia lor; aspect = latime / inaltime.",
+  "items": {}
+}

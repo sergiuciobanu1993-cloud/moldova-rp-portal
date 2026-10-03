@@ -17,7 +17,7 @@
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const KIND = {
     wpn: { label: 'Armă', layers: 18, gap: 1.5, maxY: 58, maxX: 16, idleY: 24, ar: '3 / 2' },
-    car: { label: 'Mașină', layers: 10, gap: 1.4, maxY: 26, maxX: 9, idleY: 12, ar: '2 / 1' },
+    car: { label: 'Mașină', layers: 10, gap: 1.4, maxY: 26, maxX: 9, idleY: 12, ar: '16 / 9' },
   };
   const esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -174,26 +174,26 @@
     obj.style.setProperty('--v3-ar', k.ar);
     root.querySelector('[data-v3-mode]').textContent = '3D';
     root.querySelector('[data-v3-hint]').textContent = '↔ Trage ca să rotești';
-    const src = it.hdSrc || it.src;
+    // poza mare → poza obișnuită → poza din colecția serverului (prima care există)
+    const sources = [it.hdSrc, it.src, it.src2].filter(Boolean);
+    let si = 0;
     const depth = (k.layers - 1) * k.gap;
     let html = '';
     for (let i = k.layers - 1; i >= 0; i--) {     // de la spate spre față
       const z = depth / 2 - i * k.gap;
       const cls = i === 0 ? ' is-front' : ' is-back';
-      html += `<img class="v3-layer${cls}" src="${esc(src)}" alt="" style="transform:translateZ(${z.toFixed(1)}px)" draggable="false">`;
+      html += `<img class="v3-layer${cls}" src="${esc(sources[0])}" alt="" style="transform:translateZ(${z.toFixed(1)}px)" draggable="false">`;
     }
     html += `<div class="v3-sheen" style="transform:translateZ(${(depth / 2 + 1).toFixed(1)}px)"></div>`;
     obj.innerHTML = html;
-    obj.style.setProperty('--v3-mask', `url("${src}")`);
-    // poza mare lipsește? revenim la cea obișnuită
-    if (it.hdSrc) {
-      const probe = obj.querySelector('.v3-layer.is-front');
-      probe.addEventListener('error', () => {
-        if (!obj.isConnected) return;
-        obj.querySelectorAll('.v3-layer').forEach(im => { im.src = it.src; });
-        obj.style.setProperty('--v3-mask', `url("${it.src}")`);
-      }, { once: true });
-    }
+    obj.style.setProperty('--v3-mask', `url("${sources[0]}")`);
+    const probe = obj.querySelector('.v3-layer.is-front');
+    probe.addEventListener('error', () => {
+      if (!obj.isConnected || !probe.isConnected || si >= sources.length - 1) return;
+      si++;
+      obj.querySelectorAll('.v3-layer').forEach(im => { im.src = sources[si]; });
+      obj.style.setProperty('--v3-mask', `url("${sources[si]}")`);
+    });
   }
 
   function render360(it, urls, set) {

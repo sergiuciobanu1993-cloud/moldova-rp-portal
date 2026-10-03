@@ -171,7 +171,7 @@
   .ox-crate.drop,.ox-card.show{animation-duration:.01s}
 }
 </style>
-<link rel="stylesheet" href="vip-3d.css?v=20261003a">
+<link rel="stylesheet" href="vip-3d.css?v=20261003b">
   <link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/assets/app/apple-touch-icon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black"><meta name="apple-mobile-web-app-title" content="Moldova RP"><script src="/pwa.js" defer></script><meta name="theme-color" content="#090a0b">
 </head>
 <body>
@@ -305,7 +305,7 @@
 </main>
 <script src="auth-client.js"></script>
 <script src="vip-weapons.js?v=20261001c"></script>
-<script src="vip-3d.js?v=20261003a"></script>
+<script src="vip-3d.js?v=20261003b"></script>
 <script>
 const escapeHtml = s => (s ?? '').toString()
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -333,10 +333,30 @@ function weaponOf(type, data, label) {
   if (type !== 'item' || !window.MRPWeapons) return null;
   return MRPWeapons.find(data && data.item, label);
 }
+// (03.10.2026) Pozele mașinilor. Întâi poza ținută pe site
+// (assets/vip-cars/<model>.webp — mașinile puse în cutii), apoi poza din
+// colecția serverului (toate cele 1348 de mașini, aceleași nume = codul de
+// spawn), iar dacă nu există niciuna, 🚗. Așa orice mașină nouă pusă într-o
+// cutie are poză din prima, fără nicio modificare pe site.
+const CAR_CDN = 'https://r2.fivemanage.com/gi0w8W6O9hhBekF3oXfQ3/vehicule/';
+const carKey = model => encodeURIComponent(String(model || '').trim().toLowerCase());
+const carSrc = model => `assets/vip-cars/${carKey(model)}.webp`;
+const carCdn = model => `${CAR_CDN}${carKey(model)}.webp`;
+function carImg(model, attrs, fb) {
+  return `<img ${attrs || ''} src="${carSrc(model)}" data-car="${escapeHtml(String(model || ''))}"${fb ? ` data-fb="${fb}"` : ''} alt="" loading="lazy" onerror="carImgFallback(this)">`;
+}
+function carImgFallback(img) {
+  if (img.dataset.car && !img.dataset.cdn) { img.dataset.cdn = '1'; img.src = carCdn(img.dataset.car); return; }
+  img.onerror = null;
+  if (img.dataset.fb === 'ox') img.outerHTML = '<div class="ox-icon">🚗</div>';
+  else if (img.dataset.fb === 'tile') { const t = img.closest('.prize-tile'); if (t) t.classList.add('no-img'); }
+  else if (img.dataset.fb === 'reel') img.parentNode.outerHTML = '<div class="tile-icon">🚗</div>';
+  else img.outerHTML = '<span style="width:18px;text-align:center;flex:none">🚗</span>';
+}
 // Miniatura unei recompense în liste (mașină / armă / emoji).
 function rewardThumb(type, data, label) {
   if (type === 'vehicle' && data && data.model)
-    return `<img src="assets/vip-cars/${escapeHtml(data.model)}.png" alt="" loading="lazy" style="width:40px;height:22px;object-fit:contain;border-radius:3px;flex:none">`;
+    return carImg(data.model, 'style="width:44px;height:25px;object-fit:contain;border-radius:3px;flex:none"');
   const w = weaponOf(type, data, label);
   if (w) return `<img class="wpn-thumb" src="${w.src}" alt="" loading="lazy" style="--wa:${w.accent}" onerror="this.outerHTML='<span style=&quot;width:18px;text-align:center;flex:none&quot;>🔫</span>'">`;
   return `<span style="width:18px;text-align:center;flex:none">${rewardIcon(type, data, label)}</span>`;
@@ -366,7 +386,7 @@ function v3ItemOf(r, rarity) {
   if (w) return { ...base, kind: 'wpn', src: w.src, accent: w.accent, key: w.item.toLowerCase() };
   if (r.type === 'vehicle' && r.model) {
     const model = String(r.model);
-    return { ...base, kind: 'car', src: `assets/vip-cars/${model}.png`, hdSrc: `assets/vip-cars-hd/${model}.webp`, accent: OX_COLOR[rar] || '#ff8a1f', key: model.toLowerCase() };
+    return { ...base, kind: 'car', src: carSrc(model), src2: carCdn(model), hdSrc: `assets/vip-cars-hd/${carKey(model)}.webp`, accent: OX_COLOR[rar] || '#ff8a1f', key: model.toLowerCase() };
   }
   return null;
 }
@@ -679,14 +699,14 @@ function previewPoolHtml(pool) {
   for (const r of pool) {
     const w = weaponOf(r.type, r, r.label);
     if (w) prizes.push({ r, src: w.src, accent: w.accent, kind: 'wpn' });
-    else if (r.type === 'vehicle' && r.model) prizes.push({ r, src: `assets/vip-cars/${escapeHtml(r.model)}.png`, accent: '#ff8a1f', kind: 'car' });
+    else if (r.type === 'vehicle' && r.model) prizes.push({ r, src: carSrc(r.model), accent: '#ff8a1f', kind: 'car' });
     else rest.push(r);
   }
   if (!prizes.length) return poolRowsHtml(pool);
   const tiles = prizes.map(({ r, src, accent, kind }, i) => `
     <div class="prize-tile ${kind}" data-rarity="${rarityOf(r.chancePercent)}" style="--wa:${accent}" data-v3="${i}" tabindex="0" role="button" aria-label="${escapeHtml(niceLabel(r.type, r.label, r))} — vezi în 3D">
       <span class="odds-dot ${rarityOf(r.chancePercent)}"></span><span class="prize-3d" aria-hidden="true">3D ↻</span>
-      <div class="prize-img"><img src="${src}" alt="" loading="lazy" onerror="this.closest('.prize-tile').classList.add('no-img')"></div>
+      <div class="prize-img">${kind === 'car' ? carImg(r.model, '', 'tile') : `<img src="${src}" alt="" loading="lazy" onerror="this.closest('.prize-tile').classList.add('no-img')">`}</div>
       <div class="prize-name">${escapeHtml(niceLabel(r.type, r.label, r))}${ammoNote(r)}</div>
     </div>`).join('');
   previewPrizeItems = prizes.map(({ r }) => v3ItemOf(r)).filter(Boolean);
@@ -696,7 +716,7 @@ let previewPrizeItems = [];
 // click / Enter pe un premiu din fereastra cutiei → vitrina 3D, cu săgeți între premii
 document.getElementById('preview-pool').addEventListener('click', e => {
   const t = e.target.closest('[data-v3]');
-  if (t && window.MRP3D && previewPrizeItems.length) MRP3D.open(previewPrizeItems, Number(t.dataset.v3) || 0);
+  if (t && !t.classList.contains('no-img') && window.MRP3D && previewPrizeItems.length) MRP3D.open(previewPrizeItems, Number(t.dataset.v3) || 0);
 });
 document.getElementById('preview-pool').addEventListener('keydown', e => {
   if (e.key !== 'Enter' && e.key !== ' ') return;
@@ -839,7 +859,7 @@ function reelWeightedFiller(pool) {
 function reelTileHtml(reward) {
   const wpn = weaponOf(reward.type, reward, reward.label);
   const icon = (reward.type === 'vehicle' && reward.model)
-    ? `<div class="tile-icon has-photo"><img src="assets/vip-cars/${escapeHtml(reward.model)}.png" alt="" loading="lazy"></div>`
+    ? `<div class="tile-icon has-photo">${carImg(reward.model, '', 'reel')}</div>`
     : wpn ? `<div class="tile-icon has-photo is-wpn" style="--wa:${wpn.accent}"><img src="${wpn.src}" alt="" loading="lazy"></div>`
     : `<div class="tile-icon">${rewardIcon(reward.type, reward, reward.label)}</div>`;
   return `${icon}<div class="tile-label">${escapeHtml(niceLabel(reward.type, reward.label, reward))}</div>`;
@@ -979,7 +999,7 @@ let oxRun = 0; // crește la fiecare deschidere / închidere — oprește bucla 
 function oxCardHtml(w) {
   const wpn = weaponOf(w.type, w, w.label);
   const visual = (w.type === 'vehicle' && w.model)
-    ? `<img class="ox-photo" src="assets/vip-cars/${escapeHtml(w.model)}.png" alt="" onerror="this.outerHTML='<div class=&quot;ox-icon&quot;>🚗</div>'">`
+    ? carImg(w.model, 'class="ox-photo"', 'ox')
     : wpn ? `<div class="ox-wpn" style="--wa:${wpn.accent}"><img class="ox-photo" src="${wpn.src}" alt="" onerror="this.parentNode.outerHTML='<div class=&quot;ox-icon&quot;>🔫</div>'"></div>`
     : `<div class="ox-icon">${rewardIcon(w.type, w, w.label)}</div>`;
   return `${visual}<div class="ox-label">${escapeHtml(niceLabel(w.type, w.label, w))}${ammoNote(w)}</div><span class="ox-badge">${OX_LABEL[w.rarity] || ''}</span>`;

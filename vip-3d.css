@@ -22,7 +22,7 @@
 .v3-shadow{position:absolute;left:50%;bottom:12%;width:54%;height:26px;margin-left:-27%;border-radius:50%;background:radial-gradient(ellipse at center,rgba(0,0,0,.7),transparent 70%);filter:blur(6px);transform:scaleX(var(--v3-sh,1));pointer-events:none}
 
 .v3-obj{position:absolute;left:50%;top:46%;width:min(78%,560px);aspect-ratio:var(--v3-ar,3/2);transform:translate(-50%,-50%) rotateX(var(--v3-rx,0deg)) rotateY(var(--v3-ry,0deg));transform-style:preserve-3d;will-change:transform;pointer-events:none}
-.v3-obj.is-car{width:min(118%,860px)}   /* pozele mașinilor au margini goale în jur */
+.v3-obj.is-car{width:min(92%,700px)}
 .v3-layer{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;backface-visibility:hidden;-webkit-user-drag:none}
 .v3-layer.is-back{filter:brightness(.34) saturate(.8)}
 .v3-layer.is-front{filter:drop-shadow(0 0 1px rgba(255,255,255,.45))}
@@ -49,12 +49,16 @@
 .prize-tile[data-v3]:hover{transform:translateY(-3px);border-color:color-mix(in srgb,var(--wa,#ff8a1f) 60%,transparent)}
 .prize-tile[data-v3]:focus-visible{outline:2px solid var(--wa,#ff8a1f);outline-offset:2px}
 .prize-3d{position:absolute;top:6px;right:6px;padding:2px 7px;border-radius:999px;background:rgba(0,0,0,.5);border:1px solid rgba(255,255,255,.16);color:#d5d8db;font-size:9px;font-weight:900;letter-spacing:.08em}
+/* premiu fără nicio poză găsită: fără semnul 3D, cu o mașinuță în loc de poză */
+.prize-tile.no-img .prize-3d{display:none}
+.prize-tile.no-img::before{content:'🚗';font-size:34px;line-height:74px}
+.prize-tile.no-img[data-v3]{cursor:default}
 .ox-card[data-v3]{cursor:pointer}
 .ox-3d{position:absolute;top:10px;right:10px;z-index:2;padding:3px 9px;border-radius:999px;background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.2);color:#fff;font-size:10px;font-weight:900;letter-spacing:.08em}
 
 @media(max-width:560px){
   .v3-name{font-size:19px}
   .v3-stage{height:min(42vh,300px)}
-  .v3-obj{width:88%}.v3-obj.is-car{width:128%}
+  .v3-obj{width:88%}.v3-obj.is-car{width:100%}
 }
 @media (prefers-reduced-motion:reduce){.prize-tile[data-v3]{transition:none}}

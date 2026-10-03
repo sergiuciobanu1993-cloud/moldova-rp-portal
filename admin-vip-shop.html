@@ -198,6 +198,7 @@
         <p class="rf-sell muted wide" style="margin:-4px 0 0;font-size:11px;grid-column:1/-1">Jucătorul care câștigă asta o poate vinde înapoi pentru <b>50%</b> din valoare, în coins sau în bani — alege el. Lasă gol ca să nu se poată vinde.</p>
         <div class="field rf-vehicle wide"><label>Model (spawn code exact)</label><input id="rf-model" placeholder="ex: 2019chiron" list="known-models"><p class="muted" style="margin:6px 0 0">Trebuie să fie exact numele modelului de pe server (litere mici) — altfel /recompense va eșua în joc la ridicare.</p></div>
       </div>
+      <div class="rf-vehicle" id="rf-car-preview" hidden></div>
       <datalist id="known-items"></datalist>
       <datalist id="known-models"></datalist>
       <p class="formmsg" id="reward-form-msg" hidden></p>
@@ -546,6 +547,31 @@ function updateAmmoWarn() {
   warn.textContent = msg;
   warn.hidden = !msg;
 }
+// (03.10.2026) previzualizarea mașinii când scrii modelul: întâi poza de pe
+// site (assets/vip-cars), apoi colecția serverului (1348 de mașini).
+const CAR_CDN = 'https://r2.fivemanage.com/gi0w8W6O9hhBekF3oXfQ3/vehicule/';
+let carPrevTimer = null;
+function updateCarPreview() {
+  const box = document.getElementById('rf-car-preview');
+  if (!box) return;
+  clearTimeout(carPrevTimer);
+  const model = document.getElementById('rf-model').value.trim().toLowerCase();
+  const isVeh = document.getElementById('rf-type').value === 'vehicle';
+  if (!isVeh || model.length < 2) { box.hidden = true; box.innerHTML = ''; return; }
+  carPrevTimer = setTimeout(() => {
+    const key = encodeURIComponent(model);
+    const wrapOpen = '<div style="display:flex;align-items:center;gap:14px;padding:10px 14px;border:1px solid var(--line);border-radius:10px;margin-top:12px">';
+    box.hidden = false;
+    box.innerHTML = `${wrapOpen}<img alt="" style="width:160px;height:90px;object-fit:contain"><div><b>${escapeHtml(model)}</b><br><small class="muted">Poza apare automat în VIP Shop pentru acest model.</small></div></div>`;
+    const img = box.querySelector('img');
+    let step = 0;
+    img.onerror = () => {
+      if (step === 0) { step = 1; img.src = CAR_CDN + key + '.webp'; return; }
+      box.innerHTML = `<div style="padding:10px 14px;border:1px dashed var(--line);border-radius:10px;margin-top:12px;color:var(--muted);font-size:12px">Nu am găsit nicio poză pentru modelul <code>${escapeHtml(model)}</code>. Verifică dacă e scris exact ca în joc (codul de spawn, cu litere mici). În VIP Shop ar apărea cu 🚗.</div>`;
+    };
+    img.src = 'assets/vip-cars/' + key + '.webp';
+  }, 350);
+}
 // previzualizarea pozei când scrii numele armei în formular
 function updateWpnPreview() {
   const box = document.getElementById('rf-wpn-preview');
@@ -620,6 +646,7 @@ function openRewardModal(caseId, rewardId) {
   document.getElementById('rf-value-coins').value = (r && r.value_coins) || '';
   document.getElementById('rf-value-money').value = (r && r.value_money) || '';
   updateRewardTypeFields();
+  updateCarPreview();
   updatePercentPreview();
   document.getElementById('reward-form-msg').hidden = true;
   document.getElementById('reward-overlay').hidden = false;
@@ -636,6 +663,8 @@ document.getElementById('rf-account').addEventListener('change', updateDirtyFiel
 document.getElementById('rf-amount').addEventListener('input', updateDirtyField);
 document.getElementById('rf-exch-pct').addEventListener('input', updateDirtyField);
 document.getElementById('rf-item').addEventListener('input', updateWpnPreview);
+document.getElementById('rf-model').addEventListener('input', updateCarPreview);
+document.getElementById('rf-type').addEventListener('change', updateCarPreview);
 document.getElementById('rf-item').addEventListener('input', updateAmmoWarn);
 document.getElementById('rf-ammo').addEventListener('input', updateAmmoWarn);
 document.getElementById('rf-label').addEventListener('input', updateWpnPreview);

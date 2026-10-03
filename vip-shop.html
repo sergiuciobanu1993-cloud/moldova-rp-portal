@@ -459,7 +459,7 @@ function renderPending(pending) {
     const note = document.createElement('p');
     note.className = 'muted';
     note.style.margin = '10px 0 0';
-    note.textContent = `Ești într-o facțiune legală: banii murdari câștigați îi poți schimba în bani curați, în bancă, la ${ex.exchangeOffer.pct}% din sumă.`;
+    note.textContent = `${ex.exchangeOffer.scope === 'legal' ? 'Ești într-o facțiune legală: banii' : 'Banii'} murdari câștigați îi poți păstra sau îi poți schimba în bani curați, în bancă, la ${ex.exchangeOffer.pct}% din sumă. Alegi tu — nimic nu se schimbă singur.`;
     body.insertBefore(note, document.getElementById('sell-msg'));
   }
 }
@@ -1209,7 +1209,7 @@ async function openCase(caseId) {
     // schimbă pe loc în bani curați, în bancă, la procentul setat de staff.
     if (d.exchange && d.exchange.amount) {
       const clean = `$${Number(d.exchange.amount).toLocaleString('ro-RO')}`;
-      text.textContent = `Ai câștigat: ${wonLabel}. Ești într-o facțiune legală — îi poți schimba acum în ${clean} curați, în bancă (${d.exchange.pct}%).`;
+      text.textContent = `Ai câștigat: ${wonLabel}. ${d.exchange.scope === 'legal' ? 'Ești într-o facțiune legală — îi' : 'Îi'} păstrezi murdari sau îi schimbi acum în ${clean} curați, în bancă (${d.exchange.pct}%)?`;
       actions.innerHTML = `<button type="button" class="btn-primary" data-rexch="1">🧼 Schimbă în ${clean} curați</button>`;
       actions.style.display = 'flex';
       closeBtn.textContent = 'Păstrez banii murdari';

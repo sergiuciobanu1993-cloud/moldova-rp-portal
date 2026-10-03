@@ -82,6 +82,10 @@
   .lx-job small{color:var(--muted);font-size:10px}
   .lx-jobs .lx-job{display:inline-flex;margin:0;text-transform:none;letter-spacing:0;font-size:12px;font-weight:600;color:var(--text)}
   .lx-jobs .lx-job input{width:auto;padding:0}
+  .lx-scope{display:flex;flex-wrap:wrap;gap:8px}
+  .lx-scope .lx-job{display:inline-flex;margin:0;text-transform:none;letter-spacing:0;font-size:12px;font-weight:600;color:var(--text)}
+  .lx-scope .lx-job input{width:auto;padding:0}
+  .lx-scope .lx-job:has(input:checked){border-color:rgba(66,223,138,.45);background:rgba(66,223,138,.08)}
   .lx-add{display:flex;gap:8px;margin-top:12px;max-width:420px}
   .lx-add input{flex:1}
 </style>
@@ -95,8 +99,15 @@
 <p class="vip-intro">Aici adaugi, editezi sau ștergi cutiile și recompensele din <a href="vip-shop.html">VIP Shop</a> — direct de pe site, fără să mai fie nevoie de un update pe serverul de joc de fiecare dată. Șansa fiecărei recompense se calculează automat din „pondere" — valorile nu trebuie să însumeze 100, se normalizează singure (ex: dacă o recompensă are pondere 20 și toate din cutie însumează 1000, șansa ei afișată jucătorilor va fi 2%). O cutie dezactivată dispare din VIP Shop pentru jucători, dar rămâne salvată aici, gata de reactivat.</p>
 
 <details class="formbox lx-box" id="lx-box">
-  <summary><h2>🧼 Bani murdari → facțiuni legale</h2><span class="lx-state" id="lx-state">Se încarcă…</span></summary>
-  <p class="vip-intro" style="margin:0 0 16px">Când un membru al unei facțiuni legale câștigă <b>bani murdari</b> dintr-o cutie, imediat după învârtire (și în lista „Recompensele tale") primește opțiunea să-i schimbe în <b>bani curați, în bancă</b>, la procentul de mai jos. Dacă nu vrea, îi păstrează murdari. Jucătorii din facțiuni ilegale nu văd opțiunea.</p>
+  <summary><h2>🧼 Schimbul banilor murdari</h2><span class="lx-state" id="lx-state">Se încarcă…</span></summary>
+  <p class="vip-intro" style="margin:0 0 16px">Când un jucător câștigă <b>bani murdari</b> dintr-o cutie, imediat după învârtire (și în lista „Recompense în așteptare") <b>e întrebat</b>: îi păstrează murdari sau îi schimbă în <b>bani curați, în bancă</b>, la procentul de mai jos. Nimic nu se schimbă automat — dacă nu apasă butonul, primește banii murdari în joc.</p>
+  <div class="field" style="margin:0 0 16px">
+    <label>Cine poate schimba</label>
+    <div class="lx-scope">
+      <label class="lx-job"><input type="radio" name="lx-scope" value="all"> <span>Toți jucătorii</span></label>
+      <label class="lx-job"><input type="radio" name="lx-scope" value="legal"> <span>Doar facțiunile legale</span></label>
+    </div>
+  </div>
   <div class="lx-row">
     <div class="field checkbox"><input type="checkbox" id="lx-enabled"><label for="lx-enabled">Schimbul e activ</label></div>
     <div class="field">
@@ -106,7 +117,7 @@
   </div>
   <p class="lx-example" id="lx-example"></p>
   <p class="lx-routes" id="lx-routes"></p>
-  <div class="field" style="margin-top:14px">
+  <div class="field" style="margin-top:14px" id="lx-jobs-field">
     <label>Joburi care contează ca facțiuni legale</label>
     <small class="hint">Bifează joburile legale. Lista vine din jucătorii văzuți pe server (numele jobului din joc, ex. <code>police</code>); poți adăuga și manual.</small>
     <div class="lx-jobs" id="lx-jobs"></div>
@@ -711,7 +722,13 @@ function lxExample() {
   document.getElementById('lx-example').innerHTML = on
     ? `Exemplu: <b>$100.000</b> bani murdari → <b>$${Math.floor(100000 * pct / 100).toLocaleString('ro-RO')}</b> curați în bancă.`
     : 'Schimbul e oprit — nimeni nu vede opțiunea.';
-  document.getElementById('lx-state').textContent = on ? `Activ · ${pct}% · ${lx.checked.size} joburi` : 'Oprit';
+  const scope = lxScope();
+  document.getElementById('lx-jobs-field').hidden = scope !== 'legal';
+  document.getElementById('lx-state').textContent = on ? `Activ · ${pct}% · ${scope === 'legal' ? `${lx.checked.size} joburi legale` : 'toți jucătorii'}` : 'Oprit';
+}
+function lxScope() {
+  const r = document.querySelector('input[name="lx-scope"]:checked');
+  return r && r.value === 'legal' ? 'legal' : 'all';
 }
 // starea rutelor de pe serverul de joc: vânzarea înapoi și schimbul banilor murdari
 function lxRoutes(g) {
@@ -731,6 +748,7 @@ async function loadLegalExchange() {
     lx.known = d.jobs || [];
     lx.checked = new Set(d.settings.jobs || []);
     document.getElementById('lx-enabled').checked = !!d.settings.enabled;
+    document.querySelectorAll('input[name="lx-scope"]').forEach(r => { r.checked = r.value === (d.settings.scope === 'legal' ? 'legal' : 'all'); });
     document.getElementById('lx-pct-range').value = d.settings.pct;
     document.getElementById('lx-pct-num').value = d.settings.pct;
     lxRenderJobs();
@@ -743,6 +761,7 @@ async function loadLegalExchange() {
 document.getElementById('lx-pct-range').addEventListener('input', e => { document.getElementById('lx-pct-num').value = e.target.value; lxExample(); });
 document.getElementById('lx-pct-num').addEventListener('input', e => { document.getElementById('lx-pct-range').value = e.target.value; lxExample(); });
 document.getElementById('lx-enabled').addEventListener('change', lxExample);
+document.querySelectorAll('input[name="lx-scope"]').forEach(r => r.addEventListener('change', lxExample));
 document.getElementById('lx-add-btn').addEventListener('click', () => {
   const inp = document.getElementById('lx-new-job');
   const job = inp.value.trim().toLowerCase();
@@ -758,7 +777,7 @@ document.getElementById('lx-save').addEventListener('click', async () => {
   const pct = Number(document.getElementById('lx-pct-num').value);
   if (!(pct >= 1 && pct <= 100)) { alert('Procentul trebuie să fie între 1 și 100.'); return; }
   try {
-    const res = await apiFetch('/api/admin/vip-shop/schimb-legal', { method: 'PUT', body: JSON.stringify({ enabled: document.getElementById('lx-enabled').checked, pct, jobs: [...lx.checked] }) });
+    const res = await apiFetch('/api/admin/vip-shop/schimb-legal', { method: 'PUT', body: JSON.stringify({ enabled: document.getElementById('lx-enabled').checked, scope: lxScope(), pct, jobs: [...lx.checked] }) });
     const d = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(d.error || 'Nu am putut salva.');
     lx.checked = new Set(d.settings.jobs);

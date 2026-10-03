@@ -1386,8 +1386,12 @@ function parseRewardData(raw) {
 // bani murdari la VIP Shop îi poate schimba, înainte să-i ridice, în bani
 // curați în bancă — la procentul setat de staff (implicit 70%). Lista de
 // joburi „legale" și procentul se editează din Editorul VIP Shop.
+// (03.10.2026, cerut de Sergiu) „scope" = cine primește alegerea între a păstra
+// banii murdari și a-i schimba: "all" = orice jucător (implicit de acum),
+// "legal" = doar membrii facțiunilor legale (cum era de la început).
 const LEGAL_EXCHANGE_DEFAULT = {
   enabled: true,
+  scope: "all",
   pct: 70,
   jobs: ["police", "sheriff", "ambulance", "army", "fib", "gov", "doj"],
 };
@@ -1398,6 +1402,7 @@ function normalizeLegalExchange(v) {
     : LEGAL_EXCHANGE_DEFAULT.jobs;
   return {
     enabled: v?.enabled !== false,
+    scope: v?.scope === "legal" ? "legal" : "all",
     pct: Number.isFinite(pct) && pct >= 1 && pct <= 100 ? pct : LEGAL_EXCHANGE_DEFAULT.pct,
     jobs,
   };
@@ -1435,6 +1440,14 @@ async function isLegalFactionMember(identifier, settings) {
     return false;
   }
 }
+// Are jucătorul voie să-și schimbe banii murdari? Toți (scope "all") sau doar
+// facțiunile legale (scope "legal"). Schimbul nu e niciodată automat: apare
+// doar ca buton, iar jucătorul alege dacă îi păstrează murdari.
+async function canExchangeDirty(identifier, settings) {
+  if (!identifier) return false;
+  if (settings.scope !== "legal") return true;
+  return isLegalFactionMember(identifier, settings);
+}
 // (01.10.2026) Vânzarea înapoi (/cases/sell) și schimbul banilor murdari
 // (/cases/convert) le face serverul de joc. Cât timp rutele lipsesc acolo
 // (răspund 404), NU mai arătăm butoanele jucătorilor — altfel apasă și
@@ -1459,13 +1472,13 @@ setTimeout(() => probeGameRoutes().catch(() => {}), 20_000);
 setInterval(() => probeGameRoutes().catch(() => {}), 15 * 60_000);
 const gameRouteOk = key => gameRouteReady[key] !== false;
 
-// Oferta de schimb pentru o recompensă: doar bani murdari, doar pentru legali.
+// Oferta de schimb pentru o recompensă: doar bani murdari, doar pentru cine are voie.
 function exchangeOfferFor(settings, isLegal, type, data) {
   if (!settings.enabled || !isLegal || type !== "cash") return null;
   if (String(data?.account || "") !== "black_money") return null;
   const from = Math.floor(Number(data?.amount) || 0);
   if (from <= 0) return null;
-  return { from, amount: Math.floor(from * settings.pct / 100), pct: settings.pct };
+  return { from, amount: Math.floor(from * settings.pct / 100), pct: settings.pct, scope: settings.scope };
 }
 
 // Lista publică (/cases) nu are id-uri, dar vine în aceeași ordine ca lista de
@@ -2309,7 +2322,7 @@ app.get("/api/vip-shop", auth, asyncRoute(async (req, res) => {
   const [coinsResult, casesResult, itemValues, legalCfg] = await Promise.all([fetchCoins(identifier), fetchCasesList(), loadItemValues(), loadLegalExchange()]);
   casesResult.cases = await applyOrderToPublicCases(casesResult.cases);
   const hasDirty = (coinsResult.pending || []).some(p => p.reward_type === "cash" && parseRewardData(p.reward_data).account === "black_money");
-  const isLegal = hasDirty && legalCfg.enabled ? await isLegalFactionMember(identifier, legalCfg) : false;
+  const isLegal = hasDirty && legalCfg.enabled ? await canExchangeDirty(identifier, legalCfg) : false;
   coinsResult.pending = (coinsResult.pending || []).map(p => {
     const data = parseRewardData(p.reward_data);
     return {
@@ -2365,7 +2378,7 @@ app.post("/api/vip-shop/deschide", auth, asyncRoute(async (req, res) => {
   let exchange = null;
   if (won && won.type === "cash" && String(won.data?.account || "") === "black_money" && gameRouteOk("convert")) {
     const legalCfg = await loadLegalExchange();
-    if (legalCfg.enabled && await isLegalFactionMember(identifier, legalCfg)) {
+    if (legalCfg.enabled && await canExchangeDirty(identifier, legalCfg)) {
       const offer = exchangeOfferFor(legalCfg, true, won.type, won.data);
       const coinsResult = await fetchCoins(identifier);
       const opening = (coinsResult.pending || [])
@@ -2432,7 +2445,7 @@ app.post("/api/vip-shop/schimba", auth, asyncRoute(async (req, res) => {
   if (!legalCfg.enabled) return res.status(400).json({ error: "Schimbul banilor murdari e oprit momentan." });
   const opening = (coinsResult.pending || []).find(p => Number(p.id) === openingId);
   if (!opening) return res.status(400).json({ error: "Recompensa nu mai e în așteptare (poate ai ridicat-o deja)." });
-  if (!(await isLegalFactionMember(identifier, legalCfg))) {
+  if (!(await canExchangeDirty(identifier, legalCfg))) {
     return res.status(403).json({ error: "Schimbul e doar pentru membrii facțiunilor legale." });
   }
   const offer = exchangeOfferFor(legalCfg, true, opening.reward_type, parseRewardData(opening.reward_data));
@@ -2576,7 +2589,7 @@ app.get("/api/admin/vip-shop/schimb-legal", auth, requireRole(...FOUNDER_ROLES),
 app.put("/api/admin/vip-shop/schimb-legal", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
   const pct = Math.floor(Number(req.body?.pct));
   if (!Number.isFinite(pct) || pct < 1 || pct > 100) return res.status(400).json({ error: "Procentul trebuie să fie între 1 și 100." });
-  const settings = normalizeLegalExchange({ enabled: req.body?.enabled !== false, pct, jobs: req.body?.jobs });
+  const settings = normalizeLegalExchange({ enabled: req.body?.enabled !== false, scope: req.body?.scope, pct, jobs: req.body?.jobs });
   await pool.query(
     `INSERT INTO vip_settings(key, value, updated_at) VALUES ('legal_exchange', $1, NOW())
      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,

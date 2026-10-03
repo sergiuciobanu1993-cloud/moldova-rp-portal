@@ -37,3 +37,16 @@
 .hero-ticket-cta strong{display:block;font-size:15px;line-height:1.2}
 .hero-ticket-cta small{display:block;margin-top:3px;color:#c8ccd0;font-size:11px;line-height:1.35}
 .hero-ticket-arrow{margin-left:auto;font-size:20px;font-weight:900;color:var(--orange,#ff8a1f)}
+
+/* Buton mare „VIP Shop", deasupra celui de tichete (03.10.2026) — auriu, cu
+   un luciu care trece peste el din când în când, ca să iasă în evidență. */
+.hero-vip-cta{position:relative;overflow:hidden;padding:17px 16px;border-color:rgba(255,201,60,.65);background:linear-gradient(135deg,rgba(255,201,60,.26),rgba(255,138,31,.12) 55%,rgba(255,201,60,.06));box-shadow:0 12px 30px rgba(255,190,60,.18)}
+.hero-vip-cta:hover{border-color:#ffc93c;background:linear-gradient(135deg,rgba(255,201,60,.36),rgba(255,138,31,.18) 55%,rgba(255,201,60,.1))}
+.hero-vip-cta:focus-visible{outline-color:#ffc93c}
+.hero-vip-cta .hero-ticket-icon{width:48px;height:48px;font-size:25px;background:linear-gradient(145deg,#ffd76a,#ff9d1f);box-shadow:0 6px 16px rgba(255,180,50,.35)}
+.hero-vip-cta strong{font-size:18px;letter-spacing:.01em}
+.hero-vip-cta small{color:#e3d6b8}
+.hero-vip-cta .hero-ticket-arrow{color:#ffc93c}
+.hero-vip-cta::after{content:'';position:absolute;inset:0;background:linear-gradient(110deg,transparent 40%,rgba(255,255,255,.22) 50%,transparent 60%);background-size:260% 100%;background-position:140% 0;animation:hero-vip-shine 4.5s ease-in-out 1.2s infinite;pointer-events:none}
+@keyframes hero-vip-shine{0%,55%{background-position:140% 0}100%{background-position:-60% 0}}
+@media (prefers-reduced-motion:reduce){.hero-vip-cta::after{animation:none}}

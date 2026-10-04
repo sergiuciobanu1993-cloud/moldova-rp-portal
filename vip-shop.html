@@ -48,35 +48,6 @@
   text-underline-offset:2px;text-decoration-color:rgba(146,151,157,.5)}
 .pool-more-link:hover{color:var(--orange);text-decoration-color:var(--orange)}
 
-/* ---- derulatorul de deschidere ("reel"), stil CS:GO — la fel ca pe linkul
-   de test, doar că aici recompensa vine deja decisă de server (nu se alege
-   client-side): apelăm /api/vip-shop/deschide, apoi derulatorul se
-   construiește în jurul recompensei REALE și se oprește exact pe ea. ---- */
-.reveal-stage{position:relative;margin:4px 0 18px}
-.reveal-spotlight{position:absolute;left:50%;top:-30px;width:280px;height:140px;transform:translateX(-50%);background:radial-gradient(ellipse at 50% 0%,rgba(255,138,31,.16),transparent 70%);pointer-events:none;z-index:0}
-.reveal-frame{position:relative;border-radius:10px;border:1px solid var(--line);background:var(--bg);overflow:hidden;height:132px;z-index:1}
-.reveal-marker{position:absolute;left:50%;top:0;bottom:0;width:2px;transform:translateX(-50%);background:var(--orange);z-index:4;opacity:0;transition:opacity .3s ease;box-shadow:0 0 12px 1px rgba(255,138,31,.6)}
-.reveal-marker.active{opacity:1}
-.reveal-marker::before,.reveal-marker::after{content:'';position:absolute;left:50%;transform:translateX(-50%);width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent}
-.reveal-marker::before{top:-1px;border-top:7px solid var(--orange)}
-.reveal-marker::after{bottom:-1px;border-bottom:7px solid var(--orange)}
-.reveal-fade{position:absolute;top:0;bottom:0;width:70px;z-index:2;pointer-events:none}
-.reveal-fade.left{left:0;background:linear-gradient(90deg,var(--bg),transparent)}
-.reveal-fade.right{right:0;background:linear-gradient(270deg,var(--bg),transparent)}
-.reveal-flash{position:absolute;inset:0;z-index:3;pointer-events:none;background:radial-gradient(circle at 50% 50%,rgba(255,138,31,.55),transparent 65%);opacity:0}
-.reveal-flash.hit{animation:revealFlash .55s ease-out}
-@keyframes revealFlash{0%{opacity:0}12%{opacity:1}100%{opacity:0}}
-.reveal-track{position:absolute;top:0;bottom:0;left:0;display:flex;align-items:center;gap:10px;padding:0 10px;will-change:transform}
-.reel-tile{flex:none;width:118px;height:112px;border-radius:9px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:10px 8px;border:1px solid var(--line);position:relative;transform:scale(1);filter:brightness(1);transition:transform .12s ease,filter .12s ease,border-color .12s ease}
-.reel-tile[data-rarity="common"]{background:linear-gradient(155deg,rgba(144,152,163,.28),var(--panel) 62%)}
-.reel-tile[data-rarity="uncommon"]{background:linear-gradient(155deg,rgba(75,123,255,.3),var(--panel) 62%)}
-.reel-tile[data-rarity="rare"]{background:linear-gradient(155deg,rgba(161,62,224,.32),var(--panel) 62%)}
-.reel-tile[data-rarity="legendary"]{background:linear-gradient(155deg,rgba(255,179,71,.4),rgba(235,75,75,.22) 45%,var(--panel) 75%)}
-.reel-tile .tile-icon{width:32px;height:32px;display:flex;align-items:center;justify-content:center;font-size:24px;flex:none}
-.reel-tile .tile-icon.has-photo{width:88px;height:44px}
-.reel-tile .tile-icon.has-photo img{width:100%;height:100%;object-fit:contain;display:block}
-.reel-tile .tile-icon.is-wpn{width:96px;height:54px}
-.reel-tile .tile-icon.is-wpn img{filter:drop-shadow(0 0 1px rgba(255,255,255,.4)) drop-shadow(0 3px 5px rgba(0,0,0,.55)) drop-shadow(0 0 9px color-mix(in srgb,var(--wa,#fff) 50%,transparent))}
 .prize-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(128px,1fr));gap:8px;margin-bottom:6px}
 .prize-tile{position:relative;display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 8px 9px;border-radius:10px;border:1px solid var(--line);background:linear-gradient(160deg,color-mix(in srgb,var(--wa,#fff) 13%,transparent),rgba(255,255,255,.02) 60%);overflow:hidden}
 .prize-tile .odds-dot{position:absolute;top:8px;left:8px}
@@ -88,16 +59,10 @@
 .prize-tile[data-rarity="legendary"]{border-color:rgba(255,179,71,.4)}
 .wpn-thumb{width:46px;height:30px;object-fit:contain;flex:none;filter:drop-shadow(0 0 1px rgba(255,255,255,.45)) drop-shadow(0 0 5px color-mix(in srgb,var(--wa,#fff) 55%,transparent))}
 .ammo-note{display:inline-block;margin-left:4px;padding:1px 7px;border-radius:999px;background:rgba(255,201,60,.12);border:1px solid rgba(255,201,60,.35);color:#ffd874;font-size:10px;font-weight:800;white-space:nowrap;vertical-align:middle}
-.reel-tile .tile-label{font-size:10px;text-align:center;line-height:1.25;color:var(--text);font-weight:800}
-.reel-tile.tick{transform:scale(1.08);filter:brightness(1.35);border-color:var(--orange)}
-.reel-tile.win-glow{border-color:var(--orange);box-shadow:0 0 0 1px var(--orange),0 0 22px rgba(255,138,31,.45);animation:revealWinPulse 1.1s ease-out .1s 2}
-@keyframes revealWinPulse{0%{box-shadow:0 0 0 1px var(--orange),0 0 0 rgba(255,138,31,0)}40%{box-shadow:0 0 0 1px var(--orange),0 0 30px rgba(255,138,31,.6)}100%{box-shadow:0 0 0 1px var(--orange),0 0 22px rgba(255,138,31,.45)}}
-#reveal-panel.shake{animation:revealShake .38s cubic-bezier(.36,.07,.19,.97)}
-@keyframes revealShake{10%,90%{transform:translateX(-1px)}20%,80%{transform:translateX(2px)}30%,50%,70%{transform:translateX(-4px)}40%,60%{transform:translateX(4px)}}
-/* ---- Deschidere cinematică (30.09.2026), în stil PUBG: cutia cade, se
-   încarcă (culoarea urcă prin rarități până la cea câștigată), explodează,
-   iar recompensa apare pe un card care se întoarce, cu raze în spate.
-   Recompensa e DEJA decisă de server — animația doar o prezintă. ---- */
+/* ---- Deschiderea (04.10.2026): premiile cutiei se rotesc pe orizontală,
+   încetinesc și se opresc cu premiul câștigat în mijloc; apoi premiul iese în
+   față pe un card mare, cu raze în spate, iar restul șirului se stinge.
+   Recompensa e DEJA decisă de server — rotirea doar o prezintă. ---- */
 #reveal-panel.is-cinema{max-width:760px!important}
 .ox-stage{--ox:#9aa3ad;position:relative;height:380px;margin:6px 0 14px;border-radius:14px;overflow:hidden;isolation:isolate;cursor:pointer;user-select:none;
   background:radial-gradient(ellipse 70% 60% at 50% 55%,color-mix(in srgb,var(--ox) 20%,#0b0c0d),#060708 75%);transition:background .4s}
@@ -108,26 +73,11 @@
   -webkit-mask:radial-gradient(circle,#000 0,transparent 55%);mask:radial-gradient(circle,#000 0,transparent 55%);animation:oxSpin 16s linear infinite;transition:opacity .7s}
 .ox-stage.is-open .ox-rays{opacity:.85}
 @keyframes oxSpin{to{transform:rotate(360deg)}}
-.ox-floor{position:absolute;left:50%;bottom:56px;width:320px;height:44px;margin-left:-160px;border-radius:50%;background:radial-gradient(ellipse,rgba(0,0,0,.75),transparent 70%);z-index:1;transition:opacity .4s}
-.ox-stage.is-open .ox-floor{opacity:0}
 .ox-glow{position:absolute;left:50%;top:50%;width:420px;height:420px;margin:-210px 0 0 -210px;border-radius:50%;z-index:1;pointer-events:none;
   background:radial-gradient(circle,color-mix(in srgb,var(--ox) 75%,transparent),transparent 62%);opacity:var(--glow,.15);filter:blur(10px)}
 .ox-ring{position:absolute;left:50%;top:50%;width:130px;height:130px;margin:-65px 0 0 -65px;border-radius:50%;border:3px solid var(--ox);opacity:0;z-index:2;pointer-events:none}
 .ox-ring.go{animation:oxRing .75s ease-out}
 @keyframes oxRing{0%{opacity:.95;transform:scale(.4)}100%{opacity:0;transform:scale(4.4)}}
-.ox-crate{position:absolute;left:50%;top:50%;width:340px;height:189px;margin:-112px 0 0 -170px;z-index:2;transform-origin:50% 85%;opacity:0}
-.ox-crate .half{position:absolute;inset:0;border-radius:14px;background:#15171a center/cover no-repeat;
-  -webkit-mask:radial-gradient(ellipse 60% 64% at 50% 50%,#000 62%,transparent 100%);mask:radial-gradient(ellipse 60% 64% at 50% 50%,#000 62%,transparent 100%)}
-.ox-crate .half.l{clip-path:inset(0 50% 0 0)}
-.ox-crate .half.r{clip-path:inset(0 0 0 50%)}
-.ox-crate .ox-emoji{position:absolute;inset:0;display:grid;place-items:center;font-size:110px}
-.ox-crate.drop{animation:oxDrop .75s cubic-bezier(.3,1.45,.5,1) both}
-@keyframes oxDrop{0%{transform:translateY(-280px) scale(.75);opacity:0}55%{opacity:1}100%{transform:none;opacity:1}}
-.ox-crate.burst{opacity:1}
-.ox-crate.burst .half{transition:transform .7s cubic-bezier(.15,.8,.2,1),opacity .5s .15s;opacity:0}
-.ox-crate.burst .half.l{transform:translate(-190px,-40px) rotate(-22deg)}
-.ox-crate.burst .half.r{transform:translate(190px,-40px) rotate(22deg)}
-.ox-crate.gone{opacity:0}
 .ox-card{position:absolute;left:50%;top:50%;width:260px;min-height:250px;margin:-135px 0 0 -130px;z-index:4;border-radius:18px;padding:20px 16px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;
   background:linear-gradient(160deg,color-mix(in srgb,var(--ox) 34%,#16181b),#0c0e0f 72%);border:2px solid var(--ox);
   box-shadow:0 0 0 1px rgba(0,0,0,.6),0 0 46px color-mix(in srgb,var(--ox) 60%,transparent),inset 0 0 30px color-mix(in srgb,var(--ox) 18%,transparent);opacity:0;pointer-events:none}
@@ -161,14 +111,13 @@
 .ox-sound:focus-visible{outline:2px solid var(--orange);outline-offset:2px}
 @media (max-width:600px){
   .ox-stage{height:320px}
-  .ox-crate{width:260px;height:145px;margin:-86px 0 0 -130px}
   .ox-card{width:220px;min-height:220px;margin:-118px 0 0 -110px}
   .ox-card .ox-photo{width:190px;height:100px}
   .ox-wpn{width:210px;height:136px}
 }
 @media (prefers-reduced-motion:reduce){
   .ox-rays,.ox-card::after{animation:none}
-  .ox-crate.drop,.ox-card.show{animation-duration:.01s}
+  .ox-card.show{animation-duration:.01s}
 }
 
 /* ---- (04.10.2026) Banda „Ultimele câștiguri": ce premii au ieșit din ultimele
@@ -228,7 +177,33 @@ button.win-chip:focus-visible{outline:2px solid var(--orange);outline-offset:2px
 .ox-card.show .ox-corner{animation:oxCorner .5s cubic-bezier(.2,1.5,.4,1) .55s forwards}
 .ox-card.show.quick .ox-corner,.ox-card.show.instant .ox-corner{animation-delay:.12s}
 @keyframes oxCorner{from{opacity:0;transform:translate(var(--cx),var(--cy))}to{opacity:1;transform:none}}
-.ox-card.quick{animation-duration:.5s}
+.ox-card.pop{animation:oxPopIn .5s cubic-bezier(.2,1.35,.4,1) forwards}
+@keyframes oxPopIn{from{opacity:0;transform:scale(.62)}to{opacity:1;transform:none}}
+.ox-card.show.pop .ox-corner{animation-delay:.14s}
+
+/* ---- Rotirea premiilor ---- */
+.ox-stage{--tw:168px;--th:208px;--tg:12px}
+.rl-view{position:absolute;inset:0;z-index:2;overflow:hidden;transition:opacity .45s ease,filter .45s ease;
+  -webkit-mask-image:linear-gradient(90deg,transparent,#000 13%,#000 87%,transparent);mask-image:linear-gradient(90deg,transparent,#000 13%,#000 87%,transparent)}
+.rl-track{position:absolute;left:0;top:50%;display:flex;gap:var(--tg);margin-top:calc(var(--th) / -2);will-change:transform}
+.rl-track.settle{transition:transform .32s cubic-bezier(.3,1.2,.5,1)}
+.rl-tile{--rc:var(--r-common);flex:none;width:var(--tw);height:var(--th);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:12px 10px;border-radius:12px;border:1px solid var(--line);border-bottom:3px solid var(--rc);
+  background:linear-gradient(0deg,color-mix(in srgb,var(--rc) 28%,#101214),#101214 72%);opacity:.5;transform:scale(.92);transition:opacity .14s ease,transform .14s ease}
+.rl-tile.is-mid{opacity:1;transform:scale(1)}
+.rl-tile[data-rarity="uncommon"]{--rc:var(--r-uncommon)}
+.rl-tile[data-rarity="rare"]{--rc:var(--r-rare)}
+.rl-tile[data-rarity="legendary"]{--rc:var(--r-legendary-b)}
+.rl-img{flex:none;width:100%;height:102px;display:grid;place-items:center;font-size:52px;line-height:1}
+.rl-img img{max-width:100%;max-height:102px;object-fit:contain;filter:drop-shadow(0 6px 8px rgba(0,0,0,.6))}
+.rl-name{width:100%;font-size:12.5px;font-weight:800;line-height:1.25;text-align:center;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.rl-frame{position:absolute;left:50%;top:50%;z-index:3;width:calc(var(--tw) + 30px);height:calc(var(--th) + 30px);transform:translate(-50%,-50%);pointer-events:none;transition:opacity .25s ease}
+.rl-frame i{position:absolute;width:24px;height:24px;border:3px solid rgba(255,255,255,.7)}
+.rl-frame .tl{left:0;top:0;border-right:0;border-bottom:0;border-top-left-radius:7px}
+.rl-frame .tr{right:0;top:0;border-left:0;border-bottom:0;border-top-right-radius:7px}
+.rl-frame .bl{left:0;bottom:0;border-right:0;border-top:0;border-bottom-left-radius:7px}
+.rl-frame .br{right:0;bottom:0;border-left:0;border-top:0;border-bottom-right-radius:7px}
+.ox-stage.is-open .rl-view{opacity:.3;filter:saturate(.55)}
+.ox-stage.is-open .rl-frame{opacity:0}
 
 /* ---- Mai multe cutii odată: șirul cu premiile de până acum ---- */
 .reveal-count{margin:0 0 6px;font-size:10px;font-weight:900;letter-spacing:.2em;text-transform:uppercase;color:var(--orange);font-variant-numeric:tabular-nums}
@@ -260,6 +235,11 @@ button.win-chip:focus-visible{outline:2px solid var(--orange);outline-offset:2px
 .ask-actions [hidden]{display:none}
 
 @media (max-width:600px){
+  .ox-stage{--tw:116px;--th:150px;--tg:8px}
+  .rl-tile{gap:7px;padding:9px 7px}
+  .rl-img{height:66px;font-size:36px}
+  .rl-img img{max-height:66px}
+  .rl-name{font-size:11px}
   .qty{flex-wrap:wrap}
   .qty-label{flex-basis:100%;margin:0 0 2px}
   .qty button{width:40px;height:40px}
@@ -387,25 +367,15 @@ button.win-chip:focus-visible{outline:2px solid var(--orange);outline-offset:2px
     <div class="ox-stage" id="ox-stage" hidden>
       <div class="ox-rays"></div>
       <div class="ox-glow"></div>
-      <div class="ox-floor"></div>
+      <div class="rl-view" id="rl-view"><div class="rl-track" id="rl-track"></div></div>
+      <div class="rl-frame" aria-hidden="true"><i class="tl"></i><i class="tr"></i><i class="bl"></i><i class="br"></i></div>
       <div class="ox-ring" id="ox-ring"></div>
-      <div class="ox-crate" id="ox-crate"><div class="half l"></div><div class="half r"></div></div>
       <div class="ox-card" id="ox-card"></div>
       <canvas class="ox-fx" id="ox-fx"></canvas>
       <div class="ox-flash" id="ox-flash"></div>
       <div class="ox-tier" id="ox-tier"></div>
-      <div class="ox-hint">Apasă ca să sari animația</div>
+      <div class="ox-hint">Apasă ca să sari peste rotire</div>
       <button type="button" class="ox-sound" id="ox-sound" aria-label="Sunet deschidere">🔊</button>
-    </div>
-    <div class="reveal-stage" style="display:none">
-      <div class="reveal-spotlight"></div>
-      <div class="reveal-frame" id="reveal-frame">
-        <div class="reveal-fade left"></div>
-        <div class="reveal-fade right"></div>
-        <div class="reveal-flash" id="reveal-flash"></div>
-        <div class="reveal-marker" id="reveal-marker"></div>
-        <div class="reveal-track" id="reveal-track"></div>
-      </div>
     </div>
     <div id="reveal-actions" style="display:none;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:18px"></div>
     <p id="reveal-sell-msg" class="muted" style="margin:10px 0 0" hidden></p>
@@ -495,7 +465,6 @@ function carImgFallback(img) {
   img.onerror = null;
   if (img.dataset.fb === 'ox') img.outerHTML = '<div class="ox-icon">🚗</div>';
   else if (img.dataset.fb === 'tile') { const t = img.closest('.prize-tile'); if (t) t.classList.add('no-img'); }
-  else if (img.dataset.fb === 'reel') img.parentNode.outerHTML = '<div class="tile-icon">🚗</div>';
   else if (img.dataset.fb === 'chip') {
     const chip = img.closest('.win-chip');
     if (chip) chip.dataset.noimg = '1';
@@ -1096,119 +1065,23 @@ document.addEventListener('keydown', e => {
   btns[(i + (e.shiftKey ? -1 : 1) + btns.length) % btns.length].focus();
 });
 
-// ---- Derulatorul de deschidere ("reel"), stil CS:GO — la fel ca pe linkul
-// de test. Diferența față de test: acolo recompensa e aleasă client-side
-// (nu e conectată la nimic real); AICI recompensa e deja decisă de SERVER
-// (vezi openOne() mai jos, care apelează /api/vip-shop/deschide ÎNAINTE să
-// pornească derulatorul) — derulatorul doar se construiește în jurul
-// recompensei reale primite și se oprește exact pe ea. Tile-urile din jur
-// (umplutura derulatorului) sunt alese aleatoriu din pool-ul cutiei, doar
-// pentru efect vizual — nu influențează în niciun fel recompensa.
-const REEL_TILE_W = 118, REEL_GAP = 10, REEL_STEP = REEL_TILE_W + REEL_GAP;
-const REEL_LEN = 46, REEL_WIN_INDEX = 38;
-
+// ---- Rotirea premiilor (04.10.2026) ----
+// Recompensa e deja decisă de SERVER (vezi openBatch() mai jos, care apelează
+// /api/vip-shop/deschide ÎNAINTE să pornească rotirea) — șirul de premii doar
+// se construiește în jurul recompensei reale și se oprește exact pe ea.
+// Celelalte premii din șir sunt alese la întâmplare din conținutul cutiei,
+// după șansele ei reale, doar pentru efect — nu influențează nimic.
 function reelWeightedFiller(pool) {
   const total = pool.reduce((s, r) => s + (Number(r.chancePercent) || 0), 0) || 1;
   let roll = Math.random() * total, acc = 0;
   for (const r of pool) { acc += (Number(r.chancePercent) || 0); if (roll <= acc) return r; }
   return pool[pool.length - 1];
 }
+// Încetinire: pornește repede, iar ultimele 2–3 premii trec rar prin mijloc,
+// fără să stea secunde întregi pe loc la final.
+function reelEase(t) { return 1 - Math.pow(1 - t, 2.4); }
 
-function reelTileHtml(reward) {
-  const wpn = weaponOf(reward.type, reward, reward.label);
-  const icon = (reward.type === 'vehicle' && reward.model)
-    ? `<div class="tile-icon has-photo">${carImg(reward.model, '', 'reel')}</div>`
-    : wpn ? `<div class="tile-icon has-photo is-wpn" style="--wa:${wpn.accent}"><img src="${wpn.src}" alt="" loading="lazy"></div>`
-    : `<div class="tile-icon">${rewardIcon(reward.type, reward, reward.label)}</div>`;
-  return `${icon}<div class="tile-label">${escapeHtml(niceLabel(reward.type, reward.label, reward))}</div>`;
-}
-
-function reelBuildTrack(track, winner, pool) {
-  track.innerHTML = '';
-  const positions = [];
-  for (let i = 0; i < REEL_LEN; i++) {
-    const reward = (i === REEL_WIN_INDEX) ? winner : reelWeightedFiller(pool);
-    const rarity = reward.rarity || rarityOf(Number(reward.chancePercent) || 0);
-    const el = document.createElement('div');
-    el.className = 'reel-tile';
-    el.dataset.rarity = rarity;
-    el.innerHTML = reelTileHtml(reward);
-    track.appendChild(el);
-    positions.push(i * REEL_STEP + REEL_TILE_W / 2 + 10);
-  }
-  return positions;
-}
-
-function reelEaseOutQuint(t) { return 1 - Math.pow(1 - t, 5); }
-function reelEaseInOutQuad(t) { return t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; }
-
-function reelAnimate(track, fromX, toX, duration, easeFn, onFrame, onDone) {
-  let start = null;
-  function step(ts) {
-    if (start === null) start = ts;
-    const t = Math.min(1, (ts - start) / duration);
-    const x = fromX + (toX - fromX) * easeFn(t);
-    track.style.transform = `translateX(${x}px)`;
-    if (onFrame) onFrame(x);
-    if (t < 1) requestAnimationFrame(step); else onDone();
-  }
-  requestAnimationFrame(step);
-}
-
-// Pornește derulatorul și rezolvă promisiunea abia când s-a oprit exact pe
-// "winner" (recompensa reală, deja acordată de server). Aceleași durate și
-// aceeași curbă de easing ca pe linkul de test, ca senzația să fie identică.
-function reelSpinTo(winner, pool) {
-  return new Promise((resolve) => {
-    const track = document.getElementById('reveal-track');
-    const frame = document.getElementById('reveal-frame');
-    const marker = document.getElementById('reveal-marker');
-    const flash = document.getElementById('reveal-flash');
-    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-    const positions = reelBuildTrack(track, winner, pool);
-    track.style.transform = 'translateX(0px)';
-    marker.classList.add('active');
-
-    const center = frame.clientWidth / 2;
-    const jitter = (Math.random() - 0.5) * (REEL_TILE_W * 0.45);
-    const finalX = center - positions[REEL_WIN_INDEX] - jitter;
-    const overshoot = finalX - 22;
-
-    function finish() {
-      flash.classList.remove('hit'); void flash.offsetWidth; flash.classList.add('hit');
-      const panel = document.getElementById('reveal-panel');
-      panel.classList.remove('shake'); void panel.offsetWidth; panel.classList.add('shake');
-      const winTile = track.children[REEL_WIN_INDEX];
-      if (winTile) winTile.classList.add('win-glow');
-      resolve();
-    }
-
-    if (reduced) {
-      track.style.transform = `translateX(${finalX}px)`;
-      finish();
-      return;
-    }
-
-    let lastTick = -1;
-    function onFrame(x) {
-      const nearestIndex = Math.round((center - x - REEL_TILE_W / 2) / REEL_STEP);
-      if (nearestIndex !== lastTick && nearestIndex >= 0 && nearestIndex < REEL_LEN) {
-        lastTick = nearestIndex;
-        const el = track.children[nearestIndex];
-        if (el) { el.classList.add('tick'); setTimeout(() => el.classList.remove('tick'), 130); }
-      }
-    }
-    reelAnimate(track, 0, overshoot, 5000, reelEaseOutQuint, onFrame, () => {
-      reelAnimate(track, overshoot, finalX, 260, reelEaseInOutQuad, onFrame, finish);
-    });
-  });
-}
-
-// ---- Deschidere cinematică (30.09.2026), stil PUBG ----
-// Recompensa e deja decisă de server; aici doar o prezentăm: cutia cade, se
-// „încarcă" urcând prin culorile rarităților până la cea câștigată, explodează
-// și recompensa apare pe un card rotit, cu raze în spate. Click = sari.
+// culorile și numele rarităților, folosite de scenă, confetti și vitrina 3D
 const OX_TIERS = ['common', 'uncommon', 'rare', 'legendary'];
 const OX_COLOR = { common: '#9aa3ad', uncommon: '#4b7bff', rare: '#b04cf0', legendary: '#ffb347' };
 const OX_LABEL = { common: 'Comun', uncommon: 'Neobișnuit', rare: 'Rar', legendary: 'Legendar' };
@@ -1238,10 +1111,8 @@ const oxSfx = (() => {
     get off() { return off; },
     toggle() { off = !off; try { localStorage.setItem('mrp_ox_mute', off ? '1' : '0'); } catch {} return off; },
     unlock() { const c = ac(); if (c && c.state === 'suspended') c.resume(); },
-    thud() { tone(95, 0.35, 'sine', 0.3, 0.5); noise(0.12, 0.12); },
-    beat(k) { tone(60 + k * 50, 0.22, 'sine', 0.16 + k * 0.1, 0.6); },
-    tick(i) { tone(420 + i * 160, 0.18, 'triangle', 0.12, 1.5); },
-    boom() { noise(0.7, 0.35); tone(70, 0.8, 'sine', 0.35, 0.4); },
+    click() { tone(1150, 0.035, 'square', 0.035, 0.7); },          // un premiu trece prin mijloc
+    stop() { noise(0.18, 0.16); tone(180, 0.22, 'sine', 0.2, 0.6); }, // rotirea s-a oprit
     win(r) { const base = 523 + OX_TIERS.indexOf(r) * 60; [0, 4, 7, 12].forEach((s, k) => setTimeout(() => tone(base * Math.pow(2, s / 12), 0.35, 'triangle', 0.1), k * 70)); },
   };
 })();
@@ -1344,13 +1215,25 @@ function oxCardHtml(w) {
   return `${visual}<div class="ox-label">${escapeHtml(niceLabel(w.type, w.label, w))}${ammoNote(w)}</div><span class="ox-badge">${OX_LABEL[w.rarity] || ''}</span>${corners}`;
 }
 
-// opts.instant = „deschidere rapidă": fără căderea și încărcarea cutiei —
-// premiul apare direct, cu o scurtă izbucnire.
-function crateOpenTo(winner, caseObj, opts = {}) {
+// un premiu din șirul care se rotește
+function reelTileHtml(r) {
+  const wpn = weaponOf(r.type, r, r.label);
+  const visual = (r.type === 'vehicle' && r.model) ? carImg(r.model, '', 'chip').replace(' loading="lazy"', '')
+    : wpn ? `<img src="${wpn.src}" alt="" onerror="this.outerHTML='🔫'">`
+    : rewardIcon(r.type, r, r.label);
+  return `<div class="rl-img">${visual}</div><div class="rl-name">${escapeHtml(niceLabel(r.type, r.label, r))}</div>`;
+}
+
+// Rotește premiile și se oprește pe cel câștigat; promisiunea se rezolvă când
+// premiul e pe ecran. Click pe scenă = sari peste rotire.
+// opts.instant = „deschidere rapidă": fără rotire, premiul apare direct.
+const REEL_LEN = 44, REEL_WIN = 36, REEL_START = 2, REEL_MS = 5200;
+function reelOpenTo(winner, caseObj, opts = {}) {
   return new Promise(resolve => {
     const run = ++oxRun;
     const stage = document.getElementById('ox-stage');
-    const crate = document.getElementById('ox-crate');
+    const view = document.getElementById('rl-view');
+    const track = document.getElementById('rl-track');
     const card = document.getElementById('ox-card');
     const ring = document.getElementById('ox-ring');
     const flash = document.getElementById('ox-flash');
@@ -1358,7 +1241,7 @@ function crateOpenTo(winner, caseObj, opts = {}) {
     const canvas = document.getElementById('ox-fx');
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const rarity = OX_TIERS.includes(winner.rarity) ? winner.rarity : 'common';
-    const target = OX_TIERS.indexOf(rarity);
+    const color = OX_COLOR[rarity];
 
     document.getElementById('reveal-panel').classList.add('is-cinema');
     // altfel animațiile rămase de la deschiderea trecută repornesc la afișare
@@ -1366,15 +1249,44 @@ function crateOpenTo(winner, caseObj, opts = {}) {
     stage.hidden = false;
     stage.classList.remove('is-open');
     stage.style.setProperty('--ox', OX_COLOR.common);
-    stage.style.setProperty('--glow', '0.15');
+    stage.style.setProperty('--glow', '0.12');
     tierEl.textContent = '';
-    crate.className = 'ox-crate';
-    crate.style.transform = '';
-    crate.style.opacity = '';
-    const img = caseObj && CASE_IMG[caseObj.theme];
-    crate.querySelectorAll('.half').forEach(h => { h.style.backgroundImage = img ? `url("${img}")` : 'none'; h.style.transform = ''; });
-    crate.querySelector('.ox-emoji')?.remove();
-    if (!img) crate.insertAdjacentHTML('beforeend', '<div class="ox-emoji">📦</div>');
+
+    // ---- șirul de premii ----
+    const pool = (caseObj && caseObj.pool) || [];
+    track.classList.remove('settle');
+    track.innerHTML = '';
+    const tiles = [];
+    for (let i = 0; i < REEL_LEN; i++) {
+      const r = i === REEL_WIN || !pool.length ? winner : reelWeightedFiller(pool);
+      const el = document.createElement('div');
+      el.className = 'rl-tile';
+      el.dataset.rarity = r === winner ? rarity : rarityOf(Number(r.chancePercent) || 0);
+      el.innerHTML = reelTileHtml(r);
+      track.appendChild(el);
+      tiles.push(el);
+    }
+    const tileW = tiles[0].offsetWidth || 150;
+    const step = tileW + (parseFloat(getComputedStyle(track).columnGap) || 12);
+    const center = view.clientWidth / 2;
+    const xFor = (index, off = 0) => center - (index * step + tileW / 2) - off;
+    const startX = xFor(REEL_START);
+    const finalX = xFor(REEL_WIN);
+    // se oprește puțin într-o parte a premiului (nu mereu fix pe mijloc), apoi se așază
+    const stopX = xFor(REEL_WIN, (Math.random() - 0.5) * tileW * 0.56);
+    let mid = -1, lastClick = 0;
+    const setX = (x, quiet) => {
+      track.style.transform = `translate3d(${x.toFixed(1)}px,0,0)`;
+      const index = Math.max(0, Math.min(REEL_LEN - 1, Math.round((center - x - tileW / 2) / step)));
+      if (index === mid) return;
+      if (tiles[mid]) tiles[mid].classList.remove('is-mid');
+      tiles[index].classList.add('is-mid');
+      mid = index;
+      const now = performance.now();
+      if (!quiet && now - lastClick > 45) { lastClick = now; oxSfx.click(); }
+    };
+
+    // ---- cardul mare al premiului ----
     card.className = 'ox-card';
     card.innerHTML = oxCardHtml({ ...winner, rarity });
     const wonItem = v3ItemOf(winner, rarity);
@@ -1392,11 +1304,6 @@ function crateOpenTo(winner, caseObj, opts = {}) {
     g2.setTransform(dpr, 0, 0, dpr, 0, 0);
     const cx = W / 2, cy = H / 2;
     let parts = [];
-    let color = OX_COLOR.common;
-    const spawnIn = () => {
-      const a = Math.random() * Math.PI * 2, r = 170 + Math.random() * 90;
-      parts.push({ x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r * 0.75, vx: 0, vy: 0, mode: 'in', life: 1, size: 1.5 + Math.random() * 2, c: color });
-    };
     const burst = n => {
       for (let i = 0; i < n; i++) {
         const a = Math.random() * Math.PI * 2, sp = 3 + Math.random() * 9;
@@ -1405,99 +1312,55 @@ function crateOpenTo(winner, caseObj, opts = {}) {
     };
     const ember = () => parts.push({ x: cx + (Math.random() - 0.5) * 300, y: cy + 120, vx: (Math.random() - 0.5) * 0.4, vy: -0.6 - Math.random() * 0.9, mode: 'ember', life: 1, size: 1 + Math.random() * 2, c: color });
 
-    let phase = 'drop', t0 = performance.now(), shownTier = -1, doneAt = 0, finished = false;
-    const setTier = i => {
-      shownTier = i;
-      color = OX_COLOR[OX_TIERS[i]];
-      stage.style.setProperty('--ox', color);
-      tierEl.textContent = OX_LABEL[OX_TIERS[i]];
-      tierEl.classList.remove('pop'); void tierEl.offsetWidth; tierEl.classList.add('pop');
-      ring.classList.remove('go'); void ring.offsetWidth; ring.classList.add('go');
-      oxSfx.tick(i);
-    };
-    const open = instant => {
+    let phase = 'spin', finished = false, doneAt = 0;
+    const t0 = performance.now();
+    // how: 'end' = rotirea s-a oprit singură, 'fast' = rapid / sărit, 'instant' = fără animații
+    const open = how => {
       phase = 'open';
-      if (shownTier !== target) setTier(target);
+      if (how === 'end') track.classList.add('settle'); // se așază pe mijloc
+      setX(finalX, true);
+      stage.style.setProperty('--ox', color);
+      stage.style.setProperty('--glow', '0.55');
       tierEl.textContent = OX_LABEL[rarity];
       stage.classList.add('is-open');
-      crate.style.transform = '';
       sceneLight(rarity);
-      if (instant === 'fast') {
-        crate.style.opacity = '0'; crate.classList.add('gone');
-        ring.classList.remove('go'); void ring.offsetWidth; ring.classList.add('go');
-        burst(rarity === 'legendary' ? 150 : 90);
-        card.classList.add('show', 'quick');
-        oxSfx.win(rarity);
-      }
-      else if (instant) { crate.style.opacity = '0'; crate.classList.add('gone'); card.classList.add('show', 'instant'); }
-      else {
-        flash.classList.remove('go'); void flash.offsetWidth; flash.classList.add('go');
-        ring.classList.remove('go'); void ring.offsetWidth; ring.classList.add('go');
-        crate.classList.add('burst');
-        burst(rarity === 'legendary' ? 220 : 140);
-        oxSfx.boom();
-        setTimeout(() => { if (run === oxRun) { card.classList.add('show'); oxSfx.win(rarity); } }, 140);
-      }
-      stage.style.setProperty('--glow', '0.55');
+      if (how === 'instant') { card.classList.add('show', 'instant'); return; }
+      tierEl.classList.remove('pop'); void tierEl.offsetWidth; tierEl.classList.add('pop');
+      ring.classList.remove('go'); void ring.offsetWidth; ring.classList.add('go');
+      burst(rarity === 'legendary' ? 170 : rarity === 'common' ? 60 : 110);
+      if (how === 'end') oxSfx.stop();
+      card.classList.add('show', 'pop');
+      oxSfx.win(rarity);
     };
     const finish = () => { if (finished) return; finished = true; resolve(); };
 
-    // sari animația
-    const skip = () => {
+    // sari peste rotire
+    stage.onclick = () => {
       if (phase === 'open') return;
-      open(true);
+      open('fast');
       finish();
     };
-    stage.onclick = skip;
 
-    if (reduced) { open(true); finish(); }
+    setX(startX, true);
+    if (reduced) { open('instant'); finish(); }
     else if (opts.instant) { open('fast'); doneAt = 520; }
-    else {
-      crate.classList.add('drop');
-      setTimeout(() => { if (run === oxRun && phase === 'drop') oxSfx.thud(); }, 420);
-    }
 
-    // (30.09.2026) Încărcare lungă, la cererea staff-ului: ~15s în total la
-    // comun, ~20s la legendar. Ca să nu fie monoton, cutia „bate" ca o inimă
-    // (puls + sunet) tot mai des, iar la final tremură tot mai tare.
-    const CHARGE_FROM = 900, CHARGE_MS = 12000 + target * 2000;
-    let nextBeat = CHARGE_FROM + 900;
     function frame(now) {
       if (run !== oxRun || stage.hidden) return; // închis sau o altă deschidere
       const t = now - t0;
-      if (phase === 'drop' && t >= CHARGE_FROM) { phase = 'charge'; crate.classList.remove('drop'); crate.style.opacity = '1'; setTier(0); }
-      if (phase === 'charge') {
-        const k = Math.min(1, (t - CHARGE_FROM) / CHARGE_MS);
-        // treptele de raritate, împărțite egal pe durata încărcării
-        const step = Math.min(target, Math.floor(k * (target + 1)));
-        if (step > shownTier) setTier(step);
-        else if (t >= nextBeat && k < 0.97) {
-          ring.classList.remove('go'); void ring.offsetWidth; ring.classList.add('go');
-          oxSfx.beat(k);
-        }
-        if (t >= nextBeat) nextBeat = t + Math.max(260, 1150 - k * 900); // bătăile se înteţesc
-        const amp = 1 + k * k * k * 11;
-        crate.style.transform = `translate(${((Math.random() - 0.5) * amp).toFixed(1)}px,${((Math.random() - 0.5) * amp * 0.6).toFixed(1)}px) rotate(${((Math.random() - 0.5) * amp * 0.35).toFixed(2)}deg) scale(${(1 + k * 0.06).toFixed(3)})`;
-        stage.style.setProperty('--glow', (0.15 + k * 0.6).toFixed(3));
-        const rate = 1 + Math.floor(k * 5);
-        for (let i = 0; i < rate; i++) spawnIn();
-        if (k >= 1) { open(false); doneAt = t + 1400; }
-      }
-      if (phase === 'open') {
+      if (phase === 'spin') {
+        const k = Math.min(1, t / REEL_MS);
+        setX(startX + (stopX - startX) * reelEase(k));
+        if (k >= 1) { open('end'); doneAt = t + 900; }
+      } else {
         if (Math.random() < 0.35) ember();
         if (doneAt && t >= doneAt) finish();
       }
-      // desen particule
       g2.clearRect(0, 0, W, H);
       g2.globalCompositeOperation = 'lighter';
       parts = parts.filter(p => p.life > 0);
       for (const p of parts) {
-        if (p.mode === 'in') {
-          const dx = cx - p.x, dy = cy - p.y, d = Math.hypot(dx, dy) || 1;
-          p.vx += dx / d * 0.55; p.vy += dy / d * 0.55;
-          p.vx *= 0.9; p.vy *= 0.9;
-          if (d < 24) p.life = 0;
-        } else if (p.mode === 'out') {
+        if (p.mode === 'out') {
           p.vx *= 0.965; p.vy = p.vy * 0.965 + 0.12;
           p.life -= 0.016;
         } else {
@@ -1660,7 +1523,7 @@ async function presentOne(caseId, d, i, total) {
   };
 
   text.textContent = '';
-  await crateOpenTo(winner, c, { instant: fastOpen });
+  await reelOpenTo(winner, c, { instant: fastOpen });
 
   if (slot) {
     slot.classList.add('is-done');

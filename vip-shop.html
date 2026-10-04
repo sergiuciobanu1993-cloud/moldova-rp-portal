@@ -214,8 +214,7 @@ button.win-chip:focus-visible{outline:2px solid var(--orange);outline-offset:2px
 
 /* ---- Mai multe cutii odată: șirul cu premiile de până acum ---- */
 .reveal-count{margin:0 0 6px;font-size:10px;font-weight:900;letter-spacing:.2em;text-transform:uppercase;color:var(--orange);font-variant-numeric:tabular-nums}
-.reveal-count[hidden],.batch-strip[hidden],.reveal-stop[hidden],.reveal-note[hidden]{display:none}
-.reveal-note{margin:0 0 12px;padding:9px 12px;border-radius:9px;border:1px solid rgba(255,138,31,.4);background:rgba(255,138,31,.08);color:#ffd2a6;font-size:12px;line-height:1.45;text-align:left}
+.reveal-count[hidden],.batch-strip[hidden],.reveal-stop[hidden]{display:none}
 .batch-strip{display:flex;justify-content:center;gap:7px;margin:0 0 12px}
 .batch-slot{--rc:var(--line);position:relative;flex:1 1 0;max-width:62px;height:46px;border-radius:8px;border:1px solid var(--line);background:rgba(255,255,255,.03);display:grid;place-items:center;overflow:hidden;font-size:12px;font-weight:900;color:var(--muted);font-variant-numeric:tabular-nums}
 .batch-slot.is-current{border-color:var(--orange);color:var(--text);box-shadow:0 0 0 1px var(--orange)}
@@ -372,7 +371,6 @@ button.win-chip:focus-visible{outline:2px solid var(--orange);outline-offset:2px
     <p class="reveal-count" id="reveal-count" hidden></p>
     <h2 id="reveal-title" style="margin:0 0 4px">Se deschide…</h2>
     <p id="reveal-text" class="muted" style="margin:0 0 16px;min-height:18px"></p>
-    <p class="reveal-note" id="reveal-note" hidden></p>
     <div class="batch-strip" id="batch-strip" hidden></div>
     <div class="ox-stage" id="ox-stage" hidden>
       <div class="ox-rays"></div>
@@ -1051,6 +1049,7 @@ function askConfirm({ title, text, ok, cancel, extra }) {
   const extraBtn = document.getElementById('ask-extra');
   okBtn.textContent = ok || 'Da';
   document.getElementById('ask-cancel').textContent = cancel || 'Renunț';
+  document.getElementById('ask-cancel').hidden = cancel === false; // doar un anunț, fără alegere
   extraBtn.hidden = !extra;
   extraBtn.textContent = extra || '';
   if (askDone) askDone(null); // o întrebare rămasă deschisă se închide ca „nu"
@@ -1395,10 +1394,11 @@ function reelOpenTo(winner, caseObj, opts = {}) {
 }
 
 // ---- Deschiderea propriu-zisă (04.10.2026: una sau mai multe cutii) ----
-// Toate cutiile alese se deschid (și se plătesc) dintr-o singură apăsare:
-// serverul le deschide pe toate, iar aici doar le prezentăm pe rând, cu
-// „Cutia 2 din 5". Dacă serverul n-a mai putut deschide una (coins terminați,
-// joc oprit), prezentăm cutiile deschise și spunem de ce lipsesc celelalte.
+// Toate cutiile alese pornesc dintr-o singură apăsare: se deschid una după
+// alta, în fundal (cu o scurtă pauză între ele, cerută de serverul de joc),
+// iar aici le prezentăm pe rând, cu „Cutia 2 din 5". Dacă una nu se mai poate
+// deschide (coins terminați, joc oprit), prezentăm cutiile deschise și spunem
+// de ce lipsesc celelalte — pentru cele nedeschise nu se scade nimic.
 let revealBusy = false; // de la cererea către server până apare ultimul premiu
 let revealWait = null; // alegerea jucătorului pe premiul curent: 'next' | 'stop'
 const revealDecision = () => new Promise(resolve => { revealWait = resolve; });
@@ -1449,51 +1449,89 @@ function revealReset() {
   stopBtn.disabled = false;
 }
 
+// Pauza dintre două deschideri la rând: serverul de joc refuză o deschidere
+// venită imediat după alta (protecție la apăsări repetate).
+const OPEN_GAP_MS = 1100;
 async function openBatch(caseId, count) {
+  const overlay = document.getElementById('reveal-overlay');
   const title = document.getElementById('reveal-title');
   const text = document.getElementById('reveal-text');
   const strip = document.getElementById('batch-strip');
   const countEl = document.getElementById('reveal-count');
-  const note = document.getElementById('reveal-note');
-  document.getElementById('reveal-overlay').style.display = 'flex';
+  overlay.style.display = 'flex';
   oxSfx.unlock(); // sunetul trebuie pornit din click-ul jucătorului
   revealReset();
-  strip.hidden = true;
-  strip.innerHTML = '';
   countEl.hidden = true;
-  note.hidden = true;
+  strip.hidden = count < 2;
+  strip.innerHTML = count > 1
+    ? Array.from({ length: count }, (_, i) => `<div class="batch-slot" aria-label="Cutia ${i + 1}">${i + 1}</div>`).join('')
+    : '';
   title.textContent = count > 1 ? `Se deschid ${count} cutii…` : 'Se deschide…';
   text.textContent = 'Se trimite cererea către server…';
   revealBusy = true;
 
-  const fail = (head, message) => {
-    title.textContent = head;
-    text.textContent = message;
-    document.getElementById('reveal-close').hidden = false;
-  };
-  let d;
-  try {
-    const res = await apiFetch('/api/vip-shop/deschide', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ caseId, count }) });
-    d = await res.json();
-    if (!res.ok) return fail('Nu am putut deschide recompensa', d.error || 'Eroare necunoscută.');
-  } catch {
-    return fail('Eroare de rețea', `Încearcă din nou. Dacă ${count > 1 ? 'unele cutii s-au deschis' : 'cutia s-a deschis'} totuși, premiile apar la „Recompense în așteptare”.`);
-  }
+  // Cutiile pornesc toate din această apăsare și se deschid una după alta, în
+  // fundal, cât timp jucătorul se uită la primul premiu. slots[i] se rezolvă
+  // când cutia i e deschisă (sau când aflăm că nu se mai poate deschide).
+  const slots = Array.from({ length: count }, () => {
+    let resolve;
+    const promise = new Promise(r => { resolve = r; });
+    return { promise, resolve };
+  });
+  (async () => {
+    for (let i = 0; i < count; i++) {
+      let r;
+      try {
+        const res = await apiFetch('/api/vip-shop/deschide', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ caseId }) });
+        const d = await res.json().catch(() => ({}));
+        r = res.ok && d.reward ? { ok: true, d } : { ok: false, refused: true, error: d.error || 'Eroare necunoscută.' };
+      } catch {
+        r = { ok: false, refused: false, error: 'Eroare de rețea.' };
+      }
+      slots[i].resolve(r);
+      if (!r.ok) {
+        for (let k = i + 1; k < count; k++) slots[k].resolve({ ...r, skipped: true });
+        break;
+      }
+      if (i < count - 1) await new Promise(done => setTimeout(done, OPEN_GAP_MS));
+    }
+    // fereastra a fost închisă înainte să se termine seria → pagina arată tot,
+    // iar dacă o cutie nu s-a mai deschis, spunem asta (altfel n-ar afla nimeni)
+    if (overlay.style.display === 'flex') return;
+    loadAll();
+    const results = await Promise.all(slots.map(x => x.promise));
+    const opened = results.filter(x => x.ok).length;
+    const bad = results.find(x => !x.ok);
+    if (bad) {
+      askConfirm({
+        title: 'Nu s-au deschis toate cutiile',
+        text: `${opened === 1 ? 'S-a deschis o cutie' : `S-au deschis ${opened} cutii`} din ${count}: ${bad.refused ? bad.error + ' Pentru cele nedeschise nu ai plătit nimic.' : 'eroare de rețea. Verifică „Recompense în așteptare”.'}`,
+        ok: 'Am înțeles', cancel: false,
+      });
+    }
+  })();
 
-  // Recompensele sunt deja acordate de server în acest moment — ce urmează e
-  // doar prezentare, nu mai poate schimba rezultatul.
-  const results = Array.isArray(d.results) && d.results.length ? d.results : [d];
-  const total = results.length;
-  if (total < count) {
-    note.textContent = `${total === 1 ? 'S-a deschis o singură cutie' : `S-au deschis ${total} cutii`} din ${count}${d.stopError ? `: ${d.stopError}` : '.'} Pentru cele nedeschise nu ai plătit nimic.`;
-    note.hidden = false;
-  }
-  strip.hidden = total < 2;
-  strip.innerHTML = total > 1
-    ? Array.from({ length: total }, (_, i) => `<div class="batch-slot" aria-label="Cutia ${i + 1}">${i + 1}</div>`).join('')
-    : '';
-  for (let i = 0; i < total; i++) {
-    const outcome = await presentOne(caseId, results[i], i, total);
+  for (let i = 0; i < count; i++) {
+    if (i > 0) {
+      revealReset();
+      countEl.hidden = false;
+      countEl.textContent = `Cutia ${i + 1} din ${count}`;
+      [...strip.children].forEach((el, k) => el.classList.toggle('is-current', k === i));
+      title.textContent = 'Se deschide…';
+      text.textContent = '';
+    }
+    const r = await slots[i].promise;
+    if (!r.ok) {
+      // Mesajul rămâne pe ecran; butonul „Am înțeles" închide fereastra.
+      const before = i === 1 ? 'Prima cutie e deschisă, iar premiul ei rămâne al tău.' : `Primele ${i} cutii sunt deschise, iar premiile lor rămân ale tale.`;
+      title.textContent = i > 0 ? `Cutia ${i + 1} nu s-a deschis` : 'Nu am putut deschide recompensa';
+      text.textContent = r.refused
+        ? r.error + (i > 0 ? ` ${before} Pentru cutiile nedeschise nu ai plătit nimic.` : '')
+        : `Eroare de rețea. ${i > 0 ? before + ' ' : ''}Dacă această cutie s-a deschis totuși, premiul apare la „Recompense în așteptare”.`;
+      document.getElementById('reveal-close').hidden = false;
+      return;
+    }
+    const outcome = await presentOne(caseId, r.d, i, count);
     if (outcome === 'stop') break;
   }
   closeReveal();
@@ -1627,8 +1665,8 @@ async function presentOne(caseId, d, i, total) {
     });
   }
   if (more) {
-    // cutiile rămase sunt deja deschise și plătite — doar nu le mai prezentăm
-    stopBtn.textContent = `Sari peste restul (${more === 1 ? 'premiul rămas e deja al tău, îl găsești' : `cele ${more} premii rămase sunt deja ale tale, le găsești`} în pagină)`;
+    // cutiile rămase se deschid oricum (au pornit odată cu prima) — doar nu le mai prezentăm
+    stopBtn.textContent = `Nu-mi mai arăta restul (${more === 1 ? 'cutia rămasă se deschide oricum, premiul îl găsești' : `cele ${more} cutii rămase se deschid oricum, premiile le găsești`} în pagină)`;
     stopBtn.hidden = false;
   }
 

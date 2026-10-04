@@ -1244,10 +1244,10 @@ async function postOpenCase({ identifier, playerName, caseId }) {
     const rawText = await r.text();
     let body = {};
     try { body = rawText ? JSON.parse(rawText) : {}; } catch { /* keep {} */ }
-    if (!r.ok) return { ok: false, error: body.error || "eroare" };
+    if (!r.ok) return { ok: false, error: body.error || "eroare", status: r.status };
     return { ok: true, result: body };
   } catch {
-    return { ok: false, error: "server_offline" };
+    return { ok: false, error: "server_offline", status: 503 };
   } finally {
     clearTimeout(timeout);
   }
@@ -2355,6 +2355,41 @@ const OPEN_CASE_ERRORS = {
   cutie_fara_recompense: "Această cutie nu are recompense configurate momentan.",
   server_offline: "Serverul de joc nu răspunde momentan.",
 };
+// (04.10.2026) Serverul de joc refuză o deschidere venită imediat după alta
+// (protecție la apăsări repetate): a doua cutie dintr-o serie primea un refuz
+// pe loc, deși jucătorul avea coins. Un refuz de felul ăsta (răspuns 4xx cu un
+// cod pe care nu-l cunoaștem) nu scade nimic, deci îl putem reîncerca fără
+// risc, după o scurtă pauză. NU reîncercăm erorile cunoscute (coins terminați,
+// cutie oprită…), nici erorile interne ale jocului (5xx — acolo coins-urile ar
+// putea fi deja scăzute) și nici când jocul nu răspunde deloc.
+const OPEN_RETRY_DELAYS_MS = [600, 1200, 2400];
+const OPEN_NO_RETRY = new Set(["internal_error", "eroare_baza_de_date", "date_lipsa", "metoda_neacceptata"]);
+const sleepMs = ms => new Promise(resolve => setTimeout(resolve, ms));
+function isRetryableOpenRefusal(outcome) {
+  return !outcome.ok && !OPEN_CASE_ERRORS[outcome.error] && !OPEN_NO_RETRY.has(outcome.error)
+    && outcome.status >= 400 && outcome.status < 500;
+}
+async function openCasePatiently(args) {
+  let outcome = await postOpenCase(args);
+  for (const delay of OPEN_RETRY_DELAYS_MS) {
+    if (!isRetryableOpenRefusal(outcome)) break;
+    console.warn(`VIP Shop: serverul de joc a refuzat deschiderea (HTTP ${outcome.status}, cod „${outcome.error}”) — reîncerc peste ${delay} ms.`);
+    await sleepMs(delay);
+    outcome = await postOpenCase(args);
+  }
+  if (!outcome.ok && !OPEN_CASE_ERRORS[outcome.error]) {
+    console.warn(`VIP Shop: deschidere nereușită — serverul de joc a răspuns HTTP ${outcome.status}, cod „${outcome.error}”.`);
+  }
+  return outcome;
+}
+function openCaseErrorText(outcome) {
+  if (OPEN_CASE_ERRORS[outcome.error]) return OPEN_CASE_ERRORS[outcome.error];
+  const code = String(outcome.error || "necunoscut").slice(0, 40);
+  if (outcome.status >= 500) {
+    return `Serverul de joc a dat o eroare la deschidere (cod: ${code}). Dacă ți s-au scăzut coins fără să primești un premiu, deschide un tichet.`;
+  }
+  return `Serverul de joc a refuzat deschiderea (cod: ${code}). Încearcă din nou peste câteva secunde.`;
+}
 // Pentru fiecare cutie deschisă: oferta de vânzare înapoi (mașini/arme cu
 // valoare setată) și oferta de schimb (bani murdari), legate de deschiderea
 // tocmai creată. Dacă serverul de joc nu ne spune id-ul deschiderii, îl găsim
@@ -2414,8 +2449,8 @@ app.post("/api/vip-shop/deschide", auth, asyncRoute(async (req, res) => {
   const opened = [];
   let stopError = null;
   for (let i = 0; i < requested; i++) {
-    const outcome = await postOpenCase({ identifier, playerName: rows[0].game_identifier_name, caseId });
-    if (!outcome.ok) { stopError = OPEN_CASE_ERRORS[outcome.error] || "Nu am putut deschide recompensa."; break; }
+    const outcome = await openCasePatiently({ identifier, playerName: rows[0].game_identifier_name, caseId });
+    if (!outcome.ok) { stopError = openCaseErrorText(outcome); break; }
     opened.push(outcome.result || {});
   }
   if (!opened.length) return res.status(400).json({ error: stopError });

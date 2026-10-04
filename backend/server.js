@@ -2363,6 +2363,7 @@ app.post("/api/vip-shop/deschide", auth, asyncRoute(async (req, res) => {
   // (29.09.2026) Oferta de vânzare înapoi, arătată direct după învârtire:
   // găsim deschiderea tocmai creată (cea mai nouă neridicată cu aceeași
   // recompensă) ca jucătorul să poată alege imediat: o păstrează sau o vinde.
+  recentWinsCache.at = 0; // banda „Ultimele câștiguri" îl arată imediat
   let sell = null;
   const won = outcome.result?.reward;
   if (won && (won.type === "vehicle" || won.type === "item") && gameRouteOk("sell")) {
@@ -2485,6 +2486,42 @@ app.get("/api/vip-shop/istoric", auth, asyncRoute(async (req, res) => {
   const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 30, 1), 100);
   const result = await fetchCaseHistory(identifier, limit);
   res.json({ online: result.online, history: result.history });
+}));
+
+// Banda „Ultimele câștiguri" de pe pagina VIP Shop (04.10.2026): ce premii au
+// ieșit din ultimele deschideri, ale tuturor jucătorilor. Spre deosebire de
+// jurnalul de staff de mai jos, aici NU trimitem cine a câștigat (nici nume,
+// nici identificator) — doar premiul, cutia și ora. Ținut 15 s în memorie, ca
+// pagina să se poată reîmprospăta des fără să încarce serverul de joc.
+const RECENT_WINS_MAX = 24;
+let recentWinsCache = { at: 0, wins: null };
+function publicWinOf(e) {
+  const d = parseRewardData(e.rewardData ?? e.reward_data);
+  const win = {
+    id: String(e.id ?? e.openingId ?? `${e.createdAt ?? e.created_at ?? ""}|${e.rewardLabel ?? e.reward_label ?? ""}`).slice(0, 80),
+    type: String(e.rewardType ?? e.reward_type ?? ""),
+    label: String(e.rewardLabel ?? e.reward_label ?? "").slice(0, 120),
+    caseId: e.caseId ?? e.case_id ?? null,
+    caseName: String(e.caseName ?? e.case_name ?? "").slice(0, 80),
+    at: e.createdAt ?? e.created_at ?? null,
+  };
+  if (d.model) win.model = String(d.model).slice(0, 80);
+  if (d.item) win.item = String(d.item).slice(0, 80);
+  if (Number(d.ammo) > 0) win.ammo = Math.floor(Number(d.ammo));
+  if (d.account) win.account = String(d.account).slice(0, 40);
+  if (d.amount != null && Number.isFinite(Number(d.amount))) win.amount = Number(d.amount);
+  return win;
+}
+app.get("/api/vip-shop/ultimele", auth, asyncRoute(async (_req, res) => {
+  res.set("Cache-Control", "no-store");
+  if (recentWinsCache.wins && Date.now() - recentWinsCache.at < 15_000) {
+    return res.json({ online: true, wins: recentWinsCache.wins });
+  }
+  const result = await fetchCaseOpeningsLog(RECENT_WINS_MAX);
+  if (!result.online) return res.json({ online: false, wins: recentWinsCache.wins || [] });
+  const wins = result.log.slice(0, RECENT_WINS_MAX).map(publicWinOf).filter(w => w.type && w.label);
+  recentWinsCache = { at: Date.now(), wins };
+  res.json({ online: true, wins });
 }));
 
 // Jurnalul TUTUROR deschiderilor de cutii (toți jucătorii, nu doar cel logat)

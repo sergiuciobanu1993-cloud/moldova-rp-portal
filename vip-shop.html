@@ -170,6 +170,113 @@
   .ox-rays,.ox-card::after{animation:none}
   .ox-crate.drop,.ox-card.show{animation-duration:.01s}
 }
+
+/* ---- (04.10.2026) Banda „Ultimele câștiguri": ce premii au ieșit din ultimele
+   cutii deschise de jucători (fără nume), cele mai noi în stânga. ---- */
+.wins-band{margin:0 0 22px;padding:12px 0 12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--panel);overflow:hidden}
+.wins-band[hidden]{display:none}
+.wins-head{display:flex;align-items:center;gap:8px;margin:0 0 10px;font-size:10px;font-weight:900;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+.live-dot{flex:none;width:8px;height:8px;border-radius:50%;background:var(--green);animation:livePulse 2s ease-out infinite}
+@keyframes livePulse{0%{box-shadow:0 0 0 0 rgba(66,223,138,.55)}70%,100%{box-shadow:0 0 0 7px rgba(66,223,138,0)}}
+.wins-track{display:flex;gap:8px;overflow-x:auto;padding:0 44px 2px 0;scrollbar-width:none;-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 46px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 46px),transparent)}
+.wins-track::-webkit-scrollbar{display:none}
+.win-chip{--rc:var(--r-common);flex:none;width:132px;display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 8px 9px;border-radius:9px;border:1px solid var(--line);border-bottom:2px solid var(--rc);background:linear-gradient(0deg,color-mix(in srgb,var(--rc) 20%,transparent),transparent 72%);color:inherit;font:inherit;text-align:center}
+.win-chip[data-rarity="uncommon"],.batch-slot[data-rarity="uncommon"]{--rc:var(--r-uncommon)}
+.win-chip[data-rarity="rare"],.batch-slot[data-rarity="rare"]{--rc:var(--r-rare)}
+.win-chip[data-rarity="legendary"],.batch-slot[data-rarity="legendary"]{--rc:var(--r-legendary-b)}
+.win-chip[data-rarity="common"],.batch-slot[data-rarity="common"]{--rc:var(--r-common)}
+button.win-chip{cursor:pointer;transition:transform .15s ease,border-color .15s ease}
+button.win-chip:hover{transform:translateY(-2px);border-color:var(--rc)}
+button.win-chip:focus-visible{outline:2px solid var(--orange);outline-offset:2px}
+.wc-img{height:42px;width:100%;display:grid;place-items:center;font-size:24px;line-height:1}
+.wc-img img{max-width:100%;max-height:42px;object-fit:contain;filter:drop-shadow(0 4px 6px rgba(0,0,0,.55))}
+.wc-name{width:100%;font-size:11px;font-weight:800;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:2.5em}
+.wc-case{width:100%;font-size:9.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.win-chip.is-new{animation:winIn .55s cubic-bezier(.2,1.2,.4,1)}
+@keyframes winIn{from{opacity:0;transform:translateX(-22px) scale(.92)}to{opacity:1;transform:none}}
+
+/* ---- Câte cutii odată + deschidere rapidă ---- */
+.open-bar{display:flex;align-items:center;justify-content:space-between;gap:10px 18px;flex-wrap:wrap;margin:0 0 16px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.025)}
+.qty{display:flex;align-items:center;gap:6px}
+.qty-label{margin-right:4px;font-size:10px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.qty button{width:36px;height:36px;border-radius:8px;border:1px solid var(--line);background:transparent;color:var(--text);font:inherit;font-weight:900;font-variant-numeric:tabular-nums;cursor:pointer;transition:.12s ease}
+.qty button:hover{border-color:var(--orange)}
+.qty button[aria-pressed="true"]{background:var(--orange);border-color:var(--orange);color:#0b0b0b}
+.qty button:focus-visible{outline:2px solid var(--orange);outline-offset:2px}
+.fast-toggle{position:relative;display:inline-flex;align-items:center;gap:9px;min-height:36px;font-size:12px;font-weight:800;cursor:pointer;user-select:none}
+.fast-toggle input{position:absolute;opacity:0;width:1px;height:1px}
+.fast-toggle .sw{flex:none;position:relative;width:40px;height:22px;border-radius:999px;background:#24272b;border:1px solid var(--line);transition:.15s ease}
+.fast-toggle .sw::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#aeb3b8;transition:.15s ease}
+.fast-toggle input:checked+.sw{background:rgba(255,138,31,.22);border-color:var(--orange)}
+.fast-toggle input:checked+.sw::after{left:20px;background:var(--orange)}
+.fast-toggle input:focus-visible+.sw{outline:2px solid var(--orange);outline-offset:2px}
+
+/* ---- Scena pe culoarea rarității: tot fundalul se aprinde, premiul are
+   colțuri colorate, iar la premiile rare cade confetti. ---- */
+#reveal-overlay{--ox:#9aa3ad}
+.reveal-tint{position:absolute;inset:0;z-index:0;pointer-events:none;opacity:0;transition:opacity .5s ease;
+  background:radial-gradient(ellipse 85% 75% at 50% 45%,color-mix(in srgb,var(--ox) 34%,transparent),transparent 72%)}
+#reveal-overlay.lit .reveal-tint{opacity:1}
+#reveal-panel{position:relative;z-index:1;max-height:calc(100dvh - 40px);overflow-y:auto;transition:border-color .4s ease,box-shadow .4s ease}
+#reveal-overlay.lit #reveal-panel{border-color:color-mix(in srgb,var(--ox) 55%,var(--line));box-shadow:0 0 70px color-mix(in srgb,var(--ox) 24%,transparent)}
+.confetti-fx{position:absolute;inset:0;width:100%;height:100%;z-index:2;pointer-events:none}
+.ox-corner{position:absolute;width:28px;height:28px;border:3px solid var(--ox);filter:drop-shadow(0 0 7px var(--ox));opacity:0;pointer-events:none}
+.ox-corner.tl{left:-16px;top:-16px;border-right:0;border-bottom:0;border-top-left-radius:7px;--cx:-14px;--cy:-14px}
+.ox-corner.tr{right:-16px;top:-16px;border-left:0;border-bottom:0;border-top-right-radius:7px;--cx:14px;--cy:-14px}
+.ox-corner.bl{left:-16px;bottom:-16px;border-right:0;border-top:0;border-bottom-left-radius:7px;--cx:-14px;--cy:14px}
+.ox-corner.br{right:-16px;bottom:-16px;border-left:0;border-top:0;border-bottom-right-radius:7px;--cx:14px;--cy:14px}
+.ox-card.show .ox-corner{animation:oxCorner .5s cubic-bezier(.2,1.5,.4,1) .55s forwards}
+.ox-card.show.quick .ox-corner,.ox-card.show.instant .ox-corner{animation-delay:.12s}
+@keyframes oxCorner{from{opacity:0;transform:translate(var(--cx),var(--cy))}to{opacity:1;transform:none}}
+.ox-card.quick{animation-duration:.5s}
+
+/* ---- Mai multe cutii odată: șirul cu premiile de până acum ---- */
+.reveal-count{margin:0 0 6px;font-size:10px;font-weight:900;letter-spacing:.2em;text-transform:uppercase;color:var(--orange);font-variant-numeric:tabular-nums}
+.reveal-count[hidden],.batch-strip[hidden],.reveal-stop[hidden]{display:none}
+.batch-strip{display:flex;justify-content:center;gap:7px;margin:0 0 12px}
+.batch-slot{--rc:var(--line);position:relative;flex:1 1 0;max-width:62px;height:46px;border-radius:8px;border:1px solid var(--line);background:rgba(255,255,255,.03);display:grid;place-items:center;overflow:hidden;font-size:12px;font-weight:900;color:var(--muted);font-variant-numeric:tabular-nums}
+.batch-slot.is-current{border-color:var(--orange);color:var(--text);box-shadow:0 0 0 1px var(--orange)}
+.batch-slot.is-done{border-color:var(--rc);background:linear-gradient(0deg,color-mix(in srgb,var(--rc) 30%,transparent),transparent 80%)}
+.batch-slot.is-done.is-current{box-shadow:0 0 0 1px var(--rc),0 0 14px color-mix(in srgb,var(--rc) 45%,transparent)}
+.batch-slot img{max-width:88%;max-height:34px;object-fit:contain}
+.batch-slot .bs-emoji{font-size:20px;line-height:1}
+.batch-slot.is-sold::after,.batch-slot.is-exch::after{position:absolute;left:0;right:0;bottom:0;padding:1px 0;background:rgba(0,0,0,.78);font-size:8px;letter-spacing:.06em}
+.batch-slot.is-sold::after{content:'VÂNDUT';color:#7db2ff}
+.batch-slot.is-exch::after{content:'SCHIMBAT';color:var(--green)}
+.reveal-stop{display:block;margin:12px auto 0;padding:6px 8px;background:none;border:0;color:var(--muted);font:inherit;font-size:12px;text-decoration:underline;text-underline-offset:2px;cursor:pointer}
+.reveal-stop:hover{color:var(--text)}
+.reveal-stop:focus-visible{outline:2px solid var(--orange);outline-offset:2px}
+
+/* ---- Fereastra proprie de confirmare (în locul celei din browser) ---- */
+.ask-overlay{position:fixed;inset:0;z-index:90;display:grid;place-items:center;padding:20px;background:rgba(0,0,0,.72)}
+.ask-overlay[hidden]{display:none}
+.ask-box{width:min(420px,100%);padding:22px 22px 20px;border-radius:14px;border:1px solid var(--line);background:var(--panel);box-shadow:0 30px 80px rgba(0,0,0,.6);animation:askIn .18s ease-out}
+@keyframes askIn{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:none}}
+.ask-box h3{margin:0 0 8px;font-size:18px;text-wrap:balance}
+.ask-box p{margin:0 0 18px;color:#c5c9cd;font-size:13px;line-height:1.5;white-space:pre-line}
+.ask-actions{display:flex;gap:10px;flex-wrap:wrap}
+.ask-actions button{flex:1 1 auto;min-height:42px}
+.ask-actions [hidden]{display:none}
+
+@media (max-width:600px){
+  .qty{flex-wrap:wrap}
+  .qty-label{flex-basis:100%;margin:0 0 2px}
+  .qty button{width:40px;height:40px}
+  .fast-toggle{min-height:40px}
+  .batch-slot{height:42px}
+  .ox-corner{width:22px;height:22px}
+  .ox-corner.tl,.ox-corner.tr{top:-12px}.ox-corner.bl,.ox-corner.br{bottom:-12px}
+  .ox-corner.tl,.ox-corner.bl{left:-12px}.ox-corner.tr,.ox-corner.br{right:-12px}
+}
+@media (max-width:600px){
+  #reveal-panel{padding:20px 16px!important}
+  #reveal-actions button{flex:1 1 0;padding:10px 8px;font-size:12.5px}
+}
+@media (max-width:600px) and (max-height:720px){.ox-stage{height:290px}}
+@media (prefers-reduced-motion:reduce){
+  .live-dot,.win-chip.is-new,.ask-box{animation:none}
+  .ox-card.show .ox-corner{animation-duration:.01s;animation-delay:0s}
+}
 </style>
 <link rel="stylesheet" href="vip-3d.css?v=20261003b">
   <link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/assets/app/apple-touch-icon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black"><meta name="apple-mobile-web-app-title" content="Moldova RP"><script src="/pwa.js" defer></script><meta name="theme-color" content="#090a0b">
@@ -185,9 +292,21 @@
   nu schimbă nimic la cumpărarea coins-urilor în sine.
 </p>
 
+<section class="wins-band" id="wins-band" aria-labelledby="wins-head" hidden>
+  <p class="wins-head" id="wins-head"><span class="live-dot" aria-hidden="true"></span>Ultimele câștiguri</p>
+  <div class="wins-track" id="wins-track"></div>
+</section>
+
 <section class="panel" id="cases-panel" hidden>
   <div class="head"><h2>Recompense disponibile</h2><span id="coins-balance" class="pill info">— coins</span></div>
   <p class="muted" id="account-line" style="margin:0 0 14px"></p>
+  <div class="open-bar">
+    <div class="qty" role="group" aria-label="Câte cutii deschizi dintr-o apăsare">
+      <span class="qty-label">Cutii odată</span>
+      <button type="button" data-qty="1" aria-pressed="true">1</button><button type="button" data-qty="2" aria-pressed="false">2</button><button type="button" data-qty="3" aria-pressed="false">3</button><button type="button" data-qty="4" aria-pressed="false">4</button><button type="button" data-qty="5" aria-pressed="false">5</button>
+    </div>
+    <label class="fast-toggle" title="Sare peste animație și arată direct premiul"><input type="checkbox" data-fast><span class="sw" aria-hidden="true"></span>⚡ Deschidere rapidă</label>
+  </div>
   <p class="muted" id="cases-offline-note" style="margin:0 0 14px" hidden>Serverul de joc nu răspunde momentan — recompensele nu pot fi deschise chiar acum.</p>
   <div id="cases-grid" class="case-grid"></div>
 </section>
@@ -256,10 +375,13 @@
   </div>
 </div>
 
-<div id="reveal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:50;align-items:center;justify-content:center;padding:20px">
+<div id="reveal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:50;align-items:center;justify-content:center;padding:20px">
+  <div class="reveal-tint" aria-hidden="true"></div>
   <div class="panel" id="reveal-panel" style="max-width:580px;width:100%;text-align:center;padding:28px 24px">
+    <p class="reveal-count" id="reveal-count" hidden></p>
     <h2 id="reveal-title" style="margin:0 0 4px">Se deschide…</h2>
     <p id="reveal-text" class="muted" style="margin:0 0 16px;min-height:18px"></p>
+    <div class="batch-strip" id="batch-strip" hidden></div>
     <div class="ox-stage" id="ox-stage" hidden>
       <div class="ox-rays"></div>
       <div class="ox-glow"></div>
@@ -286,6 +408,20 @@
     <div id="reveal-actions" style="display:none;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:18px"></div>
     <p id="reveal-sell-msg" class="muted" style="margin:10px 0 0" hidden></p>
     <button type="button" class="btn-primary" id="reveal-close" hidden style="margin-top:18px">Am înțeles</button>
+    <button type="button" class="reveal-stop" id="reveal-stop" hidden></button>
+  </div>
+  <canvas class="confetti-fx" id="confetti-fx" aria-hidden="true"></canvas>
+</div>
+
+<div class="ask-overlay" id="ask-overlay" role="dialog" aria-modal="true" aria-labelledby="ask-title" aria-describedby="ask-text" hidden>
+  <div class="ask-box">
+    <h3 id="ask-title"></h3>
+    <p id="ask-text"></p>
+    <div class="ask-actions">
+      <button type="button" class="btn-primary" id="ask-ok"></button>
+      <button type="button" class="btn-ghost" id="ask-extra" hidden></button>
+      <button type="button" class="btn-ghost" id="ask-cancel"></button>
+    </div>
   </div>
 </div>
 
@@ -298,6 +434,13 @@
     <p class="pill warn" id="preview-price" style="margin:6px 0 14px">🪙 — coins</p>
     <p class="muted" style="margin:0 0 10px;font-size:13px">Ce poți câștiga din această cutie:</p>
     <div id="preview-pool" style="display:flex;flex-direction:column;gap:7px;margin-bottom:18px"></div>
+    <div class="open-bar" style="margin-bottom:12px">
+      <div class="qty" role="group" aria-label="Câte cutii deschizi dintr-o apăsare">
+        <span class="qty-label">Cutii odată</span>
+        <button type="button" data-qty="1" aria-pressed="true">1</button><button type="button" data-qty="2" aria-pressed="false">2</button><button type="button" data-qty="3" aria-pressed="false">3</button><button type="button" data-qty="4" aria-pressed="false">4</button><button type="button" data-qty="5" aria-pressed="false">5</button>
+      </div>
+      <label class="fast-toggle" title="Sare peste animație și arată direct premiul"><input type="checkbox" data-fast><span class="sw" aria-hidden="true"></span>⚡ Rapidă</label>
+    </div>
     <button type="button" class="btn-primary" id="preview-open-btn" style="width:100%">Deschide</button>
   </div>
 </div>
@@ -351,6 +494,11 @@ function carImgFallback(img) {
   if (img.dataset.fb === 'ox') img.outerHTML = '<div class="ox-icon">🚗</div>';
   else if (img.dataset.fb === 'tile') { const t = img.closest('.prize-tile'); if (t) t.classList.add('no-img'); }
   else if (img.dataset.fb === 'reel') img.parentNode.outerHTML = '<div class="tile-icon">🚗</div>';
+  else if (img.dataset.fb === 'chip') {
+    const chip = img.closest('.win-chip');
+    if (chip) chip.dataset.noimg = '1';
+    img.outerHTML = '<span class="bs-emoji">🚗</span>';
+  }
   else img.outerHTML = '<span style="width:18px;text-align:center;flex:none">🚗</span>';
 }
 // Miniatura unei recompense în liste (mașină / armă / emoji).
@@ -448,7 +596,7 @@ document.getElementById('link-form').addEventListener('submit', async (e) => {
     await loadAll();
     if (caseToOpen) {
       const c = currentCasesById[caseToOpen];
-      if (c && currentCoins >= c.price) openCase(caseToOpen);
+      if (c && currentCoins >= c.price) startOpenFlow(caseToOpen);
     }
   } catch { msgEl.textContent = 'Eroare de rețea.'; }
 });
@@ -504,7 +652,12 @@ function renderPending(pending) {
 // Schimbă banii murdari în bani curați — doar facțiunile legale (30.09.2026).
 async function exchangeDirty(btn) {
   const amount = Number(btn.dataset.amount);
-  if (!confirm(`Schimbi „${btn.dataset.label}” în $${amount.toLocaleString('ro-RO')} curați, în bancă (${btn.dataset.pct}%)?\n\nDupă schimb îi ridici tot cu /recompense, ca bani în bancă.`)) return;
+  const sure = await askConfirm({
+    title: 'Schimbi banii murdari?',
+    text: `„${btn.dataset.label}” devin $${amount.toLocaleString('ro-RO')} curați, în bancă (${btn.dataset.pct}%).\n\nDupă schimb îi ridici tot cu /recompense, ca bani în bancă.`,
+    ok: '🧼 Schimbă', cancel: 'Îi păstrez murdari',
+  });
+  if (sure !== 'ok') return;
   const msg = document.getElementById('sell-msg');
   document.querySelectorAll('[data-exch],[data-sell]').forEach(b => { b.disabled = true; });
   try {
@@ -525,7 +678,12 @@ async function sellBack(btn) {
   const currency = btn.dataset.currency;
   const amount = Number(btn.dataset.amount);
   const price = currency === 'coins' ? `${amount} coins` : `$${amount.toLocaleString('ro-RO')} în bancă`;
-  if (!confirm(`Vinzi „${btn.dataset.label}” pentru ${price}?\n\nDupă vânzare nu o mai poți ridica din joc.`)) return;
+  const sure = await askConfirm({
+    title: 'Vinzi recompensa?',
+    text: `„${btn.dataset.label}” pentru ${price}.\n\nDupă vânzare nu o mai poți ridica din joc.`,
+    ok: 'Vinde', cancel: 'O păstrez',
+  });
+  if (sure !== 'ok') return;
   const msg = document.getElementById('sell-msg');
   document.querySelectorAll('[data-sell]').forEach(b => { b.disabled = true; });
   try {
@@ -752,7 +910,7 @@ function renderCases(cases, coins, linked) {
         ${poolRowsHtml(c.pool.slice(0, 3))}
         ${c.pool.length > 3 ? `<button type="button" class="pool-more-link" data-preview="${escapeHtml(c.id)}">+ ${c.pool.length - 3} alte recompense…</button>` : ''}
       </div>
-      <button type="button" class="btn-mrp" data-spin="${escapeHtml(c.id)}"><span class="mrp-mark">MRP</span> Învârte cutia</button>
+      <button type="button" class="btn-mrp" data-spin="${escapeHtml(c.id)}"><span class="mrp-mark">MRP</span> <span class="spin-text">${escapeHtml(spinLabel(c))}</span></button>
     </div>`;
   }).join('');
   // Cardul (și "+ N alte recompense…" din interior) deschide previzualizarea
@@ -781,6 +939,7 @@ function renderCases(cases, coins, linked) {
       startOpenFlow(btn.dataset.spin);
     });
   });
+  syncOpenControls();
 }
 
 // Previzualizare: click pe orice cutie deschide un panou cu toată lista de
@@ -807,7 +966,7 @@ function openPreview(caseId) {
   previewInsufficientFunds = accountLinked && !canAfford;
   const openBtn = document.getElementById('preview-open-btn');
   openBtn.disabled = false;
-  openBtn.textContent = previewInsufficientFunds ? '🛒 Coins insuficienți — cumpără pe Tebex' : 'Deschide';
+  openBtn.textContent = previewOpenLabel(c);
   document.getElementById('preview-overlay').style.display = 'flex';
 }
 function closePreview() {
@@ -830,18 +989,115 @@ document.getElementById('preview-open-btn').addEventListener('click', () => {
 // cutiei (vezi renderCases() mai sus). Reface aceleași verificări ca
 // previzualizarea: cont nelegat -> cere legarea; coins insuficienți ->
 // trimite la Tebex; altfel pornește efectiv derulatorul.
-function startOpenFlow(caseId) {
+// (04.10.2026) Deschide câte cutii sunt alese în „Cutii odată" (1–5). Dacă
+// coins-urile ajung doar pentru o parte, întrebăm înainte să cheltuim ceva.
+async function startOpenFlow(caseId) {
   const c = currentCasesById[caseId];
   if (!c) return;
   if (!accountLinked) { openLinkOverlay(caseId); return; }
-  if (currentCoins < c.price) { window.open(TEBEX_URL, '_blank', 'noopener'); return; }
-  openCase(caseId);
+  const price = Number(c.price) || 0;
+  const afford = price > 0 ? Math.floor(currentCoins / price) : OPEN_MAX;
+  if (afford < 1) { window.open(TEBEX_URL, '_blank', 'noopener'); return; }
+  let count = openQty;
+  if (afford < count) {
+    const answer = await askConfirm({
+      title: 'Coins-urile nu ajung pentru toate',
+      text: `Ai 🪙 ${currentCoins} coins: ajung pentru ${afford} din cele ${count} cutii „${c.name}”.`,
+      ok: afford === 1 ? 'Deschide o cutie' : `Deschide ${afford} cutii`,
+      extra: '🛒 Cumpără coins',
+      cancel: 'Renunț',
+    });
+    if (answer === 'extra') { window.open(TEBEX_URL, '_blank', 'noopener'); return; }
+    if (answer !== 'ok') return;
+    count = afford;
+  }
+  openBatch(caseId, count);
 }
+
+// ---- Câte cutii odată + deschidere rapidă (04.10.2026) ----
+// Numărul de cutii pornește mereu de la 1 (ca nimeni să nu cheltuie din
+// greșeală de 5 ori); „deschidere rapidă" se ține minte pe dispozitiv.
+const OPEN_MAX = 5;
+let openQty = 1;
+let fastOpen = false;
+try { fastOpen = localStorage.getItem('mrp_fast_open') === '1'; } catch {}
+function spinLabel(c) {
+  return openQty > 1 ? `Învârte ${openQty} cutii · 🪙 ${(Number(c.price) || 0) * openQty}` : 'Învârte cutia';
+}
+function previewOpenLabel(c) {
+  if (previewInsufficientFunds) return '🛒 Coins insuficienți — cumpără pe Tebex';
+  return openQty > 1 ? `Deschide ${openQty} cutii · 🪙 ${(Number(c.price) || 0) * openQty} coins` : 'Deschide';
+}
+function syncOpenControls() {
+  document.querySelectorAll('.qty [data-qty]').forEach(b => b.setAttribute('aria-pressed', String(Number(b.dataset.qty) === openQty)));
+  document.querySelectorAll('input[data-fast]').forEach(i => { i.checked = fastOpen; });
+  document.querySelectorAll('[data-spin]').forEach(btn => {
+    const c = currentCasesById[btn.dataset.spin];
+    const t = btn.querySelector('.spin-text');
+    if (c && t) t.textContent = spinLabel(c);
+  });
+  const pc = previewCaseId && currentCasesById[previewCaseId];
+  if (pc) document.getElementById('preview-open-btn').textContent = previewOpenLabel(pc);
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('.qty [data-qty]');
+  if (!b) return;
+  openQty = Math.min(OPEN_MAX, Math.max(1, Number(b.dataset.qty) || 1));
+  syncOpenControls();
+});
+document.addEventListener('change', e => {
+  if (!e.target.matches('input[data-fast]')) return;
+  fastOpen = e.target.checked;
+  try { localStorage.setItem('mrp_fast_open', fastOpen ? '1' : '0'); } catch {}
+  syncOpenControls();
+});
+syncOpenControls();
+
+// ---- Fereastra proprie de confirmare ----
+// askConfirm({title, text, ok, cancel, extra}) → 'ok' | 'extra' | null
+let askDone = null;
+function askConfirm({ title, text, ok, cancel, extra }) {
+  const box = document.getElementById('ask-overlay');
+  const back = document.activeElement;
+  document.getElementById('ask-title').textContent = title || '';
+  document.getElementById('ask-text').textContent = text || '';
+  const okBtn = document.getElementById('ask-ok');
+  const extraBtn = document.getElementById('ask-extra');
+  okBtn.textContent = ok || 'Da';
+  document.getElementById('ask-cancel').textContent = cancel || 'Renunț';
+  extraBtn.hidden = !extra;
+  extraBtn.textContent = extra || '';
+  if (askDone) askDone(null); // o întrebare rămasă deschisă se închide ca „nu"
+  box.hidden = false;
+  okBtn.focus({ preventScroll: true });
+  return new Promise(resolve => {
+    askDone = value => {
+      askDone = null;
+      box.hidden = true;
+      if (back && back.focus && document.contains(back)) back.focus({ preventScroll: true });
+      resolve(value);
+    };
+  });
+}
+document.getElementById('ask-ok').addEventListener('click', () => askDone && askDone('ok'));
+document.getElementById('ask-extra').addEventListener('click', () => askDone && askDone('extra'));
+document.getElementById('ask-cancel').addEventListener('click', () => askDone && askDone(null));
+document.getElementById('ask-overlay').addEventListener('click', e => { if (e.target.id === 'ask-overlay' && askDone) askDone(null); });
+document.addEventListener('keydown', e => {
+  if (!askDone) return;
+  if (e.key === 'Escape') { e.preventDefault(); askDone(null); return; }
+  if (e.key !== 'Tab') return;
+  // Tab rămâne între butoanele ferestrei
+  const btns = [...document.querySelectorAll('#ask-overlay button:not([hidden])')];
+  const i = btns.indexOf(document.activeElement);
+  e.preventDefault();
+  btns[(i + (e.shiftKey ? -1 : 1) + btns.length) % btns.length].focus();
+});
 
 // ---- Derulatorul de deschidere ("reel"), stil CS:GO — la fel ca pe linkul
 // de test. Diferența față de test: acolo recompensa e aleasă client-side
 // (nu e conectată la nimic real); AICI recompensa e deja decisă de SERVER
-// (vezi openCase() mai jos, care apelează /api/vip-shop/deschide ÎNAINTE să
+// (vezi openOne() mai jos, care apelează /api/vip-shop/deschide ÎNAINTE să
 // pornească derulatorul) — derulatorul doar se construiește în jurul
 // recompensei reale primite și se oprește exact pe ea. Tile-urile din jur
 // (umplutura derulatorului) sunt alese aleatoriu din pool-ul cutiei, doar
@@ -995,6 +1251,86 @@ const oxSfx = (() => {
   b.addEventListener('click', e => { e.stopPropagation(); oxSfx.toggle(); paint(); });
 })();
 
+// (04.10.2026) Scena pe culoarea rarității: când apare premiul, tot fundalul
+// ferestrei se aprinde în culoarea lui, iar la premiile peste „comun" cade
+// confetti (cu atât mai mult cu cât premiul e mai rar).
+const confettiFx = (() => {
+  const canvas = document.getElementById('confetti-fx');
+  const g = canvas.getContext('2d');
+  const COUNT = { common: 0, uncommon: 50, rare: 110, legendary: 190 };
+  let parts = [], raf = 0, W = 0, H = 0;
+  const pale = hex => {
+    const n = parseInt(hex.slice(1), 16);
+    const ch = k => Math.round(((n >> k) & 255) * 0.45 + 255 * 0.55);
+    return `rgb(${ch(16)},${ch(8)},${ch(0)})`;
+  };
+  function size() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = canvas.clientWidth; H = canvas.clientHeight;
+    canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  function frame(now) {
+    g.clearRect(0, 0, W, H);
+    parts = parts.filter(p => p.y < H + 30);
+    for (const p of parts) {
+      if (now < p.t0) continue;
+      const age = now - p.t0;
+      p.vy = Math.min(p.vy + 0.045, 6.5);
+      p.x += p.vx + Math.sin(age / 260 + p.ph) * 0.9;
+      p.y += p.vy;
+      p.rot += p.vr;
+      g.save();
+      g.translate(p.x, p.y);
+      g.rotate(p.rot);
+      g.scale(1, Math.abs(Math.cos(age / 180 + p.ph)) * 0.8 + 0.2); // fâlfâit
+      g.globalAlpha = p.y > H - 140 ? Math.max(0, (H + 30 - p.y) / 170) : 0.95;
+      g.fillStyle = p.c;
+      g.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+      g.restore();
+    }
+    raf = parts.length ? requestAnimationFrame(frame) : 0;
+  }
+  return {
+    start(rarity) {
+      this.stop();
+      const base = COUNT[rarity] || 0;
+      if (!base || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      size();
+      if (!W || !H) return;
+      const count = Math.round(base * Math.min(1, Math.max(0.5, W / 1100)));
+      const main = OX_COLOR[rarity] || '#ffffff';
+      const colors = rarity === 'legendary' ? [main, '#ffd874', '#eb4b4b', '#ffffff'] : [main, main, pale(main), '#ffffff'];
+      const now = performance.now();
+      for (let i = 0; i < count; i++) {
+        parts.push({
+          x: Math.random() * W, y: -20 - Math.random() * H * 0.25,
+          vx: (Math.random() - 0.5) * 1.6, vy: 1.5 + Math.random() * 3,
+          rot: Math.random() * 6.28, vr: (Math.random() - 0.5) * 0.24,
+          w: 6 + Math.random() * 6, h: 3 + Math.random() * 4,
+          c: colors[i % colors.length], ph: Math.random() * 6.28, t0: now + Math.random() * 900,
+        });
+      }
+      raf = requestAnimationFrame(frame);
+    },
+    stop() {
+      if (raf) cancelAnimationFrame(raf);
+      raf = 0; parts = [];
+      if (W) g.clearRect(0, 0, W, H);
+    },
+  };
+})();
+function sceneLight(rarity) {
+  const overlay = document.getElementById('reveal-overlay');
+  overlay.style.setProperty('--ox', OX_COLOR[rarity] || OX_COLOR.common);
+  overlay.classList.add('lit');
+  confettiFx.start(rarity);
+}
+function sceneDark() {
+  document.getElementById('reveal-overlay').classList.remove('lit');
+  confettiFx.stop();
+}
+
 let oxRun = 0; // crește la fiecare deschidere / închidere — oprește bucla veche
 function oxCardHtml(w) {
   const wpn = weaponOf(w.type, w, w.label);
@@ -1002,10 +1338,13 @@ function oxCardHtml(w) {
     ? carImg(w.model, 'class="ox-photo"', 'ox')
     : wpn ? `<div class="ox-wpn" style="--wa:${wpn.accent}"><img class="ox-photo" src="${wpn.src}" alt="" onerror="this.parentNode.outerHTML='<div class=&quot;ox-icon&quot;>🔫</div>'"></div>`
     : `<div class="ox-icon">${rewardIcon(w.type, w, w.label)}</div>`;
-  return `${visual}<div class="ox-label">${escapeHtml(niceLabel(w.type, w.label, w))}${ammoNote(w)}</div><span class="ox-badge">${OX_LABEL[w.rarity] || ''}</span>`;
+  const corners = '<i class="ox-corner tl"></i><i class="ox-corner tr"></i><i class="ox-corner bl"></i><i class="ox-corner br"></i>';
+  return `${visual}<div class="ox-label">${escapeHtml(niceLabel(w.type, w.label, w))}${ammoNote(w)}</div><span class="ox-badge">${OX_LABEL[w.rarity] || ''}</span>${corners}`;
 }
 
-function crateOpenTo(winner, caseObj) {
+// opts.instant = „deschidere rapidă": fără căderea și încărcarea cutiei —
+// premiul apare direct, cu o scurtă izbucnire.
+function crateOpenTo(winner, caseObj, opts = {}) {
   return new Promise(resolve => {
     const run = ++oxRun;
     const stage = document.getElementById('ox-stage');
@@ -1080,7 +1419,15 @@ function crateOpenTo(winner, caseObj) {
       tierEl.textContent = OX_LABEL[rarity];
       stage.classList.add('is-open');
       crate.style.transform = '';
-      if (instant) { crate.style.opacity = '0'; crate.classList.add('gone'); card.classList.add('show', 'instant'); }
+      sceneLight(rarity);
+      if (instant === 'fast') {
+        crate.style.opacity = '0'; crate.classList.add('gone');
+        ring.classList.remove('go'); void ring.offsetWidth; ring.classList.add('go');
+        burst(rarity === 'legendary' ? 150 : 90);
+        card.classList.add('show', 'quick');
+        oxSfx.win(rarity);
+      }
+      else if (instant) { crate.style.opacity = '0'; crate.classList.add('gone'); card.classList.add('show', 'instant'); }
       else {
         flash.classList.remove('go'); void flash.offsetWidth; flash.classList.add('go');
         ring.classList.remove('go'); void ring.offsetWidth; ring.classList.add('go');
@@ -1102,6 +1449,7 @@ function crateOpenTo(winner, caseObj) {
     stage.onclick = skip;
 
     if (reduced) { open(true); finish(); }
+    else if (opts.instant) { open('fast'); doneAt = 520; }
     else {
       crate.classList.add('drop');
       setTimeout(() => { if (run === oxRun && phase === 'drop') oxSfx.thud(); }, 420);
@@ -1166,148 +1514,285 @@ function crateOpenTo(winner, caseObj) {
   });
 }
 
-async function openCase(caseId) {
-  const overlay = document.getElementById('reveal-overlay');
+// ---- Deschiderea propriu-zisă (04.10.2026: una sau mai multe cutii la rând) ----
+// Cutiile se deschid PE RÂND: fiecare e o cerere separată către server, făcută
+// abia când jucătorul ajunge la ea. Așa, dacă se oprește la jumătate (sau pică
+// ceva), plătește doar cutiile deschise efectiv.
+let revealBusy = false; // între cererea către server și sfârșitul animației
+let revealWait = null; // alegerea jucătorului pe premiul curent: 'next' | 'stop'
+const revealDecision = () => new Promise(resolve => { revealWait = resolve; });
+function revealResolve(value) {
+  const done = revealWait;
+  revealWait = null;
+  if (done) done(value);
+  return !!done;
+}
+function closeReveal() {
+  document.getElementById('reveal-overlay').style.display = 'none';
+  oxRun++; // oprește particulele
+  sceneDark();
+  document.getElementById('ox-stage').hidden = true;
+  document.getElementById('reveal-panel').classList.remove('is-cinema');
+}
+document.getElementById('reveal-close').addEventListener('click', () => { if (!revealResolve('next')) closeReveal(); });
+document.getElementById('reveal-stop').addEventListener('click', () => { if (!revealResolve('stop')) closeReveal(); });
+
+// miniatura unui premiu în șirul „Cutia 1…5"
+function slotThumb(w) {
+  if (w.type === 'vehicle' && w.model) return carImg(w.model, '', 'chip');
+  const wpn = weaponOf(w.type, w, w.label);
+  if (wpn) return `<img src="${wpn.src}" alt="" onerror="this.outerHTML='<span class=&quot;bs-emoji&quot;>🔫</span>'">`;
+  return `<span class="bs-emoji">${rewardIcon(w.type, w, w.label)}</span>`;
+}
+
+async function openBatch(caseId, total) {
+  const strip = document.getElementById('batch-strip');
+  document.getElementById('reveal-overlay').style.display = 'flex';
+  oxSfx.unlock(); // sunetul trebuie pornit din click-ul jucătorului
+  strip.hidden = total < 2;
+  strip.innerHTML = total > 1
+    ? Array.from({ length: total }, (_, i) => `<div class="batch-slot" aria-label="Cutia ${i + 1}">${i + 1}</div>`).join('')
+    : '';
+  for (let i = 0; i < total; i++) {
+    const outcome = await openOne(caseId, i, total);
+    if (outcome === 'error') return; // mesajul rămâne pe ecran; butonul îl închide
+    if (outcome === 'stop') break;
+  }
+  closeReveal();
+}
+
+// Deschide cutia cu numărul i (din total), o prezintă și așteaptă alegerea
+// jucătorului. Întoarce 'next', 'stop' sau 'error'.
+async function openOne(caseId, i, total) {
   const title = document.getElementById('reveal-title');
   const text = document.getElementById('reveal-text');
   const closeBtn = document.getElementById('reveal-close');
-  const marker = document.getElementById('reveal-marker');
-  const track = document.getElementById('reveal-track');
-  const flash = document.getElementById('reveal-flash');
+  const stopBtn = document.getElementById('reveal-stop');
+  const actions = document.getElementById('reveal-actions');
+  const sellMsg = document.getElementById('reveal-sell-msg');
+  const countEl = document.getElementById('reveal-count');
+  const strip = document.getElementById('batch-strip');
+  const slot = strip.children[i] || null;
+  const more = total - i - 1;
+  const nextOnly = more ? `Următoarea cutie (${i + 2}/${total})` : 'Am înțeles';
 
-  overlay.style.display = 'flex';
-  oxSfx.unlock(); // sunetul trebuie pornit din click-ul jucătorului
   oxRun++;
+  sceneDark();
   document.getElementById('ox-stage').hidden = true;
   document.getElementById('reveal-panel').classList.remove('is-cinema');
-  const actions = document.getElementById('reveal-actions');
   actions.style.display = 'none';
   actions.innerHTML = '';
-  document.getElementById('reveal-sell-msg').hidden = true;
+  sellMsg.hidden = true;
+  closeBtn.hidden = true;
+  closeBtn.disabled = false;
   closeBtn.textContent = 'Am înțeles';
+  stopBtn.hidden = true;
+  stopBtn.disabled = false;
+  countEl.hidden = total < 2;
+  countEl.textContent = `Cutia ${i + 1} din ${total}`;
+  [...strip.children].forEach((el, k) => el.classList.toggle('is-current', k === i));
   title.textContent = 'Se deschide…';
   text.textContent = 'Se trimite cererea către server…';
-  closeBtn.hidden = true;
-  marker.classList.remove('active');
-  flash.classList.remove('hit');
-  track.innerHTML = '';
-  track.style.transform = 'translateX(0px)';
+  revealBusy = true;
 
+  const before = i === 1 ? 'Prima cutie e deschisă, iar premiul ei rămâne al tău.' : `Primele ${i} cutii sunt deschise, iar premiile lor rămân ale tale.`;
+  const fail = (message, refused) => {
+    title.textContent = i > 0 ? `Cutia ${i + 1} nu s-a deschis` : 'Nu am putut deschide recompensa';
+    text.textContent = message + (i > 0 ? ` ${before}${refused ? ' Pentru restul nu ai plătit nimic.' : ''}` : '');
+    closeBtn.hidden = false;
+    revealBusy = false;
+    loadAll();
+    return 'error';
+  };
+
+  let d;
   try {
     const res = await apiFetch('/api/vip-shop/deschide', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ caseId }) });
-    const d = await res.json();
-    if (!res.ok) {
-      title.textContent = 'Nu am putut deschide recompensa';
-      text.textContent = d.error || 'Eroare necunoscută.';
-      closeBtn.hidden = false;
-      return;
-    }
-
-    // Recompensa e deja acordată de server în acest moment — derulatorul de
-    // mai jos e doar prezentare, nu mai poate schimba rezultatul. Căutăm
-    // intrarea corespunzătoare din pool-ul cutiei (după tip+etichetă) doar
-    // ca să-i aflăm procentul și, prin el, culoarea de raritate a tile-ului.
-    const c = currentCasesById[caseId];
-    const pool = (c && c.pool) || [];
-    const poolMatch = pool.find(r => r.type === d.reward.type && r.label === d.reward.label);
-    const wonLabel = niceLabel(d.reward.type, d.reward.label, d.reward.data || poolMatch || {});
-    const wonModel = d.reward.type === 'vehicle' && d.reward.data && d.reward.data.model;
-    const winner = {
-      type: d.reward.type,
-      label: d.reward.label,
-      model: wonModel || undefined,
-      item: (d.reward.data && d.reward.data.item) || undefined,
-      ammo: (d.reward.data && d.reward.data.ammo) || undefined,
-      account: (d.reward.data && d.reward.data.account) || undefined,
-      rarity: poolMatch ? rarityOf(Number(poolMatch.chancePercent) || 0) : 'common',
-    };
-
-    text.textContent = '';
-    await crateOpenTo(winner, c);
-
-    title.textContent = 'Felicitări!';
-    text.textContent = d.reward.type === 'coins'
-      ? `Ai câștigat: ${wonLabel}. Au fost adăugați direct în contul tău de coins.`
-      : `Ai câștigat: ${wonLabel}. Intră pe server și scrie /recompense ca să-l ridici.`;
-    // (29.09.2026) Mașină/armă cu valoare setată: alege imediat — o păstrezi
-    // (o ridici din joc) sau o vinzi înapoi pentru 50% din valoare.
-    if (d.sell && (d.sell.coins || d.sell.money)) {
-      text.textContent = `Ai câștigat: ${wonLabel}. O păstrezi sau o vinzi înapoi pentru ${d.sell.pct}% din valoare?`;
-      actions.innerHTML = `
-        ${d.sell.coins ? `<button type="button" class="btn-ghost" data-rsell="coins" data-amount="${d.sell.coins}">Vinde pe 🪙 ${d.sell.coins} coins</button>` : ''}
-        ${d.sell.money ? `<button type="button" class="btn-ghost" data-rsell="money" data-amount="${d.sell.money}">Vinde pe $${Number(d.sell.money).toLocaleString('ro-RO')}</button>` : ''}`;
-      actions.style.display = 'flex';
-      closeBtn.textContent = 'Păstrez — o ridic din joc';
-      actions.querySelectorAll('[data-rsell]').forEach(b => b.addEventListener('click', async () => {
-        const currency = b.dataset.rsell;
-        const amount = Number(b.dataset.amount);
-        const price = currency === 'coins' ? `${amount} coins` : `$${amount.toLocaleString('ro-RO')} în bancă`;
-        const msg = document.getElementById('reveal-sell-msg');
-        actions.querySelectorAll('button').forEach(x => { x.disabled = true; });
-        closeBtn.disabled = true;
-        try {
-          const r = await apiFetch('/api/vip-shop/vinde', { method: 'POST', body: JSON.stringify({ openingId: d.sell.openingId, currency }) });
-          const rd = await r.json().catch(() => ({}));
-          if (!r.ok) throw new Error(rd.error || 'Nu am putut vinde recompensa.');
-          title.textContent = 'Vândut!';
-          text.textContent = `Ai vândut ${d.reward.label} și ai primit ${rd.amount ? (currency === 'coins' ? `${rd.amount} coins` : `$${Number(rd.amount).toLocaleString('ro-RO')} în bancă`) : price}.`;
-          actions.style.display = 'none';
-          closeBtn.textContent = 'Am înțeles';
-          await loadAll();
-        } catch (err) {
-          msg.hidden = false; msg.style.color = '#ff8a8a';
-          msg.textContent = err.message + ' Recompensa rămâne a ta — o poți ridica din joc.';
-          actions.querySelectorAll('button').forEach(x => { x.disabled = false; });
-        } finally {
-          closeBtn.disabled = false;
-        }
-      }));
-    }
-    // (30.09.2026) Bani murdari + facțiune legală: îi păstrează murdari sau îi
-    // schimbă pe loc în bani curați, în bancă, la procentul setat de staff.
-    if (d.exchange && d.exchange.amount) {
-      const clean = `$${Number(d.exchange.amount).toLocaleString('ro-RO')}`;
-      text.textContent = `Ai câștigat: ${wonLabel}. ${d.exchange.scope === 'legal' ? 'Ești într-o facțiune legală — îi' : 'Îi'} păstrezi murdari sau îi schimbi acum în ${clean} curați, în bancă (${d.exchange.pct}%)?`;
-      actions.innerHTML = `<button type="button" class="btn-primary" data-rexch="1">🧼 Schimbă în ${clean} curați</button>`;
-      actions.style.display = 'flex';
-      closeBtn.textContent = 'Păstrez banii murdari';
-      actions.querySelector('[data-rexch]').addEventListener('click', async ev => {
-        const b = ev.currentTarget;
-        const msg = document.getElementById('reveal-sell-msg');
-        b.disabled = true; closeBtn.disabled = true;
-        try {
-          const r = await apiFetch('/api/vip-shop/schimba', { method: 'POST', body: JSON.stringify({ openingId: d.exchange.openingId }) });
-          const rd = await r.json().catch(() => ({}));
-          if (!r.ok) throw new Error(rd.error || 'Nu am putut schimba banii.');
-          title.textContent = 'Schimbat!';
-          text.textContent = `Acum ai de ridicat ${rd.amount ? `$${Number(rd.amount).toLocaleString('ro-RO')}` : clean} curați, în bancă. Intră pe server și scrie /recompense.`;
-          actions.style.display = 'none';
-          closeBtn.textContent = 'Am înțeles';
-          await loadAll();
-        } catch (err) {
-          msg.hidden = false; msg.style.color = '#ff8a8a';
-          msg.textContent = err.message + ' Banii rămân ai tăi, murdari — îi poți ridica din joc.';
-          b.disabled = false;
-        } finally {
-          closeBtn.disabled = false;
-        }
-      });
-    }
-    closeBtn.hidden = false;
-    await loadAll();
+    d = await res.json();
+    if (!res.ok) return fail(d.error || 'Eroare necunoscută.', true);
   } catch {
-    title.textContent = 'Eroare de rețea';
-    text.textContent = 'Încearcă din nou.';
-    closeBtn.hidden = false;
+    return fail('Eroare de rețea. Dacă această cutie s-a deschis totuși, premiul apare la „Recompense în așteptare”.', false);
   }
+
+  // Recompensa e deja acordată de server în acest moment — animația de mai jos
+  // e doar prezentare, nu mai poate schimba rezultatul. Căutăm intrarea
+  // corespunzătoare din pool-ul cutiei (după tip+etichetă) doar ca să-i aflăm
+  // procentul și, prin el, culoarea de raritate.
+  const c = currentCasesById[caseId];
+  const pool = (c && c.pool) || [];
+  const data = d.reward.data || {};
+  const poolMatch = pool.find(r => r.type === d.reward.type && r.label === d.reward.label);
+  const wonLabel = niceLabel(d.reward.type, d.reward.label, d.reward.data || poolMatch || {});
+  const winner = {
+    type: d.reward.type,
+    label: d.reward.label,
+    model: (d.reward.type === 'vehicle' && data.model) || undefined,
+    item: data.item || undefined,
+    ammo: data.ammo || undefined,
+    account: data.account || undefined,
+    rarity: poolMatch ? rarityOf(Number(poolMatch.chancePercent) || 0) : 'common',
+  };
+
+  text.textContent = '';
+  await crateOpenTo(winner, c, { instant: fastOpen });
+  revealBusy = false;
+
+  if (slot) {
+    slot.classList.add('is-done');
+    slot.dataset.rarity = winner.rarity;
+    slot.title = wonLabel;
+    slot.innerHTML = slotThumb(winner);
+  }
+  title.textContent = 'Felicitări!';
+  text.textContent = d.reward.type === 'coins'
+    ? `Ai câștigat: ${wonLabel}. Au fost adăugați direct în contul tău de coins.`
+    : `Ai câștigat: ${wonLabel}. Intră pe server și scrie /recompense ca să-l ridici.`;
+  closeBtn.textContent = nextOnly;
+  const busy = on => {
+    actions.querySelectorAll('button').forEach(x => { x.disabled = on; });
+    closeBtn.disabled = on;
+    stopBtn.disabled = on;
+  };
+
+  // (29.09.2026) Mașină/armă cu valoare setată: alege imediat — o păstrezi
+  // (o ridici din joc) sau o vinzi înapoi pentru 50% din valoare.
+  if (d.sell && (d.sell.coins || d.sell.money)) {
+    text.textContent = `Ai câștigat: ${wonLabel}. O păstrezi sau o vinzi înapoi pentru ${d.sell.pct}% din valoare?`;
+    actions.innerHTML = `
+      ${d.sell.coins ? `<button type="button" class="btn-ghost" data-rsell="coins" data-amount="${d.sell.coins}">Vinde pe 🪙 ${d.sell.coins} coins</button>` : ''}
+      ${d.sell.money ? `<button type="button" class="btn-ghost" data-rsell="money" data-amount="${d.sell.money}">Vinde pe $${Number(d.sell.money).toLocaleString('ro-RO')}</button>` : ''}`;
+    actions.style.display = 'flex';
+    closeBtn.textContent = more ? `Păstrez · următoarea cutie (${i + 2}/${total})` : 'Păstrez — o ridic din joc';
+    actions.querySelectorAll('[data-rsell]').forEach(b => b.addEventListener('click', async () => {
+      const currency = b.dataset.rsell;
+      const amount = Number(b.dataset.amount);
+      const price = currency === 'coins' ? `${amount} coins` : `$${amount.toLocaleString('ro-RO')} în bancă`;
+      // premiile peste „comun" nu se vând dintr-o apăsare greșită
+      if (winner.rarity !== 'common') {
+        const sure = await askConfirm({
+          title: `Vinzi un premiu ${(OX_LABEL[winner.rarity] || '').toLowerCase()}?`,
+          text: `„${wonLabel}” pentru ${price}.\n\nDupă vânzare nu îl mai poți ridica din joc.`,
+          ok: 'Vinde', cancel: 'Îl păstrez',
+        });
+        if (sure !== 'ok') return;
+      }
+      busy(true);
+      try {
+        const r = await apiFetch('/api/vip-shop/vinde', { method: 'POST', body: JSON.stringify({ openingId: d.sell.openingId, currency }) });
+        const rd = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(rd.error || 'Nu am putut vinde recompensa.');
+        title.textContent = 'Vândut!';
+        text.textContent = `Ai vândut ${d.reward.label} și ai primit ${rd.amount ? (currency === 'coins' ? `${rd.amount} coins` : `$${Number(rd.amount).toLocaleString('ro-RO')} în bancă`) : price}.`;
+        actions.style.display = 'none';
+        sellMsg.hidden = true;
+        closeBtn.textContent = nextOnly;
+        if (slot) slot.classList.add('is-sold');
+        loadAll();
+      } catch (err) {
+        sellMsg.hidden = false; sellMsg.style.color = '#ff8a8a';
+        sellMsg.textContent = err.message + ' Recompensa rămâne a ta — o poți ridica din joc.';
+      } finally {
+        busy(false);
+      }
+    }));
+  }
+  // (30.09.2026) Bani murdari: îi păstrează murdari sau îi schimbă pe loc în
+  // bani curați, în bancă, la procentul setat de staff.
+  if (d.exchange && d.exchange.amount) {
+    const clean = `$${Number(d.exchange.amount).toLocaleString('ro-RO')}`;
+    text.textContent = `Ai câștigat: ${wonLabel}. ${d.exchange.scope === 'legal' ? 'Ești într-o facțiune legală — îi' : 'Îi'} păstrezi murdari sau îi schimbi acum în ${clean} curați, în bancă (${d.exchange.pct}%)?`;
+    actions.innerHTML = `<button type="button" class="btn-primary" data-rexch="1">🧼 Schimbă în ${clean} curați</button>`;
+    actions.style.display = 'flex';
+    closeBtn.textContent = more ? `Păstrez murdari · următoarea cutie (${i + 2}/${total})` : 'Păstrez banii murdari';
+    actions.querySelector('[data-rexch]').addEventListener('click', async () => {
+      busy(true);
+      try {
+        const r = await apiFetch('/api/vip-shop/schimba', { method: 'POST', body: JSON.stringify({ openingId: d.exchange.openingId }) });
+        const rd = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(rd.error || 'Nu am putut schimba banii.');
+        title.textContent = 'Schimbat!';
+        text.textContent = `Acum ai de ridicat ${rd.amount ? `$${Number(rd.amount).toLocaleString('ro-RO')}` : clean} curați, în bancă. Intră pe server și scrie /recompense.`;
+        actions.style.display = 'none';
+        sellMsg.hidden = true;
+        closeBtn.textContent = nextOnly;
+        if (slot) slot.classList.add('is-exch');
+        loadAll();
+      } catch (err) {
+        sellMsg.hidden = false; sellMsg.style.color = '#ff8a8a';
+        sellMsg.textContent = err.message + ' Banii rămân ai tăi, murdari — îi poți ridica din joc.';
+      } finally {
+        busy(false);
+      }
+    });
+  }
+  if (more) {
+    stopBtn.textContent = `Mă opresc aici (${more === 1 ? 'cutia rămasă nu se deschide' : `cele ${more} cutii rămase nu se deschid`} și nu te costă nimic)`;
+    stopBtn.hidden = false;
+  }
+
+  // alegerea se așteaptă ÎNAINTE de orice altă cerere: butonul e deja pe ecran
+  const decision = revealDecision();
+  closeBtn.hidden = false;
+  closeBtn.focus({ preventScroll: true });
+  loadAll();
+  return decision;
 }
 
-document.getElementById('reveal-close').addEventListener('click', () => {
-  document.getElementById('reveal-overlay').style.display = 'none';
-  oxRun++; // oprește particulele
-  document.getElementById('ox-stage').hidden = true;
-  document.getElementById('reveal-panel').classList.remove('is-cinema');
+// ---- Banda „Ultimele câștiguri" (04.10.2026) ----
+// Ce premii au ieșit din ultimele cutii (ale tuturor jucătorilor, fără nume).
+// Se reîncarcă la 30 s și după fiecare deschidere; premiile noi intră cu
+// animație. Mașinile și armele se pot deschide în vitrina 3D.
+let winsSeen = null;
+let winsItems = [];
+function winRarity(w) {
+  const all = Object.values(currentCasesById);
+  const own = (w.caseId != null && currentCasesById[w.caseId]) || all.find(x => x.name === w.caseName);
+  const hit = (own ? [own] : all).map(x => (x.pool || []).find(r => r.type === w.type && r.label === w.label)).find(Boolean);
+  return hit ? rarityOf(Number(hit.chancePercent) || 0) : 'common';
+}
+function renderWins(wins) {
+  const band = document.getElementById('wins-band');
+  const track = document.getElementById('wins-track');
+  if (!wins.length) { band.hidden = true; return; }
+  const fresh = new Set(winsSeen ? wins.filter(w => !winsSeen.has(w.id)).map(w => w.id) : []);
+  winsItems = [];
+  track.innerHTML = wins.map(w => {
+    const rarity = winRarity(w);
+    const label = niceLabel(w.type, w.label, w);
+    const item = v3ItemOf(w, rarity);
+    const idx = item ? winsItems.push(item) - 1 : -1;
+    const wpn = weaponOf(w.type, w, w.label);
+    const thumb = (w.type === 'vehicle' && w.model) ? carImg(w.model, '', 'chip')
+      : wpn ? `<img src="${wpn.src}" alt="" loading="lazy" onerror="this.outerHTML='<span class=&quot;bs-emoji&quot;>🔫</span>'">`
+      : `<span class="bs-emoji">${rewardIcon(w.type, w, w.label)}</span>`;
+    const open = item
+      ? `<button type="button" class="win-chip${fresh.has(w.id) ? ' is-new' : ''}" data-win3d="${idx}" aria-label="${escapeHtml(label)}, din ${escapeHtml(w.caseName || 'cutie')} — vezi în 3D"`
+      : `<div class="win-chip${fresh.has(w.id) ? ' is-new' : ''}"`;
+    return `${open} data-rarity="${rarity}" title="${escapeHtml(w.at ? fmtDate(w.at) : '')}">
+      <span class="wc-img">${thumb}</span><span class="wc-name">${escapeHtml(label)}</span><span class="wc-case">${escapeHtml(w.caseName || '')}</span>
+    </${item ? 'button' : 'div'}>`;
+  }).join('');
+  winsSeen = new Set(wins.map(w => w.id));
+  band.hidden = false;
+  if (fresh.size) track.scrollTo({ left: 0, behavior: 'smooth' });
+}
+document.getElementById('wins-track').addEventListener('click', e => {
+  const chip = e.target.closest('[data-win3d]');
+  const item = chip && !chip.dataset.noimg && winsItems[Number(chip.dataset.win3d)];
+  if (item && window.MRP3D) MRP3D.open([item], 0);
 });
+async function loadWins() {
+  // nu în timpul unei animații: premiul ar apărea în bandă înaintea ei
+  if (revealBusy) return;
+  try {
+    const res = await apiFetch('/api/vip-shop/ultimele');
+    if (!res.ok) return;
+    const d = await res.json();
+    if (revealBusy) return;
+    renderWins(Array.isArray(d.wins) ? d.wins : []);
+  } catch { /* banda rămâne cum era */ }
+}
+setInterval(() => { if (!document.hidden) loadWins(); }, 30000);
 
 async function loadAll() {
   try {
@@ -1328,8 +1813,9 @@ async function loadAll() {
   // Jurnalul (admin) și istoricul propriu sunt cereri separate (nu blochează
   // restul paginii dacă pică) — se reîncarcă de fiecare dată când loadAll()
   // se apelează, deci și imediat după fiecare deschidere de cutie (vezi
-  // openCase() mai jos).
+  // openOne() mai sus).
   loadLog();
+  loadWins();
 }
 
 (async () => {

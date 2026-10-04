@@ -1539,7 +1539,7 @@ async function vipShopAdminRequest(method, path, body) {
       signal: controller.signal,
     });
     const parsed = await r.json().catch(() => ({}));
-    if (!r.ok) return { ok: false, status: r.status, error: parsed.error || "eroare" };
+    if (!r.ok) return { ok: false, status: r.status, error: parsed.error || "eroare", data: parsed };
     return { ok: true, data: parsed };
   } catch {
     return { ok: false, status: 503, error: "server_offline" };
@@ -2497,6 +2497,8 @@ app.post("/api/vip-shop/vinde", auth, asyncRoute(async (req, res) => {
       server_offline: "Serverul de joc nu răspunde momentan.",
     };
     if (result.status === 404) gameRouteReady.sell = false;
+    // (04.10.2026) în jurnal: de ce a refuzat jocul, ca să nu mai ghicim
+    console.warn(`VIP Shop: serverul de joc a refuzat vânzarea — HTTP ${result.status}, răspuns ${JSON.stringify(result.data || {}).slice(0, 300)} (deschiderea #${openingId}, „${opening.reward_label}”, ${amount} ${currency}).`);
     const msg = result.status === 404 ? "Vânzarea înapoi nu e încă activă pe serverul de joc." : (messages[result.error] || "Nu am putut vinde recompensa.");
     return res.status(400).json({ error: msg });
   }
@@ -2540,6 +2542,7 @@ app.post("/api/vip-shop/schimba", auth, asyncRoute(async (req, res) => {
       server_offline: "Serverul de joc nu răspunde momentan.",
     };
     if (result.status === 404) gameRouteReady.convert = false;
+    console.warn(`VIP Shop: serverul de joc a refuzat schimbul — HTTP ${result.status}, răspuns ${JSON.stringify(result.data || {}).slice(0, 300)} (deschiderea #${openingId}, „${opening.reward_label}”, ${offer.from} murdari → ${offer.amount} curați, ${offer.pct}%).`);
     const msg = result.status === 404 ? "Schimbul banilor murdari nu e încă activ pe serverul de joc." : (messages[result.error] || "Nu am putut schimba banii.");
     return res.status(400).json({ error: msg });
   }

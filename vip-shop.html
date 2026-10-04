@@ -144,6 +144,13 @@ button.win-chip:focus-visible{outline:2px solid var(--orange);outline-offset:2px
 .win-chip.is-new{animation:winIn .55s cubic-bezier(.2,1.2,.4,1)}
 @keyframes winIn{from{opacity:0;transform:translateX(-22px) scale(.92)}to{opacity:1;transform:none}}
 
+/* ---- Cât se încarcă pagina (serverul de joc poate răspunde greu) ---- */
+.case-skel{height:250px;border-radius:12px;border:1px solid var(--line);background:linear-gradient(100deg,rgba(255,255,255,.025) 30%,rgba(255,255,255,.07) 50%,rgba(255,255,255,.025) 70%);background-size:220% 100%;animation:caseSkel 1.5s linear infinite}
+@keyframes caseSkel{from{background-position:120% 0}to{background-position:-100% 0}}
+@media (max-width:720px){.case-skel{height:150px}.case-skel+.case-skel{display:none}}
+@media (prefers-reduced-motion:reduce){.case-skel{animation:none}}
+.open-bar[hidden]{display:none}
+
 /* ---- Câte cutii odată + deschidere rapidă ---- */
 .open-bar{display:flex;align-items:center;justify-content:space-between;gap:10px 18px;flex-wrap:wrap;margin:0 0 16px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.025)}
 .qty{display:flex;align-items:center;gap:6px}
@@ -278,10 +285,10 @@ button.win-chip:focus-visible{outline:2px solid var(--orange);outline-offset:2px
   <div class="wins-track" id="wins-track"></div>
 </section>
 
-<section class="panel" id="cases-panel" hidden>
+<section class="panel" id="cases-panel">
   <div class="head"><h2>Recompense disponibile</h2><span id="coins-balance" class="pill info">— coins</span></div>
   <p class="muted" id="account-line" style="margin:0 0 14px"></p>
-  <div class="open-bar">
+  <div class="open-bar" id="open-bar-main" hidden>
     <div class="qty" role="group" aria-label="Câte cutii deschizi dintr-o apăsare">
       <span class="qty-label">Cutii odată</span>
       <button type="button" data-qty="1" aria-pressed="true">1</button><button type="button" data-qty="2" aria-pressed="false">2</button><button type="button" data-qty="3" aria-pressed="false">3</button><button type="button" data-qty="4" aria-pressed="false">4</button><button type="button" data-qty="5" aria-pressed="false">5</button>
@@ -289,7 +296,10 @@ button.win-chip:focus-visible{outline:2px solid var(--orange);outline-offset:2px
     <label class="fast-toggle" title="Sare peste animație și arată direct premiul"><input type="checkbox" data-fast><span class="sw" aria-hidden="true"></span>⚡ Deschidere rapidă</label>
   </div>
   <p class="muted" id="cases-offline-note" style="margin:0 0 14px" hidden>Serverul de joc nu răspunde momentan — recompensele nu pot fi deschise chiar acum.</p>
-  <div id="cases-grid" class="case-grid"></div>
+  <div id="cases-grid" class="case-grid" aria-busy="true">
+    <div class="case-skel"></div><div class="case-skel"></div><div class="case-skel"></div>
+    <p class="muted" id="cases-loading" style="grid-column:1/-1;margin:0">Se încarcă cutiile…</p>
+  </div>
 </section>
 
 <section class="panel" id="pending-panel" style="margin-top:20px" hidden>
@@ -802,6 +812,7 @@ async function loadHistory() {
 let currentCoins = 0;
 let currentCasesById = {};
 let accountLinked = false;
+let gameOnline = true; // false = serverul de joc nu a răspuns la ultima încărcare
 
 // (23.09.2026, cerut explicit) NU mai arătăm procentul exact al șansei
 // jucătorilor — doar punctul colorat rămâne, ca indiciu vizual de raritate
@@ -862,8 +873,12 @@ function renderCases(cases, coins, linked) {
   currentCasesById = {};
   cases.forEach(c => { currentCasesById[c.id] = c; });
   const grid = document.getElementById('cases-grid');
+  grid.removeAttribute('aria-busy');
+  document.getElementById('open-bar-main').hidden = !cases.length;
   if (!cases.length) {
-    grid.innerHTML = `<p class="muted" style="grid-column:1/-1">Nicio cutie disponibilă momentan — revino puțin mai târziu.</p>`;
+    grid.innerHTML = gameOnline
+      ? `<p class="muted" style="grid-column:1/-1">Nicio cutie disponibilă momentan — revino puțin mai târziu.</p>`
+      : `<p class="muted" style="grid-column:1/-1">Cutiile apar aici imediat ce serverul de joc răspunde din nou. Pagina reîncearcă singură, nu trebuie să o reîncarci.</p>`;
     return;
   }
   grid.innerHTML = cases.map(c => {
@@ -1679,12 +1694,21 @@ async function loadWins() {
 }
 setInterval(() => { if (!document.hidden) loadWins(); }, 30000);
 
+let offlineRetry = 0;
+// dacă serverul de joc întârzie, spunem asta în loc să lăsăm pagina goală
+setTimeout(() => {
+  const note = document.getElementById('cases-loading');
+  if (note) note.textContent = 'Serverul de joc răspunde greu — mai durează câteva secunde…';
+}, 3000);
 async function loadAll() {
   try {
     const res = await apiFetch('/api/vip-shop');
     if (!res.ok) throw new Error();
     const d = await res.json();
-    document.getElementById('cases-offline-note').hidden = d.online !== false;
+    gameOnline = d.online !== false;
+    document.getElementById('cases-offline-note').hidden = gameOnline;
+    clearTimeout(offlineRetry);
+    if (!gameOnline) offlineRetry = setTimeout(loadAll, 20000);
     renderAccountLine(d);
     accountLinked = !!d.linked;
     currentCoins = d.linked ? (d.coins || 0) : 0;
@@ -1694,6 +1718,7 @@ async function loadAll() {
   } catch {
     document.getElementById('cases-panel').hidden = false;
     document.getElementById('account-line').innerHTML = '<span class="muted">Nu am putut încărca pagina. Încearcă din nou mai târziu.</span>';
+    if (document.getElementById('cases-loading')) document.getElementById('cases-grid').innerHTML = '';
   }
   // Jurnalul (admin) și istoricul propriu sunt cereri separate (nu blochează
   // restul paginii dacă pică) — se reîncarcă de fiecare dată când loadAll()

@@ -2469,6 +2469,19 @@ app.post("/api/vip-shop/deschide", auth, asyncRoute(async (req, res) => {
   });
 }));
 
+// (04.10.2026) Limita pe zi a serverului de joc. La un schimb sau o vânzare
+// peste limită, jocul răspunde „nu_se_poate" cu motivul în „motiv" (de ex.
+// „limita_zi_jucator") și cu ce a mai rămas pe azi în „ramas" — văzut în
+// jurnal la primul refuz real. Fără asta, jucătorul primea mesajul greșit
+// „poate ai ridicat-o deja". Întoarce null dacă refuzul nu e o limită.
+function gameDailyLimit(result) {
+  const d = result?.data || {};
+  const motiv = String(d.motiv || d.reason || "").toLowerCase();
+  if (result?.error !== "limita_zilnica" && !motiv.startsWith("limita")) return null;
+  const left = Number(d.ramas);
+  return { left: d.ramas != null && Number.isFinite(left) && left >= 0 ? Math.floor(left) : null };
+}
+
 // Vinde înapoi o mașină/armă câștigată și încă neridicată (29.09.2026), pentru
 // 50% din valoarea setată de staff, în coins sau bani din joc — la alegerea
 // jucătorului. Serverul de joc face efectiv vânzarea ("/cases/sell"): verifică
@@ -2499,7 +2512,10 @@ app.post("/api/vip-shop/vinde", auth, asyncRoute(async (req, res) => {
     if (result.status === 404) gameRouteReady.sell = false;
     // (04.10.2026) în jurnal: de ce a refuzat jocul, ca să nu mai ghicim
     console.warn(`VIP Shop: serverul de joc a refuzat vânzarea — HTTP ${result.status}, răspuns ${JSON.stringify(result.data || {}).slice(0, 300)} (deschiderea #${openingId}, „${opening.reward_label}”, ${amount} ${currency}).`);
-    const msg = result.status === 404 ? "Vânzarea înapoi nu e încă activă pe serverul de joc." : (messages[result.error] || "Nu am putut vinde recompensa.");
+    const sellLimit = gameDailyLimit(result);
+    const msg = result.status === 404 ? "Vânzarea înapoi nu e încă activă pe serverul de joc."
+      : sellLimit ? messages.limita_zilnica
+      : (messages[result.error] || "Nu am putut vinde recompensa.");
     return res.status(400).json({ error: msg });
   }
   await logAction(req.user.sub, "vip_shop.sell_back", "vip_shop_opening", String(openingId), { currency, amount, label: opening.reward_label }, req.ip);
@@ -2543,7 +2559,13 @@ app.post("/api/vip-shop/schimba", auth, asyncRoute(async (req, res) => {
     };
     if (result.status === 404) gameRouteReady.convert = false;
     console.warn(`VIP Shop: serverul de joc a refuzat schimbul — HTTP ${result.status}, răspuns ${JSON.stringify(result.data || {}).slice(0, 300)} (deschiderea #${openingId}, „${opening.reward_label}”, ${offer.from} murdari → ${offer.amount} curați, ${offer.pct}%).`);
-    const msg = result.status === 404 ? "Schimbul banilor murdari nu e încă activ pe serverul de joc." : (messages[result.error] || "Nu am putut schimba banii.");
+    const limit = gameDailyLimit(result);
+    const limitMsg = !limit ? null
+      : limit.left > 0 ? `Suma e peste limita ta de schimb pe azi: mai poți schimba doar $${limit.left.toLocaleString("ro-RO")}. Încearcă din nou mâine.`
+      : limit.left === 0 ? "Ai atins limita ta de schimb pe azi. Încearcă din nou mâine."
+      : messages.limita_zilnica;
+    const msg = result.status === 404 ? "Schimbul banilor murdari nu e încă activ pe serverul de joc."
+      : (limitMsg || messages[result.error] || "Nu am putut schimba banii.");
     return res.status(400).json({ error: msg });
   }
   await logAction(req.user.sub, "vip_shop.legal_exchange", "vip_shop_opening", String(openingId), { from: offer.from, amount: offer.amount, pct: offer.pct, label: opening.reward_label }, req.ip);

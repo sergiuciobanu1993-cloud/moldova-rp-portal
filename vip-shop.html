@@ -232,7 +232,8 @@ button.win-chip:focus-visible{outline:2px solid var(--orange);outline-offset:2px
 
 /* ---- Mai multe cutii odată: șirul cu premiile de până acum ---- */
 .reveal-count{margin:0 0 6px;font-size:10px;font-weight:900;letter-spacing:.2em;text-transform:uppercase;color:var(--orange);font-variant-numeric:tabular-nums}
-.reveal-count[hidden],.batch-strip[hidden],.reveal-stop[hidden]{display:none}
+.reveal-count[hidden],.batch-strip[hidden],.reveal-stop[hidden],.reveal-note[hidden]{display:none}
+.reveal-note{margin:0 0 12px;padding:9px 12px;border-radius:9px;border:1px solid rgba(255,138,31,.4);background:rgba(255,138,31,.08);color:#ffd2a6;font-size:12px;line-height:1.45;text-align:left}
 .batch-strip{display:flex;justify-content:center;gap:7px;margin:0 0 12px}
 .batch-slot{--rc:var(--line);position:relative;flex:1 1 0;max-width:62px;height:46px;border-radius:8px;border:1px solid var(--line);background:rgba(255,255,255,.03);display:grid;place-items:center;overflow:hidden;font-size:12px;font-weight:900;color:var(--muted);font-variant-numeric:tabular-nums}
 .batch-slot.is-current{border-color:var(--orange);color:var(--text);box-shadow:0 0 0 1px var(--orange)}
@@ -381,6 +382,7 @@ button.win-chip:focus-visible{outline:2px solid var(--orange);outline-offset:2px
     <p class="reveal-count" id="reveal-count" hidden></p>
     <h2 id="reveal-title" style="margin:0 0 4px">Se deschide…</h2>
     <p id="reveal-text" class="muted" style="margin:0 0 16px;min-height:18px"></p>
+    <p class="reveal-note" id="reveal-note" hidden></p>
     <div class="batch-strip" id="batch-strip" hidden></div>
     <div class="ox-stage" id="ox-stage" hidden>
       <div class="ox-rays"></div>
@@ -1514,11 +1516,12 @@ function crateOpenTo(winner, caseObj, opts = {}) {
   });
 }
 
-// ---- Deschiderea propriu-zisă (04.10.2026: una sau mai multe cutii la rând) ----
-// Cutiile se deschid PE RÂND: fiecare e o cerere separată către server, făcută
-// abia când jucătorul ajunge la ea. Așa, dacă se oprește la jumătate (sau pică
-// ceva), plătește doar cutiile deschise efectiv.
-let revealBusy = false; // între cererea către server și sfârșitul animației
+// ---- Deschiderea propriu-zisă (04.10.2026: una sau mai multe cutii) ----
+// Toate cutiile alese se deschid (și se plătesc) dintr-o singură apăsare:
+// serverul le deschide pe toate, iar aici doar le prezentăm pe rând, cu
+// „Cutia 2 din 5". Dacă serverul n-a mai putut deschide una (coins terminați,
+// joc oprit), prezentăm cutiile deschise și spunem de ce lipsesc celelalte.
+let revealBusy = false; // de la cererea către server până apare ultimul premiu
 let revealWait = null; // alegerea jucătorului pe premiul curent: 'next' | 'stop'
 const revealDecision = () => new Promise(resolve => { revealWait = resolve; });
 function revealResolve(value) {
@@ -1533,6 +1536,10 @@ function closeReveal() {
   sceneDark();
   document.getElementById('ox-stage').hidden = true;
   document.getElementById('reveal-panel').classList.remove('is-cinema');
+  // soldul, recompensele în așteptare, istoricul și banda se reîncarcă abia
+  // acum — altfel premiile următoare ar apărea în pagină înaintea animației
+  revealBusy = false;
+  loadAll();
 }
 document.getElementById('reveal-close').addEventListener('click', () => { if (!revealResolve('next')) closeReveal(); });
 document.getElementById('reveal-stop').addEventListener('click', () => { if (!revealResolve('stop')) closeReveal(); });
@@ -1545,25 +1552,78 @@ function slotThumb(w) {
   return `<span class="bs-emoji">${rewardIcon(w.type, w, w.label)}</span>`;
 }
 
-async function openBatch(caseId, total) {
+// starea de pornire a ferestrei, înaintea fiecărui premiu
+function revealReset() {
+  const actions = document.getElementById('reveal-actions');
+  const closeBtn = document.getElementById('reveal-close');
+  const stopBtn = document.getElementById('reveal-stop');
+  oxRun++;
+  sceneDark();
+  document.getElementById('ox-stage').hidden = true;
+  document.getElementById('reveal-panel').classList.remove('is-cinema');
+  actions.style.display = 'none';
+  actions.innerHTML = '';
+  document.getElementById('reveal-sell-msg').hidden = true;
+  closeBtn.hidden = true;
+  closeBtn.disabled = false;
+  closeBtn.textContent = 'Am înțeles';
+  stopBtn.hidden = true;
+  stopBtn.disabled = false;
+}
+
+async function openBatch(caseId, count) {
+  const title = document.getElementById('reveal-title');
+  const text = document.getElementById('reveal-text');
   const strip = document.getElementById('batch-strip');
+  const countEl = document.getElementById('reveal-count');
+  const note = document.getElementById('reveal-note');
   document.getElementById('reveal-overlay').style.display = 'flex';
   oxSfx.unlock(); // sunetul trebuie pornit din click-ul jucătorului
+  revealReset();
+  strip.hidden = true;
+  strip.innerHTML = '';
+  countEl.hidden = true;
+  note.hidden = true;
+  title.textContent = count > 1 ? `Se deschid ${count} cutii…` : 'Se deschide…';
+  text.textContent = 'Se trimite cererea către server…';
+  revealBusy = true;
+
+  const fail = (head, message) => {
+    title.textContent = head;
+    text.textContent = message;
+    document.getElementById('reveal-close').hidden = false;
+  };
+  let d;
+  try {
+    const res = await apiFetch('/api/vip-shop/deschide', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ caseId, count }) });
+    d = await res.json();
+    if (!res.ok) return fail('Nu am putut deschide recompensa', d.error || 'Eroare necunoscută.');
+  } catch {
+    return fail('Eroare de rețea', `Încearcă din nou. Dacă ${count > 1 ? 'unele cutii s-au deschis' : 'cutia s-a deschis'} totuși, premiile apar la „Recompense în așteptare”.`);
+  }
+
+  // Recompensele sunt deja acordate de server în acest moment — ce urmează e
+  // doar prezentare, nu mai poate schimba rezultatul.
+  const results = Array.isArray(d.results) && d.results.length ? d.results : [d];
+  const total = results.length;
+  if (total < count) {
+    note.textContent = `${total === 1 ? 'S-a deschis o singură cutie' : `S-au deschis ${total} cutii`} din ${count}${d.stopError ? `: ${d.stopError}` : '.'} Pentru cele nedeschise nu ai plătit nimic.`;
+    note.hidden = false;
+  }
   strip.hidden = total < 2;
   strip.innerHTML = total > 1
     ? Array.from({ length: total }, (_, i) => `<div class="batch-slot" aria-label="Cutia ${i + 1}">${i + 1}</div>`).join('')
     : '';
   for (let i = 0; i < total; i++) {
-    const outcome = await openOne(caseId, i, total);
-    if (outcome === 'error') return; // mesajul rămâne pe ecran; butonul îl închide
+    const outcome = await presentOne(caseId, results[i], i, total);
     if (outcome === 'stop') break;
   }
   closeReveal();
 }
 
-// Deschide cutia cu numărul i (din total), o prezintă și așteaptă alegerea
-// jucătorului. Întoarce 'next', 'stop' sau 'error'.
-async function openOne(caseId, i, total) {
+// Prezintă premiul cutiei cu numărul i (din total) și așteaptă alegerea
+// jucătorului. Întoarce 'next' sau 'stop'.
+async function presentOne(caseId, d, i, total) {
   const title = document.getElementById('reveal-title');
   const text = document.getElementById('reveal-text');
   const closeBtn = document.getElementById('reveal-close');
@@ -1576,48 +1636,14 @@ async function openOne(caseId, i, total) {
   const more = total - i - 1;
   const nextOnly = more ? `Următoarea cutie (${i + 2}/${total})` : 'Am înțeles';
 
-  oxRun++;
-  sceneDark();
-  document.getElementById('ox-stage').hidden = true;
-  document.getElementById('reveal-panel').classList.remove('is-cinema');
-  actions.style.display = 'none';
-  actions.innerHTML = '';
-  sellMsg.hidden = true;
-  closeBtn.hidden = true;
-  closeBtn.disabled = false;
-  closeBtn.textContent = 'Am înțeles';
-  stopBtn.hidden = true;
-  stopBtn.disabled = false;
+  revealReset();
   countEl.hidden = total < 2;
   countEl.textContent = `Cutia ${i + 1} din ${total}`;
   [...strip.children].forEach((el, k) => el.classList.toggle('is-current', k === i));
   title.textContent = 'Se deschide…';
-  text.textContent = 'Se trimite cererea către server…';
-  revealBusy = true;
 
-  const before = i === 1 ? 'Prima cutie e deschisă, iar premiul ei rămâne al tău.' : `Primele ${i} cutii sunt deschise, iar premiile lor rămân ale tale.`;
-  const fail = (message, refused) => {
-    title.textContent = i > 0 ? `Cutia ${i + 1} nu s-a deschis` : 'Nu am putut deschide recompensa';
-    text.textContent = message + (i > 0 ? ` ${before}${refused ? ' Pentru restul nu ai plătit nimic.' : ''}` : '');
-    closeBtn.hidden = false;
-    revealBusy = false;
-    loadAll();
-    return 'error';
-  };
-
-  let d;
-  try {
-    const res = await apiFetch('/api/vip-shop/deschide', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ caseId }) });
-    d = await res.json();
-    if (!res.ok) return fail(d.error || 'Eroare necunoscută.', true);
-  } catch {
-    return fail('Eroare de rețea. Dacă această cutie s-a deschis totuși, premiul apare la „Recompense în așteptare”.', false);
-  }
-
-  // Recompensa e deja acordată de server în acest moment — animația de mai jos
-  // e doar prezentare, nu mai poate schimba rezultatul. Căutăm intrarea
-  // corespunzătoare din pool-ul cutiei (după tip+etichetă) doar ca să-i aflăm
-  // procentul și, prin el, culoarea de raritate.
+  // Căutăm intrarea corespunzătoare din pool-ul cutiei (după tip+etichetă)
+  // doar ca să-i aflăm procentul și, prin el, culoarea de raritate.
   const c = currentCasesById[caseId];
   const pool = (c && c.pool) || [];
   const data = d.reward.data || {};
@@ -1635,7 +1661,6 @@ async function openOne(caseId, i, total) {
 
   text.textContent = '';
   await crateOpenTo(winner, c, { instant: fastOpen });
-  revealBusy = false;
 
   if (slot) {
     slot.classList.add('is-done');
@@ -1687,7 +1712,6 @@ async function openOne(caseId, i, total) {
         sellMsg.hidden = true;
         closeBtn.textContent = nextOnly;
         if (slot) slot.classList.add('is-sold');
-        loadAll();
       } catch (err) {
         sellMsg.hidden = false; sellMsg.style.color = '#ff8a8a';
         sellMsg.textContent = err.message + ' Recompensa rămâne a ta — o poți ridica din joc.';
@@ -1716,7 +1740,6 @@ async function openOne(caseId, i, total) {
         sellMsg.hidden = true;
         closeBtn.textContent = nextOnly;
         if (slot) slot.classList.add('is-exch');
-        loadAll();
       } catch (err) {
         sellMsg.hidden = false; sellMsg.style.color = '#ff8a8a';
         sellMsg.textContent = err.message + ' Banii rămân ai tăi, murdari — îi poți ridica din joc.';
@@ -1726,15 +1749,14 @@ async function openOne(caseId, i, total) {
     });
   }
   if (more) {
-    stopBtn.textContent = `Mă opresc aici (${more === 1 ? 'cutia rămasă nu se deschide' : `cele ${more} cutii rămase nu se deschid`} și nu te costă nimic)`;
+    // cutiile rămase sunt deja deschise și plătite — doar nu le mai prezentăm
+    stopBtn.textContent = `Sari peste restul (${more === 1 ? 'premiul rămas e deja al tău, îl găsești' : `cele ${more} premii rămase sunt deja ale tale, le găsești`} în pagină)`;
     stopBtn.hidden = false;
   }
 
-  // alegerea se așteaptă ÎNAINTE de orice altă cerere: butonul e deja pe ecran
   const decision = revealDecision();
   closeBtn.hidden = false;
   closeBtn.focus({ preventScroll: true });
-  loadAll();
   return decision;
 }
 

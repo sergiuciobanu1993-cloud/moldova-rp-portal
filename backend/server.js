@@ -2341,6 +2341,67 @@ app.get("/api/vip-shop", auth, asyncRoute(async (req, res) => {
   });
 }));
 
+// (04.10.2026) Mai multe cutii dintr-o apăsare: „count" (1–5). Toate se
+// deschid ACUM, una după alta (fiecare e o cerere separată către serverul de
+// joc, care scade coins-urile atomic), iar pagina doar le prezintă pe rând.
+// Dacă una nu se mai poate deschide (coins terminați, server oprit), ne oprim
+// acolo: jucătorul primește premiile cutiilor deja deschise și află de ce nu
+// s-au deschis restul — pentru cele nedeschise nu se scade nimic.
+const OPEN_BATCH_MAX = 5;
+const OPEN_CASE_ERRORS = {
+  coins_insuficienti: "Nu ai suficienți coins pentru această recompensă.",
+  caz_necunoscut: "Recompensa nu mai există.",
+  cutie_indisponibila: "Această cutie a fost dezactivată momentan de staff.",
+  cutie_fara_recompense: "Această cutie nu are recompense configurate momentan.",
+  server_offline: "Serverul de joc nu răspunde momentan.",
+};
+// Pentru fiecare cutie deschisă: oferta de vânzare înapoi (mașini/arme cu
+// valoare setată) și oferta de schimb (bani murdari), legate de deschiderea
+// tocmai creată. Dacă serverul de joc nu ne spune id-ul deschiderii, îl găsim
+// printre recompensele neridicate: cea mai nouă cu aceeași recompensă — iar la
+// premii identice în aceeași serie, fiecare își ia propriul id (de la cea mai
+// nouă spre cea mai veche).
+async function offersForOpened(identifier, opened) {
+  const isSellable = w => w && (w.type === "vehicle" || w.type === "item");
+  const isDirty = w => w && w.type === "cash" && String(w.data?.account || "") === "black_money";
+  const needSell = gameRouteOk("sell") && opened.some(r => isSellable(r.reward));
+  const needExch = gameRouteOk("convert") && opened.some(r => isDirty(r.reward));
+  const out = opened.map(r => ({ ...r, sell: null, exchange: null }));
+  if (!needSell && !needExch) return out;
+
+  const [coinsResult, itemValues, legalCfg] = await Promise.all([
+    fetchCoins(identifier),
+    needSell ? loadItemValues() : null,
+    needExch ? loadLegalExchange() : null,
+  ]);
+  const canExch = !!(legalCfg && legalCfg.enabled && await canExchangeDirty(identifier, legalCfg));
+  const pending = (coinsResult.pending || []).slice().sort((x, y) => Number(y.id) - Number(x.id));
+  const used = new Set();
+  const openingIdOf = (r, won) => {
+    const direct = Number(r.openingId ?? r.opening_id);
+    if (Number.isFinite(direct) && direct > 0) { used.add(direct); return direct; }
+    const hit = pending.find(p => !used.has(Number(p.id)) && p.reward_type === won.type && p.reward_label === won.label);
+    if (!hit) return null;
+    used.add(Number(hit.id));
+    return Number(hit.id);
+  };
+  for (let i = out.length - 1; i >= 0; i--) {
+    const won = out[i].reward;
+    if (!isSellable(won) && !isDirty(won)) continue;
+    const openingId = openingIdOf(out[i], won);
+    if (!openingId) continue;
+    if (needSell && isSellable(won)) {
+      const offer = sellOfferFor(itemValues, won.type, won.data || {});
+      if (offer) out[i].sell = { openingId, ...offer };
+    }
+    if (canExch && isDirty(won)) {
+      const offer = exchangeOfferFor(legalCfg, true, won.type, won.data);
+      if (offer) out[i].exchange = { openingId, ...offer };
+    }
+  }
+  return out;
+}
+
 app.post("/api/vip-shop/deschide", auth, asyncRoute(async (req, res) => {
   const { rows } = await pool.query(`SELECT game_identifier, game_identifier_name FROM users WHERE id = $1`, [req.user.sub]);
   const identifier = rows[0]?.game_identifier;
@@ -2348,47 +2409,29 @@ app.post("/api/vip-shop/deschide", auth, asyncRoute(async (req, res) => {
 
   const caseId = String(req.body?.caseId || "").trim();
   if (!caseId) return res.status(400).json({ error: "Lipsește caseId." });
+  const requested = Math.min(Math.max(parseInt(req.body?.count, 10) || 1, 1), OPEN_BATCH_MAX);
 
-  const outcome = await postOpenCase({ identifier, playerName: rows[0].game_identifier_name, caseId });
-  if (!outcome.ok) {
-    const messages = {
-      coins_insuficienti: "Nu ai suficienți coins pentru această recompensă.",
-      caz_necunoscut: "Recompensa nu mai există.",
-      cutie_indisponibila: "Această cutie a fost dezactivată momentan de staff.",
-      cutie_fara_recompense: "Această cutie nu are recompense configurate momentan.",
-      server_offline: "Serverul de joc nu răspunde momentan.",
-    };
-    return res.status(400).json({ error: messages[outcome.error] || "Nu am putut deschide recompensa." });
+  const opened = [];
+  let stopError = null;
+  for (let i = 0; i < requested; i++) {
+    const outcome = await postOpenCase({ identifier, playerName: rows[0].game_identifier_name, caseId });
+    if (!outcome.ok) { stopError = OPEN_CASE_ERRORS[outcome.error] || "Nu am putut deschide recompensa."; break; }
+    opened.push(outcome.result || {});
   }
-  // (29.09.2026) Oferta de vânzare înapoi, arătată direct după învârtire:
-  // găsim deschiderea tocmai creată (cea mai nouă neridicată cu aceeași
-  // recompensă) ca jucătorul să poată alege imediat: o păstrează sau o vinde.
-  recentWinsCache.at = 0; // banda „Ultimele câștiguri" îl arată imediat
-  let sell = null;
-  const won = outcome.result?.reward;
-  if (won && (won.type === "vehicle" || won.type === "item") && gameRouteOk("sell")) {
-    const [coinsResult, itemValues] = await Promise.all([fetchCoins(identifier), loadItemValues()]);
-    const offer = sellOfferFor(itemValues, won.type, won.data || {});
-    const opening = (coinsResult.pending || [])
-      .filter(p => p.reward_type === won.type && p.reward_label === won.label)
-      .sort((a, b) => Number(b.id) - Number(a.id))[0];
-    if (offer && opening) sell = { openingId: Number(opening.id), ...offer };
-  }
-  // (30.09.2026) Bani murdari câștigați de un membru al unei facțiuni legale:
-  // îi oferim imediat schimbul în bani curați (bancă), la procentul setat.
-  let exchange = null;
-  if (won && won.type === "cash" && String(won.data?.account || "") === "black_money" && gameRouteOk("convert")) {
-    const legalCfg = await loadLegalExchange();
-    if (legalCfg.enabled && await canExchangeDirty(identifier, legalCfg)) {
-      const offer = exchangeOfferFor(legalCfg, true, won.type, won.data);
-      const coinsResult = await fetchCoins(identifier);
-      const opening = (coinsResult.pending || [])
-        .filter(p => p.reward_type === "cash" && p.reward_label === won.label)
-        .sort((a, b) => Number(b.id) - Number(a.id))[0];
-      if (offer && opening) exchange = { openingId: Number(opening.id), ...offer };
-    }
-  }
-  res.json({ ok: true, ...outcome.result, sell, exchange });
+  if (!opened.length) return res.status(400).json({ error: stopError });
+
+  recentWinsCache.at = 0; // banda „Ultimele câștiguri" le arată imediat
+  const results = await offersForOpened(identifier, opened);
+  // Prima cutie rămâne și „la vedere" în răspuns (reward, sell, exchange), exact
+  // ca înainte — o pagină mai veche, rămasă în memoria telefonului, merge la fel.
+  res.json({
+    ok: true,
+    ...results[0],
+    results,
+    requested,
+    opened: results.length,
+    stopError: results.length < requested ? stopError : null,
+  });
 }));
 
 // Vinde înapoi o mașină/armă câștigată și încă neridicată (29.09.2026), pentru

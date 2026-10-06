@@ -9,11 +9,12 @@
 <section class="tablebox">
   <div class="title"><h2>Alege pagina</h2></div>
   <div class="page-tabs" id="page-tabs"></div>
-  <select id="slug-picker" class="filter-select" hidden></select>
+  <div class="page-tabs slug-tabs" id="slug-tabs" hidden></div>
 </section>
 
 <section class="tablebox" id="blocks-wrap">
-  <div class="title"><h2>Blocuri de conținut</h2><small class="muted">Fiecare bloc corespunde unei bucăți din pagina publică — titlu, text, listă sau HTML.</small></div>
+  <div class="title"><h2 id="blocks-title">Blocuri de conținut</h2><small class="muted">Fiecare căsuță e o bucată din pagina publică. Schimbi textul și apeși „Salvează” — apare pe site imediat.</small></div>
+  <p class="public-link" id="public-link" hidden></p>
   <div id="blocks-list"><p class="muted">Se încarcă…</p></div>
 </section>
 
@@ -43,6 +44,36 @@ let currentSlug = 'politie';
 let allBlocks = [];
 const editState = new Map();
 
+// (06.10.2026) Se poate veni direct pe o pagină anume, din butonul „Editează
+// pagina" de pe site: admin-continut.html?page=ghid-factiune&slug=smurd
+{
+  const q = new URLSearchParams(location.search);
+  if (PAGES.some(p => p.key === q.get('page'))) currentPage = q.get('page');
+  if (GUIDE_SLUGS.some(g => g.slug === q.get('slug'))) currentSlug = q.get('slug');
+}
+const PUBLIC_URL = { index: 'index.html', joburi: 'joburi.html', 'ghid-factiuni': 'ghid-factiuni.html', 'legislatie-rutiera': 'legislatie-rutiera.html' };
+function publicUrl() {
+  return currentPage === 'ghid-factiune' ? `ghid-factiune.html?slug=${encodeURIComponent(currentSlug)}` : (PUBLIC_URL[currentPage] || 'index.html');
+}
+function renderPublicLink() {
+  const el = document.getElementById('public-link');
+  const guide = GUIDE_SLUGS.find(g => g.slug === currentSlug);
+  const name = currentPage === 'ghid-factiune' ? (guide ? guide.label : '') : (PAGES.find(p => p.key === currentPage) || {}).label;
+  document.getElementById('blocks-title').textContent = currentPage === 'ghid-factiune' ? `Ghid: ${name}` : 'Blocuri de conținut';
+  el.innerHTML = `Editezi pagina <strong>${escapeHtml(name || '')}</strong> · <a href="${publicUrl()}" target="_blank" rel="noopener">Deschide pagina de pe site ↗</a>`;
+  el.hidden = false;
+}
+
+// Modificări nesalvate: semn pe căsuță + întrebare la părăsirea paginii.
+const dirty = new Set();
+function setDirty(id, on) {
+  if (on) dirty.add(id); else dirty.delete(id);
+  const card = document.getElementById(`block-${id}`);
+  if (card) card.classList.toggle('is-dirty', on);
+}
+const leaveOk = () => !dirty.size || confirm('Ai modificări nesalvate pe această pagină. Le pierzi dacă mergi mai departe. Continui?');
+window.addEventListener('beforeunload', e => { if (dirty.size) { e.preventDefault(); e.returnValue = ''; } });
+
 const escapeHtml = s => (s ?? '').toString()
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
@@ -58,22 +89,27 @@ function renderPageTabs() {
     `<button type="button" class="page-tab${p.key === currentPage ? ' active' : ''}" data-page="${p.key}">${escapeHtml(p.label)}</button>`
   ).join('');
   tabs.querySelectorAll('button').forEach(btn => btn.addEventListener('click', () => {
-    if (btn.dataset.page === currentPage) return;
+    if (btn.dataset.page === currentPage || !leaveOk()) return;
     currentPage = btn.dataset.page;
     renderPageTabs();
-    document.getElementById('slug-picker').hidden = currentPage !== 'ghid-factiune';
+    renderSlugTabs();
     loadBlocks();
   }));
 }
 
-function renderSlugPicker() {
-  const sel = document.getElementById('slug-picker');
-  sel.innerHTML = GUIDE_SLUGS.map(g => `<option value="${g.slug}">${escapeHtml(g.label)}</option>`).join('');
-  sel.value = currentSlug;
-  sel.addEventListener('change', () => {
-    currentSlug = sel.value;
+// Ghidurile (Poliție, SMURD, Armată, licențele) — câte un buton pentru fiecare.
+function renderSlugTabs() {
+  const tabs = document.getElementById('slug-tabs');
+  tabs.hidden = currentPage !== 'ghid-factiune';
+  tabs.innerHTML = GUIDE_SLUGS.map(g =>
+    `<button type="button" class="page-tab${g.slug === currentSlug ? ' active' : ''}" data-slug="${g.slug}">${escapeHtml(g.label)}</button>`
+  ).join('');
+  tabs.querySelectorAll('button').forEach(btn => btn.addEventListener('click', () => {
+    if (btn.dataset.slug === currentSlug || !leaveOk()) return;
+    currentSlug = btn.dataset.slug;
+    renderSlugTabs();
     renderBlocks();
-  });
+  }));
 }
 
 // -----------------------------------------------------------------------
@@ -84,6 +120,7 @@ async function loadBlocks() {
   const list = document.getElementById('blocks-list');
   list.innerHTML = '<p class="muted">Se încarcă…</p>';
   editState.clear();
+  dirty.clear();
   try {
     const res = await apiFetch(`/api/admin/content/${currentPage}`);
     if (!res.ok) throw new Error();
@@ -96,6 +133,9 @@ async function loadBlocks() {
 
 function renderBlocks() {
   const list = document.getElementById('blocks-list');
+  dirty.clear();
+  renderPublicLink();
+  history.replaceState(null, '', `?page=${currentPage}${currentPage === 'ghid-factiune' ? `&slug=${currentSlug}` : ''}`);
   const blocks = currentPage === 'ghid-factiune'
     ? allBlocks.filter(b => b.block_key.startsWith(currentSlug + '_'))
     : allBlocks;
@@ -108,16 +148,20 @@ function renderBlocks() {
 }
 
 function blockCardHtml(b) {
-  const typeSelect = b.type !== 'list'
-    ? `<select class="type-select" data-id="${b.id}">
+  // Pe paginile de ghid, câmpurile au un singur fel firesc de a fi scrise
+  // (titlul e text, conținutul e document) — nu mai arătăm alegerea tipului.
+  const guide = currentPage === 'ghid-factiune';
+  const typeSelect = b.type === 'list' ? `<span class="pill info">LISTĂ</span>`
+    : guide ? ''
+    : `<select class="type-select" data-id="${b.id}">
          <option value="text"${b.type === 'text' ? ' selected' : ''}>Text simplu</option>
          <option value="richtext"${b.type === 'richtext' ? ' selected' : ''}>Text formatat</option>
-         <option value="html"${b.type === 'html' ? ' selected' : ''}>HTML brut</option>
-       </select>`
-    : `<span class="pill info">LISTĂ</span>`;
+         <option value="html"${b.type === 'html' ? ' selected' : ''}>Document (HTML)</option>
+       </select>`;
+  const label = guide ? b.label.replace(/^\[[^\]]*\]\s*/, '') : b.label;
   return `<article class="content-block" id="block-${b.id}">
     <div class="content-block-head">
-      <div><strong>${escapeHtml(b.label)}</strong><small>${escapeHtml(b.block_key)}</small></div>
+      <div><strong>${escapeHtml(label)}</strong><small>${escapeHtml(b.block_key)}</small></div>
       ${typeSelect}
     </div>
     <div class="content-block-body" data-editor-for="${b.id}"></div>
@@ -125,19 +169,35 @@ function blockCardHtml(b) {
     <div class="content-block-actions">
       <button type="button" class="btn-primary" data-save="${b.id}">Salvează</button>
       ${b.type === 'list' ? `<button type="button" class="btn-ghost" data-add-item="${b.id}">+ Element nou</button>` : ''}
-      ${b.type === 'html' ? `<button type="button" class="btn-ghost" data-preview="${b.id}">Previzualizare</button>` : ''}
+      <button type="button" class="btn-ghost" data-mode="${b.id}" hidden></button>
+      <button type="button" class="btn-ghost" data-preview="${b.id}" hidden>Previzualizare</button>
+      <span class="dirty-note">● Modificări nesalvate</span>
     </div>
   </article>`;
 }
 
 function wireBlockCard(b) {
-  editState.set(b.id, { type: b.type, content: b.content });
+  // „Document" (HTML): editor vizual dacă e alcătuit doar din titluri, text,
+  // liste și linkuri; cod dacă are și altceva (tabele, casete, clase).
+  editState.set(b.id, { type: b.type, content: b.content, mode: isSimpleHtml(b.content) ? 'visual' : 'code' });
   renderEditor(b.id);
+  document.getElementById(`block-${b.id}`).addEventListener('input', () => setDirty(b.id, true));
 
   const sel = document.querySelector(`select.type-select[data-id="${b.id}"]`);
   if (sel) sel.addEventListener('change', () => {
-    editState.get(b.id).content = getEditedContent(b.id, editState.get(b.id).type);
-    editState.get(b.id).type = sel.value;
+    const st = editState.get(b.id);
+    st.content = getEditedContent(b.id, st.type);
+    st.type = sel.value;
+    st.mode = isSimpleHtml(st.content) ? 'visual' : 'code';
+    renderEditor(b.id);
+    setDirty(b.id, true);
+  });
+
+  document.querySelector(`[data-mode="${b.id}"]`).addEventListener('click', () => {
+    const st = editState.get(b.id);
+    st.content = getEditedContent(b.id);
+    if (st.mode === 'code' && !isSimpleHtml(st.content)) { renderEditor(b.id); return; } // rămâne pe cod, cu explicația
+    st.mode = st.mode === 'visual' ? 'code' : 'visual';
     renderEditor(b.id);
   });
 
@@ -149,6 +209,7 @@ function wireBlockCard(b) {
     state._items = state._items || [];
     state._items.push({ icon: '', title: '', text: '', url: '' });
     renderEditor(b.id);
+    setDirty(b.id, true);
   });
 
   const prevBtn = document.querySelector(`[data-preview="${b.id}"]`);
@@ -165,6 +226,10 @@ function renderEditor(id) {
   const state = editState.get(id);
   const host = document.querySelector(`[data-editor-for="${id}"]`);
   if (!host) return;
+  const modeBtn = document.querySelector(`[data-mode="${id}"]`);
+  const prevBtn = document.querySelector(`[data-preview="${id}"]`);
+  modeBtn.hidden = true;
+  prevBtn.hidden = true;
 
   if (state.type === 'list') {
     if (!state._items) {
@@ -209,10 +274,196 @@ function renderEditor(id) {
     return;
   }
 
-  // html
+  // „Document" (html) — editor vizual sau cod
+  if (state.mode === 'visual') {
+    modeBtn.hidden = false;
+    modeBtn.textContent = '</> Vezi codul HTML';
+    host.innerHTML = `
+      <div class="vis-toolbar" role="toolbar" aria-label="Formatare">
+        <button type="button" data-tag="h2" title="Titlu de secțiune — apare și în cuprinsul paginii">Titlu</button>
+        <button type="button" data-tag="h3" title="Subtitlu">Subtitlu</button>
+        <button type="button" data-tag="p" title="Text obișnuit">Text</button>
+        <i class="sep"></i>
+        <button type="button" data-cmd="bold" title="Îngroșat (Ctrl+B)"><b>B</b></button>
+        <button type="button" data-cmd="italic" title="Înclinat (Ctrl+I)"><i>I</i></button>
+        <button type="button" data-cmd="underline" title="Subliniat (Ctrl+U)"><u>U</u></button>
+        <i class="sep"></i>
+        <button type="button" data-cmd="insertUnorderedList" title="Listă cu buline">• Listă</button>
+        <button type="button" data-cmd="insertOrderedList" title="Listă numerotată">1. Listă</button>
+        <i class="sep"></i>
+        <button type="button" data-cmd="createLink" title="Fă din textul selectat un link">🔗 Link</button>
+        <button type="button" data-cmd="unlink" title="Scoate linkul">Scoate linkul</button>
+        <i class="sep"></i>
+        <button type="button" data-cmd="undo" title="Înapoi (Ctrl+Z)" aria-label="Înapoi">↶</button>
+        <button type="button" data-cmd="redo" title="Înainte (Ctrl+Y)" aria-label="Înainte">↷</button>
+      </div>
+      <div class="vis-editor" contenteditable="true" spellcheck="true" lang="ro" data-vis="${id}" role="textbox" aria-multiline="true" aria-label="Conținutul paginii">${state.content}</div>
+      <p class="vis-hint">Scrii ca într-un document. „Titlu” începe o secțiune nouă. Textul lipit din Discord își păstrează titlurile, bulinele și îngroșările.</p>`;
+    wireVisualEditor(id);
+    return;
+  }
+
+  const simple = isSimpleHtml(state.content);
+  modeBtn.hidden = !simple;
+  modeBtn.textContent = '✏️ Înapoi la editorul vizual';
+  prevBtn.hidden = false;
   host.innerHTML = `
+    ${simple ? '' : '<p class="vis-hint warn">Blocul acesta are cod special (tabele, casete sau stiluri), așa că se editează doar ca HTML — editorul vizual l-ar strica.</p>'}
     <textarea class="block-input code" rows="10" data-field="${id}">${escapeHtml(state.content)}</textarea>
     <div class="html-preview" data-preview-box="${id}" hidden></div>`;
+}
+
+// ---------------------------------------------------------------------------
+// Editorul vizual (06.10.2026). Conținutul ghidurilor era o căsuță cu cod
+// HTML, greu de schimbat fără să strici ceva. Acum se scrie ca într-un
+// document; în baza de date rămâne același HTML simplu (h2, h3, p, liste,
+// îngroșat, linkuri), deci pagina publică îl arată exact ca înainte.
+// ---------------------------------------------------------------------------
+const SIMPLE_TAGS = new Set(['H1', 'H2', 'H3', 'H4', 'P', 'UL', 'OL', 'LI', 'STRONG', 'B', 'EM', 'I', 'U', 'A', 'BR', 'BLOCKQUOTE', 'HR']);
+const SIMPLE_ATTRS = new Set(['href', 'target', 'rel', 'title', 'id']);
+function isSimpleHtml(html) {
+  const t = document.createElement('template');
+  t.innerHTML = html || '';
+  for (const el of t.content.querySelectorAll('*')) {
+    if (!SIMPLE_TAGS.has(el.tagName)) return false;
+    for (const a of el.attributes) if (!SIMPLE_ATTRS.has(a.name)) return false;
+  }
+  return true;
+}
+
+// Ce scoate browserul dintr-un contenteditable → HTML curat, ca cel scris de mână.
+const VIS_BLOCKS = 'h1,h2,h3,h4,p,ul,ol,blockquote,hr,div';
+function cleanVisualHtml(html) {
+  const t = document.createElement('template');
+  t.innerHTML = html || '';
+  const root = t.content;
+  root.querySelectorAll('span,font').forEach(el => el.replaceWith(...el.childNodes));
+  root.querySelectorAll('*').forEach(el => {
+    for (const a of [...el.attributes]) if (!SIMPLE_ATTRS.has(a.name)) el.removeAttribute(a.name);
+  });
+  // <div>-urile puse de browser: paragraf, sau doar despachetate dacă țin alte blocuri
+  let div;
+  while ((div = root.querySelector('div'))) {
+    if (div.querySelector(VIS_BLOCKS)) div.replaceWith(...div.childNodes);
+    else { const p = document.createElement('p'); p.append(...div.childNodes); div.replaceWith(p); }
+  }
+  // o listă sau un titlu ajuns în interiorul unui paragraf iese lângă el
+  root.querySelectorAll('p').forEach(p => {
+    const inner = p.querySelector('ul,ol,h1,h2,h3,h4,blockquote,hr,p');
+    if (!inner) return;
+    const frag = document.createDocumentFragment();
+    let run = null;
+    for (const n of [...p.childNodes]) {
+      if (n.nodeType === 1 && n.matches('ul,ol,h1,h2,h3,h4,blockquote,hr,p')) { run = null; frag.append(n); }
+      else { if (!run) { run = document.createElement('p'); frag.append(run); } run.append(n); }
+    }
+    p.replaceWith(frag);
+  });
+  // text rămas „liber", în afara oricărui bloc → paragraf
+  let run = null;
+  for (const n of [...root.childNodes]) {
+    const block = n.nodeType === 1 && n.matches(VIS_BLOCKS);
+    if (block) { run = null; continue; }
+    if (n.nodeType === 3 && !n.textContent.trim() && !run) { n.remove(); continue; }
+    if (!run) { run = document.createElement('p'); n.before(run); }
+    run.append(n);
+  }
+  root.querySelectorAll('b').forEach(el => { const s2 = document.createElement('strong'); s2.append(...el.childNodes); el.replaceWith(s2); });
+  root.querySelectorAll('i').forEach(el => { const e2 = document.createElement('em'); e2.append(...el.childNodes); el.replaceWith(e2); });
+  // blocuri goale (rânduri lăsate libere) — pagina le-ar arăta ca spații mari
+  root.querySelectorAll('p,h1,h2,h3,h4,li,blockquote').forEach(el => {
+    el.querySelectorAll('br:last-child').forEach(br => { if (!br.nextSibling) br.remove(); });
+    if (!el.textContent.trim()) el.remove();
+  });
+  root.querySelectorAll('ul,ol').forEach(el => { if (!el.querySelector('li')) el.remove(); });
+  root.querySelectorAll('a[href]').forEach(a => {
+    if (/^https?:\/\//i.test(a.getAttribute('href'))) { a.setAttribute('target', '_blank'); a.setAttribute('rel', 'noopener noreferrer'); }
+  });
+  return [...root.childNodes].map(n => n.nodeType === 1 ? n.outerHTML : escapeHtml(n.textContent)).join('\n').trim();
+}
+
+// Text lipit (din Discord, Word, alt site) → document curat, fără stilurile
+// sursei. Recunoaște: rând gol = paragraf nou; „•", „-" sau „*" la început =
+// listă cu buline; „1." = listă numerotată; **text** = îngroșat; un rând
+// îngroșat în întregime (cum sunt titlurile din anunțurile de Discord) = titlu.
+function plainToHtml(text) {
+  const inline = s2 => escapeHtml(s2).replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  const lines = text.replace(/\r/g, '').split('\n');
+  if (lines.length === 1) return inline(lines[0]);
+  let out = '', list = null, para = [];
+  const flushPara = () => { if (para.length) { out += `<p>${para.join('<br>')}</p>`; para = []; } };
+  const flushList = () => { if (list) { out += `</${list}>`; list = null; } };
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) { flushPara(); flushList(); continue; }
+    const bullet = line.match(/^(?:[•·▪◦‣]|[-–—*])\s+(.+)$/);
+    const number = line.match(/^\d{1,3}[.)]\s+(.+)$/);
+    const heading = line.match(/^([^\p{L}\p{N}*]*)\*\*([^*]+)\*\*([^\p{L}\p{N}*]*)$/u);
+    if (bullet || number) {
+      flushPara();
+      const kind = bullet ? 'ul' : 'ol';
+      if (list !== kind) { flushList(); out += `<${kind}>`; list = kind; }
+      out += `<li>${inline((bullet || number)[1])}</li>`;
+    } else if (heading) {
+      flushPara(); flushList();
+      out += `<h2>${escapeHtml((heading[1] + heading[2] + heading[3]).trim())}</h2>`;
+    } else {
+      flushList();
+      para.push(inline(line));
+    }
+  }
+  flushPara(); flushList();
+  return out;
+}
+
+function wireVisualEditor(id) {
+  const host = document.querySelector(`[data-editor-for="${id}"]`);
+  const editor = host.querySelector('.vis-editor');
+  const bar = host.querySelector('.vis-toolbar');
+  try { document.execCommand('defaultParagraphSeparator', false, 'p'); } catch {}
+  const inEditor = () => { const sel = window.getSelection(); return sel.rangeCount && editor.contains(sel.anchorNode); };
+  const paint = () => {
+    if (!inEditor()) return;
+    let block = '';
+    try { block = String(document.queryCommandValue('formatBlock') || '').toLowerCase().replace(/[<>]/g, ''); } catch {}
+    const inList = document.queryCommandState('insertUnorderedList') || document.queryCommandState('insertOrderedList');
+    bar.querySelectorAll('[data-tag]').forEach(b2 => b2.classList.toggle('is-on', !inList && (b2.dataset.tag === block || (b2.dataset.tag === 'p' && (block === 'div' || block === '')))));
+    bar.querySelectorAll('[data-cmd]').forEach(b2 => {
+      if (['bold', 'italic', 'underline', 'insertUnorderedList', 'insertOrderedList'].includes(b2.dataset.cmd)) {
+        let on = false; try { on = document.queryCommandState(b2.dataset.cmd); } catch {}
+        b2.classList.toggle('is-on', on);
+      }
+    });
+  };
+  bar.addEventListener('mousedown', e => { if (e.target.closest('button')) e.preventDefault(); }); // nu pierde selecția
+  bar.addEventListener('click', e => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    if (!inEditor()) editor.focus();
+    if (btn.dataset.tag) {
+      // un titlu nu stă într-o listă: ieșim întâi din ea
+      if (document.queryCommandState('insertUnorderedList')) document.execCommand('insertUnorderedList');
+      if (document.queryCommandState('insertOrderedList')) document.execCommand('insertOrderedList');
+      document.execCommand('formatBlock', false, btn.dataset.tag);
+    } else if (btn.dataset.cmd === 'createLink') {
+      if (window.getSelection().isCollapsed) { alert('Selectează întâi textul care să devină link.'); return; }
+      const url = prompt('Adresa linkului (https://...)', 'https://');
+      if (url && url !== 'https://') document.execCommand('createLink', false, url.trim());
+    } else {
+      document.execCommand(btn.dataset.cmd, false, null);
+    }
+    setDirty(id, true);
+    paint();
+  });
+  editor.addEventListener('paste', e => {
+    const text = (e.clipboardData || window.clipboardData).getData('text/plain');
+    if (text == null) return;
+    e.preventDefault();
+    if (text) document.execCommand('insertHTML', false, plainToHtml(text));
+  });
+  editor.addEventListener('keyup', paint);
+  editor.addEventListener('mouseup', paint);
+  editor.addEventListener('focus', paint);
 }
 
 function renderListEditor(items) {
@@ -240,6 +491,7 @@ function wireListEditor(id) {
     row.querySelector('.li-remove').addEventListener('click', () => {
       state._items.splice(idx, 1);
       renderEditor(id);
+      setDirty(id, true);
     });
   });
 }
@@ -265,6 +517,10 @@ function getEditedContent(id, type) {
     const el = document.querySelector(`[data-rt="${id}"]`);
     return el ? el.innerHTML : editState.get(id).content;
   }
+  if (t === 'html' && editState.get(id).mode === 'visual') {
+    const el = document.querySelector(`[data-vis="${id}"]`);
+    return el ? cleanVisualHtml(el.innerHTML) : editState.get(id).content;
+  }
   const el = document.querySelector(`textarea[data-field="${id}"]`);
   return el ? el.value : editState.get(id).content;
 }
@@ -284,10 +540,11 @@ async function saveBlock(id) {
     state.content = content;
     const idx = allBlocks.findIndex(b => b.id === id);
     if (idx !== -1) { allBlocks[idx].type = state.type; allBlocks[idx].content = content; }
-    msg.textContent = 'Salvat.';
+    setDirty(id, false);
+    msg.innerHTML = `Salvat. E deja pe site — <a href="${publicUrl()}" target="_blank" rel="noopener">vezi pagina ↗</a>`;
     msg.className = 'formmsg ok';
     msg.hidden = false;
-    setTimeout(() => { msg.hidden = true; }, 2500);
+    setTimeout(() => { msg.hidden = true; }, 6000);
   } catch (err) {
     msg.textContent = err.message;
     msg.className = 'formmsg error';
@@ -300,7 +557,7 @@ async function saveBlock(id) {
   if (!me) return;
   document.getElementById('admin-name').textContent = me.username;
   renderPageTabs();
-  renderSlugPicker();
+  renderSlugTabs();
   loadBlocks();
 })();
 </script>

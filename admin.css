@@ -56,6 +56,43 @@ body.modal-open{overflow:hidden}
 .page-tab:hover{border-color:rgba(255,138,31,.4);color:var(--text)}
 .page-tab.active{background:var(--orange);border-color:var(--orange);color:#0b0b0b}
 #slug-picker{margin:0 22px 20px;max-width:320px}
+/* (06.10.2026) Ghidurile, ca butoane; linkul spre pagina publică; semnul de
+   modificări nesalvate. */
+.slug-tabs{padding-top:0;margin-top:-6px}
+.slug-tabs[hidden]{display:none}
+.slug-tabs .page-tab{border-radius:9px;font-weight:700}
+.public-link{margin:0 22px 16px;font-size:12.5px;color:var(--muted)}
+.public-link[hidden]{display:none}
+.public-link strong{color:var(--text)}
+.public-link a,.formmsg a{color:var(--orange);font-weight:800;text-decoration:underline;text-underline-offset:2px}
+.content-block.is-dirty{border-color:rgba(255,138,31,.55)}
+.dirty-note{display:none;align-self:center;font-size:11.5px;font-weight:800;color:var(--orange)}
+.content-block.is-dirty .dirty-note{display:inline}
+.content-block-actions [hidden]{display:none}
+.content-block-actions{flex-wrap:wrap}
+
+/* Editorul vizual: se scrie ca într-un document și arată ca pe pagina publică. */
+.vis-toolbar{position:sticky;top:0;z-index:3;display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:8px;border:1px solid var(--line);border-bottom:0;border-radius:10px 10px 0 0;background:#15171a}
+.vis-toolbar button{min-height:34px;min-width:34px;padding:0 11px;border-radius:7px;border:1px solid var(--line);background:var(--bg);color:var(--text);font:inherit;font-size:12px;font-weight:700;cursor:pointer;transition:.12s ease}
+.vis-toolbar button:hover{border-color:var(--orange);color:var(--orange)}
+.vis-toolbar button.is-on{background:rgba(255,138,31,.16);border-color:var(--orange);color:var(--orange)}
+.vis-toolbar button:focus-visible{outline:2px solid var(--orange);outline-offset:2px}
+.vis-toolbar .sep{flex:none;width:1px;height:22px;margin:0 2px;background:var(--line)}
+.vis-editor{min-height:260px;max-height:70vh;overflow:auto;padding:22px 26px;border:1px solid var(--line);border-radius:0 0 10px 10px;background:#101214;color:#d3d6d9;font-size:15px;line-height:1.75;outline:0;overflow-wrap:anywhere}
+.vis-editor:focus{border-color:var(--orange);box-shadow:0 0 0 3px rgba(255,138,31,.12)}
+.vis-editor:empty::before{content:'Scrie aici conținutul paginii…';color:#666}
+.vis-editor h1,.vis-editor h2{font-size:22px;line-height:1.25;margin:28px 0 12px;color:#fff;letter-spacing:-.015em}
+.vis-editor h3,.vis-editor h4{font-size:17px;line-height:1.3;margin:22px 0 8px;color:#fff}
+.vis-editor>:first-child{margin-top:0}
+.vis-editor p{margin:0 0 14px}
+.vis-editor ul,.vis-editor ol{margin:0 0 14px;padding-left:22px}
+.vis-editor li{margin-bottom:5px}
+.vis-editor strong,.vis-editor b{color:#fff;font-weight:800}
+.vis-editor a{color:var(--orange);text-decoration:underline}
+.vis-editor blockquote{margin:0 0 14px;padding:4px 18px;border-left:3px solid var(--orange);color:#b4b9bf}
+.vis-hint{margin:8px 2px 0;font-size:11.5px;line-height:1.5;color:var(--muted)}
+.vis-hint.warn{margin:0 0 8px;padding:9px 12px;border-radius:8px;border:1px solid rgba(255,138,31,.35);background:rgba(255,138,31,.07);color:#ffd2a6}
+@media(max-width:700px){.vis-editor{padding:16px 16px}.vis-toolbar button{min-height:40px;min-width:40px}.vis-toolbar .sep{display:none}}
 
 #blocks-list{padding:0 22px 22px;display:flex;flex-direction:column;gap:14px}
 .content-block{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:16px 18px}

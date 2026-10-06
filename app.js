@@ -418,3 +418,27 @@ if (newsList || updatesList) {
   loadNews();
   setInterval(loadNews, 60000);
 }
+
+// (06.10.2026) Butonul „Editează pagina" — îl văd doar co-fondatorii și
+// fondatorii, pe paginile al căror conținut se schimbă din Admin → Conținut
+// pagini (cele cu <body data-content-page="…">). Ghidul unei facțiuni
+// (ghid-factiune.html?slug=…) îl cere singur, după ce știe despre ce ghid e
+// vorba. E doar o scurtătură spre editor: dreptul de a schimba ceva îl
+// verifică serverul, la salvare.
+window.mrpEditButton = function (page, slug) {
+  let role = '';
+  try { role = ((JSON.parse(localStorage.getItem('mrp_auth') || '{}') || {}).user || {}).role || ''; } catch {}
+  if (role !== 'owner' && role !== 'co-fondator') return;
+  let link = document.getElementById('mrp-edit-btn');
+  if (!link) {
+    link = document.createElement('a');
+    link.id = 'mrp-edit-btn';
+    link.className = 'edit-fab';
+    link.textContent = '✏️ Editează pagina';
+    document.body.appendChild(link);
+  }
+  link.href = `admin-continut.html?page=${encodeURIComponent(page)}${slug ? `&slug=${encodeURIComponent(slug)}` : ''}`;
+};
+if (['index', 'joburi', 'ghid-factiuni', 'legislatie-rutiera'].includes(document.body.dataset.contentPage)) {
+  window.mrpEditButton(document.body.dataset.contentPage);
+}

@@ -81,6 +81,9 @@
       return;
     }
 
+    // fondatorii au aici scurtătura spre editorul acestui ghid (vezi app.js)
+    if (window.mrpEditButton) window.mrpEditButton('ghid-factiune', slug);
+
     const backLink = document.getElementById('back-link');
     if (group === 'legislatie') {
       backLink.href = 'legislatie-rutiera.html';

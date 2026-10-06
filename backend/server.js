@@ -828,6 +828,34 @@ async function syncPlayerSnapshots() {
   }
 }
 
+// (06.10.2026) Fiecare cont de pe site are nevoie de un rând în „players"
+// (fișa de jucător): acolo se salvează, cât e online, banii, jobul și orele
+// lui, iar profilul îl găsește tot prin ea. Rândul se crea doar la înscrierea
+// cu Discord — conturile făcute cu email și parolă rămâneau fără, așa că, deși
+// își legau personajul și deschideau cutii, profilul lor spunea „nu are cont
+// pe site" și nu arăta orele când erau offline. Îl creăm acum la înscriere și
+// la legarea contului, iar la pornire completăm conturile mai vechi.
+async function ensurePlayerRow(userId) {
+  await pool.query(
+    `INSERT INTO players(user_id, display_name)
+     SELECT id, LEFT(username, 64) FROM users WHERE id = $1
+     ON CONFLICT (user_id) DO NOTHING`, [userId]);
+}
+async function backfillPlayerRows() {
+  try {
+    const { rowCount } = await pool.query(
+      `INSERT INTO players(user_id, display_name)
+       SELECT u.id, LEFT(u.username, 64) FROM users u
+       LEFT JOIN players p ON p.user_id = u.id
+       WHERE p.id IS NULL
+       ON CONFLICT (user_id) DO NOTHING`);
+    if (rowCount) console.log(`Fișe de jucător: am creat ${rowCount} fișe lipsă pentru conturi mai vechi (cele făcute cu email și parolă).`);
+  } catch (err) {
+    console.error("Completarea fișelor de jucător a eșuat (ignorat):", err.message);
+  }
+}
+backfillPlayerRows();
+
 if (FIVEM_API_SECRET) {
   setInterval(syncPlayerSnapshots, 60_000);
   syncPlayerSnapshots();
@@ -1921,15 +1949,8 @@ app.get("/api/admin/live/assets", auth, requireRole(...ADMIN_ROLES), asyncRoute(
 // opts (28.09.2026): { userId, identifier } — pentru profilul PROPRIU al unui
 // cont legat prin /leagacont: contul se găsește după user_id și jucătorul
 // online după identificatorul ESX exact, nu după nume.
-async function buildPlayerProfile(name, opts = {}) {
-  const cleanName = (name || "").toString().trim().slice(0, 64);
-  if (!cleanName) return null;
-  const lower = cleanName.toLowerCase();
-
-  const [liveDetail, accountResult, punishmentResult, activityResult, staffActivity, deathsResult, moderationResult] = await Promise.all([
-    getPlayersDetail(),
-    pool.query(
-      `SELECT p.id, p.game_id, p.display_name, p.playtime_minutes, p.status, p.created_at,
+const PROFILE_ACCOUNT_SQL = `
+       SELECT p.id, p.game_id, p.display_name, p.playtime_minutes, p.status, p.created_at,
               p.last_cash, p.last_bank, p.last_black_money, p.last_job, p.last_job_label,
               p.last_vehicles, p.last_synced_at, p.last_identifier, p.last_rp_name, p.last_static_id, p.last_server_playtime, p.last_grade_label,
               u.id AS user_id, u.username, u.email, u.game_identifier, u.game_identifier_name, u.discord_id,
@@ -1938,7 +1959,16 @@ async function buildPlayerProfile(name, opts = {}) {
        JOIN users u ON u.id = p.user_id
        LEFT JOIN faction_members fm ON fm.player_id = p.id
        LEFT JOIN factions f ON f.id = fm.faction_id
-       LEFT JOIN faction_ranks fr ON fr.id = fm.rank_id
+       LEFT JOIN faction_ranks fr ON fr.id = fm.rank_id`;
+async function buildPlayerProfile(name, opts = {}) {
+  const cleanName = (name || "").toString().trim().slice(0, 64);
+  if (!cleanName) return null;
+  const lower = cleanName.toLowerCase();
+
+  const [liveDetail, accountResult, punishmentResult, activityResult, staffActivity, deathsResult, moderationResult] = await Promise.all([
+    getPlayersDetail(),
+    pool.query(
+      `${PROFILE_ACCOUNT_SQL}
        ${opts.userId
          ? "WHERE p.user_id = $1"
          // (29.09.2026) Cu identificator (ex. click din istoricul VIP Shop):
@@ -1961,7 +1991,7 @@ async function buildPlayerProfile(name, opts = {}) {
     fetchLuxuModeration({ player: cleanName }),
   ]);
 
-  const account = accountResult.rows[0] || null;
+  let account = accountResult.rows[0] || null;
 
   // (01.10.2026) Cont de site NELEGAT cu /leagacont, dar logat cu Discord:
   // îi găsim personajul după Discord și îl folosim ca și cum ar fi legat.
@@ -1989,6 +2019,22 @@ async function buildPlayerProfile(name, opts = {}) {
   const gameHit = (!live && (!(account && account.last_synced_at) || discordPrimary))
     ? await fetchGamePlayerLookup({ identifier: knownIdentifier, name: opts.rpName || discordPrimary?.rpName || rpFromLogs || cleanName })
     : null;
+  // (06.10.2026) Profil deschis după un nume care nu seamănă cu cel de pe site
+  // (numele de Steam, de pildă) și fără identificator: contul legat nu era
+  // găsit, deși personajul îl aflasem deja din joc. Îl căutăm acum după
+  // identificatorul personajului (contul legat de el întâi).
+  const foundIdentifier = live?.license || gameHit?.identifier || null;
+  if (!account && foundIdentifier) {
+    const late = await pool.query(
+      `${PROFILE_ACCOUNT_SQL}
+       WHERE u.game_identifier = $1 OR p.last_identifier = $1
+       ORDER BY (u.game_identifier = $1) DESC NULLS LAST
+       LIMIT 1`, [foundIdentifier]);
+    if (late.rows[0]) {
+      account = late.rows[0];
+      if (!effIdentifier) effIdentifier = foundIdentifier;
+    }
+  }
   // Ultima dată văzut pe server, după loguri (dacă n-avem altă sursă).
   const lastSeenFromLogs = (activityResult.logs || []).reduce((m, l) => (l.at && (!m || new Date(l.at) > new Date(m))) ? l.at : m, null);
   // A jucat pe alt personaj decât cel legat? (ESX multichar: char0/char1…)
@@ -2263,6 +2309,7 @@ app.post("/api/cont/leaga-joc", auth, asyncRoute(async (req, res) => {
     `UPDATE users SET game_identifier = $1, game_identifier_name = $2 WHERE id = $3`,
     [result.identifier, result.name || null, req.user.sub]
   );
+  await ensurePlayerRow(req.user.sub).catch(() => {});
   res.json({ ok: true, name: result.name || null });
 }));
 
@@ -2291,6 +2338,7 @@ app.post("/api/cont/leaga-discord", auth, asyncRoute(async (req, res) => {
     `UPDATE users SET game_identifier = $1, game_identifier_name = $2 WHERE id = $3`,
     [hit.identifier, hit.rpName || null, req.user.sub]
   );
+  await ensurePlayerRow(req.user.sub).catch(() => {});
   await logAction(req.user.sub, "account.link_game_discord", "user", req.user.sub, { identifier: hit.identifier, rpName: hit.rpName }, req.ip);
   res.json({ ok: true, name: hit.rpName || null });
 }));
@@ -3109,6 +3157,7 @@ app.post("/api/auth/register", asyncRoute(async (req, res) => {
       "INSERT INTO users(username,email,password_hash,role_id,referred_by_user_id) VALUES($1,$2,$3,$4,$5) RETURNING id,username,email",
       [username.trim(), email.trim().toLowerCase(), hash, role.rows[0].id, referredBy]
     );
+    await ensurePlayerRow(rows[0].id).catch(err => console.error("Fișa de jucător nu s-a creat la înscriere:", err.message));
     res.status(201).json({ user: rows[0] });
   } catch (e) {
     if (e.code === "23505") return res.status(409).json({ error: "Username sau email deja folosit." });

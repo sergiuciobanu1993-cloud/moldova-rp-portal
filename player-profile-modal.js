@@ -248,7 +248,9 @@ window.openPlayerProfile = (function () {
         ${escapeHtml(p.account.username)} ${p.account.game_id ? `<span class="muted">(ID #${escapeHtml(p.account.game_id)})</span>` : ''}
         ${p.account.faction_name ? ` · ${escapeHtml(p.account.faction_name)}${p.account.rank_name ? ' — ' + escapeHtml(p.account.rank_name) : ''}` : ''}
         ${p.account.playtime_minutes != null ? ` · ${Math.round(p.account.playtime_minutes / 60)}h jucate` : ''}
-        <br>${p.account.game_linked
+        <br>${p.account.other_character
+          ? `<span class="pill warn">ALT PERSONAJ</span> <span class="muted">contul de site e al aceluiași jucător, dar e legat de alt personaj: <b>${escapeHtml(p.account.game_name || '—')}</b>. Banii și orele se salvează doar pentru personajul legat.</span>`
+          : p.account.game_linked
           ? `<span class="pill on">LEGAT DE JOC</span> <span class="muted">personaj: ${escapeHtml(p.account.game_name || '—')}</span>`
           : (p.discordCharacters || []).length
             ? `<span class="pill info">GĂSIT DUPĂ DISCORD</span> <span class="muted">— n-a folosit /leagacont, dar personajele cu același Discord sunt: ${p.discordCharacters.map(c => `<b>${escapeHtml(c.rpName || c.identifier)}</b>${c.staticId ? ` #${escapeHtml(c.staticId)}` : ''}${c.online ? ' (online)' : ''}`).join(', ')}. Mai sus sunt datele ${p.discordCharacters.length > 1 ? 'primului' : 'lui'}.</span>`

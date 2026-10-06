@@ -2035,6 +2035,35 @@ async function buildPlayerProfile(name, opts = {}) {
       if (!effIdentifier) effIdentifier = foundIdentifier;
     }
   }
+  // (07.10.2026) Tot fără cont? Pe server un jucător poate avea mai multe
+  // personaje (char0:…, char1:… — aceeași licență după „:"), iar contul de pe
+  // site se leagă de UNUL singur. Dacă profilul e al altui personaj al aceluiași
+  // jucător (de pildă cel cu care a deschis cutii înainte să-și schimbe
+  // legătura), arătăm totuși contul lui de site, marcat ca atare. Datele
+  // salvate (bani, ore) rămân ale personajului legat — nu le amestecăm.
+  let accountOtherCharacter = false;
+  const wantIdentifier = effIdentifier || foundIdentifier;
+  const licenseOf = id => { const m = /^char\d+:(.+)$/i.exec(String(id || "")); return m ? m[1] : null; };
+  const wantLicense = licenseOf(wantIdentifier);
+  if (!account && wantLicense) {
+    const alt = await pool.query(
+      `${PROFILE_ACCOUNT_SQL}
+       WHERE split_part(u.game_identifier, ':', 2) = $1 OR split_part(p.last_identifier, ':', 2) = $1
+       ORDER BY (split_part(u.game_identifier, ':', 2) = $1) DESC NULLS LAST, p.last_synced_at DESC NULLS LAST
+       LIMIT 1`, [wantLicense]);
+    if (alt.rows[0]) {
+      account = alt.rows[0];
+      accountOtherCharacter = true;
+      if (!effIdentifier) effIdentifier = wantIdentifier;
+    }
+  }
+  // în jurnal, ca să știm de ce un profil rămâne fără cont de site
+  if (wantIdentifier && (!account || accountOtherCharacter)) {
+    const short = String(wantIdentifier).slice(0, 16);
+    console.log(accountOtherCharacter
+      ? `Profil: personajul ${short}… nu e cel legat pe site; contul „${account.username}” e legat de alt personaj al aceluiași jucător.`
+      : `Profil: niciun cont de site nu e legat de personajul ${short}… și nici de alt personaj al aceluiași jucător.`);
+  }
   // Ultima dată văzut pe server, după loguri (dacă n-avem altă sursă).
   const lastSeenFromLogs = (activityResult.logs || []).reduce((m, l) => (l.at && (!m || new Date(l.at) > new Date(m))) ? l.at : m, null);
   // A jucat pe alt personaj decât cel legat? (ESX multichar: char0/char1…)
@@ -2175,6 +2204,7 @@ async function buildPlayerProfile(name, opts = {}) {
       server_playtime_minutes: playtimeOf(live) ?? (snapshotIsOurs ? account.last_server_playtime : null) ?? lastKnown?.playtimeMinutes ?? null,
       username: account.username, faction_name: account.faction_name, rank_name: account.rank_name,
       game_linked: !!account.game_identifier, game_name: account.game_identifier_name || null,
+      other_character: accountOtherCharacter,
     } : null,
     punishments: punishmentResult.rows,
     moderation,

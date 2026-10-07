@@ -21,7 +21,7 @@
 // (rămâne cât ții fila deschisă); ?tema=nu o oprește.
 (() => {
   if (window.MRP_TEMA) return;
-  const VER = '20261007c'; // aceeași ca în pwa.js — schimbă-le împreună când modifici tema
+  const VER = '20261007d'; // aceeași ca în pwa.js — schimbă-le împreună când modifici tema
   const root = document.documentElement;
   const ls = {
     get(k) { try { return localStorage.getItem(k); } catch { return null; } },
@@ -139,6 +139,21 @@
           n.connect(g).connect(bp);
         }
         return 0.55;
+      },
+      // liliecii care sar la apăsare: câteva bătăi de aripi + un chițăit scurt
+      // (puțin diferit de fiecare dată, ca să nu sune ca un bip)
+      flap(c, out, t) {
+        const bp = filt(c, 'bandpass', 850 + Math.random() * 550, 1.1);
+        bp.connect(out);
+        for (let i = 0; i < 4; i++) {
+          const at = t + i * 0.045, n = noiseSrc(c, 'white', at, 0.03), g = gain(c, 0);
+          env(g, at, 0.004, 0.6 - i * 0.09, 0, 0.028);
+          n.connect(g).connect(bp);
+        }
+        const f = 5200 + Math.random() * 1800;
+        tone(c, out, t + 0.02, 'sine', f, f * 0.72, 0.04, 0.16, 0.004);
+        tone(c, out, t + 0.1, 'sine', f * 0.94, f * 0.68, 0.035, 0.12, 0.004);
+        return 0.25;
       },
       // fantomă: un „uuu" care urcă și coboară
       ghost(c, out, t) {
@@ -270,11 +285,13 @@
       get ready() { return !!ctx && ctx.state === 'running'; },
       // target = { ctx, out }: redare într-un alt context (folosit la teste)
       play,
-      // dintr-o apăsare: pornește sunetul imediat ce browserul dă drumul la audio
-      soon(name, vol = 1) {
-        const p = unlock();
+      // dintr-o apăsare: pornește sunetul imediat ce browserul dă drumul la
+      // audio; dacă asta durează mai mult de „wait" ms, renunță (altfel s-ar
+      // strânge mai multe sunete și ar porni toate odată)
+      soon(name, vol = 1, wait = 1500) {
+        const p = unlock(), asked = Date.now();
         if (ctx && ctx.state === 'running') play(name, vol);
-        else if (p) p.then(() => { play(name, vol); });
+        else if (p) p.then(() => { if (Date.now() - asked <= wait) play(name, vol); });
       },
     };
   })();
@@ -382,11 +399,30 @@
       hwTip('Site-ul are sunete de Halloween. Le poți opri din butonul cu dovleac.', 7000);
     }
   }
+  // Sunetul liliecilor de la apăsare. Cu mouse-ul se aude chiar la apăsare; pe
+  // ecran tactil abia când atingerea se dovedește a fi o apăsare (evenimentul
+  // „click") — altfel ar suna la fiecare început de derulare a paginii.
+  function hwFlap(target) {
+    if (!hw || hw.mode !== 'all') return;
+    if (target && target.closest && target.closest('.hw-fx')) return; // dovleacul are sunetul lui
+    const now = performance.now();
+    if (now - hw.lastFlap < 180) return;
+    hw.lastFlap = now;
+    snd.soon('flap', 0.8, 400);
+  }
+  function hwTap(e) {
+    if (!hw || !hw.fx || hw.lastPtr === 'mouse' || performance.now() - hw.lastDown > 900) return;
+    if (e.target && e.target.closest && e.target.closest('input,textarea,select,[contenteditable="true"]')) return;
+    hwFlap(e.target);
+  }
   // la apăsare sar câțiva lilieci mici din locul acela
   function hwClick(e) {
     if (!hw || !hw.fx || !hw.top) return;
     if (e.target && e.target.closest && e.target.closest('input,textarea,select,[contenteditable="true"]')) return;
     const now = performance.now();
+    hw.lastPtr = e.pointerType || 'mouse';
+    hw.lastDown = now;
+    if (hw.lastPtr === 'mouse') hwFlap(e.target);
     if (now - hw.lastClick < 180 || hw.top.childElementCount > 14) return;
     hw.lastClick = now;
     const n = 3 + Math.floor(Math.random() * 2);
@@ -481,7 +517,7 @@
     const decor = el('div', 'hw-decor', '<div class="hw-web"></div>' + (work ? '' : '<div class="hw-web l"></div>'));
     decor.setAttribute('aria-hidden', 'true');
     document.body.appendChild(decor);
-    hw = { decor, extra: [], btn: null, top: null, timers: [], fx: false, mode: 'off', work, lastClick: 0 };
+    hw = { decor, extra: [], btn: null, top: null, timers: [], fx: false, mode: 'off', work, lastClick: 0, lastFlap: 0, lastDown: 0, lastPtr: '' };
     if (work) { root.classList.add('hw-nofx'); return; }
     // în spatele conținutului: ceața, luna și cimitirul de la marginea de jos
     const fog = el('div', 'hw-fog');
@@ -489,6 +525,7 @@
     hw.top = el('div', 'hw-top');
     [fog, night, hw.top].forEach(x => { x.setAttribute('aria-hidden', 'true'); document.body.appendChild(x); hw.extra.push(x); });
     document.addEventListener('pointerdown', hwClick, { passive: true });
+    document.addEventListener('click', hwTap, { passive: true });
     if (!reduced()) {
       hw.btn = el('button', 'hw-fx', '<span></span>');
       hw.btn.type = 'button';
@@ -508,6 +545,7 @@
     if (!hw) return;
     hw.timers.forEach(clearTimeout);
     document.removeEventListener('pointerdown', hwClick);
+    document.removeEventListener('click', hwTap);
     [hw.decor, hw.btn, ...hw.extra].forEach(x => x && x.remove());
     document.querySelectorAll('.hw-banner,.hw-tip').forEach(x => x.remove());
     root.classList.remove('hw-nofx');

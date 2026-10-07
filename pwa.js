@@ -4,6 +4,31 @@
 //    „Instalează aplicația" — pe Android/Chrome cu butonul nativ de instalare,
 //    pe iPhone cu pașii din Safari (Partajează → Adaugă pe ecranul principal).
 // 3) Orice element cu [data-install-app] (ex. linkul din subsol) face același lucru.
+// (07.10.2026) Tema de sezon a site-ului (ex. Halloween). pwa.js e singurul
+// script inclus pe toate paginile, de aceea pornește de aici: tema ținută
+// minte de la ultima vizită se aplică pe loc (ca pagina să nu „clipească"
+// din normal în Halloween), apoi tema.js întreabă serverul dacă mai e pornită
+// și adaugă decorul. Se pornește / oprește din Admin → Dashboard.
+(() => {
+  const TEME = { halloween: '/tema-halloween.css?v=20261007a' };
+  try {
+    let tema = null;
+    const q = /[?&]tema=([a-z-]*)/i.exec(location.search);
+    if (q) { if (TEME[q[1].toLowerCase()]) sessionStorage.setItem('mrp_tema_proba', q[1].toLowerCase()); else sessionStorage.removeItem('mrp_tema_proba'); }
+    tema = sessionStorage.getItem('mrp_tema_proba') || (JSON.parse(localStorage.getItem('mrp_tema') || 'null') || {}).theme;
+    if (TEME[tema] && !document.getElementById('tema-css')) {
+      document.documentElement.classList.add('tema-' + tema);
+      const l = document.createElement('link');
+      l.id = 'tema-css'; l.rel = 'stylesheet'; l.href = TEME[tema];
+      document.head.appendChild(l);
+    }
+  } catch { /* fără stocare (mod privat): tema.js o aplică după răspunsul serverului */ }
+  const s = document.createElement('script');
+  s.src = '/tema.js?v=20261007a';
+  s.async = true;
+  document.head.appendChild(s);
+})();
+
 (() => {
   if (!('serviceWorker' in navigator)) return;
   window.addEventListener('load', () => {

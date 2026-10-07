@@ -1,0 +1,119 @@
+/* Tema de Halloween a site-ului (07.10.2026).
+   Se încarcă DOAR cât tema e pornită din Admin → Dashboard → „Tema site-ului"
+   (vezi tema.js și pwa.js). Totul e sub html.tema-halloween, deci la oprire
+   site-ul revine exact la înfățișarea obișnuită, fără alte modificări.
+   Cuprins: 1) culori  2) decor (pânză, lilieci, păianjen, ceață)
+            3) banda de pe prima pagină  4) butonul de oprit efectele
+            5) cutiile din VIP Shop (cripta). */
+
+/* ---- 1) culori: portocaliul rămâne, apare movul ---- */
+html.tema-halloween{
+  --hw-purple:#9b5cff;--hw-violet:#6b2fd6;--hw-green:#9dff6a;
+  --bg:#07060a;--panel:#121018;--panel2:#17141f;--side:#0d0b12;--line:rgba(176,132,255,.18);
+  --orange:#ff7a14;--orange2:#ff5e0e;
+}
+html.tema-halloween body{background-color:var(--bg);
+  background-image:radial-gradient(ellipse 70vw 60vh at 6% 0%,rgba(123,63,242,.22),transparent 68%),radial-gradient(ellipse 75vw 70vh at 100% 100%,rgba(255,122,20,.14),transparent 66%);
+  background-repeat:no-repeat;background-position:0 0;background-size:100% 100%;background-attachment:fixed}
+html.tema-halloween ::selection{background:#6b2fd6;color:#fff}
+html.tema-halloween .site-header{background:rgba(9,6,14,.8);border-bottom-color:rgba(176,132,255,.2)}
+html.tema-halloween .brand::after{content:'';display:inline-block;flex:none;width:22px;height:20px;margin-left:2px;vertical-align:middle;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 58'%3E%3Cpath d='M30 13c-.6-5.2 1.600-8.800 6.200-10.300l2.400 3.600c-2.500 1-3.500 3.200-3.200 6.700z' fill='%234c7a2e'/%3E%3Cellipse cx='16' cy='35' rx='14' ry='19.500' fill='%23d9590a'/%3E%3Cellipse cx='48' cy='35' rx='14' ry='19.500' fill='%23d9590a'/%3E%3Cellipse cx='24.500' cy='35' rx='13' ry='21.500' fill='%23f07410'/%3E%3Cellipse cx='39.500' cy='35' rx='13' ry='21.500' fill='%23f07410'/%3E%3Cellipse cx='32' cy='35' rx='9' ry='22' fill='%23ff8c24'/%3E%3Cg fill='%232a1206'%3E%3Cpath d='M13.500 31l10.500-7.500 1.500 10.500z'/%3E%3Cpath d='M50.500 31l-10.500-7.500-1.500 10.500z'/%3E%3Cpath d='M32 32.500l-3.500 6h7z'/%3E%3Cpath d='M11.500 40.500l6.500 4 4-3.200 5 4.700 5-3.800 5 3.800 5-4.700 4 3.200 6.500-4c-2 8.800-10.200 13.500-20.500 13.500s-18.500-4.700-20.500-13.500z'/%3E%3C/g%3E%3C/svg%3E") center/contain no-repeat;filter:drop-shadow(0 0 6px rgba(255,122,20,.6));animation:hwGlow 3.4s ease-in-out infinite}
+html.tema-halloween .site-header::after{content:'';position:absolute;left:0;right:0;bottom:-1px;height:2px;pointer-events:none;background:linear-gradient(90deg,transparent,#9b5cff 22%,#ff7a14 50%,#9b5cff 78%,transparent);opacity:.75}
+/* trei dovleci aprinși pe marginea subsolului */
+html.tema-halloween footer{position:relative}
+html.tema-halloween footer::after{content:'';position:absolute;right:max(8vw,16px);top:-40px;width:132px;height:44px;pointer-events:none;
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 58'%3E%3Cpath d='M30 13c-.6-5.2 1.600-8.800 6.200-10.300l2.400 3.600c-2.500 1-3.500 3.200-3.200 6.700z' fill='%234c7a2e'/%3E%3Cellipse cx='16' cy='35' rx='14' ry='19.500' fill='%23d9590a'/%3E%3Cellipse cx='48' cy='35' rx='14' ry='19.500' fill='%23d9590a'/%3E%3Cellipse cx='24.500' cy='35' rx='13' ry='21.500' fill='%23f07410'/%3E%3Cellipse cx='39.500' cy='35' rx='13' ry='21.500' fill='%23f07410'/%3E%3Cellipse cx='32' cy='35' rx='9' ry='22' fill='%23ff8c24'/%3E%3Cg fill='%23ffe27a'%3E%3Cpath d='M13.500 31l10.500-7.500 1.500 10.500z'/%3E%3Cpath d='M50.500 31l-10.500-7.500-1.500 10.500z'/%3E%3Cpath d='M32 32.500l-3.500 6h7z'/%3E%3Cpath d='M11.500 40.500l6.500 4 4-3.200 5 4.700 5-3.800 5 3.800 5-4.700 4 3.200 6.500-4c-2 8.800-10.200 13.500-20.500 13.500s-18.500-4.700-20.500-13.500z'/%3E%3C/g%3E%3C/svg%3E") 0 100%/40px auto no-repeat,url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 58'%3E%3Cpath d='M30 13c-.6-5.2 1.600-8.800 6.200-10.300l2.400 3.600c-2.500 1-3.500 3.200-3.200 6.700z' fill='%234c7a2e'/%3E%3Cellipse cx='16' cy='35' rx='14' ry='19.500' fill='%23d9590a'/%3E%3Cellipse cx='48' cy='35' rx='14' ry='19.500' fill='%23d9590a'/%3E%3Cellipse cx='24.500' cy='35' rx='13' ry='21.500' fill='%23f07410'/%3E%3Cellipse cx='39.500' cy='35' rx='13' ry='21.500' fill='%23f07410'/%3E%3Cellipse cx='32' cy='35' rx='9' ry='22' fill='%23ff8c24'/%3E%3Cg fill='%23ffe27a'%3E%3Cpath d='M13.500 31l10.500-7.500 1.500 10.500z'/%3E%3Cpath d='M50.500 31l-10.500-7.500-1.500 10.500z'/%3E%3Cpath d='M32 32.500l-3.500 6h7z'/%3E%3Cpath d='M11.500 40.500l6.500 4 4-3.200 5 4.700 5-3.800 5 3.800 5-4.700 4 3.200 6.500-4c-2 8.800-10.200 13.500-20.500 13.500s-18.500-4.700-20.500-13.500z'/%3E%3C/g%3E%3C/svg%3E") 38px 100%/52px auto no-repeat,url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 58'%3E%3Cpath d='M30 13c-.6-5.2 1.600-8.800 6.200-10.300l2.400 3.600c-2.500 1-3.500 3.200-3.200 6.700z' fill='%234c7a2e'/%3E%3Cellipse cx='16' cy='35' rx='14' ry='19.500' fill='%23d9590a'/%3E%3Cellipse cx='48' cy='35' rx='14' ry='19.500' fill='%23d9590a'/%3E%3Cellipse cx='24.500' cy='35' rx='13' ry='21.500' fill='%23f07410'/%3E%3Cellipse cx='39.500' cy='35' rx='13' ry='21.500' fill='%23f07410'/%3E%3Cellipse cx='32' cy='35' rx='9' ry='22' fill='%23ff8c24'/%3E%3Cg fill='%23ffe27a'%3E%3Cpath d='M13.500 31l10.500-7.500 1.500 10.500z'/%3E%3Cpath d='M50.500 31l-10.500-7.500-1.500 10.500z'/%3E%3Cpath d='M32 32.500l-3.500 6h7z'/%3E%3Cpath d='M11.500 40.500l6.500 4 4-3.200 5 4.700 5-3.800 5 3.800 5-4.700 4 3.200 6.500-4c-2 8.800-10.200 13.500-20.500 13.500s-18.500-4.700-20.500-13.500z'/%3E%3C/g%3E%3C/svg%3E") 96px 100%/34px auto no-repeat;
+  filter:drop-shadow(0 0 10px rgba(255,140,30,.55))}
+@keyframes hwGlow{0%,100%{filter:drop-shadow(0 0 4px rgba(255,122,20,.45))}50%{filter:drop-shadow(0 0 11px rgba(255,150,40,.95))}}
+
+/* ---- 2) decor ---- */
+.hw-decor{position:fixed;inset:0;z-index:30;pointer-events:none;overflow:hidden}
+.hw-web{position:absolute;top:0;right:0;width:min(190px,36vw);aspect-ratio:1;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Cpath d='M200 0L200.0 205.0M200 0L146.9 198.0M200 0L97.5 177.5M200 0L55.0 145.0M200 0L22.5 102.5M200 0L2.0 53.1M200 0L-5.0 0.0M200.0 36.0Q196.2 28.6 190.7 34.8M190.7 34.8Q189.0 26.6 182.0 31.2M182.0 31.2Q182.5 22.8 174.5 25.5M174.5 25.5Q177.2 17.5 168.8 18.0M168.8 18.0Q173.4 11.0 165.2 9.3M165.2 9.3Q171.4 3.8 164.0 0.0M200.0 66.0Q193.1 52.3 182.9 63.8M182.9 63.8Q179.8 48.8 167.0 57.2M167.0 57.2Q167.9 41.9 153.3 46.7M153.3 46.7Q158.1 32.1 142.8 33.0M142.8 33.0Q151.2 20.2 136.2 17.1M136.2 17.1Q147.7 6.9 134.0 0.0M200.0 98.0Q189.8 77.7 174.6 94.7M174.6 94.7Q170.0 72.4 151.0 84.9M151.0 84.9Q152.3 62.2 130.7 69.3M130.7 69.3Q137.8 47.7 115.1 49.0M115.1 49.0Q127.6 30.0 105.3 25.4M105.3 25.4Q122.3 10.2 102.0 0.0M200.0 132.0Q186.2 104.7 165.8 127.5M165.8 127.5Q159.6 97.6 134.0 114.3M134.0 114.3Q135.7 83.8 106.7 93.3M106.7 93.3Q116.2 64.3 85.7 66.0M85.7 66.0Q102.4 40.4 72.5 34.2M72.5 34.2Q95.3 13.8 68.0 0.0M200.0 168.0Q182.5 133.3 156.5 162.3M156.5 162.3Q148.6 124.2 116.0 145.5M116.0 145.5Q118.2 106.6 81.2 118.8M81.2 118.8Q93.4 81.8 54.5 84.0M54.5 84.0Q75.8 51.4 37.7 43.5M37.7 43.5Q66.7 17.5 32.0 0.0' fill='none' stroke='%23fff' stroke-opacity='.62' stroke-width='1.1' stroke-linecap='round'/%3E%3C/svg%3E") top right/contain no-repeat;opacity:.36}
+.hw-bat{position:absolute;left:0;top:var(--y,30vh);width:var(--w,54px);color:#7d55e6;filter:drop-shadow(0 0 8px rgba(155,92,255,.7));animation:hwFly var(--t,7s) linear var(--dl,0s) both;will-change:transform}
+.hw-bat.rev{animation-name:hwFlyRev}
+.hw-bat svg{display:block;width:100%;height:auto;overflow:visible;animation:hwBob 1.2s ease-in-out infinite alternate}
+.hw-bat .wg{transform-box:fill-box;animation:hwFlapL .2s ease-in-out infinite alternate}
+.hw-bat .wg.l{transform-origin:100% 55%}
+.hw-bat .wg.r{transform-origin:0% 55%;animation-name:hwFlapR}
+@keyframes hwFly{from{transform:translate3d(-14vw,0,0)}to{transform:translate3d(114vw,var(--dy,-12vh),0)}}
+@keyframes hwFlyRev{from{transform:translate3d(114vw,0,0) scaleX(-1)}to{transform:translate3d(-14vw,var(--dy,-12vh),0) scaleX(-1)}}
+@keyframes hwBob{from{transform:translateY(-9px)}to{transform:translateY(11px)}}
+@keyframes hwFlapL{from{transform:rotate(-20deg)}to{transform:rotate(24deg) scaleX(.82)}}
+@keyframes hwFlapR{from{transform:rotate(20deg)}to{transform:rotate(-24deg) scaleX(.82)}}
+.hw-spider{position:absolute;top:0;left:var(--x,80vw);width:34px;margin-left:-17px;transform:translateY(-100%);animation:hwDrop 9s cubic-bezier(.45,0,.3,1) both}
+.hw-spider i{display:block;width:1px;height:var(--h,130px);margin:0 auto;background:linear-gradient(rgba(255,255,255,.08),rgba(255,255,255,.6))}
+.hw-spider svg{display:block;width:34px;height:29px;margin-top:-3px}
+@keyframes hwDrop{0%{transform:translateY(-100%)}26%{transform:translateY(0)}32%{transform:translateY(-7px)}38%,70%{transform:translateY(0)}100%{transform:translateY(-100%)}}
+/* ceața stă ÎN SPATELE conținutului (se vede pe margini și între panouri) */
+.hw-fog{position:fixed;left:0;right:0;bottom:0;height:36vh;z-index:-1;pointer-events:none;overflow:hidden;opacity:.75}
+.hw-fog::before{content:'';position:absolute;inset:0 -50%;
+  background:radial-gradient(ellipse 34% 100% at 22% 100%,rgba(123,63,242,.3),transparent 70%),radial-gradient(ellipse 28% 85% at 64% 100%,rgba(157,255,106,.09),transparent 70%),radial-gradient(ellipse 40% 80% at 86% 108%,rgba(255,122,20,.17),transparent 70%);
+  animation:hwFog 42s ease-in-out infinite alternate}
+@keyframes hwFog{from{transform:translate3d(-20%,0,0)}to{transform:translate3d(20%,0,0)}}
+
+/* ---- 3) banda de pe prima pagină ---- */
+.hw-banner{position:relative;z-index:6;display:flex;align-items:center;gap:14px;margin:78px 0 0;padding:12px max(5vw,16px);
+  background:linear-gradient(90deg,rgba(107,47,214,.38),rgba(255,122,20,.2) 58%,rgba(107,47,214,.22));border-bottom:1px solid rgba(176,132,255,.3)}
+.hw-banner-ico{flex:none;width:38px;height:34px;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 58'%3E%3Cpath d='M30 13c-.6-5.2 1.600-8.800 6.200-10.300l2.400 3.600c-2.500 1-3.500 3.200-3.200 6.700z' fill='%234c7a2e'/%3E%3Cellipse cx='16' cy='35' rx='14' ry='19.500' fill='%23d9590a'/%3E%3Cellipse cx='48' cy='35' rx='14' ry='19.500' fill='%23d9590a'/%3E%3Cellipse cx='24.500' cy='35' rx='13' ry='21.500' fill='%23f07410'/%3E%3Cellipse cx='39.500' cy='35' rx='13' ry='21.500' fill='%23f07410'/%3E%3Cellipse cx='32' cy='35' rx='9' ry='22' fill='%23ff8c24'/%3E%3Cg fill='%23ffe27a'%3E%3Cpath d='M13.500 31l10.500-7.500 1.500 10.500z'/%3E%3Cpath d='M50.500 31l-10.500-7.500-1.500 10.500z'/%3E%3Cpath d='M32 32.500l-3.500 6h7z'/%3E%3Cpath d='M11.500 40.500l6.500 4 4-3.200 5 4.700 5-3.800 5 3.800 5-4.700 4 3.200 6.500-4c-2 8.800-10.200 13.500-20.500 13.500s-18.500-4.700-20.500-13.500z'/%3E%3C/g%3E%3C/svg%3E") center/contain no-repeat;filter:drop-shadow(0 0 10px rgba(255,150,40,.7))}
+.hw-banner p{flex:1;min-width:0;margin:0;font-weight:800;font-size:14.5px;line-height:1.35;text-wrap:balance;color:#fff}
+.hw-banner-go{flex:none;padding:8px 15px;border-radius:999px;background:var(--orange,#ff7a14);color:#0b0b0b!important;font-weight:900;font-size:12.5px;white-space:nowrap;transition:transform .15s ease}
+.hw-banner-go:hover{transform:translateY(-1px)}
+.hw-banner-x{flex:none;width:32px;height:32px;padding:0;border-radius:50%;border:1px solid rgba(255,255,255,.18);background:rgba(0,0,0,.3);color:#fff;font-size:14px;line-height:1;cursor:pointer}
+.hw-banner-go:focus-visible,.hw-banner-x:focus-visible,.hw-fx:focus-visible,.hw-proba button:focus-visible{outline:2px solid #fff;outline-offset:2px}
+.hw-banner + .highlights-marquee{padding-top:26px}
+@media (max-width:600px){
+  .hw-banner{gap:10px;padding:10px 14px}
+  .hw-banner-ico{width:30px;height:27px}
+  .hw-banner p{font-size:13px}
+  .hw-banner-go{padding:8px 12px}
+}
+
+/* ---- 4) butonul cu care vizitatorul își oprește efectele ---- */
+/* z-index mic: butonul rămâne SUB ferestrele care acoperă pagina (premii, anunțuri) */
+.hw-fx{position:fixed;left:18px;bottom:18px;z-index:45;width:44px;height:44px;padding:0;border-radius:50%;border:1px solid rgba(176,132,255,.45);background:rgba(16,12,24,.92);display:grid;place-items:center;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.5);transition:transform .15s ease,border-color .15s ease}
+.hw-fx:hover{transform:scale(1.06);border-color:#ff7a14}
+.hw-fx span{display:block;width:26px;height:24px;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 58'%3E%3Cpath d='M30 13c-.6-5.2 1.600-8.800 6.200-10.300l2.400 3.600c-2.500 1-3.500 3.200-3.200 6.700z' fill='%234c7a2e'/%3E%3Cellipse cx='16' cy='35' rx='14' ry='19.500' fill='%23d9590a'/%3E%3Cellipse cx='48' cy='35' rx='14' ry='19.500' fill='%23d9590a'/%3E%3Cellipse cx='24.500' cy='35' rx='13' ry='21.500' fill='%23f07410'/%3E%3Cellipse cx='39.500' cy='35' rx='13' ry='21.500' fill='%23f07410'/%3E%3Cellipse cx='32' cy='35' rx='9' ry='22' fill='%23ff8c24'/%3E%3Cg fill='%23ffe27a'%3E%3Cpath d='M13.500 31l10.500-7.500 1.500 10.500z'/%3E%3Cpath d='M50.500 31l-10.500-7.500-1.500 10.500z'/%3E%3Cpath d='M32 32.500l-3.500 6h7z'/%3E%3Cpath d='M11.500 40.500l6.500 4 4-3.200 5 4.700 5-3.800 5 3.800 5-4.700 4 3.200 6.500-4c-2 8.800-10.200 13.500-20.500 13.500s-18.500-4.700-20.500-13.500z'/%3E%3C/g%3E%3C/svg%3E") center/contain no-repeat;filter:drop-shadow(0 0 6px rgba(255,150,40,.7));transition:filter .2s ease,opacity .2s ease}
+html.hw-nofx .hw-fx span{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 58'%3E%3Cpath d='M30 13c-.6-5.2 1.600-8.800 6.200-10.300l2.400 3.600c-2.500 1-3.500 3.200-3.200 6.700z' fill='%234c7a2e'/%3E%3Cellipse cx='16' cy='35' rx='14' ry='19.500' fill='%23d9590a'/%3E%3Cellipse cx='48' cy='35' rx='14' ry='19.500' fill='%23d9590a'/%3E%3Cellipse cx='24.500' cy='35' rx='13' ry='21.500' fill='%23f07410'/%3E%3Cellipse cx='39.500' cy='35' rx='13' ry='21.500' fill='%23f07410'/%3E%3Cellipse cx='32' cy='35' rx='9' ry='22' fill='%23ff8c24'/%3E%3Cg fill='%232a1206'%3E%3Cpath d='M13.500 31l10.500-7.500 1.500 10.500z'/%3E%3Cpath d='M50.500 31l-10.500-7.500-1.500 10.500z'/%3E%3Cpath d='M32 32.500l-3.500 6h7z'/%3E%3Cpath d='M11.500 40.500l6.500 4 4-3.200 5 4.700 5-3.800 5 3.800 5-4.700 4 3.200 6.500-4c-2 8.800-10.200 13.500-20.500 13.500s-18.500-4.700-20.500-13.500z'/%3E%3C/g%3E%3C/svg%3E");filter:grayscale(.85) brightness(.7);opacity:.75}
+html:has(.edit-fab) .hw-fx{bottom:74px}
+.hw-tip{position:fixed;left:18px;bottom:72px;z-index:46;max-width:min(300px,calc(100vw - 36px));padding:10px 13px;border-radius:10px;background:#15101f;border:1px solid rgba(176,132,255,.4);color:#f1ecf9;font:600 12.5px/1.45 Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif;box-shadow:0 12px 30px rgba(0,0,0,.55);animation:hwTip .2s ease-out}
+html:has(.edit-fab) .hw-tip{bottom:128px}
+@keyframes hwTip{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.hw-proba{position:fixed;left:50%;bottom:16px;z-index:480;transform:translateX(-50%);display:flex;align-items:center;gap:10px;max-width:calc(100vw - 140px);padding:8px 8px 8px 14px;border-radius:999px;background:#15101f;border:1px solid #ff7a14;color:#f1ecf9;font:700 12px/1.3 Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif;box-shadow:0 12px 30px rgba(0,0,0,.55)}
+.hw-proba button{flex:none;padding:6px 11px;border-radius:999px;border:0;background:#ff7a14;color:#0b0b0b;font:900 11.5px/1 inherit;font-family:inherit;cursor:pointer}
+@media (max-width:600px){.hw-fx{left:12px;bottom:12px}.hw-tip{left:12px;bottom:66px}}
+html.hw-nofx .hw-fog::before,html.hw-nofx.tema-halloween .brand::after{animation:none}
+@media (prefers-reduced-motion:reduce){
+  .hw-fog::before,html.tema-halloween .brand::after,.hw-tip{animation:none}
+}
+
+/* ---- 5) cutiile din VIP Shop: seiful devine criptă ----
+   Aceleași elemente ca la deschiderea „Seif" (vezi .vt-* în vip-shop.html),
+   doar îmbrăcate altfel: lespezi de piatră în loc de casete, lada de lemn cu
+   dovleac în loc de învelișul negru, iar cutia colorată are fața de dovleac,
+   care se aprinde când se ridică capacul. */
+html.tema-halloween .vt-vig{background:radial-gradient(ellipse 75% 70% at 50% 50%,transparent 42%,rgba(14,5,24,.88))}
+html.tema-halloween .vt-door,html.tema-halloween .vt-df{border-radius:16px 16px 4px 4px;border-color:#3d3549;
+  background:radial-gradient(circle at 24% 30%,rgba(255,255,255,.05) 0 2px,transparent 3px),radial-gradient(circle at 70% 62%,rgba(0,0,0,.25) 0 3px,transparent 4px),linear-gradient(165deg,#2e2836,#15121a 74%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.07),inset 0 -12px 18px rgba(0,0,0,.45)}
+html.tema-halloween .vt-door::before,html.tema-halloween .vt-df::before{left:50%;right:auto;bottom:16%;width:22px;height:22px;margin-left:-11px;border-radius:50%;border:3px solid #6a6274;background:none;box-shadow:0 2px 3px rgba(0,0,0,.6)}
+html.tema-halloween .vt-door::after,html.tema-halloween .vt-df::after{background:#4a4353}
+html.tema-halloween .vt-door span,html.tema-halloween .vt-df span{color:#7a7186}
+html.tema-halloween .vt-door.is-scan,html.tema-halloween .vt-df{border-color:var(--hw-green);box-shadow:inset 0 1px 0 rgba(255,255,255,.1),inset 0 0 28px rgba(157,255,106,.16),0 0 20px rgba(157,255,106,.42)}
+html.tema-halloween .vt-door.is-scan::after,html.tema-halloween .vt-df::after{background:var(--hw-green);box-shadow:0 0 9px var(--hw-green)}
+html.tema-halloween .vt-door.is-scan span,html.tema-halloween .vt-df span{color:#d2ffbd}
+html.tema-halloween .vt-door.is-scan::before,html.tema-halloween .vt-df::before{border-color:#b9d8a8}
+html.tema-halloween .vt-door.is-hole{background:#030204;border-color:#0c0a0f;box-shadow:inset 0 0 34px #000}
+html.tema-halloween .vt-ds{background:linear-gradient(90deg,#0c0a10,#231e2b)}
+html.tema-halloween .vt-db{background:linear-gradient(0deg,#17131d,#060508)}
+/* lada de lemn care ascunde culoarea */
+html.tema-halloween .vt-view .vs{background:repeating-linear-gradient(90deg,rgba(0,0,0,.34) 0 2px,transparent 2px 36px),linear-gradient(165deg,#3d2817,#1b110a);box-shadow:inset 0 0 0 2px rgba(0,0,0,.45),inset 0 0 22px rgba(0,0,0,.5)}
+html.tema-halloween .vt-view .vs.l,html.tema-halloween .vt-view .vs.r{background:repeating-linear-gradient(90deg,rgba(0,0,0,.4) 0 2px,transparent 2px 36px),linear-gradient(165deg,#2a1b0f,#120b06)}
+html.tema-halloween .vt-view .vs.t{background:repeating-linear-gradient(90deg,rgba(0,0,0,.3) 0 2px,transparent 2px 36px),linear-gradient(180deg,#4a321d,#2f1f12)}
+html.tema-halloween .vs.f::before,html.tema-halloween .vs.l::before,html.tema-halloween .vs.r::before{background:linear-gradient(#57505f,#2a2530);box-shadow:0 1px 0 rgba(255,255,255,.12) inset,0 2px 4px rgba(0,0,0,.5)}
+html.tema-halloween .vs.f b{font-size:0;width:62px;height:62px;margin:-31px 0 0 -31px;border-color:var(--hw-purple);background:#150e1f url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 58'%3E%3Cpath d='M30 13c-.6-5.2 1.600-8.800 6.200-10.300l2.400 3.600c-2.500 1-3.500 3.200-3.200 6.700z' fill='%234c7a2e'/%3E%3Cellipse cx='16' cy='35' rx='14' ry='19.500' fill='%23d9590a'/%3E%3Cellipse cx='48' cy='35' rx='14' ry='19.500' fill='%23d9590a'/%3E%3Cellipse cx='24.500' cy='35' rx='13' ry='21.500' fill='%23f07410'/%3E%3Cellipse cx='39.500' cy='35' rx='13' ry='21.500' fill='%23f07410'/%3E%3Cellipse cx='32' cy='35' rx='9' ry='22' fill='%23ff8c24'/%3E%3Cg fill='%23ffe27a'%3E%3Cpath d='M13.500 31l10.500-7.500 1.500 10.500z'/%3E%3Cpath d='M50.500 31l-10.500-7.500-1.500 10.500z'/%3E%3Cpath d='M32 32.500l-3.500 6h7z'/%3E%3Cpath d='M11.500 40.500l6.500 4 4-3.200 5 4.700 5-3.800 5 3.800 5-4.700 4 3.200 6.500-4c-2 8.800-10.200 13.500-20.500 13.500s-18.500-4.700-20.500-13.500z'/%3E%3C/g%3E%3C/svg%3E") center/70% no-repeat;box-shadow:0 0 16px rgba(155,92,255,.55),0 3px 10px rgba(0,0,0,.5)}
+/* cutia colorată: fața de dovleac în locul încuietorii */
+html.tema-halloween .vb.f::before{left:50%;top:46%;width:124px;height:92px;margin:-46px 0 0 -62px;border-radius:0;box-shadow:none;background:rgba(0,0,0,.5);
+  -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='8 20 48 36'%3E%3Cpath d='M13.500 31l10.500-7.500 1.500 10.500z'/%3E%3Cpath d='M50.500 31l-10.500-7.500-1.500 10.500z'/%3E%3Cpath d='M32 32.500l-3.500 6h7z'/%3E%3Cpath d='M11.500 40.500l6.500 4 4-3.200 5 4.700 5-3.800 5 3.800 5-4.700 4 3.200 6.500-4c-2 8.800-10.200 13.500-20.500 13.500s-18.500-4.700-20.500-13.500z'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='8 20 48 36'%3E%3Cpath d='M13.500 31l10.500-7.500 1.500 10.500z'/%3E%3Cpath d='M50.500 31l-10.500-7.500-1.500 10.500z'/%3E%3Cpath d='M32 32.500l-3.500 6h7z'/%3E%3Cpath d='M11.500 40.500l6.500 4 4-3.200 5 4.700 5-3.800 5 3.800 5-4.700 4 3.200 6.500-4c-2 8.800-10.200 13.500-20.500 13.500s-18.500-4.700-20.500-13.500z'/%3E%3C/svg%3E") center/contain no-repeat;transition:background .35s ease .1s}
+html.tema-halloween .vt-view.p-lid .vb.f::before{background:#fff1a8}
+html.tema-halloween .vb.f b{bottom:8px;font-size:9px}
+html.tema-halloween .ox-hint{color:rgba(214,196,255,.6)}

@@ -1146,7 +1146,11 @@ function previewOpenLabel(c) {
 function syncOpenControls() {
   document.querySelectorAll('.qty [data-qty]').forEach(b => b.setAttribute('aria-pressed', String(Number(b.dataset.qty) === openQty)));
   document.querySelectorAll('input[data-fast]').forEach(i => { i.checked = fastOpen; });
-  document.querySelectorAll('.style-pick [data-style]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.style === openStyle)));
+  const spooky = document.documentElement.classList.contains('tema-halloween');
+  document.querySelectorAll('.style-pick [data-style]').forEach(b => {
+    b.setAttribute('aria-pressed', String(b.dataset.style === openStyle));
+    if (b.dataset.style === 'seif') b.textContent = spooky ? '⚰️ Criptă' : '🗄️ Seif';
+  });
   document.querySelectorAll('[data-spin]').forEach(btn => {
     const c = currentCasesById[btn.dataset.spin];
     const t = btn.querySelector('.spin-text');
@@ -1175,6 +1179,8 @@ document.addEventListener('change', e => {
   syncOpenControls();
 });
 syncOpenControls();
+// tema de sezon se află abia după ce răspunde serverul (vezi tema.js)
+document.addEventListener('mrp:tema', syncOpenControls);
 
 // ---- Fereastra proprie de confirmare ----
 // askConfirm({title, text, ok, cancel, extra}) → 'ok' | 'extra' | null
@@ -1287,6 +1293,9 @@ const confettiFx = (() => {
   const canvas = document.getElementById('confetti-fx');
   const g = canvas.getContext('2d');
   const COUNT = { common: 0, uncommon: 50, rare: 110, legendary: 190 };
+  // (07.10.2026) silueta unui liliac — cu tema de Halloween pornită, o parte
+  // din confetti devin lilieci în culoarea rarității
+  const BAT = new Path2D('M0-3L-1.500-6-2.500-3.500C-8-8-16-8-22-6c2 2 3 5 2.500 8 3-2 5.500-2 7.500 1 1.500-2 4-2 6 .5 1-1 2-1.500 3.500-1L0 6l2.500-3.500c1.500-.5 2.500 0 3.500 1 2-2.500 4.500-2.500 6-.5 2-3 4.500-3 7.500-1-.5-3 .5-6 2.500-8-6-2-14-2-19.500 2.500L1.500-6z');
   let parts = [], raf = 0, W = 0, H = 0;
   const pale = hex => {
     const n = parseInt(hex.slice(1), 16);
@@ -1315,7 +1324,8 @@ const confettiFx = (() => {
       g.scale(1, Math.abs(Math.cos(age / 180 + p.ph)) * 0.8 + 0.2); // fâlfâit
       g.globalAlpha = p.y > H - 140 ? Math.max(0, (H + 30 - p.y) / 170) : 0.95;
       g.fillStyle = p.c;
-      g.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+      if (p.bat) { g.scale(p.w / 11, p.w / 11); g.fill(BAT); } // liliac (tema de Halloween)
+      else g.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
       g.restore();
     }
     raf = parts.length ? requestAnimationFrame(frame) : 0;
@@ -1329,10 +1339,13 @@ const confettiFx = (() => {
       if (!W || !H) return;
       const count = Math.round(base * Math.min(1, Math.max(0.5, W / 1100)));
       const main = OX_COLOR[rarity] || '#ffffff';
-      const colors = rarity === 'legendary' ? [main, '#ffd874', '#eb4b4b', '#ffffff'] : [main, main, pale(main), '#ffffff'];
+      const spooky = document.documentElement.classList.contains('tema-halloween');
+      const colors = spooky ? [main, '#ff7a14', pale(main), '#9b5cff']
+        : rarity === 'legendary' ? [main, '#ffd874', '#eb4b4b', '#ffffff'] : [main, main, pale(main), '#ffffff'];
       const now = performance.now();
       for (let i = 0; i < count; i++) {
         parts.push({
+          bat: spooky && i % 3 === 0,
           x: Math.random() * W, y: -20 - Math.random() * H * 0.25,
           vx: (Math.random() - 0.5) * 1.6, vy: 1.5 + Math.random() * 3,
           rot: Math.random() * 6.28, vr: (Math.random() - 0.5) * 0.24,

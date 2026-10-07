@@ -3644,6 +3644,68 @@ app.get("/api/announcements", asyncRoute(async (_req, res) => {
   res.json(rows);
 }));
 
+// ---- Tema de sezon a site-ului (07.10.2026) ----
+// Fondatorul / co-fondatorul pornește din Admin o temă (deocamdată doar
+// „halloween") pentru tot site-ul și alege textul benzii de pe prima pagină.
+// Starea se ține în tabela vip_settings (cheia „site_theme") — există deja,
+// deci nu e nevoie de nicio modificare în baza de date. Fiecare pagină
+// întreabă /api/tema la încărcare (vezi tema.js); răspunsul se ține 30 de
+// secunde în memorie, ca să nu lovim baza de date la fiecare vizită.
+const SITE_THEMES = ["halloween"];
+const SITE_THEME_DEFAULT = { theme: null, bannerText: "", bannerLink: "" };
+let siteThemeCache = { at: 0, value: null };
+// linkul benzii: doar o pagină de-a noastră („/vip-shop.html") sau o adresă https
+function cleanThemeLink(v) {
+  const link = String(v ?? "").trim().slice(0, 300);
+  if (/^\/(?![\/\\])[^\s<>"']*$/.test(link) || /^https:\/\/[^\s<>"']+$/i.test(link)) return link;
+  return "";
+}
+function normalizeSiteTheme(v) {
+  return {
+    theme: SITE_THEMES.includes(v?.theme) ? v.theme : null,
+    bannerText: String(v?.bannerText ?? "").replace(/\s+/g, " ").trim().slice(0, 180),
+    bannerLink: cleanThemeLink(v?.bannerLink),
+  };
+}
+async function loadSiteTheme() {
+  if (siteThemeCache.value && Date.now() - siteThemeCache.at < 30_000) return siteThemeCache.value;
+  let value = SITE_THEME_DEFAULT;
+  try {
+    const { rows } = await pool.query(`SELECT value FROM vip_settings WHERE key = 'site_theme'`);
+    value = normalizeSiteTheme(rows[0]?.value || SITE_THEME_DEFAULT);
+  } catch (err) {
+    console.error("Tema site-ului: nu am putut citi setarea —", err.message);
+    if (siteThemeCache.value) value = siteThemeCache.value; // rămâne ultima stare cunoscută
+  }
+  siteThemeCache = { at: Date.now(), value };
+  return value;
+}
+app.get("/api/tema", asyncRoute(async (_req, res) => {
+  const t = await loadSiteTheme();
+  res.set("Cache-Control", "no-cache");
+  res.json({ theme: t.theme, banner: t.bannerText ? { text: t.bannerText, link: t.bannerLink } : null });
+}));
+app.get("/api/admin/tema", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (_req, res) => {
+  siteThemeCache.at = 0; // în Admin arătăm mereu starea din baza de date
+  res.set("Cache-Control", "no-store");
+  res.json({ settings: await loadSiteTheme(), themes: SITE_THEMES });
+}));
+app.put("/api/admin/tema", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
+  const wanted = req.body?.theme;
+  if (wanted != null && wanted !== "" && !SITE_THEMES.includes(wanted)) return res.status(400).json({ error: "Temă necunoscută." });
+  const rawLink = String(req.body?.bannerLink ?? "").trim();
+  if (rawLink && !cleanThemeLink(rawLink)) return res.status(400).json({ error: "Linkul benzii trebuie să fie o pagină de pe site (ex. /vip-shop.html) sau o adresă care începe cu https://." });
+  const settings = normalizeSiteTheme({ theme: wanted || null, bannerText: req.body?.bannerText, bannerLink: rawLink });
+  await pool.query(
+    `INSERT INTO vip_settings(key, value, updated_at) VALUES ('site_theme', $1, NOW())
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+    [JSON.stringify(settings)]
+  );
+  siteThemeCache = { at: Date.now(), value: settings };
+  await logAction(req.user.sub, "site.theme", "vip_settings", "site_theme", settings, req.ip);
+  res.json({ ok: true, settings });
+}));
+
 // Conținut editabil al paginilor publice (Admin → Conținut pagini — vezi
 // scripts/seed-content.js pentru valorile inițiale). Public: doar
 // block_key/type/content dintr-o singură pagină, ca hartă { block_key:

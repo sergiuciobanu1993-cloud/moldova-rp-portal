@@ -5,6 +5,39 @@
 <aside class="side"><a class="brand" href="index.html"><img src="assets/logo.png" alt=""><b>MOLDOVA<span>RP</span></b></a><p>ADMINISTRAȚIE</p><a class="sel" href="admin.html">▦ Dashboard</a><a href="admin-utilizatori.html">👤 Utilizatori</a><a href="admin-jucatori.html">♙ Jucători</a><a href="admin-cauta.html">🔎 Caută jucător</a><a href="admin-financiar.html">◆ Facțiuni</a><a href="admin-sanctiuni.html">⚠ Sancțiuni</a><a>▤ Reclamații</a><a>⚖ CK</a><a href="admin-regulamente.html">📚 Regulamente</a><a href="admin-continut.html">📝 Conținut pagini</a><a href="admin-anunturi.html">◉ Anunțuri</a><a href="admin-actualizari.html">🆕 Actualizări</a><a href="admin-tichete.html">🎫 Tichete</a><a href="vip-shop.html">🎁 VIP Shop</a><a href="admin-vip-shop.html">🛠 Editor VIP Shop</a><a href="admin-loguri.html">🗂 Loguri</a><a href="admin-kill-logs.html">🔪 Kill Logs</a><a>⌁ Audit Logs</a><a href="admin-txadmin.html" id="nav-txadmin">🖥 txAdmin</a><a class="back" href="dashboard.html">← Contul meu</a><a class="back" href="index.html">← Site public</a></aside>
 <main><header><div><small>PANEL ADMINISTRATIV</small><h1>Dashboard</h1></div><a class="admin" href="dashboard.html" title="Înapoi la contul meu" style="text-decoration:none"><span id="admin-name">…</span> <i></i></a></header>
 <section class="metrics"><article><small>JUCĂTORI</small><strong id="metric-players">—</strong><em>TOTAL</em></article><article><small>ONLINE</small><strong id="metric-online">—</strong><em>LIVE</em></article><article><small>RECLAMAȚII</small><strong id="metric-complaints">—</strong><em>DESCHISE</em></article><article><small>SANCȚIUNI</small><strong id="metric-punishments">—</strong><em>LUNA CURENTĂ</em></article></section>
+<!-- (07.10.2026) Tema de sezon a site-ului: se pornește / oprește de aici, pentru toți vizitatorii. -->
+<section class="tablebox" id="theme-box" style="padding:20px 22px">
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:6px">
+    <h2 style="margin:0;font-size:17px">Tema site-ului</h2>
+    <span class="pill" id="theme-state" style="background:rgba(255,255,255,.07);color:var(--muted)">…</span>
+  </div>
+  <p class="muted" style="margin:0 0 16px;max-width:70ch">Cât e pornită, tot site-ul primește culorile și decorul de Halloween, iar cutiile din VIP Shop se deschid în varianta de sezon. Fiecare vizitator își poate opri efectele din butonul cu dovleac.</p>
+  <label class="theme-switch"><input type="checkbox" id="theme-on"><span class="sw" aria-hidden="true"></span><b>🎃 Tema de Halloween</b></label>
+  <div class="theme-fields">
+    <label>Textul benzii de pe prima pagină <small class="muted">(gol = fără bandă)</small>
+      <input id="theme-text" class="filter-select" maxlength="180" placeholder="ex. 🎃 Halloween pe Moldova RP — cutiile din VIP Shop se deschid acum în criptă!"></label>
+    <label>Linkul butonului „Vezi” <small class="muted">(opțional)</small>
+      <input id="theme-link" class="filter-select" maxlength="300" placeholder="/vip-shop.html"></label>
+  </div>
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:16px">
+    <button type="button" class="btn-primary" id="theme-save" disabled>Salvează</button>
+    <a href="index.html?tema=halloween" target="_blank" rel="noopener" style="font-size:12.5px;font-weight:800;color:var(--orange)">Previzualizează (o vezi doar tu) ↗</a>
+    <span id="theme-msg" class="muted" role="status"></span>
+  </div>
+</section>
+<style>
+.theme-switch{display:inline-flex;align-items:center;gap:10px;min-height:40px;cursor:pointer;user-select:none;font-size:14px}
+.theme-switch input{position:absolute;opacity:0;width:1px;height:1px}
+.theme-switch .sw{flex:none;position:relative;width:46px;height:26px;border-radius:999px;background:#24272b;border:1px solid var(--line);transition:.15s ease}
+.theme-switch .sw::after{content:'';position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#aeb3b8;transition:.15s ease}
+.theme-switch input:checked+.sw{background:rgba(255,138,31,.22);border-color:var(--orange)}
+.theme-switch input:checked+.sw::after{left:23px;background:var(--orange)}
+.theme-switch input:focus-visible+.sw{outline:2px solid var(--orange);outline-offset:2px}
+.theme-fields{display:grid;grid-template-columns:2fr 1fr;gap:12px;margin-top:14px}
+.theme-fields label{display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:800}
+.theme-fields input{width:100%;font-weight:400}
+@media (max-width:760px){.theme-fields{grid-template-columns:1fr}}
+</style>
 <section class="tablebox"><div class="title"><h2>Activitate administrativă</h2>
   <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
     <select id="audit-scope" class="filter-select"><option value="staff">Doar staff</option><option value="all">Toată lumea (și jucători)</option></select>
@@ -37,7 +70,7 @@ const ACTION_LABEL = {
   'faction_rank.create': 'A creat un rank', 'faction_rank.update': 'A editat un rank', 'faction_rank.delete': 'A șters un rank',
   'announcement.create': 'A publicat un anunț', 'announcement.update': 'A editat un anunț', 'announcement.delete': 'A șters un anunț',
   'regulation.create': 'A adăugat un regulament', 'regulation.update': 'A editat un regulament', 'regulation.delete': 'A șters un regulament',
-  'content.update': 'A editat conținutul unei pagini',
+  'content.update': 'A editat conținutul unei pagini', 'site.theme': 'A schimbat tema site-ului',
   'vip_shop.case.create': 'VIP Shop: cutie nouă', 'vip_shop.case.update': 'VIP Shop: a editat o cutie', 'vip_shop.case.delete': 'VIP Shop: a șters o cutie',
   'vip_shop.reward.create': 'VIP Shop: recompensă nouă', 'vip_shop.reward.update': 'VIP Shop: a editat o recompensă',
   'vip_shop.reward.delete': 'VIP Shop: a șters o recompensă', 'vip_shop.reward.reorder': 'VIP Shop: a schimbat ordinea recompenselor',
@@ -111,10 +144,62 @@ document.getElementById('audit-auth').addEventListener('change', (e) => { auditS
 document.getElementById('audit-prev').addEventListener('click', () => { if (auditState.page > 1) { auditState.page--; loadAudit(); } });
 document.getElementById('audit-next').addEventListener('click', () => { auditState.page++; loadAudit(); });
 
+// ---- Tema site-ului (07.10.2026) ----
+const themeUi = {
+  on: document.getElementById('theme-on'), text: document.getElementById('theme-text'), link: document.getElementById('theme-link'),
+  save: document.getElementById('theme-save'), msg: document.getElementById('theme-msg'), state: document.getElementById('theme-state'),
+};
+let themeSaved = null; // ce e salvat acum pe server
+function themeForm() { return { theme: themeUi.on.checked ? 'halloween' : null, bannerText: themeUi.text.value.trim(), bannerLink: themeUi.link.value.trim() }; }
+function themePaint() {
+  const live = themeSaved && themeSaved.theme === 'halloween';
+  themeUi.state.textContent = !themeSaved ? '…' : live ? 'HALLOWEEN — PORNITĂ' : 'OPRITĂ';
+  themeUi.state.style.background = live ? 'rgba(255,138,31,.18)' : 'rgba(255,255,255,.07)';
+  themeUi.state.style.color = live ? 'var(--orange)' : 'var(--muted)';
+  const f = themeForm();
+  themeUi.save.disabled = !themeSaved || (f.theme === themeSaved.theme && f.bannerText === themeSaved.bannerText && f.bannerLink === themeSaved.bannerLink);
+}
+async function loadTheme() {
+  try {
+    const r = await apiFetch('/api/admin/tema');
+    if (!r.ok) throw new Error();
+    themeSaved = (await r.json()).settings;
+    themeUi.on.checked = themeSaved.theme === 'halloween';
+    themeUi.text.value = themeSaved.bannerText || '';
+    themeUi.link.value = themeSaved.bannerLink || '';
+  } catch {
+    themeUi.msg.style.color = '#ff8a8a';
+    themeUi.msg.textContent = 'Nu am putut citi tema de pe server.';
+  }
+  themePaint();
+}
+[themeUi.on, themeUi.text, themeUi.link].forEach(x => x.addEventListener('input', () => { themeUi.msg.textContent = ''; themePaint(); }));
+themeUi.save.addEventListener('click', async () => {
+  themeUi.save.disabled = true;
+  themeUi.msg.style.color = '';
+  themeUi.msg.textContent = 'Se salvează…';
+  try {
+    const r = await apiFetch('/api/admin/tema', { method: 'PUT', body: JSON.stringify(themeForm()) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || 'Nu am putut salva tema.');
+    themeSaved = d.settings;
+    themeUi.text.value = themeSaved.bannerText || '';
+    themeUi.link.value = themeSaved.bannerLink || '';
+    themeUi.msg.style.color = 'var(--green)';
+    themeUi.msg.textContent = themeSaved.theme ? 'Salvat. Tema e pornită pentru toți vizitatorii (apare la următoarea pagină deschisă).' : 'Salvat. Tema e oprită — site-ul revine la înfățișarea obișnuită.';
+    loadAudit();
+  } catch (err) {
+    themeUi.msg.style.color = '#ff8a8a';
+    themeUi.msg.textContent = err.message;
+  }
+  themePaint();
+});
+
 (async () => {
   const me = await requireRole('co-fondator', 'owner');
   if (!me) return;
   document.getElementById('admin-name').textContent = me.username;
+  loadTheme();
   try {
     const statsRes = await apiFetch('/api/admin/stats');
     if (!statsRes.ok) throw new Error();

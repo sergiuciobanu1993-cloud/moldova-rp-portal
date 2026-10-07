@@ -211,6 +211,116 @@ button.win-chip:focus-visible{outline:2px solid var(--orange);outline-offset:2px
 .rl-frame .br{right:0;bottom:0;border-left:0;border-top:0;border-bottom-right-radius:7px}
 .ox-stage.is-open .rl-view{opacity:.3;filter:saturate(.55)}
 .ox-stage.is-open .rl-frame{opacity:0}
+.rl-view[hidden],.rl-frame[hidden]{display:none}
+
+/* ---- (07.10.2026) Deschiderea „Seif": un perete de casete, una se aprinde și
+   iese din perete, din ea se ridică o cutie învelită; învelișul se ridică și
+   cutia apare în culoarea rarității, apoi capacul se deschide și iese premiul.
+   Totul e desenat din CSS 3D (fără imagini). Fețele sunt elemente separate:
+   pe grupurile cu preserve-3d NU se pune opacity / filter / overflow, altfel
+   browserul le turtește într-un singur plan. ---- */
+.vt-view{--k:1;--dw:170px;--dh:112px;--dl:150px;--bw:200px;--bh:118px;--bd:132px;--bx:#9aa3ad;--s0:.62;
+  --y0:calc(var(--dh) / 2 - var(--bh) * var(--s0) / 2 - 3px);--tx:0px;--ty:0px;--tz:-150px;--ex:0px;--ey:0px;--ez:300px;
+  position:absolute;inset:0;z-index:2;perspective:1000px;perspective-origin:50% 50%;transition:opacity .45s ease,filter .45s ease}
+.vt-view[hidden]{display:none}
+.vt-scene,.vt-drawer,.vt-box,.vt-boxin,.vt-lid,.vt-sleeve{position:absolute;left:0;top:0;width:0;height:0;transform-style:preserve-3d}
+.vt-scene{left:50%;top:50%;transform:translate3d(var(--tx),var(--ty),var(--tz)) scale3d(var(--k),var(--k),var(--k)) rotateX(-12deg) rotateY(22deg);transition:transform .9s cubic-bezier(.4,0,.2,1)}
+.vt-view.p-pull{--tx:-34px;--ty:4px;--tz:70px}
+.vt-view.p-rise{--tx:0px;--ty:26px;--tz:0px}
+.vt-view i{position:absolute;display:block;font-style:normal}
+.vt-vig{position:absolute;inset:0;z-index:1;pointer-events:none;background:radial-gradient(ellipse 75% 70% at 50% 50%,transparent 45%,rgba(4,5,6,.82))}
+
+/* peretele de casete */
+.vt-wall{position:absolute;left:-631px;top:-304px;width:1262px;height:608px;display:grid;grid-template-columns:repeat(7,var(--dw));grid-auto-rows:var(--dh);gap:12px;transition:filter .8s ease}
+.vt-view.p-rise .vt-wall,.vt-view.p-rise .vt-drawer i{filter:brightness(.45)}
+.vt-door,.vt-df{border-radius:6px;border:1px solid #30343a;background:linear-gradient(165deg,#272a2f,#141618 72%);box-shadow:inset 0 1px 0 rgba(255,255,255,.08),inset 0 -10px 16px rgba(0,0,0,.4)}
+.vt-door{position:relative;transition:border-color .1s ease,box-shadow .1s ease}
+.vt-door::before,.vt-df::before{content:'';position:absolute;left:33%;right:33%;bottom:22%;height:7px;border-radius:4px;background:linear-gradient(#646b73,#2a2e33);box-shadow:0 2px 3px rgba(0,0,0,.65)}
+.vt-door::after,.vt-df::after{content:'';position:absolute;right:11px;top:11px;width:6px;height:6px;border-radius:50%;background:#3b4046}
+.vt-door span,.vt-df span{position:absolute;left:11px;top:9px;font:800 10px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:.12em;color:#6d737a}
+.vt-door.is-scan,.vt-df{border-color:var(--orange);box-shadow:inset 0 1px 0 rgba(255,255,255,.1),inset 0 0 26px rgba(255,138,31,.2),0 0 18px rgba(255,138,31,.4)}
+.vt-door.is-scan::after,.vt-df::after{background:var(--orange);box-shadow:0 0 8px var(--orange)}
+.vt-door.is-scan span,.vt-df span{color:#ffc38a}
+.vt-door.is-hole{background:#030404;border-color:#0b0c0d;box-shadow:inset 0 0 34px #000}
+.vt-door.is-hole::before,.vt-door.is-hole::after,.vt-door.is-hole span{display:none}
+
+/* caseta care iese din perete (fără capac — se vede cutia din ea) */
+.vt-drawer{transform:scaleZ(.02);visibility:hidden;transition:transform .75s cubic-bezier(.3,.9,.3,1)}
+.vt-view.p-pull .vt-drawer{transform:scaleZ(1);visibility:visible}
+.vt-drawer i{transition:filter .8s ease}
+.vt-df{left:calc(var(--dw) / -2);top:calc(var(--dh) / -2);width:var(--dw);height:var(--dh);transform:translateZ(var(--dl))}
+.vt-ds{left:calc(var(--dl) / -2);top:calc(var(--dh) * -.2);width:var(--dl);height:calc(var(--dh) * .7);background:linear-gradient(90deg,#0b0c0e,#202328)}
+.vt-ds.l{transform:translate3d(calc(var(--dw) / -2),0,calc(var(--dl) / 2)) rotateY(90deg)}
+.vt-ds.r{transform:translate3d(calc(var(--dw) / 2),0,calc(var(--dl) / 2)) rotateY(90deg)}
+.vt-db{left:calc(var(--dw) / -2);top:calc(var(--dl) / -2);width:var(--dw);height:var(--dl);background:linear-gradient(0deg,#15171a,#060707);transform:translate3d(0,calc(var(--dh) / 2),calc(var(--dl) / 2)) rotateX(90deg)}
+
+/* cutia */
+.vt-box{transform:translate3d(0,var(--y0),calc(var(--dl) / -2)) scale3d(var(--s0),var(--s0),var(--s0)) rotateX(0deg) rotateY(0deg);transition:transform .75s cubic-bezier(.3,.9,.3,1)}
+.vt-view.p-pull .vt-box{transform:translate3d(0,var(--y0),calc(var(--dl) / 2)) scale3d(var(--s0),var(--s0),var(--s0)) rotateX(0deg) rotateY(0deg)}
+.vt-view.p-rise .vt-box{animation:vtBoxOut 1.25s linear forwards}
+@keyframes vtBoxOut{
+  0%{transform:translate3d(0,var(--y0),calc(var(--dl) / 2)) scale3d(.62,.62,.62) rotateX(0deg) rotateY(0deg);animation-timing-function:cubic-bezier(.45,0,.75,.65)}
+  30%{transform:translate3d(0,-122px,calc(var(--dl) / 2)) scale3d(.64,.64,.64) rotateX(0deg) rotateY(0deg);animation-timing-function:linear}
+  55%{transform:translate3d(0,-130px,215px) scale3d(.8,.8,.8) rotateX(-3deg) rotateY(-4deg);animation-timing-function:cubic-bezier(.2,.6,.3,1)}
+  100%{transform:translate3d(var(--ex),var(--ey),var(--ez)) scale3d(1,1,1) rotateX(-8deg) rotateY(-10deg)}
+}
+.vt-box i{transition:opacity .25s ease .3s}
+.vt-view:not(.p-pull) .vt-box i{opacity:0;transition:none}
+/* cutia colorată stă ascunsă sub înveliș până chiar înainte de dezvăluire —
+   altfel i s-ar putea zări culoarea pe la margini, cât iese din casetă */
+.vt-view:not(.p-shake) .vb,.vt-view:not(.p-shake) .vl,.vt-view:not(.p-shake) .vt-in{opacity:0;transition:none}
+.vt-view .vb,.vt-view .vl,.vt-view .vt-in{transition:none}
+.vt-view.p-shake .vt-boxin{animation:vtShake .14s linear 2}
+.vt-view.p-color .vt-boxin{animation:none}
+@keyframes vtShake{0%,100%{transform:none}25%{transform:rotateZ(-2.2deg) translateX(-3px)}75%{transform:rotateZ(2.2deg) translateX(3px)}}
+.vb{background:linear-gradient(180deg,color-mix(in srgb,var(--bx) 84%,#fff),color-mix(in srgb,var(--bx) 80%,#000))}
+.vb.f,.vb.k{left:calc(var(--bw) / -2);top:calc(var(--bh) / -2);width:var(--bw);height:var(--bh)}
+.vb.f{transform:translateZ(calc(var(--bd) / 2));box-shadow:inset 0 0 0 1px rgba(255,255,255,.2),inset 0 -22px 30px rgba(0,0,0,.22)}
+.vb.k{transform:translateZ(calc(var(--bd) / -2))}
+.vb.l,.vb.r{left:calc(var(--bd) / -2);top:calc(var(--bh) / -2);width:var(--bd);height:var(--bh);background:linear-gradient(180deg,color-mix(in srgb,var(--bx) 68%,#000),color-mix(in srgb,var(--bx) 42%,#000))}
+.vb.l{transform:translateX(calc(var(--bw) / -2)) rotateY(90deg)}
+.vb.r{transform:translateX(calc(var(--bw) / 2)) rotateY(90deg)}
+.vb.f b{position:absolute;left:0;right:0;bottom:16px;text-align:center;font-size:11px;font-weight:900;letter-spacing:.3em;color:rgba(0,0,0,.55)}
+.vb.f::before{content:'';position:absolute;left:50%;top:20px;width:30px;height:20px;margin-left:-15px;border-radius:4px;background:rgba(0,0,0,.4);box-shadow:inset 0 1px 0 rgba(255,255,255,.3)}
+.vt-in{left:calc(var(--bw) / -2);top:calc(var(--bd) / -2);width:var(--bw);height:var(--bd);transform:translateY(calc(var(--bh) / -2 + 8px)) rotateX(90deg);background:radial-gradient(ellipse at center,#fff 12%,color-mix(in srgb,var(--bx) 55%,#fff) 70%)}
+.vt-view .vt-beam{left:calc(var(--bw) * -.6);top:-300px;width:calc(var(--bw) * 1.2);height:300px;transform:translateY(calc(var(--bh) / -2 + 8px));opacity:0;transition:opacity .32s ease .08s;
+  background:linear-gradient(0deg,rgba(255,255,255,.95),rgba(255,255,255,.5) 28%,color-mix(in srgb,var(--bx) 35%,transparent) 62%,transparent 94%);
+  -webkit-mask-image:linear-gradient(90deg,transparent,#000 32%,#000 68%,transparent);mask-image:linear-gradient(90deg,transparent,#000 32%,#000 68%,transparent)}
+.vt-view.p-lid .vt-beam{opacity:.9}
+/* capacul: se rotește în jurul muchiei din spate */
+.vt-lid{transform:translate3d(0,calc(var(--bh) / -2 - 1px),calc(var(--bd) / -2 - 3px)) rotateX(0deg);transition:transform .62s cubic-bezier(.3,1.35,.5,1)}
+.vt-view.p-lid .vt-lid{transform:translate3d(0,calc(var(--bh) / -2 - 1px),calc(var(--bd) / -2 - 3px)) rotateX(112deg)}
+.vl{background:linear-gradient(180deg,color-mix(in srgb,var(--bx) 72%,#fff),color-mix(in srgb,var(--bx) 92%,#000));box-shadow:inset 0 0 0 1px rgba(255,255,255,.22)}
+.vl.t{left:calc(var(--bw) / -2 - 3px);top:calc(var(--bd) / -2 - 3px);width:calc(var(--bw) + 6px);height:calc(var(--bd) + 6px);transform:translateZ(calc(var(--bd) / 2 + 3px)) rotateX(90deg)}
+.vl.f{left:calc(var(--bw) / -2 - 3px);top:0;width:calc(var(--bw) + 6px);height:22px;transform:translateZ(calc(var(--bd) + 6px))}
+.vl.l,.vl.r{left:calc(var(--bd) / -2 - 3px);top:0;width:calc(var(--bd) + 6px);height:22px;background:color-mix(in srgb,var(--bx) 62%,#000)}
+.vl.l{transform:translate3d(calc(var(--bw) / -2 - 3px),0,calc(var(--bd) / 2 + 3px)) rotateY(90deg)}
+.vl.r{transform:translate3d(calc(var(--bw) / 2 + 3px),0,calc(var(--bd) / 2 + 3px)) rotateY(90deg)}
+/* învelișul: ascunde culoarea până în ultima clipă, apoi se ridică */
+.vt-sleeve{transition:transform .6s cubic-bezier(.55,0,.85,.45)}
+.vt-view.p-color .vt-sleeve{transform:translateY(-250px)}
+.vt-view .vs{background:linear-gradient(165deg,#2d3136,#15171a);box-shadow:inset 0 0 0 1px rgba(255,255,255,.08);transition:opacity .22s ease .36s}
+.vt-view.p-color .vs{opacity:0}
+.vs.f,.vs.l,.vs.r{top:calc(var(--bh) / -2 - 7px);height:calc(var(--bh) + 9px)}
+.vs.f{left:calc(var(--bw) / -2 - 8px);width:calc(var(--bw) + 16px);transform:translateZ(calc(var(--bd) / 2 + 8px))}
+.vs.l,.vs.r{left:calc(var(--bd) / -2 - 8px);width:calc(var(--bd) + 16px);background:linear-gradient(165deg,#1d2024,#0e0f11)}
+.vs.l{transform:translateX(calc(var(--bw) / -2 - 8px)) rotateY(90deg)}
+.vs.r{transform:translateX(calc(var(--bw) / 2 + 8px)) rotateY(90deg)}
+.vs.t{left:calc(var(--bw) / -2 - 8px);top:calc(var(--bd) / -2 - 8px);width:calc(var(--bw) + 16px);height:calc(var(--bd) + 16px);transform:translateY(calc(var(--bh) / -2 - 7px)) rotateX(90deg);background:linear-gradient(180deg,#3a3f45,#25282c)}
+.vs.f::before,.vs.l::before,.vs.r::before{content:'';position:absolute;left:0;right:0;top:44%;height:14%;background:linear-gradient(#ff9c3d,#d96a06)}
+.vs.l::before,.vs.r::before{filter:brightness(.6)}
+.vs.f b{position:absolute;left:50%;top:51%;width:54px;height:54px;margin:-27px 0 0 -27px;border-radius:50%;display:grid;place-items:center;background:#121416;border:3px solid var(--orange);color:var(--orange);font-size:26px;font-weight:900;line-height:1;box-shadow:0 3px 10px rgba(0,0,0,.5)}
+.ox-stage.is-open .vt-view{opacity:.3;filter:saturate(.6)}
+.vt-view.no-anim,.vt-view.no-anim *{transition:none!important;animation-duration:.001s!important;animation-delay:0s!important}
+@media (max-width:600px){.vt-view{--k:.72}}
+
+/* alegerea animației (Seif / Ruletă) */
+.style-pick{display:flex;align-items:center;gap:6px}
+.style-pick button{min-height:36px;padding:0 12px;border-radius:8px;border:1px solid var(--line);background:transparent;color:var(--text);font:inherit;font-size:12px;font-weight:800;cursor:pointer;transition:.12s ease}
+.style-pick button:hover{border-color:var(--orange)}
+.style-pick button[aria-pressed="true"]{background:rgba(255,138,31,.16);border-color:var(--orange);color:#ffc38a}
+.style-pick button:focus-visible{outline:2px solid var(--orange);outline-offset:2px}
+@media (max-width:600px){.style-pick{flex-wrap:wrap}.style-pick .qty-label{flex-basis:100%;margin:0 0 2px}.style-pick button{min-height:40px}}
 
 /* ---- Mai multe cutii odată: șirul cu premiile de până acum ---- */
 .reveal-count{margin:0 0 6px;font-size:10px;font-weight:900;letter-spacing:.2em;text-transform:uppercase;color:var(--orange);font-variant-numeric:tabular-nums}
@@ -291,6 +401,10 @@ button.win-chip:focus-visible{outline:2px solid var(--orange);outline-offset:2px
     <div class="qty" role="group" aria-label="Câte cutii deschizi dintr-o apăsare">
       <span class="qty-label">Cutii odată</span>
       <button type="button" data-qty="1" aria-pressed="true">1</button><button type="button" data-qty="2" aria-pressed="false">2</button><button type="button" data-qty="3" aria-pressed="false">3</button><button type="button" data-qty="4" aria-pressed="false">4</button><button type="button" data-qty="5" aria-pressed="false">5</button>
+    </div>
+    <div class="style-pick" role="group" aria-label="Animația deschiderii">
+      <span class="qty-label">Animație</span>
+      <button type="button" data-style="seif" aria-pressed="true">🗄️ Seif</button><button type="button" data-style="ruleta" aria-pressed="false">🎰 Ruletă</button>
     </div>
     <label class="fast-toggle" title="Sare peste animație și arată direct premiul"><input type="checkbox" data-fast><span class="sw" aria-hidden="true"></span>⚡ Deschidere rapidă</label>
   </div>
@@ -376,13 +490,26 @@ button.win-chip:focus-visible{outline:2px solid var(--orange);outline-offset:2px
       <div class="ox-rays"></div>
       <div class="ox-glow"></div>
       <div class="rl-view" id="rl-view"><div class="rl-track" id="rl-track"></div></div>
-      <div class="rl-frame" aria-hidden="true"><i class="tl"></i><i class="tr"></i><i class="bl"></i><i class="br"></i></div>
+      <div class="rl-frame" id="rl-frame" aria-hidden="true"><i class="tl"></i><i class="tr"></i><i class="bl"></i><i class="br"></i></div>
+      <div class="vt-view" id="vt-view" aria-hidden="true" hidden>
+        <div class="vt-scene">
+          <div class="vt-wall" id="vt-wall"></div>
+          <div class="vt-drawer"><i class="vt-df"><span id="vt-df-no"></span></i><i class="vt-ds l"></i><i class="vt-ds r"></i><i class="vt-db"></i></div>
+          <div class="vt-box"><div class="vt-boxin">
+            <i class="vb k"></i><i class="vb l"></i><i class="vb r"></i><i class="vb f"><b>MOLDOVA RP</b></i>
+            <i class="vt-in"></i><i class="vt-beam"></i>
+            <div class="vt-lid"><i class="vl t"></i><i class="vl l"></i><i class="vl r"></i><i class="vl f"></i></div>
+            <div class="vt-sleeve"><i class="vs t"></i><i class="vs l"></i><i class="vs r"></i><i class="vs f"><b>?</b></i></div>
+          </div></div>
+        </div>
+        <div class="vt-vig"></div>
+      </div>
       <div class="ox-ring" id="ox-ring"></div>
       <div class="ox-card" id="ox-card"></div>
       <canvas class="ox-fx" id="ox-fx"></canvas>
       <div class="ox-flash" id="ox-flash"></div>
       <div class="ox-tier" id="ox-tier"></div>
-      <div class="ox-hint">Apasă ca să sari peste rotire</div>
+      <div class="ox-hint">Apasă ca să sari peste animație</div>
       <button type="button" class="ox-sound" id="ox-sound" aria-label="Sunet deschidere">🔊</button>
     </div>
     <div id="reveal-actions" style="display:none;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:18px"></div>
@@ -1005,6 +1132,10 @@ const OPEN_MAX = 5;
 let openQty = 1;
 let fastOpen = false;
 try { fastOpen = localStorage.getItem('mrp_fast_open') === '1'; } catch {}
+// (07.10.2026) Animația deschiderii: 'seif' (cutia iese din seif și își arată
+// culoarea) sau 'ruleta' (premiile se rotesc). Se ține minte pe dispozitiv.
+let openStyle = 'seif';
+try { if (localStorage.getItem('mrp_open_style') === 'ruleta') openStyle = 'ruleta'; } catch {}
 function spinLabel(c) {
   return openQty > 1 ? `Învârte ${openQty} cutii · 🪙 ${(Number(c.price) || 0) * openQty}` : 'Învârte cutia';
 }
@@ -1015,6 +1146,7 @@ function previewOpenLabel(c) {
 function syncOpenControls() {
   document.querySelectorAll('.qty [data-qty]').forEach(b => b.setAttribute('aria-pressed', String(Number(b.dataset.qty) === openQty)));
   document.querySelectorAll('input[data-fast]').forEach(i => { i.checked = fastOpen; });
+  document.querySelectorAll('.style-pick [data-style]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.style === openStyle)));
   document.querySelectorAll('[data-spin]').forEach(btn => {
     const c = currentCasesById[btn.dataset.spin];
     const t = btn.querySelector('.spin-text');
@@ -1027,6 +1159,13 @@ document.addEventListener('click', e => {
   const b = e.target.closest('.qty [data-qty]');
   if (!b) return;
   openQty = Math.min(OPEN_MAX, Math.max(1, Number(b.dataset.qty) || 1));
+  syncOpenControls();
+});
+document.addEventListener('click', e => {
+  const b = e.target.closest('.style-pick [data-style]');
+  if (!b) return;
+  openStyle = b.dataset.style === 'ruleta' ? 'ruleta' : 'seif';
+  try { localStorage.setItem('mrp_open_style', openStyle); } catch {}
   syncOpenControls();
 });
 document.addEventListener('change', e => {
@@ -1127,6 +1266,9 @@ const oxSfx = (() => {
     unlock() { const c = ac(); if (c && c.state === 'suspended') c.resume(); },
     click() { tone(1150, 0.035, 'square', 0.035, 0.7); },          // un premiu trece prin mijloc
     stop() { noise(0.18, 0.16); tone(180, 0.22, 'sine', 0.2, 0.6); }, // rotirea s-a oprit
+    slide() { noise(0.55, 0.13); tone(90, 0.5, 'sine', 0.12, 1.7); },  // caseta iese din perete
+    tier(r) { const k = OX_TIERS.indexOf(r); tone(330 + k * 70, 0.3, 'triangle', 0.12, 1.5); noise(0.25, 0.1); }, // se vede culoarea
+    lid() { tone(240, 0.16, 'square', 0.04, 1.9); },                   // capacul
     win(r) { const base = 523 + OX_TIERS.indexOf(r) * 60; [0, 4, 7, 12].forEach((s, k) => setTimeout(() => tone(base * Math.pow(2, s / 12), 0.35, 'triangle', 0.1), k * 70)); },
   };
 })();
@@ -1238,9 +1380,86 @@ function reelTileHtml(r) {
   return `<div class="rl-img">${visual}</div><div class="rl-name">${escapeHtml(niceLabel(r.type, r.label, r))}</div>`;
 }
 
-// Rotește premiile și se oprește pe cel câștigat; promisiunea se rezolvă când
-// premiul e pe ecran. Click pe scenă = sari peste rotire.
-// opts.instant = „deschidere rapidă": fără rotire, premiul apare direct.
+// ---- Deschiderea „Seif" (07.10.2026) ----
+// Ca și rotirea, doar PREZINTĂ o recompensă deja decisă de server. Pașii:
+// lumina sare pe câteva casete și se oprește pe una → caseta iese din perete →
+// cutia (învelită) se ridică din ea și vine în față → învelișul se ridică și
+// cutia apare în culoarea rarității (aici pornește și confetti) → capacul se
+// deschide → premiul. Timpii sunt în milisecunde de la pornire.
+const VT_COLS = 7, VT_ROWS = 5, VT_MID = Math.floor(VT_ROWS / 2) * VT_COLS + Math.floor(VT_COLS / 2);
+const VT_T = { hops: [0, 130, 270, 420, 590, 790, 1020], pull: 1300, rise: 2050, shake: 3270, color: 3550, tier: 3900, lid: 4400, end: 5150 };
+// unghiurile scenei (aceleași ca în CSS, la .vt-scene) și locul în care ajunge
+// cutia pe ecran: în mijloc, aproape de privitor
+const VT_RX = -12, VT_RY = 22, VT_END = { x: 0, y: 38, z: 270 }, VT_CAM_END = { x: 0, y: 26, z: 0 };
+function vaultSetup(rarity, color, hooks) {
+  const view = document.getElementById('vt-view');
+  const wall = document.getElementById('vt-wall');
+  if (!wall.children.length) {
+    wall.innerHTML = Array.from({ length: VT_COLS * VT_ROWS }, (_, i) => `<div class="vt-door"><span>${String(i + 1).padStart(2, '0')}</span></div>`).join('');
+    document.getElementById('vt-df-no').textContent = String(VT_MID + 1).padStart(2, '0');
+  }
+  const doors = [...wall.children];
+  view.className = 'vt-view no-anim';
+  doors.forEach(d => d.classList.remove('is-scan', 'is-hole'));
+  view.style.setProperty('--bx', color);
+  // Scena e rotită, deci „mijlocul ecranului" nu e pe axa ei: calculăm înapoi,
+  // în coordonatele scenei, punctul care se vede în mijloc (inversul rotirii).
+  const k = parseFloat(getComputedStyle(view).getPropertyValue('--k')) || 1;
+  const a = -VT_RX * Math.PI / 180, b = -VT_RY * Math.PI / 180;
+  const vx = (VT_END.x - VT_CAM_END.x) / k, vy = (VT_END.y - VT_CAM_END.y) / k, vz = (VT_END.z - VT_CAM_END.z) / k;
+  const y1 = vy * Math.cos(a) - vz * Math.sin(a), z1 = vy * Math.sin(a) + vz * Math.cos(a);
+  const x2 = vx * Math.cos(b) + z1 * Math.sin(b), z2 = -vx * Math.sin(b) + z1 * Math.cos(b);
+  view.style.setProperty('--ex', x2.toFixed(1) + 'px');
+  view.style.setProperty('--ey', y1.toFixed(1) + 'px');
+  view.style.setProperty('--ez', z2.toFixed(1) + 'px');
+  void view.offsetWidth; // pornește din nou tranzițiile de la zero
+  view.classList.remove('no-anim');
+
+  // casetele pe care sare lumina: cele din jurul mijlocului (se văd și pe
+  // telefon), niciodată aceeași de două ori la rând; ultima e cea din mijloc
+  const near = [];
+  for (let r = -1; r <= 1; r++) for (let c = -1; c <= 1; c++) if (r || c) near.push(VT_MID + r * VT_COLS + c);
+  const order = [];
+  for (let i = 0; i < VT_T.hops.length - 1; i++) {
+    let pick;
+    do { pick = near[Math.floor(Math.random() * near.length)]; } while (pick === order[i - 1]);
+    order.push(pick);
+  }
+  order.push(VT_MID);
+  let hop = 0, lit = null;
+  const done = {};
+  const once = (name, at, t, fn) => { if (!done[name] && t >= at) { done[name] = true; fn(); } };
+  return {
+    // întoarce true când capacul e deschis și poate apărea premiul
+    step(t) {
+      while (hop < order.length && t >= VT_T.hops[hop]) {
+        if (lit) lit.classList.remove('is-scan');
+        lit = doors[order[hop]];
+        lit.classList.add('is-scan');
+        oxSfx.click();
+        hop++;
+      }
+      once('pull', VT_T.pull, t, () => { doors[VT_MID].classList.remove('is-scan'); doors[VT_MID].classList.add('is-hole'); view.classList.add('p-pull'); oxSfx.slide(); });
+      once('rise', VT_T.rise, t, () => view.classList.add('p-rise'));
+      once('shake', VT_T.shake, t, () => view.classList.add('p-shake'));
+      once('color', VT_T.color, t, () => view.classList.add('p-color')); // învelișul începe să se ridice
+      once('tier', VT_T.tier, t, () => { oxSfx.tier(rarity); hooks.color(); }); // culoarea se vede → numele rarității + confetti
+      once('lid', VT_T.lid, t, () => { view.classList.add('p-lid'); oxSfx.lid(); });
+      return t >= VT_T.end;
+    },
+    // direct la sfârșit: cutia deschisă, în culoarea ei (sărit / rapid)
+    jump() {
+      view.classList.add('no-anim');
+      doors.forEach(d => d.classList.remove('is-scan'));
+      doors[VT_MID].classList.add('is-hole');
+      view.classList.add('p-pull', 'p-rise', 'p-shake', 'p-color', 'p-lid');
+    },
+  };
+}
+
+// Prezintă premiul câștigat cu animația aleasă (Seif sau Ruletă); promisiunea
+// se rezolvă când premiul e pe ecran. Click pe scenă = sari peste animație.
+// opts.instant = „deschidere rapidă": fără animație, premiul apare direct.
 const REEL_LEN = 44, REEL_WIN = 36, REEL_START = 2, REEL_MS = 5200;
 function reelOpenTo(winner, caseObj, opts = {}) {
   return new Promise(resolve => {
@@ -1256,6 +1475,14 @@ function reelOpenTo(winner, caseObj, opts = {}) {
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const rarity = OX_TIERS.includes(winner.rarity) ? winner.rarity : 'common';
     const color = OX_COLOR[rarity];
+    const vault = openStyle === 'seif';
+    let sceneLit = false; // fundalul + confetti pornesc o singură dată
+    const light = () => { if (!sceneLit) { sceneLit = true; sceneLight(rarity); } };
+    const showTier = () => {
+      stage.style.setProperty('--ox', color);
+      tierEl.textContent = OX_LABEL[rarity];
+      tierEl.classList.remove('pop'); void tierEl.offsetWidth; tierEl.classList.add('pop');
+    };
 
     document.getElementById('reveal-panel').classList.add('is-cinema');
     // altfel animațiile rămase de la deschiderea trecută repornesc la afișare
@@ -1265,13 +1492,19 @@ function reelOpenTo(winner, caseObj, opts = {}) {
     stage.style.setProperty('--ox', OX_COLOR.common);
     stage.style.setProperty('--glow', '0.12');
     tierEl.textContent = '';
+    view.hidden = vault;
+    document.getElementById('rl-frame').hidden = vault;
+    document.getElementById('vt-view').hidden = !vault;
 
-    // ---- șirul de premii ----
+    // ---- seiful: la apariția culorii se aprinde scena în culoarea rarității ----
+    const vt = vault ? vaultSetup(rarity, color, { color() { showTier(); stage.style.setProperty('--glow', '0.4'); light(); } }) : null;
+
+    // ---- șirul de premii (doar la ruletă) ----
     const pool = (caseObj && caseObj.pool) || [];
     track.classList.remove('settle');
     track.innerHTML = '';
     const tiles = [];
-    for (let i = 0; i < REEL_LEN; i++) {
+    for (let i = 0; i < (vault ? 0 : REEL_LEN); i++) {
       const r = i === REEL_WIN || !pool.length ? winner : reelWeightedFiller(pool);
       const el = document.createElement('div');
       el.className = 'rl-tile';
@@ -1280,7 +1513,7 @@ function reelOpenTo(winner, caseObj, opts = {}) {
       track.appendChild(el);
       tiles.push(el);
     }
-    const tileW = tiles[0].offsetWidth || 150;
+    const tileW = (tiles[0] && tiles[0].offsetWidth) || 150;
     const step = tileW + (parseFloat(getComputedStyle(track).columnGap) || 12);
     const center = view.clientWidth / 2;
     const xFor = (index, off = 0) => center - (index * step + tileW / 2) - off;
@@ -1290,6 +1523,7 @@ function reelOpenTo(winner, caseObj, opts = {}) {
     const stopX = xFor(REEL_WIN, (Math.random() - 0.5) * tileW * 0.56);
     let mid = -1, lastClick = 0;
     const setX = (x, quiet) => {
+      if (vault) return;
       track.style.transform = `translate3d(${x.toFixed(1)}px,0,0)`;
       const index = Math.max(0, Math.min(REEL_LEN - 1, Math.round((center - x - tileW / 2) / step)));
       if (index === mid) return;
@@ -1333,13 +1567,16 @@ function reelOpenTo(winner, caseObj, opts = {}) {
       phase = 'open';
       if (how === 'end') track.classList.add('settle'); // se așază pe mijloc
       setX(finalX, true);
+      if (vt && how !== 'end') vt.jump(); // sărit / rapid: cutia apare gata deschisă
+      const tierShown = sceneLit; // la seif, culoarea s-a văzut deja
       stage.style.setProperty('--ox', color);
       stage.style.setProperty('--glow', '0.55');
       tierEl.textContent = OX_LABEL[rarity];
       stage.classList.add('is-open');
-      sceneLight(rarity);
+      light();
       if (how === 'instant') { card.classList.add('show', 'instant'); return; }
-      tierEl.classList.remove('pop'); void tierEl.offsetWidth; tierEl.classList.add('pop');
+      if (!tierShown) { tierEl.classList.remove('pop'); void tierEl.offsetWidth; tierEl.classList.add('pop'); }
+      if (vt && how === 'end') { flash.classList.remove('go'); void flash.offsetWidth; flash.classList.add('go'); } // lumina din cutie
       ring.classList.remove('go'); void ring.offsetWidth; ring.classList.add('go');
       burst(rarity === 'legendary' ? 170 : rarity === 'common' ? 60 : 110);
       if (how === 'end') oxSfx.stop();
@@ -1362,7 +1599,9 @@ function reelOpenTo(winner, caseObj, opts = {}) {
     function frame(now) {
       if (run !== oxRun || stage.hidden) return; // închis sau o altă deschidere
       const t = now - t0;
-      if (phase === 'spin') {
+      if (phase === 'spin' && vt) {
+        if (vt.step(t)) { open('end'); doneAt = t + 900; }
+      } else if (phase === 'spin') {
         const k = Math.min(1, t / REEL_MS);
         setX(startX + (stopX - startX) * reelEase(k));
         if (k >= 1) { open('end'); doneAt = t + 900; }

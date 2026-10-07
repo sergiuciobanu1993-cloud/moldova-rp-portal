@@ -1266,16 +1266,22 @@ const oxSfx = (() => {
     f.type = 'lowpass'; f.frequency.value = 1800;
     src.buffer = buf; g.gain.value = vol; src.connect(f).connect(g).connect(c.destination); src.start();
   }
+  // (07.10.2026) Cu tema de Halloween pornită, sunetele cutiei devin „de
+  // criptă": lespede trasă, acord rece, scârțâit, orgă și râs (sunt făcute în
+  // tema.js). Butonul 🔊 de aici le oprește la fel ca pe cele obișnuite; dacă
+  // tema nu poate reda sunetul, rămâne cel obișnuit.
+  const spooky = (name, r) => !off && !!(window.MRP_TEMA && MRP_TEMA.theme === 'halloween' && MRP_TEMA.play
+    && MRP_TEMA.play(name, { k: Math.max(0, OX_TIERS.indexOf(r)) }) > 0);
   return {
     get off() { return off; },
     toggle() { off = !off; try { localStorage.setItem('mrp_ox_mute', off ? '1' : '0'); } catch {} return off; },
     unlock() { const c = ac(); if (c && c.state === 'suspended') c.resume(); },
     click() { tone(1150, 0.035, 'square', 0.035, 0.7); },          // un premiu trece prin mijloc
-    stop() { noise(0.18, 0.16); tone(180, 0.22, 'sine', 0.2, 0.6); }, // rotirea s-a oprit
-    slide() { noise(0.55, 0.13); tone(90, 0.5, 'sine', 0.12, 1.7); },  // caseta iese din perete
-    tier(r) { const k = OX_TIERS.indexOf(r); tone(330 + k * 70, 0.3, 'triangle', 0.12, 1.5); noise(0.25, 0.1); }, // se vede culoarea
-    lid() { tone(240, 0.16, 'square', 0.04, 1.9); },                   // capacul
-    win(r) { const base = 523 + OX_TIERS.indexOf(r) * 60; [0, 4, 7, 12].forEach((s, k) => setTimeout(() => tone(base * Math.pow(2, s / 12), 0.35, 'triangle', 0.1), k * 70)); },
+    stop() { if (spooky('thud')) return; noise(0.18, 0.16); tone(180, 0.22, 'sine', 0.2, 0.6); }, // rotirea s-a oprit
+    slide() { if (spooky('slab')) return; noise(0.55, 0.13); tone(90, 0.5, 'sine', 0.12, 1.7); },  // caseta iese din perete
+    tier(r) { if (spooky('reveal', r)) return; const k = OX_TIERS.indexOf(r); tone(330 + k * 70, 0.3, 'triangle', 0.12, 1.5); noise(0.25, 0.1); }, // se vede culoarea
+    lid() { if (spooky('creak')) return; tone(240, 0.16, 'square', 0.04, 1.9); },                   // capacul
+    win(r) { if (spooky('organ', r)) return; const base = 523 + OX_TIERS.indexOf(r) * 60; [0, 4, 7, 12].forEach((s, k) => setTimeout(() => tone(base * Math.pow(2, s / 12), 0.35, 'triangle', 0.1), k * 70)); },
   };
 })();
 (() => {

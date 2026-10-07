@@ -10,7 +10,7 @@
 // din normal în Halloween), apoi tema.js întreabă serverul dacă mai e pornită
 // și adaugă decorul. Se pornește / oprește din Admin → Dashboard.
 (() => {
-  const TEME = { halloween: '/tema-halloween.css?v=20261007b' };
+  const TEME = { halloween: '/tema-halloween.css?v=20261007c' };
   try {
     let tema = null;
     const q = /[?&]tema=([a-z-]*)/i.exec(location.search);
@@ -24,7 +24,7 @@
     }
   } catch { /* fără stocare (mod privat): tema.js o aplică după răspunsul serverului */ }
   const s = document.createElement('script');
-  s.src = '/tema.js?v=20261007b';
+  s.src = '/tema.js?v=20261007c';
   s.async = true;
   document.head.appendChild(s);
 })();

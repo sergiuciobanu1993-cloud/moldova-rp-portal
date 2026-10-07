@@ -12,13 +12,16 @@
 // Cine are „mișcare redusă" setată în telefon / calculator nu vede animațiile
 // și nu aude sunetele de pe pagini.
 // Sunetele sunt generate pe loc (fără fișiere audio). Browserul nu lasă niciun
-// sunet să pornească înainte ca vizitatorul să apese ceva pe pagină, iar dacă
-// vizitatorul a oprit muzica site-ului, tac și sunetele de pe pagini.
+// sunet să pornească înainte ca vizitatorul să apese ceva pe pagină (pe FIECARE
+// pagină deschisă). Sunetele de pe pagini țin doar de butonul cu dovleac — nu
+// de butonul de muzică al site-ului. La prima apăsare dintr-o vizită se aude
+// un sunet în câteva secunde, apoi cam unul pe minut; ritmul se păstrează când
+// treci de la o pagină la alta.
 // Previzualizare doar pentru tine: adaugă ?tema=halloween la orice adresă
 // (rămâne cât ții fila deschisă); ?tema=nu o oprește.
 (() => {
   if (window.MRP_TEMA) return;
-  const VER = '20261007b'; // aceeași ca în pwa.js — schimbă-le împreună când modifici tema
+  const VER = '20261007c'; // aceeași ca în pwa.js — schimbă-le împreună când modifici tema
   const root = document.documentElement;
   const ls = {
     get(k) { try { return localStorage.getItem(k); } catch { return null; } },
@@ -233,32 +236,45 @@
       },
     };
 
-    // contextul audio se creează abia la prima apăsare a vizitatorului
+    // Contextul audio se creează abia la prima apăsare a vizitatorului și se
+    // pornește din evenimentele pe care browserele le acceptă drept „apăsare":
+    // pe telefon contează ridicarea degetului (touchend / pointerup / click),
+    // nu atingerea — de aceea ascultăm mai multe.
     function unlock() {
       if (!ctx) {
         try {
           const C = window.AudioContext || window.webkitAudioContext;
           ctx = new C();
           master = ctx.createGain();
-          master.gain.value = 0.9;
+          master.gain.value = 1;
           master.connect(ctx.destination);
-        } catch { ctx = null; return; }
+        } catch { ctx = null; return null; }
       }
-      if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+      if (ctx.state === 'running') return Promise.resolve();
+      try { const p = ctx.resume(); return p && p.then ? p.catch(() => {}) : null; } catch { return null; }
     }
-    ['pointerdown', 'keydown'].forEach(ev => document.addEventListener(ev, unlock, { capture: true, passive: true }));
+    ['pointerdown', 'pointerup', 'mousedown', 'touchend', 'click', 'keydown'].forEach(ev => document.addEventListener(ev, unlock, { capture: true, passive: true }));
 
+    function play(name, vol = 1, k = 0, target = null) {
+      if (!defs[name]) return 0;
+      const c = target ? target.ctx : ctx;
+      if (!c) return 0;
+      if (!target && c.state !== 'running') { unlock(); return 0; } // încă blocat de browser
+      const out = c.createGain();
+      out.gain.value = vol;
+      out.connect(target ? target.out : master);
+      try { return defs[name](c, out, c.currentTime + 0.03, k); } catch { return 0; }
+    }
     return {
       names: Object.keys(defs),
+      get ready() { return !!ctx && ctx.state === 'running'; },
       // target = { ctx, out }: redare într-un alt context (folosit la teste)
-      play(name, vol = 1, k = 0, target = null) {
-        if (!defs[name]) return 0;
-        const c = target ? target.ctx : ctx;
-        if (!c || (!target && c.state !== 'running')) return 0;
-        const out = c.createGain();
-        out.gain.value = vol;
-        out.connect(target ? target.out : master);
-        try { return defs[name](c, out, c.currentTime + 0.03, k); } catch { return 0; }
+      play,
+      // dintr-o apăsare: pornește sunetul imediat ce browserul dă drumul la audio
+      soon(name, vol = 1) {
+        const p = unlock();
+        if (ctx && ctx.state === 'running') play(name, vol);
+        else if (p) p.then(() => { play(name, vol); });
       },
     };
   })();
@@ -287,17 +303,11 @@
   };
   let hw = null; // starea decorului de Halloween, cât e pornit
 
-  // sunetele de pe pagini: doar pe treapta „all", cu fila la vedere și numai
-  // dacă vizitatorul nu a oprit muzica site-ului (butonul din dreapta-jos)
+  // sunetele de pe pagini: doar pe treapta „all" a butonului cu dovleac și cu
+  // fila la vedere; întoarce true dacă sunetul chiar a pornit
   function hwSound(name, vol) {
-    if (!hw || hw.mode !== 'all' || hw.work || document.hidden) return;
-    let k = 0.85;
-    try {
-      const a = JSON.parse(ls.get('mrp_audio_state') || 'null');
-      if (a && (a.muted || a.volume === 0)) return;
-      if (a && typeof a.volume === 'number') k = Math.min(1, 0.35 + a.volume * 1.2);
-    } catch { /* fără preferință salvată */ }
-    snd.play(name, vol * k);
+    if (!hw || hw.mode !== 'all' || hw.work || document.hidden) return false;
+    return snd.play(name, vol) > 0;
   }
 
   function hwSpawnBats() {
@@ -316,7 +326,7 @@
       b.addEventListener('animationend', e => { if (e.target === b) b.remove(); });
       hw.decor.appendChild(b);
     }
-    if (Math.random() < 0.35) hwSound('bat', 0.6);
+    if (Math.random() < 0.5) hwSound('bat', 0.8);
   }
   function hwSpawnSpider() {
     if (!hw || !hw.fx || document.hidden) return;
@@ -337,7 +347,7 @@
     g.style.setProperty('--dx', rand(-16, 16).toFixed(1) + 'vw');
     g.addEventListener('animationend', e => { if (e.target === g) g.remove(); });
     hw.decor.appendChild(g);
-    if (Math.random() < 0.45) hwSound('ghost', 0.75);
+    if (Math.random() < 0.7) hwSound('ghost', 0.9);
   }
   // o pereche de ochi care clipesc lângă marginea ecranului
   function hwSpawnEyes() {
@@ -349,12 +359,28 @@
     e.addEventListener('animationend', ev => { if (ev.target === e) e.remove(); });
     hw.decor.appendChild(e);
   }
-  // din când în când, un sunet de noapte (niciodată același de două ori la rând)
+  // Din când în când, un sunet de noapte (lup, clopot, bufniță — niciodată
+  // același de două ori la rând). Momentul următorului sunet se ține minte cât
+  // e deschisă fila, ca navigarea între pagini să nu o ia mereu de la capăt.
+  // La prima apăsare din vizită, primul sunet vine în câteva secunde.
+  const SND_NEXT = 'mrp_tema_sunet_urm';
   function hwAmbient() {
-    if (!hw) return;
-    const pool = ['howl', 'bell', 'owl'].filter(n => n !== hw.lastAmbient);
-    hw.lastAmbient = pool[Math.floor(Math.random() * pool.length)];
-    hwSound(hw.lastAmbient, hw.lastAmbient === 'bell' ? 0.7 : 0.8);
+    if (!hw || hw.mode !== 'all' || document.hidden || !snd.ready) return;
+    const now = Date.now();
+    let next = Number(ss.get(SND_NEXT)) || 0;
+    if (!next) { next = now + rand(2500, 5000); ss.set(SND_NEXT, String(Math.round(next))); }
+    if (now < next) return;
+    const last = ss.get('mrp_tema_sunet_ult');
+    const pool = ['howl', 'bell', 'owl'].filter(n => n !== last);
+    const name = pool[Math.floor(Math.random() * pool.length)];
+    if (!hwSound(name, name === 'bell' ? 0.9 : 1)) return;
+    ss.set('mrp_tema_sunet_ult', name);
+    ss.set(SND_NEXT, String(Math.round(now + rand(45000, 90000))));
+    // prima dată pe acest dispozitiv: spunem de unde se opresc
+    if (!ls.get('mrp_tema_sunet_stiut')) {
+      ls.set('mrp_tema_sunet_stiut', '1');
+      hwTip('Site-ul are sunete de Halloween. Le poți opri din butonul cu dovleac.', 7000);
+    }
   }
   // la apăsare sar câțiva lilieci mici din locul acela
   function hwClick(e) {
@@ -393,16 +419,16 @@
     again(hwSpawnGhost, 24000, 42000, rand(5000, 9000));
     again(hwSpawnEyes, 14000, 26000, rand(6000, 11000));
     again(hwSpawnSpider, 18000, 32000, rand(9000, 15000));
-    again(hwAmbient, 55000, 110000, rand(20000, 38000));
+    again(hwAmbient, 3000, 3000, 2500); // doar verifică dacă a venit momentul
   }
-  function hwTip(text) {
+  function hwTip(text, ms = 4500) {
     document.querySelector('.hw-tip')?.remove();
     const t = el('div', 'hw-tip');
     t.setAttribute('role', 'status');
     t.textContent = text;
     document.body.appendChild(t);
     clearTimeout(hwTip.timer);
-    hwTip.timer = setTimeout(() => t.remove(), 4500);
+    hwTip.timer = setTimeout(() => t.remove(), ms);
   }
   function hwSetMode(mode, say) {
     if (!hw) return;
@@ -455,7 +481,7 @@
     const decor = el('div', 'hw-decor', '<div class="hw-web"></div>' + (work ? '' : '<div class="hw-web l"></div>'));
     decor.setAttribute('aria-hidden', 'true');
     document.body.appendChild(decor);
-    hw = { decor, extra: [], btn: null, top: null, timers: [], fx: false, mode: 'off', work, lastClick: 0, lastAmbient: null };
+    hw = { decor, extra: [], btn: null, top: null, timers: [], fx: false, mode: 'off', work, lastClick: 0 };
     if (work) { root.classList.add('hw-nofx'); return; }
     // în spatele conținutului: ceața, luna și cimitirul de la marginea de jos
     const fog = el('div', 'hw-fog');
@@ -470,6 +496,8 @@
         const next = MODES[(MODES.indexOf(hw.mode) + 1) % MODES.length];
         ls.set('mrp_tema_fx', MODE_SAVE[next]);
         hwSetMode(next, true);
+        // pe treapta cu sunete se aude pe loc un clopot — așa știi că merg
+        if (hw.mode === 'all') { snd.soon('bell', 0.9); ss.set(SND_NEXT, String(Date.now() + 40000)); }
       });
       document.body.appendChild(hw.btn);
     }

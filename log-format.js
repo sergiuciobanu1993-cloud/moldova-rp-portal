@@ -370,6 +370,7 @@
         const inflow = (Number(d.cashDelta) || 0) > 0 || (Number(d.bankDelta) || 0) > 0;
         const internal = Number(d.cashDelta) !== 0 && Number(d.cashDelta) === -Number(d.bankDelta);
         if (!internal) sizeFlag(m, 'Sumă');
+        if (inflow && /^salariu/i.test(String(d.possibleSource || '')) && m >= 100000) add(m >= MONEY_HUGE ? 'crit' : 'warn', '„Salariu” prea mare — de verificat');
         if (inflow && !internal && !d.confirmedSource && !d.possibleSource && !log.explainedBy && m >= 50000) add(m >= MONEY_BIG ? 'crit' : 'warn', 'Bani primiți fără sursă cunoscută');
         break;
       }

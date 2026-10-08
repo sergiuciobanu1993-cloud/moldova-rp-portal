@@ -2446,7 +2446,8 @@ async function buildMoneyTrail(resolved, { after, before }) {
       let cat = "unknown", text = amount > 0 ? "sursă necunoscută" : "destinație necunoscută", confidence = "necunoscut", counterpart = null;
       if (peer) { cat = amount > 0 ? "transfer_in" : "transfer_out"; text = amount > 0 ? `i-a primit de la {cp} (${/bancă/.test(src) ? "prin bancă" : "cash"})` : `i-a dat lui {cp} (${/bancă/.test(src) ? "prin bancă" : "cash"})`; counterpart = { name: peer }; confidence = d.confirmedSource ? "sigur" : "probabil"; }
       else if (d.confirmedSource) { cat = "bank_op"; text = d.confirmedSource; confidence = "sigur"; }
-      else if (/^salariu/.test(src) && amount > 0) { cat = "salary"; text = src; confidence = "probabil"; }
+      else if (/^salariu/.test(src) && amount > 0 && amount < 100000) { cat = "salary"; text = src; confidence = "probabil"; }
+      else if (/^salariu/.test(src) && amount > 0) { text = `jocul a ghicit „${src}", dar suma e prea mare pentru un salariu`; }
       else if (src) { cat = "other_possible"; text = `posibil legat de: ${src}`; confidence = "probabil"; }
       if (cat === "unknown") {
         // un mesaj din canalele Discord (bancă, facturi…) cu exact suma asta, în același minut
@@ -2469,6 +2470,31 @@ async function buildMoneyTrail(resolved, { after, before }) {
     entries.push({ at: e.at, kind: "event", character: e.log && !e.incoming ? charOf(e.log.identifier) : null, parts: [evOut(e)], flags: [] });
     addTotal(null, e.cat, e.account, e.amount);
   });
+
+  // --- Salariu: aceeași sumă, la intervale regulate = salariul jobului ----------------
+  // Jocul doar ghicește „salariu posibil". Dacă aceeași sumă intră de mai multe ori
+  // în bancă la intervale aproape egale, e aproape sigur salariul (plătit periodic).
+  const salaryGroups = new Map();
+  for (const e of entries) for (const p of e.parts || []) {
+    if (p.cat !== "salary") continue;
+    const k = `${e.character?.identifier || ""}|${p.amount}`;
+    if (!salaryGroups.has(k)) salaryGroups.set(k, []);
+    salaryGroups.get(k).push({ e, p });
+  }
+  for (const list of salaryGroups.values()) {
+    if (list.length < 2) continue;
+    const ts = list.map(x => ms(x.e.at)).sort((a, b) => a - b);
+    const gaps = ts.slice(1).map((t, i) => t - ts[i]).sort((a, b) => a - b);
+    const med = gaps[Math.floor(gaps.length / 2)];
+    const regular = gaps.filter(g => Math.abs(g - med) <= Math.max(60000, med * 0.15)).length;
+    const min = Math.round(med / 60000);
+    if (min < 3 || min > 240 || regular < Math.ceil(gaps.length / 2)) continue;
+    const job = (/job: ([^)]+)/.exec(list[0].p.text) || [])[1];
+    for (const { p } of list) {
+      p.text = `salariu${job ? ` (job: ${job})` : ""} — aceeași sumă primită de ${list.length} ori, cam la fiecare ${min} min`;
+      p.confidence = "aproape sigur";
+    }
+  }
 
   // --- Cu cine a făcut schimb ----------------------------------------------------
   const partners = new Map();

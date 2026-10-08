@@ -260,7 +260,7 @@ document.getElementById('refresh-btn').addEventListener('click', () => loadLogs(
 
 // ---- Traseul banilor -------------------------------------------------------------
 const ACC = { cash: 'cash', bank: 'bancă', black: 'murdari' };
-const CONF = { sigur: 'lf-sure', probabil: 'lf-maybe', necunoscut: 'lf-unknown' };
+const CONF = { sigur: 'lf-sure', 'aproape sigur': 'lf-sure', probabil: 'lf-maybe', necunoscut: 'lf-unknown' };
 function amt(n, account) {
   const cls = n > 0 ? 'mt-in' : n < 0 ? 'mt-out' : '';
   return `<span class="mt-amt ${cls}">${n > 0 ? '+' : n < 0 ? '−' : ''}${fmtSum(n)}</span><span class="mt-acc">${ACC[account] || account || ''}</span>`;

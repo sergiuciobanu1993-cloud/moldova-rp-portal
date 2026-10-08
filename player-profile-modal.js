@@ -43,9 +43,11 @@ window.openPlayerProfile = (function () {
   // din moldovarp-api) — arătăm doar un rezumat scurt (profilul nu e locul
   // pentru tot detaliul), dar acoperim categoriile frecvente, altfel rămâne
   // gol ("—") fără niciun motiv vizibil pentru staff.
-  function activityLine(log) {
+  // multi = în listă sunt rânduri de la mai multe personaje ale jucătorului →
+  // arătăm și numele personajului, ca să se știe de pe care a fost
+  function activityLine(log, multi) {
     const cat = escapeHtml(log.category || '?');
-    const who = escapeHtml(log.player || '');
+    const who = escapeHtml(log.player || '') + (multi && log.rpName ? ` <span class="pp-char-tag">${escapeHtml(log.rpName)}</span>` : '');
     const d = log.details || {};
     let extra = '';
     if (log.category === 'death') {
@@ -265,13 +267,41 @@ window.openPlayerProfile = (function () {
       p.tickets.map(t => `<tr><td>${escapeHtml(t.subject)}</td><td><span class="pill ${t.status === 'open' ? 'warn' : 'off'}">${escapeHtml(t.status)}</span></td><td>${fmtDate(t.created_at)}</td></tr>`).join('')
     }</tbody></table>` : `<p class="muted" style="margin:0">Niciun tichet.</p>`;
 
-    const activity = p.recentActivity.length ? `<div class="thread">${p.recentActivity.map(activityLine).join('')}</div>` : `<p class="muted" style="margin:0">Nicio activitate recentă.</p>`;
+    const multiChar = new Set(p.recentActivity.map(l => l.identifier).filter(Boolean)).size > 1;
+    const activity = p.recentActivity.length ? `<div class="thread">${p.recentActivity.map(l => activityLine(l, multiChar)).join('')}</div>` : `<p class="muted" style="margin:0">Nicio activitate recentă.</p>`;
 
     const killsVictim = p.killsAsVictim.length ? `<div class="thread">${p.killsAsVictim.map(k => `<div class="msg"><span>${killCauseLabel(k)}</span><small>${fmtDate(k.at)}</small></div>`).join('')}</div>` : `<p class="muted" style="margin:0">Nicio moarte recentă.</p>`;
     const killsKiller = p.killsAsKiller.length ? `<div class="thread">${p.killsAsKiller.map(k => `<div class="msg"><span>a ucis pe <strong>${escapeHtml(k.victim)}</strong>${k.cause ? ` <span class="muted">(${escapeHtml(k.cause)})</span>` : ''}</span><small>${fmtDate(k.at)}</small></div>`).join('')}</div>` : `<p class="muted" style="margin:0">Niciun kill recent (din ultimele ~300 de morți de pe server).</p>`;
 
+    // (08.10.2026) Pe server un jucător poate avea 2 personaje (aceeași licență,
+    // char0:/char2:…). Le arătăm pe toate, cu orele și banii fiecăruia, plus
+    // totalul — ca staff-ul să vadă jucătorul întreg, nu doar un personaj.
+    const chars = p.characters || [];
+    const money = v => v == null ? '—' : '$' + Number(v).toLocaleString('ro-RO');
+    const hm = m => m == null ? '—' : `${Math.floor(m / 60)}h ${m % 60}m`;
+    const sum = k => chars.some(c => c[k] != null) ? chars.reduce((t, c) => t + (Number(c[k]) || 0), 0) : null;
+    const charactersHtml = chars.length > 1 ? `
+      <div class="pp-chars-wrap">
+        <b style="font-size:11px;color:var(--muted);letter-spacing:.08em">PERSONAJELE JUCĂTORULUI (${chars.length}) — aceeași licență</b>
+        <div class="pp-chars">${chars.map(c => {
+          const me = c.identifier === p.charIdentifier;
+          const name = c.rpName || c.identifier;
+          return `<div class="pp-char${me ? ' is-me' : ''}">
+            <div class="pp-char-top"><strong>${escapeHtml(name)}</strong>${c.staticId ? ` <span class="muted">#${escapeHtml(c.staticId)}</span>` : ''}
+              <span class="pill ${c.online ? 'on' : 'off'}">${c.online ? 'ONLINE' : 'OFFLINE'}</span>${me ? ' <span class="pill info">ACESTA</span>' : ''}</div>
+            <div>Ore jucate: <strong>${hm(c.playtimeMinutes)}</strong>${c.jobLabel ? ` · ${escapeHtml([c.jobLabel, c.gradeLabel].filter(Boolean).join(' · '))}` : ''}</div>
+            <div>Cash <strong>${money(c.cash)}</strong> · Bancă <strong>${money(c.bank)}</strong> · Murdari <strong>${money(c.blackMoney)}</strong></div>
+            ${!c.online && c.lastSeen ? `<div class="muted">Ultima dată online: ${fmtDate(c.lastSeen)}</div>` : ''}
+            <div class="muted" style="font-size:11px"><code>${escapeHtml(c.identifier)}</code></div>
+            ${me ? '' : `<button type="button" class="btn-ghost pp-char-open" data-name="${escapeHtml(name)}" data-id="${escapeHtml(c.identifier)}">Deschide profilul →</button>`}
+          </div>`;
+        }).join('')}</div>
+        <p class="muted" style="margin:8px 0 0;font-size:12px">Total pe toate personajele: <strong>${hm(sum('playtimeMinutes'))}</strong> jucate · cash + bancă <strong>${money((sum('cash') ?? 0) + (sum('bank') ?? 0))}</strong> · bani murdari <strong>${money(sum('blackMoney'))}</strong></p>
+      </div>` : '';
+
     body.innerHTML = `
       ${live}
+      ${charactersHtml}
       ${account}
       <h2 style="font-size:14px;margin:22px 0 10px">⚠ Sancțiuni</h2>${punishments}
       ${moderationHtml(p.moderation)}
@@ -282,6 +312,9 @@ window.openPlayerProfile = (function () {
       ${fold('🔪 Kill-uri — ca victimă', `${p.killsAsVictim.length}`, killsVictim, p.killsAsVictim.length)}
       ${fold('🔪 Kill-uri — ca ucigaș', `${p.killsAsKiller.length}`, killsKiller, p.killsAsKiller.length)}
     `;
+    body.querySelectorAll('.pp-char-open').forEach(b => b.addEventListener('click', () => {
+      window.openPlayerProfile(b.dataset.name, { identifier: b.dataset.id });
+    }));
   }
 
   function ensureModal() {
@@ -291,6 +324,13 @@ window.openPlayerProfile = (function () {
       st.id = 'pp-fold-style';
       st.textContent = `
         details.pp-fold{margin:18px 0 0}
+        .pp-chars-wrap{margin:0 0 18px}
+        .pp-chars{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;margin-top:8px}
+        .pp-char{display:flex;flex-direction:column;gap:4px;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.02);font-size:13px}
+        .pp-char.is-me{border-color:rgba(120,170,255,.45);box-shadow:inset 3px 0 0 #7db2ff}
+        .pp-char-top{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:2px}
+        .pp-char .pp-char-open{align-self:flex-start;margin-top:6px;padding:7px 12px;font-size:12px}
+        .pp-char-tag{display:inline-block;margin-left:4px;padding:1px 7px;border-radius:999px;background:rgba(120,170,255,.14);color:#9cc3ff;font-size:10px;font-weight:800;vertical-align:1px}
         details.pp-fold>summary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.03);font-size:13px;user-select:none}
         details.pp-fold>summary::-webkit-details-marker{display:none}
         details.pp-fold>summary:hover{border-color:rgba(255,138,31,.45)}

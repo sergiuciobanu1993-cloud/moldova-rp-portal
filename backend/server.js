@@ -3552,11 +3552,29 @@ app.get("/api/auth/discord", (req, res) => {
   res.redirect(`https://discord.com/api/oauth2/authorize?${params.toString()}`);
 });
 
+// (08.10.2026) Același cod Discord venea de DOUĂ ori, la ~0,2 s (văzut în
+// jurnal la Edge și Opera). Discord acceptă un cod o singură dată, așa că a
+// doua cerere pica („Discord token exchange failed: 400") și jucătorul vedea
+// eroare, deși prima cerere îl logase — unii au reîncercat de 5 ori la rând.
+// Acum ținem minte 30 de secunde rezultatul fiecărui cod și îl dăm la fel și
+// cererii duble — doar dacă vine de la aceeași adresă IP.
+const discordCodeResults = new Map(); // cod → { ip, result: Promise<adresa de redirecționare> }
 app.get("/api/auth/discord/callback", asyncRoute(async (req, res) => {
   if (!discordConfigured()) return res.status(503).send("Conectarea cu Discord nu este configurată.");
   const { code, error: discordError } = req.query;
   if (discordError || !code) return res.redirect("/auth-callback.html?error=discord_denied");
+  const key = String(code).slice(0, 200);
+  let entry = discordCodeResults.get(key);
+  if (!entry || entry.ip !== req.ip) {
+    entry = { ip: req.ip, result: discordLoginRedirect(req, key) };
+    discordCodeResults.set(key, entry);
+    const t = setTimeout(() => { if (discordCodeResults.get(key) === entry) discordCodeResults.delete(key); }, 30_000);
+    if (t.unref) t.unref();
+  }
+  res.redirect(await entry.result);
+}));
 
+async function discordLoginRedirect(req, code) {
   try {
     const tokenRes = await fetch("https://discord.com/api/oauth2/token", {
       method: "POST",
@@ -3637,12 +3655,12 @@ app.get("/api/auth/discord/callback", asyncRoute(async (req, res) => {
     const token = signUser({ id: user.id, username: user.username, role_name: 'player' });
     await logAction(user.id, "auth.discord_login", "user", user.id, null, req.ip);
 
-    res.redirect(`/auth-callback.html#token=${encodeURIComponent(token)}`);
+    return `/auth-callback.html#token=${encodeURIComponent(token)}`;
   } catch (e) {
     console.error("Discord OAuth error:", e);
-    res.redirect("/auth-callback.html?error=discord_failed");
+    return "/auth-callback.html?error=discord_failed";
   }
-}));
+}
 
 app.get("/api/me", auth, asyncRoute(async (req, res) => {
   const { rows } = await pool.query(
@@ -3924,6 +3942,14 @@ function noteGameFields(route, list) {
   if (!keys || gameFieldsSeen.has(route + "|" + keys)) return;
   gameFieldsSeen.add(route + "|" + keys);
   console.log(`Joc ${route}: câmpuri primite — ${keys}`);
+  // (08.10.2026) Jocul trimite DOUĂ câmpuri de ore: playtimeMinutes și
+  // characterPlaytimeMinutes. Ca să știm care e pe personaj și care pe tot
+  // jucătorul, notăm o dată valorile (doar numerele, fără nume) unde diferă.
+  const both = list.find(p => p && p.playtimeMinutes != null && p.characterPlaytimeMinutes != null && Number(p.playtimeMinutes) !== Number(p.characterPlaytimeMinutes));
+  if (both && !gameFieldsSeen.has("ore-diferite")) {
+    gameFieldsSeen.add("ore-diferite");
+    console.log(`Joc ${route}: exemplu ore — playtimeMinutes=${Number(both.playtimeMinutes)}, characterPlaytimeMinutes=${Number(both.characterPlaytimeMinutes)}, slot ${String(both.identifier || "").split(":")[0] || "?"}`);
+  }
 }
 
 async function fetchGamePlayerLookup({ identifier, name } = {}) {

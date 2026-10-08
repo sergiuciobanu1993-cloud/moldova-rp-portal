@@ -28,6 +28,26 @@ app.use(express.json({ limit: "8mb" }));
 // costă un download complet la fiecare navigare, doar garantează că HTML-ul
 // e mereu proaspăt. CSS/JS/imaginile rămân cu comportamentul implicit al
 // express.static (cache normal, revalidare pe ETag).
+
+// (08.10.2026) Adresa tehnică de la Railway (…up.railway.app) nu trebuie să
+// apară la jucători: orice PAGINĂ deschisă pe ea (link vechi, semn de carte,
+// întoarcerea de la Discord) e mutată pe moldovarp.md, cu aceeași cale. Atingem
+// doar navigările din browser (GET cu „Sec-Fetch-Mode: navigate" sau, la
+// browserele vechi, cereri de pagină HTML) — nu și cererile tehnice: API-ul
+// cerut din pagini, verificarea de sănătate a Railway (/api/health) etc.
+const CANONICAL_HOST = "moldovarp.md";
+app.use((req, res, next) => {
+  const host = String(req.headers.host || "").toLowerCase().split(":")[0];
+  if (!host.endsWith(".up.railway.app") || (req.method !== "GET" && req.method !== "HEAD")) return next();
+  const mode = req.headers["sec-fetch-mode"];
+  const isPage = mode ? mode === "navigate" : /text\/html/i.test(String(req.headers.accept || ""));
+  if (!isPage) return next();
+  // din API mutăm doar pașii login-ului cu Discord (care sunt navigări)
+  if (req.path.startsWith("/api/") && !req.path.startsWith("/api/auth/discord")) return next();
+  // paginile: definitiv (301); pașii de login: temporar (302), ca browserul să nu-i țină minte
+  res.redirect(req.path.startsWith("/api/") ? 302 : 301, `https://${CANONICAL_HOST}${req.originalUrl}`);
+});
+
 // (30.09.2026) Folderele interne ale proiectului (codul serverului, schema
 // bazei de date, scripturi, docker) și fișierele de configurare nu sunt
 // pagini — nu le mai servim public, deși stau în același folder cu site-ul.
@@ -5380,7 +5400,9 @@ const DISCORD_ANNOUNCE_WEBHOOK = process.env.DISCORD_ANNOUNCE_WEBHOOK || "";
 // server/joc) — de obicei alt canal Discord decât anunțurile generale, ca să
 // nu se amestece. Dacă nu e setat, cade automat pe DISCORD_ANNOUNCE_WEBHOOK.
 const DISCORD_UPDATE_WEBHOOK = process.env.DISCORD_UPDATE_WEBHOOK || "";
-const SITE_URL = process.env.SITE_URL || "https://web-production-4fd88.up.railway.app";
+// (08.10.2026) Adresa publică a site-ului, folosită în linkuri (Discord, email). Implicit
+// moldovarp.md — adresa tehnică de la Railway nu trebuie să ajungă la jucători.
+const SITE_URL = process.env.SITE_URL || "https://moldovarp.md";
 
 // Ține sincronizat cu filtrul de pe pagina publică (app.js) și cu
 // admin-actualizari.html: orice anunț cu această categorie e tratat ca

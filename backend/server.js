@@ -31,7 +31,8 @@ app.use(express.json({ limit: "8mb" }));
 // (30.09.2026) Folderele interne ale proiectului (codul serverului, schema
 // bazei de date, scripturi, docker) și fișierele de configurare nu sunt
 // pagini — nu le mai servim public, deși stau în același folder cu site-ul.
-const PRIVATE_PATHS = /^\/(backend|database|scripts|docker|node_modules)(\/|$)|^\/(package(-lock)?\.json|docker-compose\.ya?ml|API\.md|README\.md)$/i;
+// (08.10.2026) + server.js în rădăcină: o copie a codului serverului urcată din greșeală acolo nu trebuie să poată fi descărcată.
+const PRIVATE_PATHS = /^\/(backend|database|scripts|docker|node_modules)(\/|$)|^\/(package(-lock)?\.json|docker-compose\.ya?ml|API\.md|README\.md|server\.js)$/i;
 app.use((req, res, next) => {
   let p = req.path;
   try { p = decodeURIComponent(p); } catch { /* cale invalidă */ }

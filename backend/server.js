@@ -2016,7 +2016,10 @@ async function buildPlayerProfile(name, opts = {}) {
   const ownLogs = (activityResult.logs || []).filter(l => !knownIdentifier || l.identifier === knownIdentifier);
   const rpFromLogs = ownLogs.find(l => l.rpName)?.rpName || null;
   const discordPrimary = discordCharacters[0] || null;
-  const gameHit = (!live && (!(account && account.last_synced_at) || discordPrimary))
+  // (08.10.2026) Echipa serverului trimite acum, și pentru jucătorii offline,
+  // banii, jobul, mașinile și orele (salvate de joc la ieșire) — le cerem
+  // pentru orice profil offline, nu doar pentru cele fără poză pe site.
+  const gameHit = !live
     ? await fetchGamePlayerLookup({ identifier: knownIdentifier, name: opts.rpName || discordPrimary?.rpName || rpFromLogs || cleanName })
     : null;
   // (06.10.2026) Profil deschis după un nume care nu seamănă cu cel de pe site
@@ -2164,9 +2167,9 @@ async function buildPlayerProfile(name, opts = {}) {
     staticId: account.last_static_id || null,
     gradeLabel: account.last_grade_label || null,
   } : null;
-  if (!live && !lastKnown && gameHit) {
+  if (!live && gameHit) {
     const num = v => (v == null || v === "" || !Number.isFinite(Number(v))) ? null : Number(v);
-    lastKnown = {
+    const fromGame = {
       fromGame: true,
       cash: num(gameHit.cash), bank: num(gameHit.bank), blackMoney: num(gameHit.blackMoney),
       job: gameHit.job || null, jobLabel: gameHit.jobLabel || null,
@@ -2177,6 +2180,30 @@ async function buildPlayerProfile(name, opts = {}) {
       staticId: gameHit.staticId != null ? String(gameHit.staticId) : null,
       playtimeMinutes: playtimeOf(gameHit),
     };
+    // Contul are deja o poză salvată de site (din ultima dată când a fost
+    // online): datele din joc sunt mai noi (se salvează la ieșire), așa că le
+    // punem peste ea — dar numai dacă e sigur același personaj și numai
+    // câmpurile pe care jocul chiar le-a trimis.
+    const ownId = account?.game_identifier || account?.last_identifier || null;
+    if (!lastKnown) lastKnown = fromGame;
+    else if (snapshotIsOurs && gameHit.identifier && (!ownId || gameHit.identifier === ownId)) {
+      for (const k of ["cash", "bank", "blackMoney", "job", "jobLabel", "gradeLabel", "staticId", "serverName", "playtimeMinutes"]) {
+        if (fromGame[k] != null) lastKnown[k] = fromGame[k];
+      }
+      if (Array.isArray(gameHit.vehicles)) lastKnown.vehicles = fromGame.vehicles;
+      if (gameHit.lastSeen && (!lastKnown.syncedAt || new Date(gameHit.lastSeen) > new Date(lastKnown.syncedAt))) lastKnown.syncedAt = gameHit.lastSeen;
+      lastKnown.fromGame = true;
+    }
+  }
+  // Orele: online — din joc, pe loc; offline — cea mai mare valoare dintre ce
+  // a salvat site-ul și ce trimite jocul (orele doar cresc). Dacă jocul are mai
+  // multe, le salvăm și în fișa jucătorului, ca să apară și în „Contul meu".
+  const savedPlaytime = account && snapshotIsOurs && account.last_server_playtime != null ? Number(account.last_server_playtime) : null;
+  const gamePlaytime = !live && lastKnown?.fromGame && lastKnown.playtimeMinutes != null ? Number(lastKnown.playtimeMinutes) : null;
+  const offlinePlaytime = savedPlaytime == null && gamePlaytime == null ? (lastKnown?.playtimeMinutes ?? null) : Math.max(savedPlaytime ?? 0, gamePlaytime ?? 0);
+  if (account?.id && gamePlaytime != null && (savedPlaytime == null || gamePlaytime > savedPlaytime)) {
+    pool.query(`UPDATE players SET last_server_playtime = $2 WHERE id = $1 AND (last_server_playtime IS NULL OR last_server_playtime < $2)`, [account.id, Math.round(gamePlaytime)])
+      .catch(err => console.error("Profil: nu am putut salva orele jucate —", err.message));
   }
 
   return {
@@ -2201,7 +2228,7 @@ async function buildPlayerProfile(name, opts = {}) {
     account: account ? {
       id: account.id, game_id: account.game_id, display_name: account.display_name,
       playtime_minutes: account.playtime_minutes, status: account.status, created_at: account.created_at,
-      server_playtime_minutes: playtimeOf(live) ?? (snapshotIsOurs ? account.last_server_playtime : null) ?? lastKnown?.playtimeMinutes ?? null,
+      server_playtime_minutes: playtimeOf(live) ?? offlinePlaytime,
       username: account.username, faction_name: account.faction_name, rank_name: account.rank_name,
       game_linked: !!account.game_identifier, game_name: account.game_identifier_name || null,
       other_character: accountOtherCharacter,
@@ -3788,6 +3815,7 @@ async function fetchGameCharsByDiscord(discordId, liveDetail) {
     });
     if (r.ok) {
       const body = await r.json();
+      noteGameFields("/players/search?discord", body.players);
       for (const p of Array.isArray(body.players) ? body.players : []) {
         if (normDiscordId(p.discord) !== id || !p.identifier || byId.has(p.identifier)) continue;
         byId.set(p.identifier, {
@@ -3801,6 +3829,18 @@ async function fetchGameCharsByDiscord(discordId, liveDetail) {
   return [...byId.values()].sort((a, b) => (b.online - a.online) || (new Date(b.lastSeen || 0) - new Date(a.lastSeen || 0)));
 }
 
+// (08.10.2026) Ce câmpuri trimite de fapt serverul de joc la căutare — doar
+// NUMELE câmpurilor (fără valori), o singură dată pentru fiecare combinație,
+// ca să vedem în jurnal când echipa serverului adaugă ceva nou.
+const gameFieldsSeen = new Set();
+function noteGameFields(route, list) {
+  if (!Array.isArray(list) || !list.length || gameFieldsSeen.size > 60) return;
+  const keys = [...new Set(list.flatMap(p => (p && typeof p === "object") ? Object.keys(p) : []))].sort().join(", ");
+  if (!keys || gameFieldsSeen.has(route + "|" + keys)) return;
+  gameFieldsSeen.add(route + "|" + keys);
+  console.log(`Joc ${route}: câmpuri primite — ${keys}`);
+}
+
 async function fetchGamePlayerLookup({ identifier, name } = {}) {
   const get = async (qs) => {
     const controller = new AbortController();
@@ -3811,7 +3851,9 @@ async function fetchGamePlayerLookup({ identifier, name } = {}) {
       });
       if (!r.ok) return [];
       const body = await r.json();
-      return Array.isArray(body.players) ? body.players : [];
+      const list = Array.isArray(body.players) ? body.players : [];
+      noteGameFields(qs.startsWith("identifier=") ? "/players/search?identifier" : "/players/search?q", list);
+      return list;
     } catch { return []; } finally { clearTimeout(timeout); }
   };
   if (identifier) {

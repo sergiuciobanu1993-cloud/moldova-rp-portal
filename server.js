@@ -1,0 +1,5700 @@
+require("dotenv").config();
+
+const express = require("express");
+const helmet = require("helmet");
+const cors = require("cors");
+const jwt = require("jsonwebtoken");
+const bcrypt = require("bcryptjs");
+const path = require("path");
+const { Pool } = require("pg");
+
+const app = express();
+const port = Number(process.env.PORT || 3000);
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
+app.use(helmet({ contentSecurityPolicy: false }));
+app.use(cors({ origin: process.env.CORS_ORIGIN?.split(",") || true }));
+// Limita a fost 1mb până la MDT FIB (17.09.2026) — probele încărcate direct
+// (poze, ca base64 în JSON, vezi /api/mdt/dosare/:id/probe mai jos) au nevoie
+// de mai mult spațiu. Fișierul propriu-zis rămâne plafonat mult sub atât
+// (MDT_MAX_FILE_BYTES), asta e doar limita brută a corpului cererii HTTP.
+app.use(express.json({ limit: "8mb" }));
+// Fără asta, browserul putea ține în cache o pagină .html veche (care trimite
+// la rândul ei către un mdt-shared.css/js vechi, chiar dacă acelea AU un
+// "?v=" nou) — utilizatorul vedea update-uri de CSS/JS "că nu se aplică",
+// deși erau deja live pe server, doar că el încărca tot HTML-ul dintr-o
+// versiune cache-uită de-acum câteva request-uri. "no-cache" (nu "no-store")
+// tot lasă browserul să valideze cu un If-None-Match/304 quick, deci nu
+// costă un download complet la fiecare navigare, doar garantează că HTML-ul
+// e mereu proaspăt. CSS/JS/imaginile rămân cu comportamentul implicit al
+// express.static (cache normal, revalidare pe ETag).
+// (30.09.2026) Folderele interne ale proiectului (codul serverului, schema
+// bazei de date, scripturi, docker) și fișierele de configurare nu sunt
+// pagini — nu le mai servim public, deși stau în același folder cu site-ul.
+const PRIVATE_PATHS = /^\/(backend|database|scripts|docker|node_modules)(\/|$)|^\/(package(-lock)?\.json|docker-compose\.ya?ml|API\.md|README\.md)$/i;
+app.use((req, res, next) => {
+  let p = req.path;
+  try { p = decodeURIComponent(p); } catch { /* cale invalidă */ }
+  if (PRIVATE_PATHS.test(p.replace(/\/{2,}/g, "/"))) return res.status(404).end();
+  next();
+});
+// (01.10.2026) Aplicația Android descărcată direct de pe site (fără Google Play).
+// Fișierele stau în folderul /aplicatie: moldova-rp.apk (pachetul generat pe
+// pwabuilder.com) și assetlinks.json (dovada că aplicația e a lui moldovarp.md —
+// fără el aplicația se deschide cu bara de adresă a browserului sus).
+const APP_DIR = path.join(__dirname, "..", "aplicatie");
+app.get("/.well-known/assetlinks.json", (_req, res) => {
+  const f = path.join(APP_DIR, "assetlinks.json");
+  require("fs").access(f, err => {
+    if (err) return res.status(404).json([]);
+    res.set("Cache-Control", "no-cache");
+    res.type("application/json").sendFile(f);
+  });
+});
+app.get("/api/aplicatie", (_req, res) => {
+  require("fs").stat(path.join(APP_DIR, "moldova-rp.apk"), (err, st) => {
+    res.set("Cache-Control", "no-cache");
+    if (err || !st.isFile() || st.size < 1024) return res.json({ android: null });
+    res.json({ android: { url: "/aplicatie/moldova-rp.apk", sizeMb: Math.round(st.size / 1048576 * 10) / 10, updatedAt: st.mtime.toISOString() } });
+  });
+});
+app.use(express.static(path.join(__dirname, ".."), {
+  setHeaders: (res, filePath) => {
+    // sw.js și manifestul aplicației trebuie verificate mereu, ca telefoanele
+    // să ia imediat versiunea nouă a aplicației (PWA, 30.09.2026).
+    if (filePath.endsWith(".html") || filePath.endsWith("sw.js") || filePath.endsWith(".webmanifest")) res.set("Cache-Control", "no-cache");
+    if (filePath.endsWith(".webmanifest")) res.type("application/manifest+json");
+    if (filePath.endsWith(".apk")) {
+      res.type("application/vnd.android.package-archive");
+      res.set("Content-Disposition", 'attachment; filename="Moldova-RP.apk"');
+      res.set("Cache-Control", "no-cache");
+    }
+  },
+}));
+
+const asyncRoute = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+
+function signUser(user) {
+  return jwt.sign(
+    { sub: user.id, username: user.username, role: user.role_name },
+    process.env.JWT_SECRET,
+    { expiresIn: "12h" }
+  );
+}
+
+async function auth(req, res, next) {
+  const header = req.headers.authorization || "";
+  const token = header.startsWith("Bearer ") ? header.slice(7) : null;
+  if (!token) return res.status(401).json({ error: "Neautentificat" });
+  try {
+    req.user = jwt.verify(token, process.env.JWT_SECRET);
+    next();
+  } catch {
+    res.status(401).json({ error: "Token invalid sau expirat" });
+  }
+}
+
+function requireRole(...roles) {
+  return (req, res, next) => {
+    if (!roles.includes(req.user.role)) return res.status(403).json({ error: "Acces interzis" });
+    next();
+  };
+}
+
+// (03.10.2026, cerut de Sergiu) Accesul în panoul de administrare, pe grade:
+//   • moderator  → Tichete, Loguri, Kill Logs, Caută jucător, Sancțiuni   (MOD_ROLES)
+//   • admin      → tot ce are moderatorul + pagina Jucători               (ADMIN_ROLES)
+//   • co-fondator / fondator → tot restul: Dashboard, Utilizatori, Facțiuni,
+//     Regulamente, Conținut pagini, Anunțuri, Actualizări, Editor VIP Shop,
+//     jurnalul VIP Shop, txAdmin                                           (FOUNDER_ROLES)
+// Înainte, „admin" avea aproape tot. Aceleași reguli sunt și în auth-client.js
+// (ce linkuri vede fiecare grad în meniul din stânga) și în fiecare pagină.
+const MOD_ROLES = ["moderator", "admin", "co-fondator", "owner"];
+const ADMIN_ROLES = ["admin", "co-fondator", "owner"];
+// Rang nou, aproape de owner — acces la tot ce are admin, plus secțiunea
+// txAdmin (foarte sensibilă: control total pe serverul de joc). Schimbarea
+// rangurilor rămâne totuși restricționată strict la owner (vezi mai jos),
+// ca un co-fondator să nu poată promova pe altcineva la owner/co-fondator
+// fără acordul proprietarului contului.
+const FOUNDER_ROLES = ["co-fondator", "owner"];
+
+// Coduri de referal (27.09.2026) — normalizăm mereu la MAJUSCULE, ca un cod
+// tastat sau lipit de pe orice tastatură ("culiok", "Culiok", "CULIOK") să se
+// potrivească la fel, fără să ținem o coloană separată case-insensitive.
+// Întoarce id-ul contului care deține codul, sau null dacă nu există unul
+// (o intrare nevalidă NU blochează niciodată înregistrarea — vezi apelurile
+// de mai jos, la /api/auth/register și /api/auth/discord/callback).
+function normalizeReferralCode(code) {
+  const cleaned = (code || "").toString().trim().toUpperCase();
+  return /^[A-Z0-9_]{3,32}$/.test(cleaned) ? cleaned : null;
+}
+async function resolveReferrerId(rawCode) {
+  const code = normalizeReferralCode(rawCode);
+  if (!code) return null;
+  const { rows } = await pool.query("SELECT id FROM users WHERE referral_code=$1", [code]);
+  return rows[0]?.id || null;
+}
+
+async function logAction(actorId, action, entityType, entityId, metadata, ip) {
+  await pool.query(
+    "INSERT INTO audit_logs(actor_id,action,entity_type,entity_id,metadata,ip) VALUES($1,$2,$3,$4,$5,$6)",
+    [actorId, action, entityType, entityId ?? null, metadata ? JSON.stringify(metadata) : null, ip || null]
+  );
+}
+
+// Notificare în cont (24.09.2026) — vezi tabela "notifications" din
+// database/schema.sql pentru context complet. Non-fatal cu bun-simț: dacă
+// insert-ul eșuează dintr-un motiv oarecare, NU trebuie să pice acțiunea
+// principală (ex. crearea unui tichet) doar pentru că notificarea n-a mers —
+// de-aia apelanții o cheamă fără await pe eroare (catch local, doar log).
+// (01.10.2026) external: true = trimite și în afara site-ului (Discord sau
+// email, vezi deliverExternal mai jos). emailFallback: false = doar Discord.
+async function notifyUser(userId, { type, title, message, link, external = false, emailFallback = true, dedupeKey = null }) {
+  if (!userId) return;
+  try {
+    await pool.query(
+      `INSERT INTO notifications(user_id, type, title, message, link) VALUES ($1,$2,$3,$4,$5)`,
+      [userId, type, title, message || null, link || null]
+    );
+  } catch (err) {
+    console.error("notifyUser a eșuat:", err.message);
+  }
+  if (external) {
+    // în fundal — nu ținem cererea jucătorului după Discord/Brevo
+    deliverExternal(userId, { title, message, link, emailFallback, dedupeKey })
+      .catch(err => console.error("Notificare externă eșuată:", err.message));
+  }
+}
+
+// ---- Notificări în afara site-ului: Discord (DM) + email (01.10.2026) ----
+// Întâi un mesaj privat pe Discord de la botul serverului (dacă contul are
+// Discord legat și jucătorul n-a oprit asta din Contul meu). Dacă nu se
+// poate (fără Discord, DM-uri închise, bot nesetat), trimitem pe email
+// prin Brevo — doar conturile cu email. Același tichet nu trimite mai des
+// de o dată la 10 minute aceluiași om (ex. 5 răspunsuri la rând = 1 mesaj).
+const externalSentAt = new Map();
+const EXTERNAL_COOLDOWN_MS = 10 * 60 * 1000;
+function absoluteSiteLink(link) {
+  if (!link) return `${SITE_URL}/`;
+  return /^https?:\/\//i.test(link) ? link : `${SITE_URL}/${String(link).replace(/^\/+/, "")}`;
+}
+async function discordBotRequest(method, path, body) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    return await fetch(`${DISCORD_API_BASE}${path}`, {
+      method,
+      headers: { Authorization: `Bot ${DISCORD_LOGS_BOT_TOKEN}`, "Content-Type": "application/json" },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+// Trimite un mesaj privat; întoarce true doar dacă a ajuns.
+async function sendDiscordDm(discordId, { title, message, link }) {
+  if (!DISCORD_LOGS_BOT_TOKEN || !discordId) return false;
+  try {
+    const ch = await discordBotRequest("POST", "/users/@me/channels", { recipient_id: String(discordId) });
+    if (!ch.ok) { console.warn(`Discord DM: nu pot deschide conversația (HTTP ${ch.status}).`); return false; }
+    const { id } = await ch.json();
+    const url = absoluteSiteLink(link);
+    const msg = await discordBotRequest("POST", `/channels/${id}/messages`, {
+      embeds: [{
+        title: String(title || "Moldova RP").slice(0, 250),
+        description: `${String(message || "").slice(0, 1800)}\n\n[Deschide pe site →](${url})`,
+        url,
+        color: 0xff8a1f,
+        footer: { text: "Moldova RP · poți opri aceste mesaje din Contul meu" },
+        timestamp: new Date().toISOString(),
+      }],
+    });
+    // 403 / cod 50007 = DM-uri închise sau botul nu e pe niciun server comun
+    if (!msg.ok) console.warn(`Discord DM: mesajul nu a ajuns (HTTP ${msg.status}).`);
+    return msg.ok;
+  } catch (err) {
+    console.warn("Discord DM eșuat:", err.message);
+    return false;
+  }
+}
+async function sendNotificationEmail(to, { title, message, link }) {
+  if (!emailApiConfigured() || !to) return false;
+  const url = absoluteSiteLink(link);
+  const esc = v => String(v || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+    method: "POST",
+    headers: { accept: "application/json", "content-type": "application/json", "api-key": process.env.BREVO_API_KEY },
+    body: JSON.stringify({
+      sender: { email: process.env.EMAIL_FROM, name: "Moldova RP" },
+      to: [{ email: to }],
+      subject: `Moldova RP — ${String(title || "Notificare").slice(0, 150)}`,
+      textContent: `${message || ""}\n\nDeschide pe site: ${url}\n\nPoți opri aceste emailuri din Contul meu → Notificări.`,
+      htmlContent: `<div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;padding:24px;background:#0f1112;color:#f2f2f2;border-radius:14px">
+        <p style="margin:0 0 6px;color:#ff8a1f;font-weight:bold;letter-spacing:2px;font-size:11px">MOLDOVA RP</p>
+        <h2 style="margin:0 0 12px;font-size:20px">${esc(title)}</h2>
+        <p style="margin:0 0 20px;line-height:1.6;color:#c9ccd0">${esc(message)}</p>
+        <p style="margin:0 0 20px"><a href="${esc(url)}" style="display:inline-block;padding:12px 18px;background:#ff8a1f;color:#0b0b0b;text-decoration:none;font-weight:bold;border-radius:10px">Deschide pe site</a></p>
+        <p style="margin:0;font-size:11px;color:#8f949a">Poți opri aceste emailuri din Contul meu → Notificări.</p>
+      </div>`,
+    }),
+  });
+  return res.ok;
+}
+async function deliverExternal(userId, { title, message, link, emailFallback = true, dedupeKey = null }) {
+  if (dedupeKey) {
+    const k = `${userId}|${dedupeKey}`;
+    const last = externalSentAt.get(k) || 0;
+    if (Date.now() - last < EXTERNAL_COOLDOWN_MS) return;
+    externalSentAt.set(k, Date.now());
+    if (externalSentAt.size > 5000) externalSentAt.clear();
+  }
+  const { rows } = await pool.query(
+    `SELECT email, discord_id, notify_discord, notify_email FROM users WHERE id = $1`, [userId]
+  );
+  const u = rows[0];
+  if (!u) return;
+  // jurnal scurt (fără date personale) ca să vedem în Railway ce s-a întâmplat
+  const tag = `Notificare externă (cont #${userId}, „${String(title || "").slice(0, 40)}”)`;
+  if (u.notify_discord && u.discord_id) {
+    if (await sendDiscordDm(u.discord_id, { title, message, link })) { console.log(`${tag}: trimisă pe Discord.`); return; }
+  }
+  if (emailFallback && u.notify_email && u.email) {
+    const ok = await sendNotificationEmail(u.email, { title, message, link }).catch(() => false);
+    console.log(`${tag}: ${ok ? "trimisă pe email" : "emailul nu a plecat"}.`);
+    return;
+  }
+  console.log(`${tag}: nu s-a trimis — ${!u.discord_id ? "cont fără Discord legat" : !u.notify_discord ? "Discord oprit din setări" : "DM eșuat"}, ${!u.email ? "fără email" : !u.notify_email ? "email oprit din setări" : "fără email de rezervă"}.`);
+}
+
+// (01.10.2026, cerut de Sergiu) Staff-ul NU primește mesaje private: tot ce
+// e pentru staff (tichet nou, răspuns de la jucător) merge într-un singur
+// canal de staff pe Discord. Mesajele private sunt doar pentru jucători
+// (cel reclamat, autorul tichetului).
+// Canalul: webhook-ul din DISCORD_TICKETS_WEBHOOK (făcut de Sergiu în canalul
+// de staff) are prioritate; dacă lipsește sau pică, botul site-ului scrie în
+// canalul DISCORD_STAFF_CHANNEL_ID. La tichet nou sunt etichetați
+// administratorii: rolurile din DISCORD_STAFF_ROLE_IDS (id-uri separate prin
+// virgulă) sau, dacă nu e setat, rolurile din server care au „admin” în nume.
+const STAFF_CHANNEL_ID = String(process.env.DISCORD_STAFF_CHANNEL_ID || "1516940531697979565").replace(/\D/g, "");
+function staffWebhookUrl() {
+  const hook = process.env.DISCORD_TICKETS_WEBHOOK || "";
+  return /^https:\/\/(\w+\.)?discord(app)?\.com\/api\/webhooks\//i.test(hook) ? hook : null;
+}
+let staffRolesCache = { at: 0, ids: [] };
+async function staffMentionRoles() {
+  const fromEnv = String(process.env.DISCORD_STAFF_ROLE_IDS || "").split(/[\s,;]+/).map(x => x.replace(/\D/g, "")).filter(Boolean);
+  if (fromEnv.length) return fromEnv.slice(0, 10);
+  if (!DISCORD_LOGS_BOT_TOKEN) return [];
+  if (Date.now() - staffRolesCache.at < 60 * 60 * 1000) return staffRolesCache.ids;
+  staffRolesCache = { at: Date.now(), ids: [] };
+  try {
+    let guild_id = null;
+    const hook = staffWebhookUrl();
+    if (hook) {
+      const wr = await fetch(hook).catch(() => null);
+      if (wr && wr.ok) guild_id = (await wr.json()).guild_id || null;
+    }
+    if (!guild_id && STAFF_CHANNEL_ID) {
+      const ch = await discordBotRequest("GET", `/channels/${STAFF_CHANNEL_ID}`);
+      if (ch.ok) guild_id = (await ch.json()).guild_id || null;
+    }
+    if (!guild_id) { console.warn("Canal staff Discord: nu găsesc serverul de Discord pentru tag."); return []; }
+    const rr = await discordBotRequest("GET", `/guilds/${guild_id}/roles`);
+    if (!rr.ok) { console.warn(`Canal staff Discord: nu pot citi rolurile (HTTP ${rr.status}).`); return []; }
+    const roles = (await rr.json()).filter(r => /admin/i.test(r.name || "") && !r.managed);
+    staffRolesCache.ids = roles.map(r => r.id).slice(0, 10);
+    const names = roles.map(r => `„${r.name}”`).join(", ") || "(niciun rol cu „admin” în nume)";
+    console.log(`Canal staff Discord: etichetez rolurile ${names}.`);
+  } catch (err) {
+    console.warn("Canal staff Discord: rolurile nu s-au putut citi:", err.message);
+  }
+  return staffRolesCache.ids;
+}
+// (01.10.2026) La pornire verificăm dacă botul site-ului e pe serverul de
+// Discord al comunității (cel cu webhook-ul de staff). Fără asta: nu poate
+// eticheta rolul de admin și NU poate trimite mesaje private jucătorilor
+// (Discord cere un server comun). Dacă lipsește, scriem în jurnal linkul de invitare.
+async function checkStaffDiscordSetup() {
+  const hook = staffWebhookUrl();
+  if (!hook || !DISCORD_LOGS_BOT_TOKEN) return;
+  try {
+    const wr = await fetch(hook);
+    const guildId = wr.ok ? (await wr.json()).guild_id : null;
+    const me = await discordBotRequest("GET", "/users/@me");
+    const botId = me.ok ? (await me.json()).id : null;
+    if (!guildId || !botId) return;
+    const g = await discordBotRequest("GET", `/guilds/${guildId}`);
+    if (g.ok) { console.log("Discord: botul site-ului e pe serverul comunității — tag-ul de admin și mesajele private pot funcționa."); return; }
+    console.warn(`Discord: botul site-ului NU e pe serverul comunității (HTTP ${g.status}). Fără el nu merg tag-ul de admin și mesajele private. Invită-l: https://discord.com/oauth2/authorize?client_id=${botId}&scope=bot&permissions=0`);
+  } catch (err) {
+    console.warn("Discord: verificarea botului a eșuat:", err.message);
+  }
+}
+setTimeout(checkStaffDiscordSetup, 15 * 1000);
+
+async function postStaffChannel({ title, message, link, color = 0xff8a1f, mentionAdmins = false }) {
+  const url = absoluteSiteLink(link);
+  const roles = mentionAdmins ? await staffMentionRoles() : [];
+  const payload = {
+    content: roles.length ? roles.map(id => `<@&${id}>`).join(" ") : undefined,
+    allowed_mentions: { parse: [], roles },
+    embeds: [{ title: String(title).slice(0, 250), description: `${String(message || "").slice(0, 1800)}\n\n[Deschide în panou →](${url})`, url, color, timestamp: new Date().toISOString() }],
+  };
+  const hook = staffWebhookUrl();
+  if (hook) {
+    try {
+      const r = await fetch(hook, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: "Moldova RP · Tichete", ...payload }),
+      });
+      if (r.ok) return true;
+      console.warn(`Webhook staff Discord: HTTP ${r.status}.`);
+    } catch (err) {
+      console.warn("Webhook staff Discord eșuat:", err.message);
+    }
+  }
+  if (DISCORD_LOGS_BOT_TOKEN && STAFF_CHANNEL_ID) {
+    try {
+      const r = await discordBotRequest("POST", `/channels/${STAFF_CHANNEL_ID}/messages`, payload);
+      if (r.ok) return true;
+      console.warn(`Canal staff Discord: botul nu poate scrie în canal (HTTP ${r.status}).`);
+    } catch (err) {
+      console.warn("Canal staff Discord eșuat:", err.message);
+    }
+  }
+  return false;
+}
+
+async function notifyStaffNewTicket(ticket, authorName) {
+  const cat = { general: "General", bug: "Bug", reclamatie: "Reclamație", ban_appeal: "Contestație" }[ticket.category] || ticket.category;
+  await postStaffChannel({
+    title: `🎫 Tichet nou: ${String(ticket.subject || "").slice(0, 120)}`,
+    message: `**${cat}** · deschis de ${authorName || "un jucător"}${ticket.reported_player_label ? ` · despre **${ticket.reported_player_label}**` : ""}`,
+    link: `admin-tichete.html?id=${ticket.id}`,
+    mentionAdmins: true,
+  });
+}
+
+async function reportedUserIdOf(ticket) {
+  if (ticket.category !== "reclamatie" || !ticket.reported_player_id) return null;
+  const { rows } = await pool.query(`SELECT user_id FROM players WHERE id = $1`, [ticket.reported_player_id]);
+  return rows[0]?.user_id || null;
+}
+
+// Tichet rezolvat / închis → autorul și (la reclamație) jucătorul reclamat.
+async function notifyTicketDecision(ticket, staffId) {
+  const word = ticket.status === "resolved" ? "rezolvat" : "închis";
+  const subject = String(ticket.subject || "").slice(0, 120);
+  const link = `tichet.html?id=${ticket.id}`;
+  if (ticket.user_id && ticket.user_id !== staffId) {
+    await notifyUser(ticket.user_id, {
+      type: "ticket_status",
+      title: `Tichetul tău a fost ${word}`,
+      message: `Staff-ul a marcat tichetul „${subject}” ca ${word}. Vezi decizia pe site.`,
+      link, external: true, dedupeKey: `status:${ticket.id}:${ticket.status}`,
+    });
+  }
+  const reportedUserId = await reportedUserIdOf(ticket);
+  if (reportedUserId && reportedUserId !== staffId && reportedUserId !== ticket.user_id) {
+    await notifyUser(reportedUserId, {
+      type: "ticket_status",
+      title: `Reclamația despre tine a fost ${ticket.status === "resolved" ? "rezolvată" : "închisă"}`,
+      message: "Staff-ul a luat o decizie în reclamația depusă despre tine. Vezi detaliile pe site.",
+      link, external: true, dedupeKey: `status:${ticket.id}:${ticket.status}`,
+    });
+  }
+}
+
+// Răspuns nou într-un tichet → autorul, jucătorul reclamat și staff-ul
+// care l-a preluat (oricine în afară de cel care a scris răspunsul).
+async function notifyTicketReply(ticketId, ticket, replierId, { fromStaff }) {
+  const subject = String(ticket.subject || "").slice(0, 120);
+  const link = `tichet.html?id=${ticketId}`;
+  const targets = new Map();
+  if (ticket.user_id && ticket.user_id !== replierId) {
+    targets.set(ticket.user_id, {
+      title: fromStaff ? "Staff-ul ți-a răspuns la tichet" : "Răspuns nou la tichetul tău",
+      message: `Ai un răspuns nou la tichetul „${subject}”.`,
+      link,
+    });
+  }
+  const reportedUserId = await reportedUserIdOf(ticket);
+  if (reportedUserId && reportedUserId !== replierId && !targets.has(reportedUserId)) {
+    targets.set(reportedUserId, {
+      title: "Răspuns nou la reclamația despre tine",
+      message: "A apărut un răspuns nou în reclamația depusă despre tine.",
+      link,
+    });
+  }
+  for (const [uid, n] of targets) {
+    await notifyUser(uid, { type: "ticket_reply", ...n, external: true, dedupeKey: `reply:${ticketId}` });
+  }
+  // Staff-ul: doar în panou (clopoțel) pentru cel care a preluat tichetul și
+  // un mesaj în canalul de staff — fără mesaje private.
+  if (!fromStaff) {
+    if (ticket.assigned_to && ticket.assigned_to !== replierId) {
+      await notifyUser(ticket.assigned_to, {
+        type: "ticket_reply",
+        title: "Răspuns nou într-un tichet preluat de tine",
+        message: `Jucătorul a răspuns în tichetul „${subject}”.`,
+        link: `admin-tichete.html?id=${ticketId}`,
+      });
+    }
+    const k = `staffreply|${ticketId}`;
+    if (Date.now() - (externalSentAt.get(k) || 0) >= EXTERNAL_COOLDOWN_MS) {
+      externalSentAt.set(k, Date.now());
+      await postStaffChannel({
+        title: `💬 Răspuns nou de la jucător: ${subject}`,
+        message: "Jucătorul a scris un răspuns nou în tichet.",
+        link: `admin-tichete.html?id=${ticketId}`,
+        color: 0x7db2ff,
+      });
+    }
+  }
+}
+
+app.get("/api/health", asyncRoute(async (_req, res) => {
+  const { rows } = await pool.query("SELECT NOW() AS time");
+  res.json({ ok: true, service: "moldova-rp-api", database: "online", time: rows[0].time });
+}));
+
+// Live FiveM server status. The game server only serves its info/players
+// endpoints over plain HTTP, so the browser can't call it directly from our
+// HTTPS site (mixed-content is blocked) — this backend fetches it server-side
+// instead and exposes the numbers over our own HTTPS API. Cached briefly so a
+// burst of homepage visits doesn't hammer the game server on every load, and
+// falls back to the last known-good reading (marked stale) if the server is
+// temporarily unreachable, so the homepage doesn't flash to zero.
+const FIVEM_ADDRESS = process.env.FIVEM_SERVER_ADDRESS || "104.167.24.67:30120";
+const FIVEM_MAX_PLAYERS = Number(process.env.FIVEM_MAX_PLAYERS || 2048);
+// FXServer redacts players.json by default (every entry comes back as
+// name:"Player", id:0) unless the request is authenticated with the token
+// set via the server's own `sv_playersToken` convar — a Cfx.re privacy
+// change so random visitors can't scrape the full player list. Set the same
+// secret in server.cfg (`set sv_playersToken "..."`) and here
+// (FIVEM_PLAYERS_TOKEN) to get real names/ids back.
+const FIVEM_PLAYERS_TOKEN = process.env.FIVEM_PLAYERS_TOKEN || "";
+const FIVEM_CACHE_MS = 20_000;
+let fivemCache = { data: null, fetchedAt: 0 };
+
+async function fetchFivemStatus() {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 4000);
+  try {
+    const url = `http://${FIVEM_ADDRESS}/players.json`;
+    const res = await fetch(FIVEM_PLAYERS_TOKEN ? `${url}?token=${encodeURIComponent(FIVEM_PLAYERS_TOKEN)}` : url, {
+      headers: FIVEM_PLAYERS_TOKEN ? { "X-Players-Token": FIVEM_PLAYERS_TOKEN } : undefined,
+      signal: controller.signal,
+    });
+    if (!res.ok) throw new Error(`players.json HTTP ${res.status}`);
+    const players = await res.json();
+    const rawList = Array.isArray(players)
+      // Only the server-slot id and display name are exposed publicly — never
+      // identifiers/endpoint/ping, which could be used to target or dox a
+      // specific player.
+      ? players.map(p => ({ id: p.id, name: (p.name || "Necunoscut").toString().slice(0, 64) }))
+      : [];
+    // Without a valid sv_playersToken, FXServer sends every entry back as
+    // {id:0,name:"Player"} — detect that and don't pass off fake-looking
+    // duplicate names as real data.
+    const namesRedacted = rawList.length > 0 && rawList.every(p => p.id === 0 && p.name === "Player");
+    const list = namesRedacted ? [] : rawList.sort((a, b) => a.name.localeCompare(b.name, "ro"));
+    return { online: true, players: rawList.length, maxPlayers: FIVEM_MAX_PLAYERS, list, namesRedacted };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+app.get("/api/server-status", asyncRoute(async (_req, res) => {
+  const age = Date.now() - fivemCache.fetchedAt;
+  if (fivemCache.data && age < FIVEM_CACHE_MS) return res.json(fivemCache.data);
+  try {
+    const data = await fetchFivemStatus();
+    fivemCache = { data, fetchedAt: Date.now() };
+    res.json(data);
+  } catch {
+    if (fivemCache.data) return res.json({ ...fivemCache.data, stale: true });
+    res.json({ online: false, players: 0, maxPlayers: FIVEM_MAX_PLAYERS, list: [] });
+  }
+}));
+
+// Public roster for the homepage's "Jucători" section. Preferred source is
+// our own moldovarp-api resource (getPlayersDetail, defined further below,
+// same cache the admin panel uses) — it reads real ESX display names
+// directly off the game server and doesn't need FXServer's sv_playersToken
+// at all. Only falls back to the plain players.json reading (which FXServer
+// redacts to generic "Player" entries without that token — see
+// fetchFivemStatus above) when moldovarp-api isn't configured or offline.
+app.get("/api/live/players", asyncRoute(async (_req, res) => {
+  if (FIVEM_API_SECRET) {
+    const detail = await getPlayersDetail();
+    if (detail.online) {
+      // Staff badge: moldovarp-api reports each player's ESX group
+      // (xPlayer.getGroup()) — anything other than the default "user" group
+      // is surfaced here as a rank label. Only the group NAME is public
+      // (no money/vehicles), same data-minimization rule as the rest of
+      // this endpoint.
+      const list = (detail.players || [])
+        .map(p => ({
+          id: p.id,
+          name: (p.name || "Necunoscut").toString().slice(0, 64),
+          ...(p.group && p.group.toLowerCase() !== "user" ? { group: p.group.toString().slice(0, 24) } : {}),
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name, "ro"));
+      return res.json({
+        online: true,
+        players: list.length,
+        list,
+        namesRedacted: false,
+        ...(detail.stale ? { stale: true } : {}),
+      });
+    }
+  }
+
+  const shape = d => ({ online: d.online, players: d.players ?? 0, list: d.list || [], namesRedacted: !!d.namesRedacted });
+  const age = Date.now() - fivemCache.fetchedAt;
+  if (fivemCache.data && age < FIVEM_CACHE_MS) return res.json(shape(fivemCache.data));
+  try {
+    const data = await fetchFivemStatus();
+    fivemCache = { data, fetchedAt: Date.now() };
+    res.json(shape(data));
+  } catch {
+    if (fivemCache.data) return res.json({ ...shape(fivemCache.data), stale: true });
+    res.json({ online: false, players: 0, list: [], namesRedacted: false });
+  }
+}));
+
+// Live facțiuni + bani, citite din resursa custom "moldovarp-api" instalată
+// pe serverul de joc (vezi fivem-resource/moldovarp-api în README-ul livrat
+// separat). Nu ne conectăm niciodată direct la baza de date MySQL a
+// serverului — doar la acest rezumat securizat cu o cheie. Dacă resursa nu e
+// încă instalată/pornită, endpoint-ul răspunde degradat (online:false) în loc
+// să crape, ca site-ul să funcționeze normal oricum.
+const FIVEM_API_SECRET = process.env.FIVEM_API_SECRET || "";
+const FACTIONS_CACHE_MS = 20_000;
+let factionCache = { data: null, fetchedAt: 0 };
+
+async function fetchFactionSnapshot() {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 4000);
+  try {
+    const res = await fetch(`http://${FIVEM_ADDRESS}/moldovarp-api/snapshot`, {
+      headers: { "x-api-key": FIVEM_API_SECRET },
+      signal: controller.signal,
+    });
+    if (!res.ok) throw new Error(`moldovarp-api HTTP ${res.status}`);
+    const snapshot = await res.json();
+    return { online: true, ...snapshot };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+// ---- Ultimele date bune, salvate în baza site-ului (01.10.2026) ----
+// Când serverul de joc e oprit, paginile de admin arată ultima poză reușită
+// (cu ora la care a fost salvată), nu „datele live nu sunt disponibile".
+// Salvăm cel mult o dată pe minut și NU salvăm o listă goală (ex. imediat
+// după un restart, cu 0 jucători), ca să nu ștergem poza bună de dinainte.
+const liveSnapshotSavedAt = new Map();
+function saveLiveSnapshot(key, data) {
+  const last = liveSnapshotSavedAt.get(key) || 0;
+  if (Date.now() - last < 60_000) return;
+  liveSnapshotSavedAt.set(key, Date.now());
+  const { stale, snapshot, savedAt, ...clean } = data || {};
+  pool.query(
+    `INSERT INTO live_snapshots(key, data, saved_at) VALUES ($1, $2, NOW())
+     ON CONFLICT (key) DO UPDATE SET data = EXCLUDED.data, saved_at = NOW()`,
+    [key, JSON.stringify(clean)]
+  ).catch(err => console.error(`Salvare snapshot ${key} eșuată:`, err.message));
+}
+async function loadLiveSnapshot(key) {
+  try {
+    const { rows } = await pool.query(`SELECT data, saved_at FROM live_snapshots WHERE key = $1`, [key]);
+    if (!rows[0]) return null;
+    return { ...rows[0].data, online: true, stale: true, snapshot: true, savedAt: rows[0].saved_at };
+  } catch {
+    return null;
+  }
+}
+
+async function getFactionSnapshot(force) {
+  const age = Date.now() - factionCache.fetchedAt;
+  if (!force && factionCache.data && age < FACTIONS_CACHE_MS) return factionCache.data;
+  try {
+    const data = await fetchFactionSnapshot();
+    factionCache = { data, fetchedAt: Date.now() };
+    if (data.online && (data.factions || []).some(f => f.online > 0)) saveLiveSnapshot("factions", data);
+    return data;
+  } catch {
+    if (factionCache.data) return { ...factionCache.data, stale: true };
+    return { online: false, factions: [], totals: null };
+  }
+}
+
+// Banii (societyMoney, totals.cash/bank) rămân doar pentru admin — pe site-ul
+// public arătăm doar câți membri sunt online per facțiune.
+function stripFactionMoney(data) {
+  return {
+    online: data.online,
+    factions: (data.factions || []).map(f => ({ name: f.name, label: f.label, online: f.online })),
+    totals: data.totals ? { onlinePlayers: data.totals.onlinePlayers } : null,
+    ...(data.stale ? { stale: true } : {}),
+  };
+}
+
+app.get("/api/live/factions", asyncRoute(async (_req, res) => {
+  res.json(stripFactionMoney(await getFactionSnapshot()));
+}));
+
+app.get("/api/admin/live/factions", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
+  const data = await getFactionSnapshot(req.query.force === "1");
+  res.json(data.online ? data : (await loadLiveSnapshot("factions")) || data);
+}));
+
+// Detaliu per-jucător (bani + vehicule), tot din moldovarp-api — vezi
+// /players acolo. Admin-only: aici chiar apar sume individuale ale
+// jucătorilor, nu doar totaluri agregate ca la /snapshot.
+const PLAYERS_CACHE_MS = 20_000;
+let playersDetailCache = { data: null, fetchedAt: 0 };
+
+async function fetchPlayersDetail() {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 6000);
+  try {
+    const res = await fetch(`http://${FIVEM_ADDRESS}/moldovarp-api/players`, {
+      headers: { "x-api-key": FIVEM_API_SECRET },
+      signal: controller.signal,
+    });
+    if (!res.ok) throw new Error(`moldovarp-api HTTP ${res.status}`);
+    const data = await res.json();
+    return { online: true, players: data.players || [] };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+// Shared by the admin route below and by the public /api/live/players route
+// above (which strips this down to just id+name — no money/vehicles/job).
+// ID-ul static al personajului (28.09.2026) — acceptăm câteva nume posibile de
+// câmp, până confirmă echipa serverului numele exact din /players.
+function staticIdOf(pl) {
+  const v = pl?.staticId ?? pl?.static_id ?? pl?.uid ?? null;
+  return v == null || v === "" ? null : String(v).slice(0, 32);
+}
+
+// Orele jucate pe server (29.09.2026), în minute — câmpul "playtimeMinutes"
+// din /players, dacă serverul de joc îl trimite.
+function playtimeOf(pl) {
+  const v = Number(pl?.playtimeMinutes ?? pl?.playtime_minutes);
+  return Number.isFinite(v) && v >= 0 ? Math.round(v) : null;
+}
+
+async function getPlayersDetail(force) {
+  const age = Date.now() - playersDetailCache.fetchedAt;
+  if (!force && playersDetailCache.data && age < PLAYERS_CACHE_MS) return playersDetailCache.data;
+  try {
+    const data = await fetchPlayersDetail();
+    playersDetailCache = { data, fetchedAt: Date.now() };
+    if ((data.players || []).length) saveLiveSnapshot("players", data);
+    return data;
+  } catch {
+    if (playersDetailCache.data) return { ...playersDetailCache.data, stale: true };
+    return { online: false, players: [] };
+  }
+}
+
+app.get("/api/admin/live/players", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+  const data = await getPlayersDetail(req.query.force === "1");
+  // doar pentru admin: pe site-ul public NU arătăm jucători „online" vechi
+  res.json(data.online ? data : (await loadLiveSnapshot("players")) || data);
+}));
+
+// "Ultima dată văzut" — la fiecare 60 de secunde, indiferent dacă cineva se
+// uită chiar acum în admin panel sau pe homepage, salvăm pentru fiecare
+// jucător ONLINE (matching după display_name, doar pentru cei care au deja
+// cont pe site) ultimele valori cunoscute — bani, job, vehicule — în
+// coloanele last_* din players (vezi migrarea din database/schema.sql).
+// Scopul: profilul jucătorului să arate ceva relevant și când e OFFLINE, nu
+// doar "nu ești conectat acum" — asta era exact observația care a dus la
+// acest sync ("ar fi mult mai profesional" să meargă și offline).
+// Best-effort, tăcut: dacă serverul de joc e jos momentan, pur și simplu nu
+// actualizăm nimic la acest tur — nu ștergem/stricăm ultima poză bună deja
+// salvată.
+async function syncPlayerSnapshots() {
+  if (!FIVEM_API_SECRET) return;
+  try {
+    // (21.09.2026, optimizare resurse) Înainte, acest tur chema
+    // fetchPlayersDetail() direct — o cerere NOU-NOUȚĂ către serverul de joc,
+    // complet separată de cache-ul de 20s de mai sus (getPlayersDetail),
+    // folosit de orice altă parte a site-ului (profil jucător, admin, etc).
+    // Rezultatul: dacă cineva se uita pe site exact în aceeași fereastră de
+    // 60s, resursa moldovarp-api primea DOUĂ cereri /players aproape
+    // simultan, în loc de una singură refolosită. Acum folosim aceeași
+    // funcție cu cache ca tot restul site-ului — o cerere reală la cel mult
+    // fiecare 20s, indiferent câte locuri din site au nevoie de date.
+    const detail = await getPlayersDetail();
+    if (!detail.online || !detail.players.length) return;
+
+    // (19.09.2026, optimizare resurse) Înainte, acest tur trimitea câte un
+    // UPDATE separat pentru FIECARE jucător online — cu zeci de jucători pe
+    // server, asta însemna zeci de round-trip-uri către baza de date, la
+    // fiecare 60 de secunde, non-stop, indiferent dacă cineva naviga pe site
+    // sau nu. Acum construim un singur UPDATE ... FROM (VALUES ...), care
+    // actualizează toți jucătorii online într-o singură interogare — aceeași
+    // treabă, o singură rundă la DB în loc de N.
+    const values = [];
+    const params = [];
+    let i = 0;
+    for (const pl of detail.players) {
+      const name = (pl.name || "").toString().trim();
+      if (!name) continue;
+      params.push(
+        // last_cash/last_bank/last_black_money sunt INTEGER — jocul poate
+        // trimite valori cu zecimale (ex: bani murdari calculați ca procent,
+        // 333112.75), ceea ce Postgres refuză direct la INSERT/UPDATE cu
+        // "invalid input syntax for type integer". Rotunjim aici, nu
+        // schimbăm coloana la NUMERIC, pentru că banii din joc sunt oricum
+        // afișați ca sumă întreagă peste tot pe site (fmtMoney) — nu pierdem
+        // nimic relevant vizual.
+        Number.isFinite(pl.cash) ? Math.round(pl.cash) : null,
+        Number.isFinite(pl.bank) ? Math.round(pl.bank) : null,
+        Number.isFinite(pl.blackMoney) ? Math.round(pl.blackMoney) : null,
+        pl.job || null,
+        pl.jobLabel || null,
+        JSON.stringify(pl.vehicles || []),
+        // last_identifier/last_rp_name (25.09.2026) — vezi comentariul din
+        // schema.sql. "license" e identificatorul ESX exact al jucătorului
+        // (pl.license, trimis deja de moldovarp-api), "serverName" e numele
+        // de personaj RP (firstname+lastname din ESX "users", NU numele CFX
+        // de mai jos) — le salvăm acum ca să rămână disponibile și cât
+        // jucătorul e offline, pentru profilul lui (case/business-uri/
+        // benzinării/magazine/gașcă — vezi buildPlayerProfile).
+        pl.license || null,
+        pl.serverName || null,
+        name,
+        // ID-ul static al personajului (#336 din HUD), dacă serverul îl trimite.
+        staticIdOf(pl),
+        // Orele jucate pe server (minute), dacă serverul le trimite.
+        playtimeOf(pl),
+        // Gradul din job (ex. „Director”) — Rank în Dashboard.
+        pl.gradeLabel ? String(pl.gradeLabel).slice(0, 80) : null
+      );
+      // Tipurile sunt indicate explicit (::int, ::text, ::jsonb) pentru că, cu
+      // valori NULL pe primul rând, Postgres nu poate deduce singur tipul
+      // coloanei din VALUES și ar refuza interogarea.
+      values.push(
+        `($${i + 1}::int,$${i + 2}::int,$${i + 3}::int,$${i + 4}::text,$${i + 5}::text,$${i + 6}::jsonb,$${i + 7}::text,$${i + 8}::text,$${i + 9}::text,$${i + 10}::text,$${i + 11}::int,$${i + 12}::text)`
+      );
+      i += 12;
+    }
+    if (!values.length) return;
+
+    // playtime_minutes (24.09.2026) — coloana exista în schema.sql încă de
+    // la început (DEFAULT 0), dar nimic n-o actualiza vreodată nicăieri în
+    // cod, nici aici, nici în moldovarp-api — de-aia arăta mereu "0h" pentru
+    // toată lumea, indiferent cât timp chiar jucase cineva. Acest tur rulează
+    // exact la 60s (vezi setInterval mai jos) și găsește toți jucătorii
+    // online CHIAR ACUM — +1 minut per tur, per jucător online, e o
+    // aproximare rezonabilă (±1 minut), fără nevoie de o urmărire separată
+    // de sesiuni (conectare/deconectare) în joc. IMPORTANT: nu putem
+    // recupera orele jucate ÎNAINTE de acest update — informația aia n-a
+    // fost păstrată nicăieri până acum, deci toată lumea pornește de la ora
+    // curentă înainte, nu de la ora reală de joc acumulată în timp.
+    await pool.query(
+      `UPDATE players AS p SET
+         last_cash = v.cash, last_bank = v.bank, last_black_money = v.black_money,
+         last_job = v.job, last_job_label = v.job_label, last_vehicles = v.vehicles,
+         last_identifier = COALESCE(v.identifier, p.last_identifier),
+         last_rp_name = COALESCE(v.rp_name, p.last_rp_name),
+         last_static_id = COALESCE(v.static_id, p.last_static_id),
+         last_server_playtime = COALESCE(v.server_playtime, p.last_server_playtime),
+         last_grade_label = COALESCE(v.grade_label, p.last_grade_label),
+         last_synced_at = NOW(), playtime_minutes = p.playtime_minutes + 1
+       FROM (VALUES ${values.join(",")}) AS v(cash, bank, black_money, job, job_label, vehicles, identifier, rp_name, display_name, static_id, server_playtime, grade_label),
+            users u
+       WHERE u.id = p.user_id AND (
+         -- Cont legat prin /leagacont (28.09.2026): potrivire EXACTĂ după
+         -- identificatorul ESX, nu după nume (numele de Discord de pe site și
+         -- numele din joc de obicei nu seamănă deloc).
+         (u.game_identifier IS NOT NULL AND u.game_identifier = v.identifier)
+         OR (u.game_identifier IS NULL AND p.display_name ILIKE v.display_name)
+       )`,
+      params
+    );
+  } catch (err) {
+    console.error("syncPlayerSnapshots a eșuat (ignorat, reîncercăm la următorul tur):", err.message);
+  }
+}
+
+// (06.10.2026) Fiecare cont de pe site are nevoie de un rând în „players"
+// (fișa de jucător): acolo se salvează, cât e online, banii, jobul și orele
+// lui, iar profilul îl găsește tot prin ea. Rândul se crea doar la înscrierea
+// cu Discord — conturile făcute cu email și parolă rămâneau fără, așa că, deși
+// își legau personajul și deschideau cutii, profilul lor spunea „nu are cont
+// pe site" și nu arăta orele când erau offline. Îl creăm acum la înscriere și
+// la legarea contului, iar la pornire completăm conturile mai vechi.
+async function ensurePlayerRow(userId) {
+  await pool.query(
+    `INSERT INTO players(user_id, display_name)
+     SELECT id, LEFT(username, 64) FROM users WHERE id = $1
+     ON CONFLICT (user_id) DO NOTHING`, [userId]);
+}
+async function backfillPlayerRows() {
+  try {
+    const { rowCount } = await pool.query(
+      `INSERT INTO players(user_id, display_name)
+       SELECT u.id, LEFT(u.username, 64) FROM users u
+       LEFT JOIN players p ON p.user_id = u.id
+       WHERE p.id IS NULL
+       ON CONFLICT (user_id) DO NOTHING`);
+    if (rowCount) console.log(`Fișe de jucător: am creat ${rowCount} fișe lipsă pentru conturi mai vechi (cele făcute cu email și parolă).`);
+  } catch (err) {
+    console.error("Completarea fișelor de jucător a eșuat (ignorat):", err.message);
+  }
+}
+backfillPlayerRows();
+
+if (FIVEM_API_SECRET) {
+  setInterval(syncPlayerSnapshots, 60_000);
+  syncPlayerSnapshots();
+}
+
+// Lista COMPLETĂ a joburilor/facțiunilor configurate pe server (tabela ESX
+// "jobs"), nu doar cele cu jucători online acum. O folosim ca să vedem toate
+// numele existente — inclusiv găști fără niciun membru online în acel moment.
+let jobsCache = { data: null, fetchedAt: 0 };
+const JOBS_CACHE_MS = 60_000;
+
+// ---------------------------------------------------------------------------
+// Proxy de dezvoltare către endpoint-urile "/dev/..." ale resursei
+// moldovarp-api (v1.15.0+) de pe serverul de joc.
+// ---------------------------------------------------------------------------
+// De ce există: sandbox-ul din care developerul (Claude) lucrează nu poate
+// deschide conexiuni de rețea directe către IP-ul brut al serverului de joc
+// (doar către domenii web obișnuite, prin HTTPS) — dar Railway, unde rulează
+// acest site, poate perfect (la fel cum citește deja /snapshot, /players,
+// /jobs, /logs mai sus). Așa că site-ul face "puntea": primește o cerere pe
+// un domeniu HTTPS normal (acesta), o pasează mai departe către
+// http://IP:PORT/moldovarp-api/dev/..., și întoarce rezultatul.
+//
+// Protejat cu DEV_PROXY_SECRET — o cheie DIFERITĂ de FIVEM_DEV_SECRET (care e
+// cea folosită între site și serverul de joc) și diferită de orice cheie
+// folosită de site-ul public — nu necesită cont/login, deci trebuie separată
+// clar de restul. Nu e nevoie ca cineva să rețină sau să introducă vreo
+// cheie aici — o generez și o setez direct pe Railway.
+const DEV_PROXY_SECRET = process.env.DEV_PROXY_SECRET || "";
+const FIVEM_DEV_SECRET = process.env.FIVEM_DEV_SECRET || "";
+
+// Accepta cheia fie ca header (x-dev-proxy-key), fie ca query param (?key=)
+// — al doilea exista special pentru ca uneltele mele de citit pagini web nu
+// pot trimite header-e custom, doar un URL simplu.
+function requireDevProxy(req, res, next) {
+  const provided = req.headers["x-dev-proxy-key"] || req.query.key;
+  if (!DEV_PROXY_SECRET || provided !== DEV_PROXY_SECRET) {
+    return res.status(401).json({ error: "unauthorized" });
+  }
+  next();
+}
+
+async function fetchFromGameDev(path) {
+  if (!FIVEM_DEV_SECRET) throw new Error("FIVEM_DEV_SECRET nu e configurat.");
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10000);
+  try {
+    const res = await fetch(`http://${FIVEM_ADDRESS}/moldovarp-api${path}`, {
+      headers: { "x-dev-key": FIVEM_DEV_SECRET },
+      signal: controller.signal,
+    });
+    const text = await res.text();
+    return { status: res.status, contentType: res.headers.get("content-type") || "text/plain", body: text };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+app.get("/api/dev/resources", requireDevProxy, asyncRoute(async (_req, res) => {
+  const r = await fetchFromGameDev("/dev/resources");
+  res.status(r.status).type(r.contentType).send(r.body);
+}));
+
+app.get("/api/dev/file", requireDevProxy, asyncRoute(async (req, res) => {
+  const qs = new URLSearchParams();
+  if (req.query.resource) qs.set("resource", String(req.query.resource));
+  if (req.query.file) qs.set("file", String(req.query.file));
+  const r = await fetchFromGameDev(`/dev/file?${qs.toString()}`);
+  res.status(r.status).type(r.contentType).send(r.body);
+}));
+
+// "/dev/listdir" (io.popen, risc de blocare a firului principal FXServer)
+// a fost RETRAS pe partea de joc — vezi server.lua din moldovarp-api. Rutat
+// acum către "/dev/checkfiles", varianta sigură (doar LoadResourceFile).
+app.get("/api/dev/checkfiles", requireDevProxy, asyncRoute(async (req, res) => {
+  const qs = new URLSearchParams();
+  if (req.query.resource) qs.set("resource", String(req.query.resource));
+  if (req.query.files) qs.set("files", String(req.query.files));
+  const r = await fetchFromGameDev(`/dev/checkfiles?${qs.toString()}`);
+  res.status(r.status).type(r.contentType).send(r.body);
+}));
+
+app.get("/api/dev/db-tables", requireDevProxy, asyncRoute(async (_req, res) => {
+  const r = await fetchFromGameDev("/dev/db-tables");
+  res.status(r.status).type(r.contentType).send(r.body);
+}));
+
+app.get("/api/dev/db-columns", requireDevProxy, asyncRoute(async (req, res) => {
+  const qs = new URLSearchParams();
+  if (req.query.table) qs.set("table", String(req.query.table));
+  const r = await fetchFromGameDev(`/dev/db-columns?${qs.toString()}`);
+  res.status(r.status).type(r.contentType).send(r.body);
+}));
+
+// Cateva randuri REALE (nu doar numele coloanelor) dintr-o tabela — folosit
+// pentru diagnosticul "afacerilor" (v1.26.2): ce contine efectiv coloana
+// "creator" din pug_businesses (nume de personaj sau identificator?).
+app.get("/api/dev/db-sample", requireDevProxy, asyncRoute(async (req, res) => {
+  const qs = new URLSearchParams();
+  if (req.query.table) qs.set("table", String(req.query.table));
+  if (req.query.columns) qs.set("columns", String(req.query.columns));
+  if (req.query.limit) qs.set("limit", String(req.query.limit));
+  if (req.query.recent) qs.set("recent", String(req.query.recent));
+  const r = await fetchFromGameDev(`/dev/db-sample?${qs.toString()}`);
+  res.status(r.status).type(r.contentType).send(r.body);
+}));
+
+// Diagnostic pentru "Jaf după moarte" (v1.26.5b) — reface EXACT logica din
+// /api/admin/kill-logs (vezi mai jos), dar fără autentificare de admin (gate
+// pe DEV_PROXY_SECRET, ca toate rutele /api/dev/*) și cu informații
+// suplimentare expuse direct (fereastra de timp calculată, câte transferuri
+// s-au găsit în ea, lista lor brută) — ca să nu mai depindem de un staff care
+// deschide manual Network tab din browser ca să ne dea răspunsul brut al
+// API-ului. Doar citire, nimic nu se schimbă în baza de date.
+app.get("/api/dev/kill-logs-debug", requireDevProxy, asyncRoute(async (req, res) => {
+  const player = req.query.player ? String(req.query.player).slice(0, 64) : "";
+
+  // "raw=1" — ignora complet mortile/fereastra: ultimele N transferuri de
+  // item (implicit 20, orice jucator), FARA nicio conditie de timp (fara
+  // beforeAt/afterAt) — folosit ca sa izolam daca problema e STRICT in
+  // compararea de timp sau in altceva (ex: transferurile nici nu ajung sa
+  // fie citite deloc de "/logs" pentru categoria asta).
+  if (req.query.raw === "1") {
+    const rawLimit = Math.min(50, Math.max(1, Number(req.query.limit) || 20));
+    const r = await fetchGameLogs({ player, category: "item_transfer", pageSize: rawLimit });
+    return res.json({ online: r.online, transfersFound: r.logs.length, transfers: r.logs });
+  }
+
+  const { online, logs: deaths, total } = await fetchGameLogs({
+    player,
+    category: "death",
+    page: 1,
+    pageSize: Math.min(50, Math.max(1, Number(req.query.deathsLimit) || 5)),
+    withTotal: true,
+  });
+
+  let transfers = [];
+  let windowInfo = null;
+  if (deaths.length) {
+    const times = deaths.map(d => new Date(d.at).getTime());
+    const oldest = new Date(Math.min(...times));
+    const newest = new Date(Math.max(...times) + 3 * 60 * 1000);
+    windowInfo = {
+      oldestIso: oldest.toISOString(),
+      newestIso: newest.toISOString(),
+      oldestMs: oldest.getTime(),
+      newestMs: newest.getTime(),
+    };
+    const r = await fetchGameLogs({ player: "", category: "item_transfer", after: oldest, before: newest, pageSize: 500 });
+    transfers = r.logs;
+  }
+
+  res.json({ online, deathsTotal: total, deaths, window: windowInfo, transfersFound: transfers.length, transfers });
+}));
+
+app.get("/api/admin/live/jobs", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+  const force = req.query.force === "1";
+  const age = Date.now() - jobsCache.fetchedAt;
+  if (!force && jobsCache.data && age < JOBS_CACHE_MS) return res.json(jobsCache.data);
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 6000);
+  try {
+    const r = await fetch(`http://${FIVEM_ADDRESS}/moldovarp-api/jobs`, {
+      headers: { "x-api-key": FIVEM_API_SECRET },
+      signal: controller.signal,
+    });
+    if (!r.ok) throw new Error(`moldovarp-api HTTP ${r.status}`);
+    const body = await r.json();
+    const data = { online: true, jobs: body.jobs || [] };
+    jobsCache = { data, fetchedAt: Date.now() };
+    if (data.jobs.length) saveLiveSnapshot("jobs", data);
+    res.json(data);
+  } catch {
+    if (jobsCache.data) return res.json({ ...jobsCache.data, stale: true });
+    res.json((await loadLiveSnapshot("jobs")) || { online: false, jobs: [] });
+  } finally {
+    clearTimeout(timeout);
+  }
+}));
+
+// Jurnalul de activitate combină DOUĂ surse:
+// 1. moldovarp-api de pe serverul de joc (chat/comenzi, conectări/deconectări,
+//    morți/kill-uri, mișcări de bani, cumpărături/crafting/transferuri de
+//    iteme din ox_inventory) — categoriile "game" de mai jos.
+// 2. Acțiunile de staff trimise direct de panoul cloud Luxu Admin (kill,
+//    revive, give/take item, ban etc.) prin webhook-ul lor propriu — vezi
+//    POST /api/webhooks/luxu mai jos și tabela admin_action_logs (a noastră,
+//    Postgres, nu depinde de serverul de joc fiind online).
+// Filtrele (player/category/limit) sunt pasate mai departe. Gated la fel ca
+// Sancțiunile (moderator+) — e un instrument de investigație pentru staff,
+// nu date publice.
+const GAME_LOG_CATEGORIES = ["chat", "command", "connect", "disconnect", "death", "money", "money_vehicle_deposit", "money_vehicle_withdraw", "item_buy", "item_craft", "item_transfer", "item_obtained", "item_drop", "item_pickup", "vehicle_acquired"];
+// "discord" (23.09.2026) — a treia sursă, vezi botul de citit canale Discord
+// mai jos (pollDiscordLogs) și fetchDiscordLogsPage.
+const LOG_CATEGORIES = [...GAME_LOG_CATEGORIES, "admin", "discord"];
+
+// Cere loguri de joc de la moldovarp-api. `category` poate fi o singura
+// categorie sau mai multe separate prin virgula (resursa stie sa le
+// interogheze pe toate deodata — vezi Kill Logs mai jos, care are nevoie
+// simultan de "death" si "item_transfer" ca sa coreleze o moarte cu ce s-a
+// luat din inventarul victimei imediat dupa).
+// `after` (created_at > ?) și `page`/`pageSize` (paginare pe număr de pagină,
+// OFFSET direct) sunt opționale, adăugate special pentru Kill Logs — vezi
+// ruta /api/admin/kill-logs mai jos pentru motivul din spate (mortile erau
+// "împinse" din pagini de volumul mare de transferuri de iteme cand foloseam
+// doar cursorul "beforeAt" pe categoriile combinate death+item_transfer).
+// `withTotal` cere și numărul total de rânduri care s-ar potrivi (fără
+// limit/offset), pentru calculul numărului de pagini.
+async function fetchGameLogs({ player, category, limit, before, after, page, pageSize, withTotal }) {
+  const qs = new URLSearchParams();
+  if (player) qs.set("player", player);
+  if (category) qs.set("category", category);
+  qs.set("limit", String(pageSize || limit));
+  // BUG REAL gasit acum (06.09.2026, confirmat direct din "/dev/db-sample"):
+  // "created_at" in moldovarp_logs (MySQL) e stocat ca NUMAR (milisecunde de
+  // la epoch, ex: 1788709662000), NU ca text/DATETIME. Trimiteam aici
+  // before/after.toISOString() (text, ex: "2026-09-06T13:22:13.000Z") — MySQL,
+  // comparand text cu o coloana numerica, trunchiaza textul la primul grup de
+  // cifre valid ("2026"), deci "created_at < ?" devenea "created_at < 2026",
+  // FALS pentru orice valoare reala (milisecunde de la epoch sunt mult mai
+  // mari) — filtrul "beforeAt" excludea ABSOLUT TOATE randurile, intotdeauna.
+  // Exact de-aia "Jaf dupa moarte" (Kill Logs, singurul loc care foloseste
+  // "before") nu arata niciodata nimic, indiferent daca transferul chiar
+  // exista in baza de date (confirmat separat ca EXISTA, corect atribuit).
+  // Fix: trimitem milisecunde de la epoch (numar, ca text simplu), nu ISO —
+  // se compara corect cu coloana numerica.
+  if (before) qs.set("beforeAt", String(before.getTime()));
+  if (after) qs.set("afterAt", String(after.getTime()));
+  if (page) qs.set("page", String(page));
+  if (withTotal) qs.set("withTotal", "1");
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const r = await fetch(`http://${FIVEM_ADDRESS}/moldovarp-api/logs?${qs.toString()}`, {
+      headers: { "x-api-key": FIVEM_API_SECRET },
+      signal: controller.signal,
+    });
+    if (!r.ok) throw new Error(`moldovarp-api HTTP ${r.status}`);
+    const body = await r.json();
+    return { online: true, logs: body.logs || [], total: typeof body.total === "number" ? body.total : null };
+  } catch {
+    return { online: false, logs: [], total: null };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+// Sancțiuni date direct din Luxu Admin (resursa lor separată, instalată pe
+// serverul de joc) — ban-uri, avertismente și perioade de închisoare, citite
+// direct din tabelele lor MySQL (bans/warnings/jail) prin noul endpoint
+// "/moderation" al moldovarp-api (vezi getModeration() în server.lua).
+// `player` opțional: fără el, vin ultimele sancțiuni de pe tot serverul
+// (pagina Sancțiuni); cu el, doar ale unui singur jucător (fereastra de
+// profil). La fel ca fetchGameLogs, degradăm silențios la "offline" dacă
+// serverul de joc nu răspunde — nu blocăm restul paginii pentru asta.
+async function fetchLuxuModeration({ player } = {}) {
+  const qs = new URLSearchParams();
+  if (player) qs.set("player", player);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const r = await fetch(`http://${FIVEM_ADDRESS}/moldovarp-api/moderation?${qs.toString()}`, {
+      headers: { "x-api-key": FIVEM_API_SECRET },
+      signal: controller.signal,
+    });
+    if (!r.ok) throw new Error(`moldovarp-api HTTP ${r.status}`);
+    const body = await r.json();
+    return { online: true, bans: body.bans || [], warnings: body.warnings || [], jail: body.jail || [] };
+  } catch {
+    return { online: false, bans: [], warnings: [], jail: [] };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+// Case, business-uri și apartenența la găști (op-crime) — citite direct din
+// tabelele resurselor deja instalate pe serverul de joc (0resmon_ph_houses/
+// 0resmon_ph_owned_houses, pug_businesses, opcrime_players/opcrime_orgs/
+// opcrime_ranks) prin noul endpoint "/assets" al moldovarp-api (vezi
+// getHouses()/getBusinesses()/getGangs() în server.lua). La fel ca la
+// moderare: `player` opțional filtrează după numele proprietarului/porecla
+// din op-crime; fără el, vin listele nefiltrate pentru pagina Jucători.
+// `identifier` e opțional — dat DOAR când știm deja identificatorul ESX
+// exact (jucătorul e online chiar acum, vezi buildPlayerProfile mai jos) —
+// atunci case+găști se potrivesc EXACT pe el (mult mai sigur decât numele:
+// owner_name/customnick din joc pot să nu semene deloc cu numele CFX
+// folosit peste tot pe site — asta era motivul pentru care un jucător
+// online, cu vehicule afișate corect, putea totuși ieși fără casă/gașcă
+// găsită, chiar dacă avea).
+async function fetchAssets({ player, identifier, rpName } = {}) {
+  const qs = new URLSearchParams();
+  if (player) qs.set("player", player);
+  if (identifier) qs.set("identifier", identifier);
+  // Business-urile (pug_businesses) nu au identificator de proprietar —
+  // rămân căutate după nume în coloana "creator". Diagnostic (v1.26.2, cerut
+  // explicit după ce afacerile ieșeau mereu goale): valorile reale din
+  // "creator" (ex: "Jora", "Misa") sunt prenume/porecle de personaj RP, NU
+  // numele CFX de pe site (gen "BluntCat2951") — deci căutarea după numele
+  // CFX nu avea NICIODATĂ șansa să găsească ceva. Cand știm și numele de
+  // personaj RP (jucătorul online chiar acum, vezi buildPlayerProfile), îl
+  // trimitem separat, ca a doua variantă de căutare — vezi getBusinesses.
+  if (rpName) qs.set("rpName", rpName);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const r = await fetch(`http://${FIVEM_ADDRESS}/moldovarp-api/assets?${qs.toString()}`, {
+      headers: { "x-api-key": FIVEM_API_SECRET },
+      signal: controller.signal,
+    });
+    if (!r.ok) throw new Error(`moldovarp-api HTTP ${r.status}`);
+    const body = await r.json();
+    return {
+      online: true,
+      houses: body.houses || [],
+      businesses: body.businesses || [],
+      // gasStations/stores (v1.27.0) — sisteme SEPARATE de pug_businesses,
+      // descoperite după ce un jucător cu benzinărie confirmată tot ieșea cu
+      // "niciun business găsit": pug_businesses are doar 3 rânduri în toată
+      // baza de date, niciuna benzinărie. gas_station_business/store_business
+      // au "user_id" = identificatorul ESX exact — match sigur, nu ghicit
+      // după nume, ca la getBusinesses. Vezi getGasStations/getStores în
+      // server.lua.
+      gasStations: body.gasStations || [],
+      stores: body.stores || [],
+      gangs: body.gangs || [],
+    };
+  } catch {
+    return { online: false, houses: [], businesses: [], gasStations: [], stores: [], gangs: [] };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// "Cazuri" (coins) — jucătorul cheltuie coins-uri deja cumpărate (prin fluxul
+// care există deja în g-coin-shop: "Cumpără coins" -> Tebex -> "Enter TBX
+// Transaction ID" -> Claim, NEATINS de noi) pe un caz cu șansă. Recompensa se
+// ridică din joc cu "/recompense" — vezi comentariile din server.lua
+// (moldovarp-api) pentru toată logica și motivele deciziilor de siguranță.
+// ---------------------------------------------------------------------------
+
+// Verifică codul de 6 cifre generat de comanda din joc "/leagacont" — dacă e
+// valid, moldovarp-api ne dă identifier-ul (licența) real al jucătorului.
+// Codul se consumă la prima verificare reușită (nu poate fi refolosit).
+async function fetchLinkVerify(code) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const r = await fetch(`http://${FIVEM_ADDRESS}/moldovarp-api/link/verify?code=${encodeURIComponent(code)}`, {
+      headers: { "x-api-key": FIVEM_API_SECRET },
+      signal: controller.signal,
+    });
+    if (!r.ok) return { ok: false, error: r.status === 404 ? "cod_invalid" : "eroare" };
+    const body = await r.json();
+    return { ok: true, identifier: body.identifier, name: body.name };
+  } catch {
+    return { ok: false, error: "server_offline" };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function fetchCoins(identifier) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const r = await fetch(`http://${FIVEM_ADDRESS}/moldovarp-api/coins?identifier=${encodeURIComponent(identifier)}`, {
+      headers: { "x-api-key": FIVEM_API_SECRET },
+      signal: controller.signal,
+    });
+    if (!r.ok) throw new Error(`moldovarp-api HTTP ${r.status}`);
+    const body = await r.json();
+    return { online: true, coins: body.coins || 0, pending: body.pending || [] };
+  } catch {
+    return { online: false, coins: 0, pending: [] };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function fetchCasesList() {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const r = await fetch(`http://${FIVEM_ADDRESS}/moldovarp-api/cases`, {
+      headers: { "x-api-key": FIVEM_API_SECRET },
+      signal: controller.signal,
+    });
+    if (!r.ok) throw new Error(`moldovarp-api HTTP ${r.status}`);
+    const body = await r.json();
+    return { online: true, cases: body.cases || [] };
+  } catch {
+    return { online: false, cases: [] };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+// Deschide efectiv un caz — POST către moldovarp-api, care scade coins ATOMIC
+// și alege recompensa după șanse (vezi openCase() în server.lua). Se apelează
+// o singură dată per clic — orice retry din partea clientului ar trebui să
+// vină ca o cerere nouă, nu o repetare automată de aici.
+async function postOpenCase({ identifier, playerName, caseId }) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const r = await fetch(`http://${FIVEM_ADDRESS}/moldovarp-api/cases/open`, {
+      method: "POST",
+      headers: { "x-api-key": FIVEM_API_SECRET, "Content-Type": "application/json" },
+      body: JSON.stringify({ identifier, playerName, caseId }),
+      signal: controller.signal,
+    });
+    const rawText = await r.text();
+    let body = {};
+    try { body = rawText ? JSON.parse(rawText) : {}; } catch { /* keep {} */ }
+    if (!r.ok) return { ok: false, error: body.error || "eroare", status: r.status };
+    return { ok: true, result: body };
+  } catch {
+    return { ok: false, error: "server_offline", status: 503 };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+// Jurnalul tuturor deschiderilor de cutii (vezi ruta "/cases/log" de mai jos
+// din moldovarp-api, v1.29.3+) — folosit doar de panoul de admin de pe site.
+async function fetchCaseOpeningsLog(limit, extra = {}) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    // (29.09.2026) offset/q/status — pagini în jurnal; dacă serverul le
+    // suportă, întoarce și "total" (vezi /api/vip-shop/log mai jos).
+    const qs = new URLSearchParams({ limit: String(limit) });
+    for (const [k, v] of Object.entries(extra)) if (v != null && v !== "") qs.set(k, String(v));
+    const r = await fetch(`http://${FIVEM_ADDRESS}/moldovarp-api/cases/log?${qs.toString()}`, {
+      headers: { "x-api-key": FIVEM_API_SECRET },
+      signal: controller.signal,
+    });
+    if (!r.ok) throw new Error(`moldovarp-api HTTP ${r.status}`);
+    const body = await r.json();
+    return { online: true, log: body.log || [], total: Number.isFinite(Number(body.total)) && body.total !== null && body.total !== undefined ? Number(body.total) : null };
+  } catch {
+    return { online: false, log: [], total: null };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+// Istoricul propriu al UNUI SINGUR jucător (vezi ruta "/cases/history" din
+// moldovarp-api, v1.29.4+) — folosit de secțiunea "Istoricul tău" de pe
+// pagina VIP Shop, spre deosebire de fetchCaseOpeningsLog() de mai sus (toți
+// jucătorii, doar pentru admin).
+async function fetchCaseHistory(identifier, limit) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const r = await fetch(`http://${FIVEM_ADDRESS}/moldovarp-api/cases/history?identifier=${encodeURIComponent(identifier)}&limit=${encodeURIComponent(limit)}`, {
+      headers: { "x-api-key": FIVEM_API_SECRET },
+      signal: controller.signal,
+    });
+    if (!r.ok) throw new Error(`moldovarp-api HTTP ${r.status}`);
+    const body = await r.json();
+    return { online: true, history: body.history || [] };
+  } catch {
+    return { online: false, history: [] };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+// Codurile de referal din JOC (27.09.2026). Comanda "/referal COD" și
+// evidența ei sunt deja pe serverul de joc (resursa vx_referal, rutele
+// "/referal" și "/referal/<COD>" din moldovarp-api, vezi SITE_INTEGRARE.md
+// de la echipa serverului). Site-ul doar le citește LIVE, nu stochează nimic.
+// Câmpurile noi (nivel, baniStreamer, inAsteptare...) sunt doar adăugiri,
+// deci trimitem răspunsul mai departe așa cum vine.
+const REFERAL_CODE_RE = /^[A-Za-z0-9_-]{1,40}$/;
+async function fetchReferal(path, params = {}) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) if (v != null && v !== "") qs.set(k, String(v));
+    const q = qs.toString();
+    const r = await fetch(`http://${FIVEM_ADDRESS}/moldovarp-api${path}${q ? "?" + q : ""}`, {
+      headers: { "x-api-key": FIVEM_API_SECRET },
+      signal: controller.signal,
+    });
+    if (r.status === 403) return { online: true, status: 403, body: null };
+    if (r.status === 404) return { online: true, status: 404, body: null };
+    if (!r.ok) throw new Error(`moldovarp-api HTTP ${r.status}`);
+    return { online: true, status: 200, body: await r.json() };
+  } catch {
+    return { online: false, status: 0, body: null };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+// Cerere generică către rutele de administrare a VIP Shop-ului din
+// moldovarp-api ("/cases/admin..." — vezi server.lua v1.30.0), folosită de
+// toate rutele /api/admin/vip-shop/... de mai jos. Un singur helper în loc de
+// cate o funcție separată pentru fiecare operație (creare/editare/ștergere de
+// cutii și recompense) — toate au aceeași formă (metodă + cale + body opțional
+// -> JSON sau eroare).
+// Ordinea recompenselor (29.09.2026) — salvată pe site (vip_reward_order),
+// aplicată la afișare. Recompensele noi (fără loc salvat) rămân la final, în
+// ordinea lor de acum.
+async function loadRewardOrders() {
+  try {
+    const { rows } = await pool.query(`SELECT case_id, reward_ids FROM vip_reward_order`);
+    return new Map(rows.map(r => [r.case_id, (Array.isArray(r.reward_ids) ? r.reward_ids : []).map(String)]));
+  } catch {
+    return new Map();
+  }
+}
+function sortByOrder(list, ids, idOf) {
+  if (!ids || !ids.length) return list;
+  const pos = new Map(ids.map((id, i) => [String(id), i]));
+  return list
+    .map((item, i) => ({ item, i, p: pos.has(String(idOf(item, i))) ? pos.get(String(idOf(item, i))) : Infinity }))
+    .sort((a, b) => (a.p - b.p) || (a.i - b.i))
+    .map(x => x.item);
+}
+// Vânzare înapoi (29.09.2026) — valoarea mașinilor/armelor, setată de staff.
+const SELL_BACK_PCT = 50;
+function valueKey(type, data) {
+  if (type === "vehicle" && data?.model) return ["vehicle", String(data.model).toLowerCase().slice(0, 80)];
+  if (type === "item" && data?.item) return ["item", String(data.item).slice(0, 80)];
+  return null;
+}
+async function loadItemValues() {
+  try {
+    const { rows } = await pool.query(`SELECT kind, item_key, value_coins, value_money FROM vip_item_value`);
+    return new Map(rows.map(r => [`${r.kind}|${r.item_key}`, { coins: r.value_coins, money: r.value_money != null ? Number(r.value_money) : null }]));
+  } catch {
+    return new Map();
+  }
+}
+function sellOfferFor(values, type, data) {
+  const k = valueKey(type, data);
+  const v = k && values.get(`${k[0]}|${k[1]}`);
+  if (!v) return null;
+  const coins = v.coins ? Math.floor(v.coins * SELL_BACK_PCT / 100) : null;
+  const money = v.money ? Math.floor(v.money * SELL_BACK_PCT / 100) : null;
+  return (coins || money) ? { coins, money, pct: SELL_BACK_PCT } : null;
+}
+function parseRewardData(raw) {
+  if (raw && typeof raw === "object") return raw;
+  try { return JSON.parse(raw || "{}"); } catch { return {}; }
+}
+
+// Schimbul banilor murdari pentru facțiunile legale (30.09.2026).
+// Un membru al unei facțiuni legale (Poliție, SMURD, Armată…) care câștigă
+// bani murdari la VIP Shop îi poate schimba, înainte să-i ridice, în bani
+// curați în bancă — la procentul setat de staff (implicit 70%). Lista de
+// joburi „legale" și procentul se editează din Editorul VIP Shop.
+// (03.10.2026, cerut de Sergiu) „scope" = cine primește alegerea între a păstra
+// banii murdari și a-i schimba: "all" = orice jucător (implicit de acum),
+// "legal" = doar membrii facțiunilor legale (cum era de la început).
+const LEGAL_EXCHANGE_DEFAULT = {
+  enabled: true,
+  scope: "all",
+  pct: 70,
+  jobs: ["police", "sheriff", "ambulance", "army", "fib", "gov", "doj"],
+};
+function normalizeLegalExchange(v) {
+  const pct = Math.floor(Number(v?.pct));
+  const jobs = Array.isArray(v?.jobs)
+    ? [...new Set(v.jobs.map(j => String(j || "").trim().toLowerCase().slice(0, 40)).filter(Boolean))].slice(0, 60)
+    : LEGAL_EXCHANGE_DEFAULT.jobs;
+  return {
+    enabled: v?.enabled !== false,
+    scope: v?.scope === "legal" ? "legal" : "all",
+    pct: Number.isFinite(pct) && pct >= 1 && pct <= 100 ? pct : LEGAL_EXCHANGE_DEFAULT.pct,
+    jobs,
+  };
+}
+async function loadLegalExchange() {
+  try {
+    const { rows } = await pool.query(`SELECT value FROM vip_settings WHERE key = 'legal_exchange'`);
+    return normalizeLegalExchange(rows[0]?.value || LEGAL_EXCHANGE_DEFAULT);
+  } catch {
+    return normalizeLegalExchange(LEGAL_EXCHANGE_DEFAULT);
+  }
+}
+// E jucătorul (personajul legat) într-o facțiune legală? Întâi datele live de
+// pe server (dacă serverul trimite direct un câmp „legal", îl folosim pe el),
+// apoi ultimul job salvat de sincronizare.
+async function isLegalFactionMember(identifier, settings) {
+  if (!identifier) return false;
+  const jobs = new Set(settings.jobs);
+  try {
+    const detail = await getPlayersDetail();
+    const live = (detail.players || []).find(p => p.license === identifier);
+    if (live) {
+      const flag = live.legalFaction ?? live.isLegal ?? live.legal;
+      if (typeof flag === "boolean") return flag;
+      if (live.job) return jobs.has(String(live.job).toLowerCase());
+    }
+  } catch { /* trecem la datele salvate */ }
+  try {
+    const { rows } = await pool.query(
+      `SELECT last_job FROM players WHERE last_identifier = $1 AND last_job IS NOT NULL ORDER BY last_synced_at DESC NULLS LAST LIMIT 1`,
+      [identifier]
+    );
+    return !!rows[0] && jobs.has(String(rows[0].last_job).toLowerCase());
+  } catch {
+    return false;
+  }
+}
+// Are jucătorul voie să-și schimbe banii murdari? Toți (scope "all") sau doar
+// facțiunile legale (scope "legal"). Schimbul nu e niciodată automat: apare
+// doar ca buton, iar jucătorul alege dacă îi păstrează murdari.
+async function canExchangeDirty(identifier, settings) {
+  if (!identifier) return false;
+  if (settings.scope !== "legal") return true;
+  return isLegalFactionMember(identifier, settings);
+}
+// (01.10.2026) Vânzarea înapoi (/cases/sell) și schimbul banilor murdari
+// (/cases/convert) le face serverul de joc. Cât timp rutele lipsesc acolo
+// (răspund 404), NU mai arătăm butoanele jucătorilor — altfel apasă și
+// primesc doar „nu e încă activ". Verificăm singuri la pornire și la 15 min;
+// cererea de verificare n-are identificator, deci nu poate face nimic în joc.
+const gameRouteReady = { sell: null, convert: null };
+let gameRoutesCheckedAt = null;
+async function probeGameRoutes() {
+  for (const [key, path] of [["sell", "/cases/sell"], ["convert", "/cases/convert"]]) {
+    const r = await vipShopAdminRequest("POST", path, {});
+    if (r.status === 503) continue; // server oprit — nu știm, păstrăm ce aveam
+    const ready = r.status !== 404;
+    // (01.10.2026) scriem în jurnal când se schimbă starea, ca să vedem când
+    // colegul a pornit rutele pe serverul de joc
+    if (gameRouteReady[key] !== ready)
+      console.log(`Rută joc ${path}: ${ready ? `activă (răspuns HTTP ${r.status})` : "lipsește (404) — butoanele rămân ascunse"}.`);
+    gameRouteReady[key] = ready;
+    gameRoutesCheckedAt = new Date().toISOString();
+  }
+}
+setTimeout(() => probeGameRoutes().catch(() => {}), 20_000);
+setInterval(() => probeGameRoutes().catch(() => {}), 15 * 60_000);
+const gameRouteOk = key => gameRouteReady[key] !== false;
+
+// Oferta de schimb pentru o recompensă: doar bani murdari, doar pentru cine are voie.
+function exchangeOfferFor(settings, isLegal, type, data) {
+  if (!settings.enabled || !isLegal || type !== "cash") return null;
+  if (String(data?.account || "") !== "black_money") return null;
+  const from = Math.floor(Number(data?.amount) || 0);
+  if (from <= 0) return null;
+  return { from, amount: Math.floor(from * settings.pct / 100), pct: settings.pct, scope: settings.scope };
+}
+
+// Lista publică (/cases) nu are id-uri, dar vine în aceeași ordine ca lista de
+// admin (/cases/admin) — le potrivim după poziție și verificăm tip+etichetă;
+// dacă ceva nu se potrivește, lăsăm cutia în ordinea de pe server.
+// (01.10.2026) Lista publică a jocului (/cases) nu spune ce item e o armă,
+// câte gloanțe vine cu ea sau suma exactă — doar eticheta. Le luăm din lista
+// de admin (ținută 20 s în memorie) și le lipim pe fiecare recompensă, ca
+// VIP Shop-ul să poată arăta poza armei, „+ N gloanțe" și sumele formatate.
+let adminCasesCache = { at: 0, cases: null };
+async function adminCasesCached() {
+  if (adminCasesCache.cases && Date.now() - adminCasesCache.at < 20_000) return adminCasesCache.cases;
+  const admin = await vipShopAdminRequest("GET", "/cases/admin");
+  if (!admin.ok) return adminCasesCache.cases;
+  adminCasesCache = { at: Date.now(), cases: admin.data?.cases || [] };
+  return adminCasesCache.cases;
+}
+function publicRewardExtras(a) {
+  if (!a) return {};
+  const x = {};
+  if (a.type === "item" && a.item) { x.item = a.item; if (Number(a.ammo) > 0) x.ammo = Math.floor(Number(a.ammo)); }
+  if (a.type === "cash" || a.type === "coins") { if (a.amount != null) x.amount = a.amount; if (a.account) x.account = a.account; }
+  return x;
+}
+async function applyOrderToPublicCases(cases) {
+  if (!cases.length) return cases;
+  const orders = await loadRewardOrders();
+  const adminCases = await adminCasesCached();
+  if (!adminCases) return cases;
+  const adminById = new Map(adminCases.map(c => [c.id, c]));
+  return cases.map(c => {
+    const ids = orders.get(c.id);
+    const ac = adminById.get(c.id);
+    const pubPool = c.pool || [];
+    const admPool = ac?.pool || [];
+    if (!ac) return c;
+    const aligned = pubPool.length === admPool.length
+      && pubPool.every((r, i) => r.type === admPool[i].type && r.label === admPool[i].label);
+    if (!aligned) {
+      // ordinea nu se potrivește: potrivim doar după tip + etichetă, fără reordonare
+      return { ...c, pool: pubPool.map(r => ({ ...publicRewardExtras(admPool.find(a => a.type === r.type && a.label === r.label)), ...r })) };
+    }
+    const pool = pubPool.map((r, i) => ({ ...publicRewardExtras(admPool[i]), ...r }));
+    return { ...c, pool: ids ? sortByOrder(pool, ids, (_r, i) => admPool[i].id) : pool };
+  });
+}
+
+async function vipShopAdminRequest(method, path, body) {
+  // orice modificare din editor → lista de admin din memorie se reîncarcă
+  if (method !== "GET" && path.startsWith("/cases/admin")) adminCasesCache.at = 0;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const r = await fetch(`http://${FIVEM_ADDRESS}/moldovarp-api${path}`, {
+      method,
+      headers: { "x-api-key": FIVEM_API_SECRET, "Content-Type": "application/json" },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
+    });
+    const parsed = await r.json().catch(() => ({}));
+    if (!r.ok) return { ok: false, status: r.status, error: parsed.error || "eroare", data: parsed };
+    return { ok: true, data: parsed };
+  } catch {
+    return { ok: false, status: 503, error: "server_offline" };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+// Acțiunile de staff (Luxu), sursa separata (Postgres) folosita atat pentru
+// categoria "admin" din Loguri cat si pentru corelarile best-effort de mai
+// jos (kill/revive/item de admin etc.) si pentru Kill Logs.
+async function fetchStaffLogs({ player, before, after, limit }) {
+  const conditions = [];
+  const params = [];
+  if (player) {
+    params.push(`%${player}%`);
+    conditions.push(`(staff_name ILIKE $${params.length} OR target_name ILIKE $${params.length})`);
+  }
+  if (before) {
+    params.push(before.toISOString());
+    conditions.push(`created_at < $${params.length}`);
+  }
+  if (after) {
+    params.push(after.toISOString());
+    conditions.push(`created_at > $${params.length}`);
+  }
+  params.push(limit);
+  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+  const { rows } = await pool.query(
+    `SELECT staff_name, target_name, action, reason, raw, created_at
+     FROM admin_action_logs ${where} ORDER BY created_at DESC LIMIT $${params.length}`,
+    params
+  );
+  return rows.map(r => ({
+    category: "admin",
+    player: r.staff_name || r.target_name || "necunoscut",
+    details: { staff: r.staff_name, target: r.target_name, action: r.action, reason: r.reason, raw: r.raw },
+    at: r.created_at,
+  }));
+}
+
+// Varianta paginata pe NUMĂR de pagină (OFFSET direct în Postgres) a
+// funcției de mai sus — folosită DOAR când staff-ul alege explicit categoria
+// "Acțiuni staff (Luxu)" în Loguri, unde acțiunile de admin sunt chiar
+// conținutul principal al paginii, nu doar context atașat altor rânduri (vezi
+// GET /api/admin/logs mai jos). Are propriul total/totalPages, la fel ca
+// paginarea de pe Kill Logs.
+async function fetchStaffLogsPage({ player, page, pageSize }) {
+  const conditions = [];
+  const params = [];
+  if (player) {
+    params.push(`%${player}%`);
+    conditions.push(`(staff_name ILIKE $${params.length} OR target_name ILIKE $${params.length})`);
+  }
+  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+  const countRes = await pool.query(`SELECT COUNT(*)::int AS total FROM admin_action_logs ${where}`, params);
+  const total = countRes.rows[0]?.total || 0;
+
+  const limitParams = [...params, pageSize, (page - 1) * pageSize];
+  const { rows } = await pool.query(
+    `SELECT staff_name, target_name, action, reason, raw, created_at
+     FROM admin_action_logs ${where} ORDER BY created_at DESC LIMIT $${limitParams.length - 1} OFFSET $${limitParams.length}`,
+    limitParams
+  );
+  const logs = rows.map(r => ({
+    category: "admin",
+    player: r.staff_name || r.target_name || "necunoscut",
+    details: { staff: r.staff_name, target: r.target_name, action: r.action, reason: r.reason, raw: r.raw },
+    at: r.created_at,
+  }));
+  return { logs, total };
+}
+
+// A treia sursă a paginii de Loguri (23.09.2026, cerut explicit): mesajele
+// copiate din canalele Discord de loguri (bancă/facturi, heist-uri,
+// protecție exploit-uri etc.) de botul nostru — vezi pollDiscordLogs mai
+// jos, care le salvează în discord_channel_logs. Aceeași formă de rezultat
+// ca fetchStaffLogsPage, ca frontend-ul să le trateze la fel (o singură
+// categorie dedicată, paginată exact, nu amestecată cu logurile de joc).
+async function fetchDiscordLogsPage({ player, page, pageSize }) {
+  const conditions = [];
+  const params = [];
+  if (player) {
+    params.push(`%${player}%`);
+    conditions.push(`(author_name ILIKE $${params.length} OR title ILIKE $${params.length} OR channel_name ILIKE $${params.length} OR fields::text ILIKE $${params.length})`);
+  }
+  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+  const countRes = await pool.query(`SELECT COUNT(*)::int AS total FROM discord_channel_logs ${where}`, params);
+  const total = countRes.rows[0]?.total || 0;
+
+  const limitParams = [...params, pageSize, (page - 1) * pageSize];
+  const { rows } = await pool.query(
+    `SELECT channel_name, category_name, author_name, title, fields, content, posted_at
+     FROM discord_channel_logs ${where} ORDER BY posted_at DESC LIMIT $${limitParams.length - 1} OFFSET $${limitParams.length}`,
+    limitParams
+  );
+  const logs = rows.map(r => ({
+    category: "discord",
+    player: extractDiscordPlayer(r.fields) || r.author_name || r.channel_name || "necunoscut",
+    details: {
+      channel: r.channel_name,
+      category: r.category_name,
+      author: r.author_name,
+      title: r.title,
+      fields: r.fields,
+      content: r.content,
+    },
+    at: r.posted_at,
+  }));
+  return { logs, total };
+}
+
+// Best-effort: cautăm în câmpurile embed-ului unul care pare să fie despre
+// jucător ("Jucator"/"Player"), ca filtrul după jucător de pe pagina de
+// Loguri să funcționeze și pentru intrările din Discord, nu doar cele din
+// joc/Luxu. Dacă nu găsim un asemenea câmp, rândul tot apare — doar coloana
+// JUCĂTOR arată numele bot-ului/canalului în loc.
+function extractDiscordPlayer(fields) {
+  if (!fields || typeof fields !== "object") return null;
+  for (const [key, value] of Object.entries(fields)) {
+    if (/jucator|player/i.test(key)) return String(value).slice(0, 120);
+  }
+  return null;
+}
+
+// Corelare best-effort: cand un log de joc (item obtinut generic, moarte,
+// vehicul nou aparut) se intampla FOARTE aproape in timp de o actiune de
+// staff din Luxu care pare potrivita (dupa un cuvant-cheie in actiune/motiv)
+// si vizeaza acelasi jucator, marcam intrarea ca fiind rezultatul acelei
+// actiuni de admin — ca sa nu para ceva organic din joc (item "gasit",
+// moarte "de la un jucator necunoscut", vehicul "cumparat"). Schema exactă
+// a payload-ului Luxu nu e documentată public (vezi comentariul de la
+// /api/webhooks/luxu mai jos), deci potrivirea e doar dupa cuvinte-cheie —
+// dacă observați intrări nepotrivite sau cazuri reale ratate, spuneți-mi
+// exact ce ați văzut (categoria + ce ar fi trebuit să scrie) și ajustez.
+function correlateStaffAction(gameLogs, staffLogs, gameCategory, keywordRegex, detailsField) {
+  if (!gameLogs.length || !staffLogs.length) return;
+  const matches = staffLogs.filter(s =>
+    keywordRegex.test(s.details.action || "") || keywordRegex.test(s.details.reason || "")
+  );
+  if (!matches.length) return;
+  for (const log of gameLogs) {
+    if (log.category !== gameCategory || !log.player) continue;
+    const logTime = new Date(log.at).getTime();
+    const match = matches.find(s => {
+      const target = (s.details.target || "").toLowerCase().trim();
+      if (!target || target !== log.player.toLowerCase().trim()) return false;
+      return Math.abs(new Date(s.at).getTime() - logTime) <= 8000;
+    });
+    if (match) {
+      log.details = { ...log.details, [detailsField]: { staff: match.details.staff || "admin" } };
+    }
+  }
+}
+
+// Fix (2026-09): paginarea veche ("Încarcă mai vechi", cursor pe timp) avea
+// EXACT bug-ul găsit inițial la Kill Logs — cand nu era ales niciun filtru de
+// categorie ("Toate categoriile", vizualizarea implicită), interogam TOATE
+// categoriile de joc laolaltă cu o singură limită comună; pe un server activ,
+// categoriile foarte frecvente (chat/comenzi/transfer de iteme) umpleau
+// aproape toată pagina, iar cursorul ("mai vechi decat X") abia se mișca in
+// timp real — staff a raportat că "Încarcă mai vechi" părea să reîncarce
+// loguri din aceeași zi la nesfârșit. Rezolvare: paginare pe NUMĂR de pagină
+// (OFFSET direct), la fel ca la Kill Logs — o pagină avansează mereu exact
+// `pageSize` rânduri, indiferent de amestecul de categorii, deci nu se mai
+// poate "bloca" pe același interval de timp.
+app.get("/api/admin/logs", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
+  const player = req.query.player ? String(req.query.player).slice(0, 64) : "";
+  const category = LOG_CATEGORIES.includes(req.query.category) ? req.query.category : "";
+  const pageSize = Math.min(100, Math.max(1, Number(req.query.pageSize) || 50));
+  const page = Math.max(1, Number(req.query.page) || 1);
+
+  // Categoria "Acțiuni staff (Luxu)" e o sursă unică (Postgres, a noastră) —
+  // paginăm direct pe ea, cu total/totalPages proprii.
+  if (category === "admin") {
+    const { logs, total } = await fetchStaffLogsPage({ player, page, pageSize });
+    const totalPages = Math.max(1, Math.ceil((total || 0) / pageSize));
+    return res.json({ online: true, logs, page, pageSize, total, totalPages });
+  }
+
+  // La fel ca "admin" mai sus — sursă proprie (Postgres, botul de Discord),
+  // paginată separat, nu depinde de serverul de joc fiind online.
+  if (category === "discord") {
+    const { logs, total } = await fetchDiscordLogsPage({ player, page, pageSize });
+    const totalPages = Math.max(1, Math.ceil((total || 0) / pageSize));
+    return res.json({ online: true, logs, page, pageSize, total, totalPages });
+  }
+
+  // "Toate categoriile" sau o singură categorie de joc aleasă — o singură
+  // sursă (moldovarp-api, de pe serverul de joc), paginată pe OFFSET direct
+  // (vezi getLogs în server.lua) — total/totalPages calculate de acolo.
+  const { online: gameOnline, logs: gameLogs, total: gameTotal } = await fetchGameLogs({
+    player, category, page, pageSize, withTotal: true,
+  });
+
+  // Acțiunile de staff se ATAȘEAZĂ (ca rânduri proprii + ca sursă de corelare
+  // pentru "adminKill"/"adminGrant") doar cand se vede "Toate categoriile",
+  // și doar în fereastra de timp acoperită STRICT de rândurile din pagina
+  // curentă — la fel ca jaful de cadavru de la Kill Logs — ca să nu
+  // reintroducem o a doua sursă paginată separat, cu propriul ei cursor, care
+  // ar putea din nou "aluneca" independent de prima. Cine vrea DOAR acțiunile
+  // de staff alege categoria dedicată de mai sus, unde sunt paginate exact.
+  let staffLogs = [];
+  if (!category && gameLogs.length) {
+    const times = gameLogs.map(l => new Date(l.at).getTime());
+    const oldest = new Date(Math.min(...times));
+    const newest = new Date(Math.max(...times) + 1000);
+    staffLogs = await fetchStaffLogs({ player, after: oldest, before: newest, limit: 200 });
+  }
+
+  correlateStaffAction(gameLogs, staffLogs, "item_obtained", /item/i, "adminGrant");
+  correlateStaffAction(gameLogs, staffLogs, "death", /kill/i, "adminKill");
+  correlateStaffAction(gameLogs, staffLogs, "vehicle_acquired", /vehic|masin/i, "adminGrant");
+
+  const merged = [...gameLogs, ...staffLogs].sort((a, b) => new Date(b.at) - new Date(a.at));
+
+  const totalPages = gameTotal != null ? Math.max(1, Math.ceil(gameTotal / pageSize)) : null;
+  res.json({ online: gameOnline, logs: merged, page, pageSize, total: gameTotal, totalPages });
+}));
+
+// Pagina separata "Kill Logs" — cerută explicit: cine pe cine a ucis, și ce
+// s-a luat din inventarul victimei imediat după (jaf de cadavru).
+//
+// Aproximare, nu certitudine: nu știm dacă cel care a luat itemele chiar e
+// ucigașul (poate fi oricine ajunge primul la cadavru) — de-aia arătăm
+// explicit cine a luat, nu presupunem că e ucigașul. Fereastra e de 3 minute
+// după moarte.
+//
+// Paginare pe NUMĂR de pagină (1, 2, 3...), nu pe cursor — cerut explicit de
+// staff, după ce cursorul vechi ("Încarcă mai vechi") s-a dovedit nefiabil:
+// cerea mortile ȘI transferurile de iteme din ACELEAȘI moldovarp_logs cu o
+// singură limită comună, iar pe un server activ transferurile (mult mai
+// frecvente decât mortile) "împingeau" mortile vechi în afara ferestrei
+// paginate — uneori o pagină întreagă nu mai conținea nicio moarte nouă,
+// deși mai existau, mult mai vechi. Acum cerem mortile SINGURE, paginate
+// direct pe numărul cerut (offset în baza de date, vezi getLogs în
+// server.lua), independent de volumul de transferuri — și abia apoi cerem
+// transferurile relevante într-o fereastră de timp STRICT delimitată de
+// mortile de pe pagina curentă (de la cea mai veche până la cea mai nouă +3
+// minute), deci un query mult mai mic și mai țintit, nu concurează deloc cu
+// paginarea mortilor. Asta garantează și cerința de "cel puțin 72h în urmă"
+// pentru tichete/anchete — fiind acum independentă de traficul de iteme,
+// paginarea ajunge oricât de departe în istoric (până la limita de păstrare
+// de 30 de zile), fără ca vreo pagină să "sară" morti.
+app.get("/api/admin/kill-logs", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
+  const player = req.query.player ? String(req.query.player).slice(0, 64) : "";
+  const pageSize = Math.min(100, Math.max(1, Number(req.query.pageSize) || 20));
+  const page = Math.max(1, Number(req.query.page) || 1);
+
+  const { online, logs: deaths, total } = await fetchGameLogs({
+    player,
+    category: "death",
+    page,
+    pageSize,
+    withTotal: true,
+  });
+
+  let kills = [];
+  if (deaths.length) {
+    const times = deaths.map(d => new Date(d.at).getTime());
+    const oldest = new Date(Math.min(...times));
+    const newest = new Date(Math.max(...times) + 3 * 60 * 1000); // +3 minute (fereastra de jaf)
+
+    // Transferurile relevante — DOAR în fereastra de timp a acestei pagini,
+    // nu din tot istoricul. Limita de 500 e doar o plasă de siguranță pentru
+    // un interval neobișnuit de aglomerat — fereastra fiind deja restrânsă la
+    // mortile paginii curente, în practică e mult sub atât.
+    const { logs: transfers } = await fetchGameLogs({
+      player,
+      category: "item_transfer",
+      after: oldest,
+      before: newest,
+      pageSize: 500,
+    });
+
+    // DIAGNOSTIC TEMPORAR (25.09.2026) — de scos după ce găsim cauza reală a
+    // bug-ului "Jaf după moarte" raportat (Nurofen ucis de Dima Relaxare —
+    // Loguri arată clar 6 transferuri de iteme către ucigaș, dar Kill Logs
+    // arată gol la "Jaf după moarte" pentru exact acest kill). Afișăm exact
+    // ce a primit corelarea (fereastra de timp calculată, câte transferuri
+    // s-au întors de la moldovarp-api, numele exact al victimei la fiecare
+    // moarte și la fiecare transfer, orele exacte) — asta rulează AICI, pe
+    // Railway, deci vedem direct în "railway logs" fără să mai depindem de
+    // consola serverului de joc.
+    console.log(`[kill-logs-debug] player=${JSON.stringify(player)} deaths=${deaths.length} oldest=${oldest.toISOString()} newest=${newest.toISOString()} transfersFetched=${transfers.length}`);
+    for (const d of deaths) {
+      console.log(`[kill-logs-debug] death victim=${JSON.stringify(d.player)} at=${JSON.stringify(d.at)} parsedAt=${new Date(d.at).toISOString()}`);
+    }
+    for (const t of transfers) {
+      console.log(`[kill-logs-debug] transfer player=${JSON.stringify(t.player)} at=${JSON.stringify(t.at)} parsedAt=${new Date(t.at).toISOString()} details=${JSON.stringify(t.details)}`);
+    }
+
+    const staffLogs = await fetchStaffLogs({ after: oldest, before: newest, limit: 500 });
+    correlateStaffAction(deaths, staffLogs, "death", /kill/i, "adminKill");
+
+    function lootedAfterDeath(victim, deathAt) {
+      const deathTime = new Date(deathAt).getTime();
+      return transfers
+        .filter(t => (t.player || "").toLowerCase().trim() === (victim || "").toLowerCase().trim())
+        .filter(t => {
+          const dt = new Date(t.at).getTime() - deathTime;
+          return dt >= 0 && dt <= 3 * 60 * 1000;
+        })
+        .map(t => ({ item: t.details.item, count: t.details.count, to: t.details.to, at: t.at }));
+    }
+
+    kills = deaths
+      .map(d => ({
+        victim: d.player,
+        victimRpName: d.rpName || null,
+        killer: d.details.killer || null,
+        adminKill: d.details.adminKill || null,
+        cause: d.details.cause || null,
+        job: d.details.job || null,
+        detectedBy: d.details.detectedBy || "event",
+        at: d.at,
+        looted: lootedAfterDeath(d.player, d.at),
+      }))
+      .sort((a, b) => new Date(b.at) - new Date(a.at));
+  }
+
+  const totalPages = total != null ? Math.max(1, Math.ceil(total / pageSize)) : null;
+  res.json({ online, kills, page, pageSize, total, totalPages });
+}));
+
+// Sancțiuni Luxu Admin, pentru pagina Sancțiuni de pe site — cerută explicit,
+// ca staff-ul nostru să vadă și ban-urile/avertismentele/închisorile date
+// prin panoul Luxu, fără să deschidă separat panoul lor. Fără filtru de
+// jucător = ultimele de pe tot serverul.
+app.get("/api/admin/live/moderation", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
+  const player = req.query.player ? String(req.query.player).trim().slice(0, 64) : "";
+  const result = await fetchLuxuModeration({ player });
+  res.json(result);
+}));
+
+// Case, business-uri și găști — pagina Jucători, secțiunea "Proprietăți" (fără
+// filtru de jucător = tot ce există pe server, pentru răsfoire).
+app.get("/api/admin/live/assets", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+  const player = req.query.player ? String(req.query.player).trim().slice(0, 64) : "";
+  const result = await fetchAssets({ player });
+  if (result.online) {
+    const any = ["houses", "businesses", "gasStations", "stores", "gangs"].some(k => (result[k] || []).length);
+    if (!player && any) saveLiveSnapshot("assets", result);
+    return res.json(result);
+  }
+  // Server oprit → ultima listă completă salvată; cu filtru, o filtrăm aici
+  // după numele proprietarului / creatorului / găștii.
+  const snap = await loadLiveSnapshot("assets");
+  if (!snap) return res.json(result);
+  if (player) {
+    const q = player.toLowerCase();
+    const has = v => String(v || "").toLowerCase().includes(q);
+    const match = o => o && Object.entries(o).some(([k, v]) => /owner|name|creator|nick|label|member|leader/i.test(k) && (typeof v === "string" ? has(v) : Array.isArray(v) && v.some(x => typeof x === "string" ? has(x) : x && Object.values(x).some(has))));
+    for (const k of ["houses", "businesses", "gasStations", "stores", "gangs"]) snap[k] = (snap[k] || []).filter(match);
+  }
+  res.json(snap);
+}));
+
+// ---------------------------------------------------------------------------
+// Profilul unui jucător — pagina cerută explicit ("apesi pe player și se
+// deschide pagina cu toată informația lui"). Combină TOATE sursele deja
+// folosite separat în alte pagini, într-un singur rezumat:
+//   - date live din moldovarp-api (bani, vehicule, job) — doar dacă jucătorul
+//     e online chiar acum, altfel `live` rămâne null (nu inventăm date vechi
+//     aici — pentru asta există deja Loguri, care arată istoricul)
+//   - contul de pe site, dacă jucătorul din joc are și cont (majoritatea
+//     jucătorilor pot să nu aibă — potrivirea e după numele afișat)
+//   - sancțiuni (după target_name, la fel ca pagina de Sancțiuni)
+//   - tichetele contului, dacă are cont
+//   - activitate recentă (aceleași loguri ca la pagina Loguri, filtrate pe
+//     acest jucător)
+//   - kill-uri, ATÂT ca victimă CÂT ȘI ca ucigaș (pentru "ca ucigaș" nu putem
+//     filtra la sursă — moldovarp-api filtrează după victimă — deci citim un
+//     lot mai mare de morți recente și filtrăm aici după numele ucigașului;
+//     acceptabil pentru un rezumat de profil, nu pentru un istoric complet)
+// Găsită după NUME (case-insensitive), nu după un id din baza noastră —
+// pentru că jucătorul din joc poate să nu aibă deloc cont pe site.
+// ---------------------------------------------------------------------------
+// opts (28.09.2026): { userId, identifier } — pentru profilul PROPRIU al unui
+// cont legat prin /leagacont: contul se găsește după user_id și jucătorul
+// online după identificatorul ESX exact, nu după nume.
+const PROFILE_ACCOUNT_SQL = `
+       SELECT p.id, p.game_id, p.display_name, p.playtime_minutes, p.status, p.created_at,
+              p.last_cash, p.last_bank, p.last_black_money, p.last_job, p.last_job_label,
+              p.last_vehicles, p.last_synced_at, p.last_identifier, p.last_rp_name, p.last_static_id, p.last_server_playtime, p.last_grade_label,
+              u.id AS user_id, u.username, u.email, u.game_identifier, u.game_identifier_name, u.discord_id,
+              f.name AS faction_name, fr.name AS rank_name
+       FROM players p
+       JOIN users u ON u.id = p.user_id
+       LEFT JOIN faction_members fm ON fm.player_id = p.id
+       LEFT JOIN factions f ON f.id = fm.faction_id
+       LEFT JOIN faction_ranks fr ON fr.id = fm.rank_id`;
+async function buildPlayerProfile(name, opts = {}) {
+  const cleanName = (name || "").toString().trim().slice(0, 64);
+  if (!cleanName) return null;
+  const lower = cleanName.toLowerCase();
+
+  const [liveDetail, accountResult, punishmentResult, activityResult, staffActivity, deathsResult, moderationResult] = await Promise.all([
+    getPlayersDetail(),
+    pool.query(
+      `${PROFILE_ACCOUNT_SQL}
+       ${opts.userId
+         ? "WHERE p.user_id = $1"
+         // (29.09.2026) Cu identificator (ex. click din istoricul VIP Shop):
+         // întâi contul legat de acel personaj, altfel după nume ca înainte.
+         : "WHERE p.display_name ILIKE $1 OR ($2::text IS NOT NULL AND (u.game_identifier = $2 OR p.last_identifier = $2)) ORDER BY COALESCE($2::text IS NOT NULL AND (u.game_identifier = $2 OR p.last_identifier = $2), false) DESC"}
+       LIMIT 1`, opts.userId ? [opts.userId] : [cleanName, opts.identifier || null]
+    ),
+    pool.query(
+      `SELECT pu.id, pu.type, pu.reason, pu.duration_minutes, pu.created_at, u.username AS issued_by,
+              CASE WHEN pu.duration_minutes IS NOT NULL
+                   THEN pu.created_at + (pu.duration_minutes || ' minutes')::interval
+                   ELSE NULL END AS expires_at
+       FROM punishments pu LEFT JOIN users u ON u.id = pu.issued_by
+       WHERE pu.target_name ILIKE $1
+       ORDER BY pu.created_at DESC LIMIT 20`, [cleanName]
+    ),
+    fetchGameLogs({ player: cleanName, limit: 25 }),
+    fetchStaffLogs({ player: cleanName, limit: 25 }),
+    fetchGameLogs({ category: "death", limit: 300 }),
+    fetchLuxuModeration({ player: cleanName }),
+  ]);
+
+  let account = accountResult.rows[0] || null;
+
+  // (01.10.2026) Cont de site NELEGAT cu /leagacont, dar logat cu Discord:
+  // îi găsim personajul după Discord și îl folosim ca și cum ar fi legat.
+  let discordCharacters = [];
+  let effIdentifier = opts.identifier || null;
+  if (!effIdentifier && account && !account.game_identifier && account.discord_id) {
+    discordCharacters = await fetchGameCharsByDiscord(account.discord_id, liveDetail);
+    if (discordCharacters.length) effIdentifier = discordCharacters[0].identifier;
+  }
+
+  const live = liveDetail.online
+    ? (liveDetail.players || []).find(p => effIdentifier
+        ? p.license === effIdentifier
+        : (p.name || "").toLowerCase().trim() === lower) || null
+    : null;
+
+  // (29.09.2026) Offline și fără poză salvată pe site → căutăm în baza jocului,
+  // ca profilul să arate ceva oriunde dai click pe un jucător.
+  // Numele RP îl putem afla și din logurile lui din joc (fiecare log are
+  // identificatorul și numele RP) — util când nu avem altă sursă.
+  const knownIdentifier = effIdentifier || account?.game_identifier || account?.last_identifier || null;
+  const ownLogs = (activityResult.logs || []).filter(l => !knownIdentifier || l.identifier === knownIdentifier);
+  const rpFromLogs = ownLogs.find(l => l.rpName)?.rpName || null;
+  const discordPrimary = discordCharacters[0] || null;
+  // (08.10.2026) Echipa serverului trimite acum, și pentru jucătorii offline,
+  // banii, jobul, mașinile și orele (salvate de joc la ieșire) — le cerem
+  // pentru orice profil offline, nu doar pentru cele fără poză pe site.
+  const gameHit = !live
+    ? await fetchGamePlayerLookup({ identifier: knownIdentifier, name: opts.rpName || discordPrimary?.rpName || rpFromLogs || cleanName })
+    : null;
+  // (06.10.2026) Profil deschis după un nume care nu seamănă cu cel de pe site
+  // (numele de Steam, de pildă) și fără identificator: contul legat nu era
+  // găsit, deși personajul îl aflasem deja din joc. Îl căutăm acum după
+  // identificatorul personajului (contul legat de el întâi).
+  const foundIdentifier = live?.license || gameHit?.identifier || null;
+  if (!account && foundIdentifier) {
+    const late = await pool.query(
+      `${PROFILE_ACCOUNT_SQL}
+       WHERE u.game_identifier = $1 OR p.last_identifier = $1
+       ORDER BY (u.game_identifier = $1) DESC NULLS LAST
+       LIMIT 1`, [foundIdentifier]);
+    if (late.rows[0]) {
+      account = late.rows[0];
+      if (!effIdentifier) effIdentifier = foundIdentifier;
+    }
+  }
+  // (07.10.2026) Tot fără cont? Pe server un jucător poate avea mai multe
+  // personaje (char0:…, char1:… — aceeași licență după „:"), iar contul de pe
+  // site se leagă de UNUL singur. Dacă profilul e al altui personaj al aceluiași
+  // jucător (de pildă cel cu care a deschis cutii înainte să-și schimbe
+  // legătura), arătăm totuși contul lui de site, marcat ca atare. Datele
+  // salvate (bani, ore) rămân ale personajului legat — nu le amestecăm.
+  let accountOtherCharacter = false;
+  const wantIdentifier = effIdentifier || foundIdentifier;
+  const licenseOf = id => { const m = /^char\d+:(.+)$/i.exec(String(id || "")); return m ? m[1] : null; };
+  const wantLicense = licenseOf(wantIdentifier);
+  if (!account && wantLicense) {
+    const alt = await pool.query(
+      `${PROFILE_ACCOUNT_SQL}
+       WHERE split_part(u.game_identifier, ':', 2) = $1 OR split_part(p.last_identifier, ':', 2) = $1
+       ORDER BY (split_part(u.game_identifier, ':', 2) = $1) DESC NULLS LAST, p.last_synced_at DESC NULLS LAST
+       LIMIT 1`, [wantLicense]);
+    if (alt.rows[0]) {
+      account = alt.rows[0];
+      accountOtherCharacter = true;
+      if (!effIdentifier) effIdentifier = wantIdentifier;
+    }
+  }
+  // în jurnal, ca să știm de ce un profil rămâne fără cont de site
+  if (wantIdentifier && (!account || accountOtherCharacter)) {
+    const short = String(wantIdentifier).slice(0, 16);
+    console.log(accountOtherCharacter
+      ? `Profil: personajul ${short}… nu e cel legat pe site; contul „${account.username}” e legat de alt personaj al aceluiași jucător.`
+      : `Profil: niciun cont de site nu e legat de personajul ${short}… și nici de alt personaj al aceluiași jucător.`);
+  }
+  // Ultima dată văzut pe server, după loguri (dacă n-avem altă sursă).
+  const lastSeenFromLogs = (activityResult.logs || []).reduce((m, l) => (l.at && (!m || new Date(l.at) > new Date(m))) ? l.at : m, null);
+  // A jucat pe alt personaj decât cel legat? (ESX multichar: char0/char1…)
+  const otherCharacters = knownIdentifier
+    ? [...new Set((activityResult.logs || []).map(l => l.identifier).filter(id => id && id !== knownIdentifier))]
+    : [];
+
+  // Cerută separat, DUPĂ ce știm `live` — dacă jucătorul e online chiar
+  // acum, moldovarp-api ne-a dat deja identificatorul lui ESX exact (vezi
+  // /players), pe care îl trimitem mai departe la /assets pentru un match
+  // sigur pe casă/gașcă (owner/identificator), în loc de potrivire de nume
+  // (owner_name/customnick — pot să nu semene deloc cu numele CFX).
+  //
+  // (25.09.2026, cerut explicit — prea puține date la "Case deținute" pentru
+  // un jucător OFFLINE): înainte, fără `live`, treceam direct la căutarea
+  // după nume, cu limitările știute (business-uri/benzinării/magazine/gașcă
+  // ieșeau aproape mereu goale, pentru că au nevoie de identificator ESX/nume
+  // RP, nu de numele CFX). Acum, dacă avem un cont pe site pentru acest
+  // jucător (`account`), folosim ULTIMA valoare cunoscută salvată automat cât
+  // timp a fost online (last_identifier/last_rp_name, vezi syncPlayerSnapshots)
+  // — și, dacă lipsește și aia (cont foarte nou, încă nesincronizat o dată),
+  // identificatorul legat manual prin "/leagacont" (game_identifier). Un
+  // jucător FĂRĂ cont pe site (ca "account" să fie null) tot nu are din ce
+  // sursă să primească aceste date offline — rămâne limitarea cunoscută,
+  // fără soluție posibilă fără ca jucătorul să-și facă cont sau să fie online.
+  const assetsResult = await fetchAssets({
+    player: cleanName,
+    identifier: live?.license || effIdentifier || gameHit?.identifier || account?.last_identifier || account?.game_identifier || undefined,
+    rpName: live?.serverName || gameHit?.rpName || account?.last_rp_name || account?.game_identifier_name || undefined,
+  });
+
+  // Cutiile deschise în VIP Shop (29.09.2026) — după identificatorul exact al
+  // personajului (cel cu care se deschid cutiile pe site).
+  const vipIdentifier = live?.license || effIdentifier || gameHit?.identifier || account?.game_identifier || account?.last_identifier || null;
+  const vipResult = vipIdentifier ? await fetchCaseHistory(vipIdentifier, 50) : { online: true, history: [] };
+
+  let tickets = [];
+  if (account) {
+    const t = await pool.query(
+      `SELECT id, subject, category, status, created_at FROM tickets WHERE user_id = $1 ORDER BY created_at DESC LIMIT 10`,
+      [account.user_id]
+    );
+    tickets = t.rows;
+  }
+
+  const recentActivity = [...activityResult.logs, ...staffActivity]
+    .sort((a, b) => new Date(b.at) - new Date(a.at))
+    .slice(0, 25);
+
+  const allDeaths = deathsResult.logs;
+  correlateStaffAction(allDeaths, staffActivity, "death", /kill/i, "adminKill");
+
+  const killsAsVictim = allDeaths
+    .filter(d => (d.player || "").toLowerCase().trim() === lower)
+    .map(d => ({ killer: d.details.killer || null, adminKill: d.details.adminKill || null, cause: d.details.cause || null, at: d.at }))
+    .slice(0, 20);
+
+  const killsAsKiller = allDeaths
+    .filter(d => (d.details.killer || "").toLowerCase().trim() === lower)
+    .map(d => ({ victim: d.player, cause: d.details.cause || null, at: d.at }))
+    .slice(0, 20);
+
+  // Cand jucatorul e offline ACUM, dar avem o poza salvata de cand a fost
+  // ultima data online (vezi syncPlayerSnapshots, la fiecare 60s), o
+  // aratam clar etichetata cu "ultima data vazut" — nu o confundam cu date
+  // live. Fara asta, un jucator offline nu vedea absolut nimic despre
+  // banii/vehiculele lui, ceea ce nu parea profesional.
+  // player-profile-modal.js (moderationHtml) așteaptă un singur obiect
+  // "jail", nu o listă — arătăm cea mai relevantă intrare: una activă acum,
+  // altfel cea mai recentă (istoric), altfel deloc dacă n-a stat niciodată.
+  const moderation = moderationResult.online ? {
+    bans: moderationResult.bans,
+    warnings: moderationResult.warnings,
+    jail: moderationResult.jail.find(j => j.active) || moderationResult.jail[0] || null,
+  } : null;
+
+  // Un jucător poate avea mai multe case (houses e listă întreagă), dar de
+  // obicei o singură gașcă activă — luăm prima găsită după porecla din
+  // op-crime (vezi comentariul din fetchAssets/getGangs despre limitările
+  // acelei potriviri).
+  const houses = assetsResult.online ? assetsResult.houses : [];
+  const businesses = assetsResult.online ? assetsResult.businesses : [];
+  // gasStations/stores (v1.27.0) — vezi comentariul din fetchAssets. Match
+  // exact pe identificator, deci doar pentru jucătorul ONLINE chiar acum
+  // (fără identificator exact, resursa nu are cum să caute în aceste tabele).
+  const gasStations = assetsResult.online ? assetsResult.gasStations : [];
+  const stores = assetsResult.online ? assetsResult.stores : [];
+  const gang = assetsResult.online ? (assetsResult.gangs[0] || null) : null;
+
+  // Pentru un cont legat, arătăm poza salvată doar dacă e chiar a
+  // personajului legat (nu una rămasă dintr-o potrivire veche după nume).
+  const snapshotIsOurs = !effIdentifier || !account?.last_identifier || account.last_identifier === effIdentifier;
+  let lastKnown = (!live && account && account.last_synced_at && snapshotIsOurs) ? {
+    cash: account.last_cash, bank: account.last_bank, blackMoney: account.last_black_money,
+    job: account.last_job, jobLabel: account.last_job_label,
+    vehicles: account.last_vehicles || [], syncedAt: account.last_synced_at,
+    serverName: account.last_rp_name || null, license: account.last_identifier || null,
+    staticId: account.last_static_id || null,
+    gradeLabel: account.last_grade_label || null,
+  } : null;
+  if (!live && gameHit) {
+    const num = v => (v == null || v === "" || !Number.isFinite(Number(v))) ? null : Number(v);
+    const fromGame = {
+      fromGame: true,
+      cash: num(gameHit.cash), bank: num(gameHit.bank), blackMoney: num(gameHit.blackMoney),
+      job: gameHit.job || null, jobLabel: gameHit.jobLabel || null,
+      gradeLabel: gameHit.gradeLabel || (gameHit.grade != null ? `grad ${gameHit.grade}` : null),
+      vehicles: Array.isArray(gameHit.vehicles) ? gameHit.vehicles : [],
+      syncedAt: gameHit.lastSeen || null,
+      serverName: gameHit.rpName || null, license: gameHit.identifier || null,
+      staticId: gameHit.staticId != null ? String(gameHit.staticId) : null,
+      playtimeMinutes: playtimeOf(gameHit),
+    };
+    // Contul are deja o poză salvată de site (din ultima dată când a fost
+    // online): datele din joc sunt mai noi (se salvează la ieșire), așa că le
+    // punem peste ea — dar numai dacă e sigur același personaj și numai
+    // câmpurile pe care jocul chiar le-a trimis.
+    const ownId = account?.game_identifier || account?.last_identifier || null;
+    if (!lastKnown) lastKnown = fromGame;
+    else if (snapshotIsOurs && gameHit.identifier && (!ownId || gameHit.identifier === ownId)) {
+      for (const k of ["cash", "bank", "blackMoney", "job", "jobLabel", "gradeLabel", "staticId", "serverName", "playtimeMinutes"]) {
+        if (fromGame[k] != null) lastKnown[k] = fromGame[k];
+      }
+      if (Array.isArray(gameHit.vehicles)) lastKnown.vehicles = fromGame.vehicles;
+      if (gameHit.lastSeen && (!lastKnown.syncedAt || new Date(gameHit.lastSeen) > new Date(lastKnown.syncedAt))) lastKnown.syncedAt = gameHit.lastSeen;
+      lastKnown.fromGame = true;
+    }
+  }
+  // Orele: online — din joc, pe loc; offline — cea mai mare valoare dintre ce
+  // a salvat site-ul și ce trimite jocul (orele doar cresc). Dacă jocul are mai
+  // multe, le salvăm și în fișa jucătorului, ca să apară și în „Contul meu".
+  const savedPlaytime = account && snapshotIsOurs && account.last_server_playtime != null ? Number(account.last_server_playtime) : null;
+  const gamePlaytime = !live && lastKnown?.fromGame && lastKnown.playtimeMinutes != null ? Number(lastKnown.playtimeMinutes) : null;
+  const offlinePlaytime = savedPlaytime == null && gamePlaytime == null ? (lastKnown?.playtimeMinutes ?? null) : Math.max(savedPlaytime ?? 0, gamePlaytime ?? 0);
+  if (account?.id && gamePlaytime != null && (savedPlaytime == null || gamePlaytime > savedPlaytime)) {
+    pool.query(`UPDATE players SET last_server_playtime = $2 WHERE id = $1 AND (last_server_playtime IS NULL OR last_server_playtime < $2)`, [account.id, Math.round(gamePlaytime)])
+      .catch(err => console.error("Profil: nu am putut salva orele jucate —", err.message));
+  }
+
+  return {
+    name: cleanName,
+    online: !!live,
+    live: live ? {
+      serverId: live.id, job: live.job, jobLabel: live.jobLabel, group: live.group,
+      grade: live.grade ?? null, gradeLabel: live.gradeLabel || null,
+      playtimeMinutes: playtimeOf(live),
+      staticId: staticIdOf(live) || (snapshotIsOurs ? account?.last_static_id : null) || null,
+      cash: live.cash, bank: live.bank, blackMoney: live.blackMoney, vehicles: live.vehicles || [],
+      // cfxName = numele raportat de platformă (Steam/Rockstar), serverName =
+      // numele personajului RP din baza jocului (users.firstname/lastname) —
+      // pot diferi complet; license = identificatorul stabil (license:...).
+      // Doar cât jucătorul e online (`live`) — quando offline, folosim doar
+      // numele cu care a fost găsit profilul (cleanName), fără să inventăm.
+      cfxName: live.name || null,
+      serverName: live.serverName || null,
+      license: live.license || null,
+    } : null,
+    lastKnown,
+    account: account ? {
+      id: account.id, game_id: account.game_id, display_name: account.display_name,
+      playtime_minutes: account.playtime_minutes, status: account.status, created_at: account.created_at,
+      server_playtime_minutes: playtimeOf(live) ?? offlinePlaytime,
+      username: account.username, faction_name: account.faction_name, rank_name: account.rank_name,
+      game_linked: !!account.game_identifier, game_name: account.game_identifier_name || null,
+      other_character: accountOtherCharacter,
+    } : null,
+    punishments: punishmentResult.rows,
+    moderation,
+    houses,
+    businesses,
+    gasStations,
+    stores,
+    gang,
+    tickets,
+    recentActivity,
+    killsAsVictim,
+    killsAsKiller,
+    vipHistory: vipResult.online ? vipResult.history : null,
+    lastSeenFromLogs,
+    otherCharacters,
+    // personajele găsite după Discord (doar pentru conturi nelegate)
+    discordCharacters: discordCharacters.length ? discordCharacters : undefined,
+  };
+}
+
+app.get("/api/admin/player-profile", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
+  const name = String(req.query.name || "").trim();
+  if (!name) return res.status(400).json({ error: "Parametrul name este obligatoriu." });
+  const idRaw = String(req.query.identifier || "").trim();
+  const identifier = /^[A-Za-z0-9:._-]{3,120}$/.test(idRaw) ? idRaw : undefined;
+  const rpName = String(req.query.rpName || "").trim().slice(0, 64) || undefined;
+  // (29.09.2026) Din pagina Utilizatori: profilul după contul de pe site.
+  const userIdRaw = String(req.query.userId || "").trim();
+  if (/^[0-9a-f-]{36}$/i.test(userIdRaw)) {
+    const { rows } = await pool.query(
+      `SELECT u.id, u.username, u.game_identifier, u.game_identifier_name, p.display_name, p.last_rp_name
+       FROM users u LEFT JOIN players p ON p.user_id = u.id WHERE u.id = $1 LIMIT 1`, [userIdRaw]);
+    const u = rows[0];
+    if (!u) return res.status(404).json({ error: "Utilizatorul nu există." });
+    const detail = await getPlayersDetail();
+    const liveP = u.game_identifier ? (detail.players || []).find(p => p.license === u.game_identifier) : null;
+    const pname = liveP?.name || u.game_identifier_name || u.display_name || u.username;
+    const prof = await buildPlayerProfile(pname, {
+      userId: u.id,
+      ...(u.game_identifier ? { identifier: u.game_identifier } : {}),
+      ...(u.last_rp_name ? { rpName: u.last_rp_name } : {}),
+    });
+    if (!prof) return res.status(400).json({ error: "Nume invalid." });
+    return res.json(prof);
+  }
+  const profile = await buildPlayerProfile(name, { ...(identifier ? { identifier } : {}), ...(rpName ? { rpName } : {}) });
+  if (!profile) return res.status(400).json({ error: "Nume invalid." });
+  res.json(profile);
+}));
+
+// Profilul PROPRIU al jucătorului logat — aceeași agregare ca mai sus, dar
+// legată strict de contul autentificat (nu poate cere profilul altcuiva).
+// Necesită un cont de site cu display_name setat (vine din players.display_name,
+// populat la prima sincronizare cu jocul) — dacă nu există încă, răspundem
+// degradat, nu cu eroare.
+app.get("/api/me/profile", auth, asyncRoute(async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT p.display_name, u.game_identifier, u.game_identifier_name
+     FROM users u LEFT JOIN players p ON p.user_id = u.id WHERE u.id = $1 LIMIT 1`, [req.user.sub]);
+  const row = rows[0] || {};
+  // Cont legat prin /leagacont (28.09.2026): căutăm personajul după
+  // identificatorul exact. Numele pentru loguri/sancțiuni e numele din joc
+  // (live, sau cel salvat la legare), nu username-ul de pe site.
+  if (row.game_identifier) {
+    const detail = await getPlayersDetail();
+    const live = (detail.players || []).find(p => p.license === row.game_identifier);
+    const name = live?.name || row.game_identifier_name || row.display_name;
+    const profile = await buildPlayerProfile(name, { userId: req.user.sub, identifier: row.game_identifier });
+    return res.json({ hasGameProfile: true, linked: true, identifier: row.game_identifier, ...profile });
+  }
+  if (!row.display_name) return res.json({ hasGameProfile: false, linked: false });
+  const profile = await buildPlayerProfile(row.display_name);
+  res.json({ hasGameProfile: true, linked: false, ...profile });
+}));
+
+// Notificări proprii (24.09.2026) — vezi tabela "notifications" din
+// database/schema.sql și notifyUser() mai sus pentru context. Limitat la 50
+// cele mai recente (destul pentru un clopoțel, fără paginare — dacă devine
+// nevoie de istoric complet, se poate adăuga pagination ca la /api/admin/logs).
+app.get("/api/me/notifications", auth, asyncRoute(async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT id, type, title, message, link, read_at, created_at
+     FROM notifications WHERE user_id = $1 ORDER BY created_at DESC LIMIT 50`,
+    [req.user.sub]
+  );
+  res.json({ notifications: rows, unread: rows.filter(r => !r.read_at).length });
+}));
+
+app.post("/api/me/notifications/:id/citit", auth, asyncRoute(async (req, res) => {
+  await pool.query(
+    `UPDATE notifications SET read_at = NOW() WHERE id = $1 AND user_id = $2 AND read_at IS NULL`,
+    [req.params.id, req.user.sub]
+  );
+  res.json({ ok: true });
+}));
+
+app.post("/api/me/notifications/citeste-tot", auth, asyncRoute(async (req, res) => {
+  await pool.query(
+    `UPDATE notifications SET read_at = NOW() WHERE user_id = $1 AND read_at IS NULL`,
+    [req.user.sub]
+  );
+  res.json({ ok: true });
+}));
+
+// Leagă contul de site (Discord) de personajul din joc — jucătorul scrie
+// "/leagacont" în joc, primește un cod de 6 cifre valabil 5 minute, îl
+// introduce aici o singură dată. Verificat DIRECT de moldovarp-api (vezi
+// fetchLinkVerify) — site-ul nu are cum să inventeze o legătură validă fără
+// codul real generat în joc, deci nu se poate lega contul altcuiva.
+//
+// LANSAT PUBLIC (10.09.2026): VIP Shop nu mai e restricționat la staff —
+// legarea de cont există ca să poți deschide cutii, deci merge deblocat la
+// fel ca /api/vip-shop + /api/vip-shop/deschide + /api/vip-shop/istoric.
+//
+// IMPORTANT: /api/vip-shop/log (jurnalul TUTUROR jucătorilor, mai jos) rămâne
+// restricționat la FOUNDER_ROLES PERMANENT, cerut explicit (08.09.2026): e un
+// instrument de staff, nu un feature pentru jucători, deci nu se deblochează
+// odată cu restul. La fel și rutele de editor "/api/admin/vip-shop/cutii...".
+app.post("/api/cont/leaga-joc", auth, asyncRoute(async (req, res) => {
+  const code = String(req.body?.code || "").trim();
+  if (!/^\d{6}$/.test(code)) return res.status(400).json({ error: "Codul trebuie să aibă 6 cifre." });
+  const result = await fetchLinkVerify(code);
+  if (!result.ok) {
+    const messages = {
+      cod_invalid: "Cod invalid sau deja folosit.",
+      server_offline: "Serverul de joc nu răspunde momentan — încearcă din nou puțin mai târziu.",
+      eroare: "Nu am putut verifica codul.",
+    };
+    return res.status(400).json({ error: messages[result.error] || messages.eroare });
+  }
+  await pool.query(
+    `UPDATE users SET game_identifier = $1, game_identifier_name = $2 WHERE id = $3`,
+    [result.identifier, result.name || null, req.user.sub]
+  );
+  await ensurePlayerRow(req.user.sub).catch(() => {});
+  res.json({ ok: true, name: result.name || null });
+}));
+
+// (01.10.2026) Legare fără cod, prin Discord: dacă te-ai logat pe site cu
+// Discord, îți arătăm personajele din joc care au același Discord și îl
+// alegi pe al tău. Verificăm din nou pe server la legare (nu ne bazăm pe ce
+// trimite browserul).
+app.get("/api/cont/personaje-discord", auth, asyncRoute(async (req, res) => {
+  const { rows } = await pool.query(`SELECT discord_id FROM users WHERE id = $1`, [req.user.sub]);
+  const discordId = rows[0]?.discord_id;
+  if (!discordId) return res.json({ hasDiscord: false, characters: [] });
+  const chars = await fetchGameCharsByDiscord(discordId);
+  res.json({ hasDiscord: true, characters: chars.map(c => ({ identifier: c.identifier, rpName: c.rpName, staticId: c.staticId, jobLabel: c.jobLabel || c.job, online: c.online, lastSeen: c.lastSeen })) });
+}));
+
+app.post("/api/cont/leaga-discord", auth, asyncRoute(async (req, res) => {
+  const identifier = String(req.body?.identifier || "").trim().slice(0, 120);
+  if (!identifier) return res.status(400).json({ error: "Alege un personaj." });
+  const { rows } = await pool.query(`SELECT discord_id FROM users WHERE id = $1`, [req.user.sub]);
+  const discordId = rows[0]?.discord_id;
+  if (!discordId) return res.status(400).json({ error: "Contul tău nu e logat cu Discord — folosește codul din joc (/leagacont)." });
+  const chars = await fetchGameCharsByDiscord(discordId);
+  const hit = chars.find(c => c.identifier === identifier);
+  if (!hit) return res.status(400).json({ error: "Personajul nu e legat de Discord-ul tău. Folosește codul din joc (/leagacont)." });
+  await pool.query(
+    `UPDATE users SET game_identifier = $1, game_identifier_name = $2 WHERE id = $3`,
+    [hit.identifier, hit.rpName || null, req.user.sub]
+  );
+  await ensurePlayerRow(req.user.sub).catch(() => {});
+  await logAction(req.user.sub, "account.link_game_discord", "user", req.user.sub, { identifier: hit.identifier, rpName: hit.rpName }, req.ip);
+  res.json({ ok: true, name: hit.rpName || null });
+}));
+
+app.post("/api/cont/dezleaga-joc", auth, asyncRoute(async (req, res) => {
+  await pool.query(`UPDATE users SET game_identifier = NULL, game_identifier_name = NULL WHERE id = $1`, [req.user.sub]);
+  res.json({ ok: true });
+}));
+
+// Pagina "VIP Shop" — lista recompenselor (cu prețuri și șanse) e publică
+// pentru orice cont logat, ca jucătorii să vadă din prima ce oferim, fără să
+// fie nevoiți să lege contul mai întâi. Soldul de coins și recompensele "în
+// așteptare" necesită cont legat de joc — fără el răspundem "linked: false"
+// și lăsăm frontend-ul să ceară legarea abia când chiar încearcă să deschidă
+// o cutie (nu e o eroare, doar jucătorul nu a parcurs încă acel pas).
+app.get("/api/vip-shop", auth, asyncRoute(async (req, res) => {
+  // Fără cache — pagina trebuie să reflecte mereu starea curentă a cutiilor
+  // (ex. o cutie dezactivată/activată chiar acum din admin), nu un răspuns
+  // servit din cache-ul browserului pe baza unui ETag vechi.
+  res.set("Cache-Control", "no-store");
+  const { rows } = await pool.query(`SELECT game_identifier, game_identifier_name FROM users WHERE id = $1`, [req.user.sub]);
+  const identifier = rows[0]?.game_identifier;
+
+  if (!identifier) {
+    const casesResult = await fetchCasesList();
+    return res.json({ linked: false, online: casesResult.online, cases: await applyOrderToPublicCases(casesResult.cases) });
+  }
+
+  const [coinsResult, casesResult, itemValues, legalCfg] = await Promise.all([fetchCoins(identifier), fetchCasesList(), loadItemValues(), loadLegalExchange()]);
+  casesResult.cases = await applyOrderToPublicCases(casesResult.cases);
+  const hasDirty = (coinsResult.pending || []).some(p => p.reward_type === "cash" && parseRewardData(p.reward_data).account === "black_money");
+  const isLegal = hasDirty && legalCfg.enabled ? await canExchangeDirty(identifier, legalCfg) : false;
+  coinsResult.pending = (coinsResult.pending || []).map(p => {
+    const data = parseRewardData(p.reward_data);
+    return {
+      ...p,
+      sellOffer: gameRouteOk("sell") ? sellOfferFor(itemValues, p.reward_type, data) : null,
+      exchangeOffer: gameRouteOk("convert") ? exchangeOfferFor(legalCfg, isLegal, p.reward_type, data) : null,
+    };
+  });
+  res.json({
+    linked: true,
+    name: rows[0].game_identifier_name,
+    online: coinsResult.online && casesResult.online,
+    coins: coinsResult.coins,
+    pending: coinsResult.pending,
+    cases: casesResult.cases,
+  });
+}));
+
+// (04.10.2026) Mai multe cutii dintr-o apăsare: „count" (1–5). Toate se
+// deschid ACUM, una după alta (fiecare e o cerere separată către serverul de
+// joc, care scade coins-urile atomic), iar pagina doar le prezintă pe rând.
+// Dacă una nu se mai poate deschide (coins terminați, server oprit), ne oprim
+// acolo: jucătorul primește premiile cutiilor deja deschise și află de ce nu
+// s-au deschis restul — pentru cele nedeschise nu se scade nimic.
+const OPEN_BATCH_MAX = 5;
+const OPEN_CASE_ERRORS = {
+  coins_insuficienti: "Nu ai suficienți coins pentru această recompensă.",
+  caz_necunoscut: "Recompensa nu mai există.",
+  cutie_indisponibila: "Această cutie a fost dezactivată momentan de staff.",
+  cutie_fara_recompense: "Această cutie nu are recompense configurate momentan.",
+  server_offline: "Serverul de joc nu răspunde momentan.",
+};
+// (04.10.2026) Serverul de joc refuză o deschidere venită imediat după alta
+// (protecție la apăsări repetate): a doua cutie dintr-o serie primea un refuz
+// pe loc, deși jucătorul avea coins. Un refuz de felul ăsta (răspuns 4xx cu un
+// cod pe care nu-l cunoaștem) nu scade nimic, deci îl putem reîncerca fără
+// risc, după o scurtă pauză. NU reîncercăm erorile cunoscute (coins terminați,
+// cutie oprită…), nici erorile interne ale jocului (5xx — acolo coins-urile ar
+// putea fi deja scăzute) și nici când jocul nu răspunde deloc.
+const OPEN_RETRY_DELAYS_MS = [600, 1200, 2400];
+const OPEN_NO_RETRY = new Set(["internal_error", "eroare_baza_de_date", "date_lipsa", "metoda_neacceptata"]);
+const sleepMs = ms => new Promise(resolve => setTimeout(resolve, ms));
+function isRetryableOpenRefusal(outcome) {
+  return !outcome.ok && !OPEN_CASE_ERRORS[outcome.error] && !OPEN_NO_RETRY.has(outcome.error)
+    && outcome.status >= 400 && outcome.status < 500;
+}
+async function openCasePatiently(args) {
+  let outcome = await postOpenCase(args);
+  for (const delay of OPEN_RETRY_DELAYS_MS) {
+    if (!isRetryableOpenRefusal(outcome)) break;
+    console.warn(`VIP Shop: serverul de joc a refuzat deschiderea (HTTP ${outcome.status}, cod „${outcome.error}”) — reîncerc peste ${delay} ms.`);
+    await sleepMs(delay);
+    outcome = await postOpenCase(args);
+  }
+  if (!outcome.ok && !OPEN_CASE_ERRORS[outcome.error]) {
+    console.warn(`VIP Shop: deschidere nereușită — serverul de joc a răspuns HTTP ${outcome.status}, cod „${outcome.error}”.`);
+  }
+  return outcome;
+}
+function openCaseErrorText(outcome) {
+  if (OPEN_CASE_ERRORS[outcome.error]) return OPEN_CASE_ERRORS[outcome.error];
+  const code = String(outcome.error || "necunoscut").slice(0, 40);
+  if (outcome.status >= 500) {
+    return `Serverul de joc a dat o eroare la deschidere (cod: ${code}). Dacă ți s-au scăzut coins fără să primești un premiu, deschide un tichet.`;
+  }
+  return `Serverul de joc a refuzat deschiderea (cod: ${code}). Încearcă din nou peste câteva secunde.`;
+}
+// Pentru fiecare cutie deschisă: oferta de vânzare înapoi (mașini/arme cu
+// valoare setată) și oferta de schimb (bani murdari), legate de deschiderea
+// tocmai creată. Dacă serverul de joc nu ne spune id-ul deschiderii, îl găsim
+// printre recompensele neridicate: cea mai nouă cu aceeași recompensă — iar la
+// premii identice în aceeași serie, fiecare își ia propriul id (de la cea mai
+// nouă spre cea mai veche).
+async function offersForOpened(identifier, opened) {
+  const isSellable = w => w && (w.type === "vehicle" || w.type === "item");
+  const isDirty = w => w && w.type === "cash" && String(w.data?.account || "") === "black_money";
+  const needSell = gameRouteOk("sell") && opened.some(r => isSellable(r.reward));
+  const needExch = gameRouteOk("convert") && opened.some(r => isDirty(r.reward));
+  const out = opened.map(r => ({ ...r, sell: null, exchange: null }));
+  if (!needSell && !needExch) return out;
+
+  const [coinsResult, itemValues, legalCfg] = await Promise.all([
+    fetchCoins(identifier),
+    needSell ? loadItemValues() : null,
+    needExch ? loadLegalExchange() : null,
+  ]);
+  const canExch = !!(legalCfg && legalCfg.enabled && await canExchangeDirty(identifier, legalCfg));
+  const pending = (coinsResult.pending || []).slice().sort((x, y) => Number(y.id) - Number(x.id));
+  const used = new Set();
+  const openingIdOf = (r, won) => {
+    const direct = Number(r.openingId ?? r.opening_id);
+    if (Number.isFinite(direct) && direct > 0) { used.add(direct); return direct; }
+    const hit = pending.find(p => !used.has(Number(p.id)) && p.reward_type === won.type && p.reward_label === won.label);
+    if (!hit) return null;
+    used.add(Number(hit.id));
+    return Number(hit.id);
+  };
+  for (let i = out.length - 1; i >= 0; i--) {
+    const won = out[i].reward;
+    if (!isSellable(won) && !isDirty(won)) continue;
+    const openingId = openingIdOf(out[i], won);
+    if (!openingId) continue;
+    if (needSell && isSellable(won)) {
+      const offer = sellOfferFor(itemValues, won.type, won.data || {});
+      if (offer) out[i].sell = { openingId, ...offer };
+    }
+    if (canExch && isDirty(won)) {
+      const offer = exchangeOfferFor(legalCfg, true, won.type, won.data);
+      if (offer) out[i].exchange = { openingId, ...offer };
+    }
+  }
+  return out;
+}
+
+app.post("/api/vip-shop/deschide", auth, asyncRoute(async (req, res) => {
+  const { rows } = await pool.query(`SELECT game_identifier, game_identifier_name FROM users WHERE id = $1`, [req.user.sub]);
+  const identifier = rows[0]?.game_identifier;
+  if (!identifier) return res.status(400).json({ error: "Leagă-ți mai întâi contul de personajul din joc." });
+
+  const caseId = String(req.body?.caseId || "").trim();
+  if (!caseId) return res.status(400).json({ error: "Lipsește caseId." });
+  const requested = Math.min(Math.max(parseInt(req.body?.count, 10) || 1, 1), OPEN_BATCH_MAX);
+
+  const opened = [];
+  let stopError = null;
+  for (let i = 0; i < requested; i++) {
+    const outcome = await openCasePatiently({ identifier, playerName: rows[0].game_identifier_name, caseId });
+    if (!outcome.ok) { stopError = openCaseErrorText(outcome); break; }
+    opened.push(outcome.result || {});
+  }
+  if (!opened.length) return res.status(400).json({ error: stopError });
+
+  recentWinsCache.at = 0; // banda „Ultimele câștiguri" le arată imediat
+  const results = await offersForOpened(identifier, opened);
+  // Prima cutie rămâne și „la vedere" în răspuns (reward, sell, exchange), exact
+  // ca înainte — o pagină mai veche, rămasă în memoria telefonului, merge la fel.
+  res.json({
+    ok: true,
+    ...results[0],
+    results,
+    requested,
+    opened: results.length,
+    stopError: results.length < requested ? stopError : null,
+  });
+}));
+
+// (04.10.2026) Limita pe zi a serverului de joc. La un schimb sau o vânzare
+// peste limită, jocul răspunde „nu_se_poate" cu motivul în „motiv" (de ex.
+// „limita_zi_jucator") și cu ce a mai rămas pe azi în „ramas" — văzut în
+// jurnal la primul refuz real. Fără asta, jucătorul primea mesajul greșit
+// „poate ai ridicat-o deja". Întoarce null dacă refuzul nu e o limită.
+function gameDailyLimit(result) {
+  const d = result?.data || {};
+  const motiv = String(d.motiv || d.reason || "").toLowerCase();
+  if (result?.error !== "limita_zilnica" && !motiv.startsWith("limita")) return null;
+  const left = Number(d.ramas);
+  return { left: d.ramas != null && Number.isFinite(left) && left >= 0 ? Math.floor(left) : null };
+}
+
+// Vinde înapoi o mașină/armă câștigată și încă neridicată (29.09.2026), pentru
+// 50% din valoarea setată de staff, în coins sau bani din joc — la alegerea
+// jucătorului. Serverul de joc face efectiv vânzarea ("/cases/sell"): verifică
+// atomic că recompensa e a lui și încă neridicată, o marchează și dă plata.
+app.post("/api/vip-shop/vinde", auth, asyncRoute(async (req, res) => {
+  const { rows } = await pool.query(`SELECT game_identifier FROM users WHERE id = $1`, [req.user.sub]);
+  const identifier = rows[0]?.game_identifier;
+  if (!identifier) return res.status(400).json({ error: "Leagă-ți mai întâi contul de personajul din joc." });
+  const openingId = parseInt(req.body?.openingId, 10);
+  const currency = req.body?.currency === "money" ? "money" : req.body?.currency === "coins" ? "coins" : null;
+  if (!openingId || !currency) return res.status(400).json({ error: "Date invalide." });
+
+  const [coinsResult, itemValues] = await Promise.all([fetchCoins(identifier), loadItemValues()]);
+  if (!coinsResult.online) return res.status(503).json({ error: "Serverul de joc nu răspunde momentan." });
+  const opening = (coinsResult.pending || []).find(p => Number(p.id) === openingId);
+  if (!opening) return res.status(400).json({ error: "Recompensa nu mai e în așteptare (poate ai ridicat-o deja)." });
+  const offer = sellOfferFor(itemValues, opening.reward_type, parseRewardData(opening.reward_data));
+  const amount = offer && offer[currency];
+  if (!amount) return res.status(400).json({ error: "Această recompensă nu se poate vinde în moneda aleasă." });
+
+  const result = await vipShopAdminRequest("POST", "/cases/sell", { identifier, openingId, currency, amount });
+  if (!result.ok) {
+    const messages = {
+      nu_se_poate: "Recompensa nu mai poate fi vândută (poate ai ridicat-o deja).",
+      limita_zilnica: "Ai atins limita de vânzări pe azi. Recompensa rămâne în așteptare: o poți vinde mâine sau o ridici în joc.",
+      server_offline: "Serverul de joc nu răspunde momentan.",
+    };
+    if (result.status === 404) gameRouteReady.sell = false;
+    // (04.10.2026) în jurnal: de ce a refuzat jocul, ca să nu mai ghicim
+    console.warn(`VIP Shop: serverul de joc a refuzat vânzarea — HTTP ${result.status}, răspuns ${JSON.stringify(result.data || {}).slice(0, 300)} (deschiderea #${openingId}, „${opening.reward_label}”, ${amount} ${currency}).`);
+    const sellLimit = gameDailyLimit(result);
+    const msg = result.status === 404 ? "Vânzarea înapoi nu e încă activă pe serverul de joc."
+      : sellLimit ? messages.limita_zilnica
+      : (messages[result.error] || "Nu am putut vinde recompensa.");
+    return res.status(400).json({ error: msg });
+  }
+  await logAction(req.user.sub, "vip_shop.sell_back", "vip_shop_opening", String(openingId), { currency, amount, label: opening.reward_label }, req.ip);
+  // (01.10.2026) Serverul de joc poate recalcula singur suma (mai sigur) —
+  // dacă întoarce „amount", aia e suma reală plătită și pe aia o arătăm.
+  const paid = Number(result.data?.amount);
+  res.json({ ok: true, currency, amount: Number.isFinite(paid) && paid > 0 ? Math.floor(paid) : amount });
+}));
+
+// Schimbă banii murdari (neridicați) în bani curați în bancă (30.09.2026) —
+// doar pentru membrii facțiunilor legale, la procentul setat de staff.
+// Serverul de joc face efectiv schimbul ("/cases/convert"): verifică atomic
+// că recompensa e a jucătorului, încă neridicată și chiar bani murdari, apoi
+// o transformă în bani în bancă (suma de mai jos) — se ridică tot cu /recompense.
+app.post("/api/vip-shop/schimba", auth, asyncRoute(async (req, res) => {
+  const { rows } = await pool.query(`SELECT game_identifier FROM users WHERE id = $1`, [req.user.sub]);
+  const identifier = rows[0]?.game_identifier;
+  if (!identifier) return res.status(400).json({ error: "Leagă-ți mai întâi contul de personajul din joc." });
+  const openingId = parseInt(req.body?.openingId, 10);
+  if (!openingId) return res.status(400).json({ error: "Date invalide." });
+
+  const [coinsResult, legalCfg] = await Promise.all([fetchCoins(identifier), loadLegalExchange()]);
+  if (!coinsResult.online) return res.status(503).json({ error: "Serverul de joc nu răspunde momentan." });
+  if (!legalCfg.enabled) return res.status(400).json({ error: "Schimbul banilor murdari e oprit momentan." });
+  const opening = (coinsResult.pending || []).find(p => Number(p.id) === openingId);
+  if (!opening) return res.status(400).json({ error: "Recompensa nu mai e în așteptare (poate ai ridicat-o deja)." });
+  if (!(await canExchangeDirty(identifier, legalCfg))) {
+    return res.status(403).json({ error: "Schimbul e doar pentru membrii facțiunilor legale." });
+  }
+  const offer = exchangeOfferFor(legalCfg, true, opening.reward_type, parseRewardData(opening.reward_data));
+  if (!offer) return res.status(400).json({ error: "Doar banii murdari se pot schimba." });
+
+  const result = await vipShopAdminRequest("POST", "/cases/convert", {
+    identifier, openingId, account: "bank", amount: offer.amount, pct: offer.pct,
+  });
+  if (!result.ok) {
+    const messages = {
+      nu_se_poate: "Recompensa nu mai poate fi schimbată (poate ai ridicat-o deja).",
+      limita_zilnica: "Ai atins limita de schimburi pe azi. Banii rămân în așteptare: îi poți schimba mâine sau îi ridici murdari în joc.",
+      server_offline: "Serverul de joc nu răspunde momentan.",
+    };
+    if (result.status === 404) gameRouteReady.convert = false;
+    console.warn(`VIP Shop: serverul de joc a refuzat schimbul — HTTP ${result.status}, răspuns ${JSON.stringify(result.data || {}).slice(0, 300)} (deschiderea #${openingId}, „${opening.reward_label}”, ${offer.from} murdari → ${offer.amount} curați, ${offer.pct}%).`);
+    const limit = gameDailyLimit(result);
+    const limitMsg = !limit ? null
+      : limit.left > 0 ? `Suma e peste limita ta de schimb pe azi: mai poți schimba doar $${limit.left.toLocaleString("ro-RO")}. Încearcă din nou mâine.`
+      : limit.left === 0 ? "Ai atins limita ta de schimb pe azi. Încearcă din nou mâine."
+      : messages.limita_zilnica;
+    const msg = result.status === 404 ? "Schimbul banilor murdari nu e încă activ pe serverul de joc."
+      : (limitMsg || messages[result.error] || "Nu am putut schimba banii.");
+    return res.status(400).json({ error: msg });
+  }
+  await logAction(req.user.sub, "vip_shop.legal_exchange", "vip_shop_opening", String(openingId), { from: offer.from, amount: offer.amount, pct: offer.pct, label: opening.reward_label }, req.ip);
+  const paid = Number(result.data?.amount);
+  res.json({ ok: true, amount: Number.isFinite(paid) && paid > 0 ? Math.floor(paid) : offer.amount, pct: offer.pct });
+}));
+
+// Istoricul PROPRIU al jucătorului logat (deschideri ridicate ȘI în
+// așteptare) — ca să-și poată vedea singur ce a câștigat de-a lungul
+// timpului, nu doar recompensele încă neridicate (alea rămân în "pending",
+// de la /api/vip-shop de mai sus). Citit prin ruta nouă "/cases/history" din
+// moldovarp-api (v1.29.4). Face parte din grupul de rute care se
+// deblochează împreună la lansarea publică (vezi comentariul de mai sus) —
+// spre deosebire de /api/vip-shop/log (jurnalul tuturor), care rămâne
+// admin-only.
+app.get("/api/vip-shop/istoric", auth, asyncRoute(async (req, res) => {
+  const { rows } = await pool.query(`SELECT game_identifier FROM users WHERE id = $1`, [req.user.sub]);
+  const identifier = rows[0]?.game_identifier;
+  if (!identifier) return res.json({ online: true, history: [] });
+
+  const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 30, 1), 100);
+  const result = await fetchCaseHistory(identifier, limit);
+  res.json({ online: result.online, history: result.history });
+}));
+
+// Banda „Ultimele câștiguri" de pe pagina VIP Shop (04.10.2026): ce premii au
+// ieșit din ultimele deschideri, ale tuturor jucătorilor. Spre deosebire de
+// jurnalul de staff de mai jos, aici NU trimitem cine a câștigat (nici nume,
+// nici identificator) — doar premiul, cutia și ora. Ținut 15 s în memorie, ca
+// pagina să se poată reîmprospăta des fără să încarce serverul de joc.
+const RECENT_WINS_MAX = 24;
+let recentWinsCache = { at: 0, wins: null };
+function publicWinOf(e) {
+  const d = parseRewardData(e.rewardData ?? e.reward_data);
+  const win = {
+    id: String(e.id ?? e.openingId ?? `${e.createdAt ?? e.created_at ?? ""}|${e.rewardLabel ?? e.reward_label ?? ""}`).slice(0, 80),
+    type: String(e.rewardType ?? e.reward_type ?? ""),
+    label: String(e.rewardLabel ?? e.reward_label ?? "").slice(0, 120),
+    caseId: e.caseId ?? e.case_id ?? null,
+    caseName: String(e.caseName ?? e.case_name ?? "").slice(0, 80),
+    at: e.createdAt ?? e.created_at ?? null,
+  };
+  if (d.model) win.model = String(d.model).slice(0, 80);
+  if (d.item) win.item = String(d.item).slice(0, 80);
+  if (Number(d.ammo) > 0) win.ammo = Math.floor(Number(d.ammo));
+  if (d.account) win.account = String(d.account).slice(0, 40);
+  if (d.amount != null && Number.isFinite(Number(d.amount))) win.amount = Number(d.amount);
+  return win;
+}
+app.get("/api/vip-shop/ultimele", auth, asyncRoute(async (_req, res) => {
+  res.set("Cache-Control", "no-store");
+  if (recentWinsCache.wins && Date.now() - recentWinsCache.at < 15_000) {
+    return res.json({ online: true, wins: recentWinsCache.wins });
+  }
+  const result = await fetchCaseOpeningsLog(RECENT_WINS_MAX);
+  if (!result.online) return res.json({ online: false, wins: recentWinsCache.wins || [] });
+  const wins = result.log.slice(0, RECENT_WINS_MAX).map(publicWinOf).filter(w => w.type && w.label);
+  recentWinsCache = { at: Date.now(), wins };
+  res.json({ online: true, wins });
+}));
+
+// Jurnalul TUTUROR deschiderilor de cutii (toți jucătorii, nu doar cel logat)
+// — cerut de staff ca să vadă cine ce a câștigat cât timp VIP Shop e încă în
+// testare, și rămâne restricționat la FOUNDER_ROLES chiar și după ce restul
+// feature-ului devine public (vezi comentariul de mai sus — e un instrument
+// de staff, nu un feature pentru jucători). Citit direct din
+// moldovarp_case_openings de pe serverul de joc, prin ruta "/cases/log" din
+// moldovarp-api (v1.29.3) — NU e stocat nimic din asta pe site.
+// (29.09.2026) Pagini + căutare după jucător + filtru ridicat/în așteptare.
+// Dacă serverul de joc știe de "offset" (întoarce "total"), paginile merg
+// oricât de departe în istoric. Altfel luăm ultimele 200 și paginăm aici.
+app.get("/api/vip-shop/log", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
+  const per = Math.min(Math.max(parseInt(req.query.per ?? req.query.limit, 10) || 25, 1), 100);
+  const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+  const q = String(req.query.q || "").trim().slice(0, 64);
+  const status = ["claimed", "pending"].includes(req.query.status) ? req.query.status : "";
+  const first = await fetchCaseOpeningsLog(per, { offset: (page - 1) * per, q, status });
+  if (!first.online) return res.json({ online: false, log: [], total: 0, page, per });
+  if (first.total != null) {
+    return res.json({ online: true, log: first.log, total: first.total, page, per, capped: false });
+  }
+  // Server fără pagini: ultimele 200, filtrate și împărțite pe pagini aici.
+  const all = (await fetchCaseOpeningsLog(200)).log;
+  const ql = q.toLowerCase();
+  const filtered = all.filter(e =>
+    (!ql || [e.playerName, e.identifier, e.rewardLabel, e.caseName].some(v => String(v || "").toLowerCase().includes(ql))) &&
+    (!status || (status === "claimed" ? !!e.claimedAt : !e.claimedAt))
+  );
+  res.json({ online: true, log: filtered.slice((page - 1) * per, page * per), total: filtered.length, page, per, capped: all.length >= 200 });
+}));
+
+// Editor de cutii/recompense VIP Shop (09.09.2026, cerut explicit de staff)
+// — administratorii pot acum adăuga/edita/șterge cutii și recompense direct
+// din panoul de admin (admin-vip-shop.html), fără să mai fie nevoie să vină
+// aici de fiecare dată să cerem un update de resursă pe serverul de joc.
+// Toate rutele de mai jos doar transmit cererea către moldovarp-api
+// ("/cases/admin..." — vezi server.lua v1.30.0), care ține config-ul real în
+// MySQL, și loghează acțiunea în audit_logs (Postgres, al site-ului) — la fel
+// ca orice altă acțiune de admin (regulamente, anunțuri etc.). Rămâne
+// restricționat la FOUNDER_ROLES PERMANENT — spre deosebire de rutele de mai
+// sus (deblocate pentru jucători la lansare, 10.09.2026), editorul de cutii/
+// recompense e un instrument de staff, nu un feature pentru jucători.
+const VIP_SHOP_ADMIN_ERRORS = {
+  nume_lipsa: "Numele cutiei este obligatoriu.",
+  date_lipsa: "Lipsesc date obligatorii.",
+  date_invalide: "Date invalide.",
+  item_lipsa: "Lipsește numele item-ului (obligatoriu pentru recompense de tip item).",
+  model_lipsa: "Lipsește modelul vehiculului (obligatoriu pentru recompense de tip vehicul).",
+  cutie_inexistenta: "Cutia nu există.",
+  metoda_neacceptata: "Metodă neacceptată.",
+  server_offline: "Serverul de joc nu răspunde momentan — încearcă din nou puțin mai târziu.",
+  internal_error: "Eroare internă pe serverul de joc.",
+};
+
+function vipShopAdminError(res, result) {
+  const message = VIP_SHOP_ADMIN_ERRORS[result.error] || "Nu am putut finaliza operația.";
+  return res.status(result.status && result.status >= 400 && result.status < 600 ? result.status : 400).json({ error: message });
+}
+
+app.get("/api/admin/vip-shop/cutii", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (_req, res) => {
+  // Idem — editorul de admin trebuie să vadă mereu starea reală, imediat
+  // după orice activare/dezactivare/editare, nu un 304 din cache-ul browserului.
+  res.set("Cache-Control", "no-store");
+  const result = await vipShopAdminRequest("GET", "/cases/admin");
+  if (!result.ok) return vipShopAdminError(res, result);
+  const [orders, itemValues] = await Promise.all([loadRewardOrders(), loadItemValues()]);
+  const data = result.data || {};
+  if (Array.isArray(data.cases)) {
+    data.cases = data.cases.map(c => ({
+      ...c,
+      pool: sortByOrder(c.pool || [], orders.get(c.id), r => r.id).map(r => {
+        const k = valueKey(r.type, r);
+        const v = k && itemValues.get(`${k[0]}|${k[1]}`);
+        return v ? { ...r, value_coins: v.coins, value_money: v.money } : r;
+      }),
+    }));
+  }
+  res.json({ ...data, sellBackPct: SELL_BACK_PCT });
+}));
+
+// Setările schimbului de bani murdari pentru facțiunile legale (30.09.2026).
+// GET întoarce și joburile văzute pe server (din sincronizarea jucătorilor),
+// ca staff-ul să bifeze din listă care sunt legale.
+app.get("/api/admin/vip-shop/schimb-legal", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (_req, res) => {
+  const settings = await loadLegalExchange();
+  let jobs = [];
+  try {
+    const { rows } = await pool.query(
+      `SELECT LOWER(last_job) job, MAX(last_job_label) label, COUNT(*)::int players
+       FROM players WHERE last_job IS NOT NULL AND last_job <> ''
+       GROUP BY LOWER(last_job) ORDER BY COUNT(*) DESC LIMIT 80`
+    );
+    jobs = rows;
+  } catch { /* fără listă — se pot adăuga manual */ }
+  // starea rutelor din joc (vânzare / schimb) — verificată din nou dacă e mai veche de un minut
+  if (!gameRoutesCheckedAt || Date.now() - new Date(gameRoutesCheckedAt) > 60_000)
+    await probeGameRoutes().catch(() => {});
+  res.json({ settings, jobs, gameRoutes: { sell: gameRouteReady.sell, convert: gameRouteReady.convert, checkedAt: gameRoutesCheckedAt } });
+}));
+
+app.put("/api/admin/vip-shop/schimb-legal", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
+  const pct = Math.floor(Number(req.body?.pct));
+  if (!Number.isFinite(pct) || pct < 1 || pct > 100) return res.status(400).json({ error: "Procentul trebuie să fie între 1 și 100." });
+  const settings = normalizeLegalExchange({ enabled: req.body?.enabled !== false, scope: req.body?.scope, pct, jobs: req.body?.jobs });
+  await pool.query(
+    `INSERT INTO vip_settings(key, value, updated_at) VALUES ('legal_exchange', $1, NOW())
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+    [JSON.stringify(settings)]
+  );
+  await logAction(req.user.sub, "vip_shop.legal_exchange_settings", "vip_settings", "legal_exchange", settings, req.ip);
+  res.json({ ok: true, settings });
+}));
+
+// Valoarea unei mașini/arme (în coins și în bani din joc) — pentru vânzarea înapoi.
+app.put("/api/admin/vip-shop/valoare", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
+  const k = valueKey(req.body?.kind, req.body?.kind === "vehicle" ? { model: req.body?.key } : { item: req.body?.key });
+  if (!k || !String(req.body?.key || "").trim()) return res.status(400).json({ error: "Date invalide." });
+  const toNum = v => { const n = Math.floor(Number(v)); return Number.isFinite(n) && n > 0 ? n : null; };
+  const coins = toNum(req.body?.coins);
+  const money = toNum(req.body?.money);
+  if (coins != null && coins > 1000000) return res.status(400).json({ error: "Valoare în coins prea mare." });
+  if (!coins && !money) {
+    await pool.query(`DELETE FROM vip_item_value WHERE kind = $1 AND item_key = $2`, k);
+  } else {
+    await pool.query(
+      `INSERT INTO vip_item_value(kind, item_key, value_coins, value_money, updated_at) VALUES ($1,$2,$3,$4,NOW())
+       ON CONFLICT (kind, item_key) DO UPDATE SET value_coins = EXCLUDED.value_coins, value_money = EXCLUDED.value_money, updated_at = NOW()`,
+      [k[0], k[1], coins, money]
+    );
+  }
+  await logAction(req.user.sub, "vip_shop.item_value", "vip_item_value", `${k[0]}:${k[1]}`, { coins, money }, req.ip);
+  res.json({ ok: true, coins, money });
+}));
+
+// Salvează ordinea recompenselor dintr-o cutie (tras cu mouse-ul în editor).
+app.put("/api/admin/vip-shop/cutii/:id/ordine", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
+  const caseId = String(req.params.id || "").slice(0, 40);
+  const ids = Array.isArray(req.body?.ids) ? req.body.ids.map(String).filter(x => /^\d{1,12}$/.test(x)).slice(0, 200) : null;
+  if (!caseId || !ids) return res.status(400).json({ error: "Ordine invalidă." });
+  await pool.query(
+    `INSERT INTO vip_reward_order(case_id, reward_ids, updated_at) VALUES ($1, $2::jsonb, NOW())
+     ON CONFLICT (case_id) DO UPDATE SET reward_ids = EXCLUDED.reward_ids, updated_at = NOW()`,
+    [caseId, JSON.stringify(ids)]
+  );
+  await logAction(req.user.sub, "vip_shop.reward.reorder", "vip_shop_case", caseId, { count: ids.length }, req.ip);
+  res.json({ ok: true });
+}));
+
+app.post("/api/admin/vip-shop/cutii", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
+  const { name, price, theme } = req.body || {};
+  if (!name || !String(name).trim()) return res.status(400).json({ error: "Numele cutiei este obligatoriu." });
+  const result = await vipShopAdminRequest("POST", "/cases/admin", { name: String(name).trim(), price: Number(price) || 0, theme });
+  if (!result.ok) return vipShopAdminError(res, result);
+  await logAction(req.user.sub, "vip_shop.case.create", "vip_shop_case", result.data?.id, { name, price, theme }, req.ip);
+  res.status(201).json(result.data);
+}));
+
+app.put("/api/admin/vip-shop/cutii/:id", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
+  const { name, price, theme, active } = req.body || {};
+  if (!name || !String(name).trim()) return res.status(400).json({ error: "Numele cutiei este obligatoriu." });
+  const sentActive = active !== false;
+  const result = await vipShopAdminRequest("PUT", `/cases/admin/${encodeURIComponent(req.params.id)}`, {
+    name: String(name).trim(), price: Number(price) || 0, theme, active: sentActive,
+  });
+  if (!result.ok) return vipShopAdminError(res, result);
+  await logAction(req.user.sub, "vip_shop.case.update", "vip_shop_case", req.params.id, { name, price, theme, active }, req.ip);
+  res.json(result.data);
+}));
+
+app.delete("/api/admin/vip-shop/cutii/:id", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
+  const result = await vipShopAdminRequest("DELETE", `/cases/admin/${encodeURIComponent(req.params.id)}`);
+  if (!result.ok) return vipShopAdminError(res, result);
+  await logAction(req.user.sub, "vip_shop.case.delete", "vip_shop_case", req.params.id, null, req.ip);
+  res.json(result.data);
+}));
+
+// (01.10.2026) „Gloanțe incluse" la o armă: câmpul „ammo" (0–1000) al unei
+// recompense de tip item. Serverul de joc îl salvează cu recompensa și, la
+// /recompense, dă și muniția potrivită armei (ammoname din ox_inventory).
+// Pleacă doar când editorul îl trimite (gloanțe puse, sau scoase = 0).
+function rewardAmmoField(body) {
+  if (!body || body.type !== "item" || body.ammo === undefined || body.ammo === null) return {};
+  const n = Math.floor(Number(body.ammo) || 0);
+  return { ammo: Math.max(0, Math.min(1000, n)) };
+}
+
+app.post("/api/admin/vip-shop/cutii/:id/recompense", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
+  const { type, label, weight, amount, account, item, count, model } = req.body || {};
+  if (!type || !label || !String(label).trim()) return res.status(400).json({ error: "Tipul și eticheta recompensei sunt obligatorii." });
+  const result = await vipShopAdminRequest("POST", `/cases/admin/${encodeURIComponent(req.params.id)}/rewards`, {
+    type, label: String(label).trim(), weight: Number(weight) || 10, amount, account, item, count, model, ...rewardAmmoField(req.body),
+  });
+  if (!result.ok) return vipShopAdminError(res, result);
+  await logAction(req.user.sub, "vip_shop.reward.create", "vip_shop_reward", result.data?.id, { caseId: req.params.id, type, label }, req.ip);
+  res.status(201).json(result.data);
+}));
+
+app.put("/api/admin/vip-shop/cutii/:id/recompense/:rewardId", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
+  const { type, label, weight, amount, account, item, count, model } = req.body || {};
+  if (!type || !label || !String(label).trim()) return res.status(400).json({ error: "Tipul și eticheta recompensei sunt obligatorii." });
+  const result = await vipShopAdminRequest(
+    "PUT",
+    `/cases/admin/${encodeURIComponent(req.params.id)}/rewards/${encodeURIComponent(req.params.rewardId)}`,
+    { type, label: String(label).trim(), weight: Number(weight) || 10, amount, account, item, count, model, ...rewardAmmoField(req.body) }
+  );
+  if (!result.ok) return vipShopAdminError(res, result);
+  await logAction(req.user.sub, "vip_shop.reward.update", "vip_shop_reward", req.params.rewardId, { caseId: req.params.id, type, label }, req.ip);
+  res.json(result.data);
+}));
+
+app.delete("/api/admin/vip-shop/cutii/:id/recompense/:rewardId", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
+  const result = await vipShopAdminRequest(
+    "DELETE",
+    `/cases/admin/${encodeURIComponent(req.params.id)}/rewards/${encodeURIComponent(req.params.rewardId)}`
+  );
+  if (!result.ok) return vipShopAdminError(res, result);
+  await logAction(req.user.sub, "vip_shop.reward.delete", "vip_shop_reward", req.params.rewardId, { caseId: req.params.id }, req.ip);
+  res.json(result.data);
+}));
+
+// Webhook primit direct de la Luxu Admin (panoul lor cloud, tab "Webhooks"),
+// de fiecare dată când un membru staff face o acțiune (kill, revive, dă/ia
+// item, ban etc.). Fără autentificare per-user (nu e un admin logat pe site,
+// e Luxu care ne cheamă) — protejat printr-un secret în query string, pentru
+// că Luxu nu oferă header-e custom / semnătură configurabile.
+// Structura exactă a payload-ului Luxu nu e documentată public, deci
+// încercăm mai multe nume de câmp posibile și, indiferent de rezultat,
+// păstrăm payload-ul brut (raw) ca să nu pierdem nimic dacă extragerea unui
+// câmp anume eșuează pentru un tip de eveniment pe care nu l-am prevăzut.
+const LUXU_WEBHOOK_SECRET = process.env.LUXU_WEBHOOK_SECRET || "";
+
+function pickField(obj, keys) {
+  for (const k of keys) {
+    const v = obj?.[k];
+    if (v !== undefined && v !== null && String(v).trim() !== "") return String(v).trim().slice(0, 500);
+  }
+  return null;
+}
+
+app.post("/api/webhooks/luxu", asyncRoute(async (req, res) => {
+  if (!LUXU_WEBHOOK_SECRET || req.query.key !== LUXU_WEBHOOK_SECRET) {
+    return res.status(401).json({ error: "unauthorized" });
+  }
+  const body = (req.body && typeof req.body === "object") ? req.body : {};
+  const staff = pickField(body, ["admin", "staff", "moderator", "executor", "by", "source_name", "adminName", "staffName", "username", "author"]);
+  const target = pickField(body, ["target", "player", "target_name", "targetName", "victim", "targetPlayer"]);
+  const action = pickField(body, ["action", "type", "event", "command", "title"]);
+  const reason = pickField(body, ["reason", "note", "notes", "details", "description"]);
+  await pool.query(
+    "INSERT INTO admin_action_logs(source, staff_name, target_name, action, reason, raw) VALUES ($1,$2,$3,$4,$5,$6)",
+    ["luxu", staff, target, action, reason, JSON.stringify(body)]
+  );
+  res.json({ ok: true });
+}));
+
+// Curățare periodică a acțiunilor de staff (Luxu) — păstrăm doar ultimele 30
+// de zile, la fel ca tabela moldovarp_logs de pe serverul de joc.
+setInterval(() => {
+  pool.query("DELETE FROM admin_action_logs WHERE created_at < NOW() - INTERVAL '30 days'")
+    .catch(err => console.error("Curățarea admin_action_logs a eșuat:", err.message));
+}, 6 * 60 * 60 * 1000);
+
+// ---------------------------------------------------------------------------
+// Loguri din Discord — bot propriu, citește canale (23.09.2026, cerut
+// explicit). Staff-ul are deja loguri detaliate (transferuri bancare,
+// heist-uri, protecție exploit-uri) trimise în Discord prin ~185 de
+// webhook-uri diferite, provenind din scripturi variate — prea multe și, pe
+// alocuri, closed-source, ca să le adăugăm câte un "al doilea webhook" spre
+// site (ca la Luxu, mai sus). Soluția: UN bot Discord al nostru (cont
+// separat, token propriu — DISCORD_LOGS_BOT_TOKEN, cu voie DOAR să vadă
+// canalele de loguri, nicio permisiune de scris), care citește periodic
+// mesajele noi de-acolo și le copiază în discord_channel_logs — indiferent
+// ce script/webhook le-a trimis inițial în Discord.
+//
+// Canalele NU sunt hardcodate: citim toate canalele-text din server la care
+// botul chiar are acces (permisiunea se dă din Discord, per categorie —
+// vezi admin-loguri.html) — un canal nou de loguri, adăugat mai târziu, nu
+// cere nicio schimbare de cod, doar să i se dea botului voie să-l vadă.
+const DISCORD_LOGS_BOT_TOKEN = process.env.DISCORD_LOGS_BOT_TOKEN || "";
+const DISCORD_LOGS_GUILD_ID = process.env.DISCORD_LOGS_GUILD_ID || "";
+const DISCORD_API_BASE = "https://discord.com/api/v10";
+
+async function discordApiGet(path) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    return await fetch(`${DISCORD_API_BASE}${path}`, {
+      headers: { Authorization: `Bot ${DISCORD_LOGS_BOT_TOKEN}` },
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+let discordChannelMapCache = { channels: null, fetchedAt: 0 };
+const DISCORD_CHANNEL_MAP_TTL_MS = 10 * 60 * 1000;
+// Canale la care botul nu are acces (403/404) — le ținem minte ca să nu mai
+// încercăm la fiecare tur de 30s; dacă li se dă acces mai târziu, se
+// rezolvă la următorul restart al serviciului.
+const discordWarnedChannels = new Set();
+
+// Cursoarele (ultimul mesaj_id citit din fiecare canal) — încărcate o
+// singură dată din DB, apoi ținute în memorie; scrise înapoi doar când apar
+// mesaje noi, ca fiecare tur de polling să nu facă un SELECT per canal.
+let discordCursors = null;
+async function loadDiscordCursors() {
+  if (discordCursors) return discordCursors;
+  const { rows } = await pool.query("SELECT channel_id, last_message_id FROM discord_log_cursors");
+  discordCursors = new Map(rows.map(r => [r.channel_id, r.last_message_id]));
+  return discordCursors;
+}
+async function saveDiscordCursor(channelId, lastMessageId) {
+  discordCursors.set(channelId, lastMessageId);
+  await pool.query(
+    `INSERT INTO discord_log_cursors(channel_id, last_message_id, updated_at) VALUES ($1,$2,NOW())
+     ON CONFLICT (channel_id) DO UPDATE SET last_message_id=$2, updated_at=NOW()`,
+    [channelId, lastMessageId]
+  );
+}
+
+async function getDiscordChannelMap() {
+  const age = Date.now() - discordChannelMapCache.fetchedAt;
+  if (discordChannelMapCache.channels && age < DISCORD_CHANNEL_MAP_TTL_MS) return discordChannelMapCache.channels;
+
+  const res = await discordApiGet(`/guilds/${DISCORD_LOGS_GUILD_ID}/channels`);
+  if (!res.ok) {
+    console.error(`Discord logs: nu am putut lista canalele serverului (HTTP ${res.status}).`);
+    return discordChannelMapCache.channels || new Map();
+  }
+  const list = await res.json();
+  const byId = new Map(list.map(c => [c.id, c]));
+  const channels = new Map();
+  for (const c of list) {
+    // Tip 0 = text normal, 5 = anunțuri — singurele din care are sens să
+    // citim mesaje; categoriile (tip 4) și canalele vocale sunt sărite.
+    if (c.type !== 0 && c.type !== 5) continue;
+    const parent = c.parent_id ? byId.get(c.parent_id) : null;
+    channels.set(c.id, { id: c.id, name: c.name, categoryName: parent?.name || null });
+  }
+  discordChannelMapCache = { channels, fetchedAt: Date.now() };
+  return channels;
+}
+
+// ID-urile Discord (snowflake) sunt numere pe 64 de biți — un Number
+// obișnuit din JS și-ar pierde precizia, așa că le comparăm ca BigInt.
+function snowflakeGreater(a, b) {
+  if (!a) return false;
+  if (!b) return true;
+  return BigInt(a) > BigInt(b);
+}
+
+function parseDiscordEmbed(message) {
+  const embed = message.embeds && message.embeds[0];
+  if (!embed) return { title: null, fields: null, content: message.content || null };
+  const fields = {};
+  for (const f of embed.fields || []) {
+    if (f?.name) fields[String(f.name).slice(0, 120)] = String(f.value ?? "").slice(0, 500);
+  }
+  return {
+    title: embed.title || null,
+    fields: Object.keys(fields).length ? fields : null,
+    content: embed.description || message.content || null,
+  };
+}
+
+async function pollDiscordChannel(channelInfo) {
+  if (discordWarnedChannels.has(channelInfo.id)) return;
+
+  const cursors = await loadDiscordCursors();
+  let lastSeen = cursors.get(channelInfo.id) || null;
+
+  if (!lastSeen) {
+    // Prima dată când vedem acest canal: NU importăm tot istoricul (ar
+    // putea fi luni de mesaje, pe 185 de webhook-uri) — doar "ancorăm"
+    // cursorul la cel mai recent mesaj de acum; de-aici încolo citim doar
+    // ce e nou.
+    const res = await discordApiGet(`/channels/${channelInfo.id}/messages?limit=1`);
+    if (res.status === 403 || res.status === 404) {
+      discordWarnedChannels.add(channelInfo.id);
+      console.warn(`Discord logs: fără acces la #${channelInfo.name} (${channelInfo.id}) — sărim peste el (repornește serverul dacă i-ai dat voie între timp).`);
+      return;
+    }
+    if (!res.ok) { console.error(`Discord logs: eroare HTTP ${res.status} la ancorarea #${channelInfo.name}.`); return; }
+    const messages = await res.json();
+    if (messages.length) await saveDiscordCursor(channelInfo.id, messages[0].id);
+    return;
+  }
+
+  // Recuperăm TOATE mesajele noi, nu doar primele 100 — dacă un canal a
+  // fost foarte activ între două tururi, continuăm în buclă până ne prindem
+  // din urmă (limită de siguranță: max 2000 mesaje/tur/canal).
+  for (let guard = 0; guard < 20; guard++) {
+    const res = await discordApiGet(`/channels/${channelInfo.id}/messages?after=${encodeURIComponent(lastSeen)}&limit=100`);
+    if (res.status === 403 || res.status === 404) {
+      discordWarnedChannels.add(channelInfo.id);
+      console.warn(`Discord logs: fără acces la #${channelInfo.name} (${channelInfo.id}) — sărim peste el (repornește serverul dacă i-ai dat voie între timp).`);
+      return;
+    }
+    if (res.status === 429) { console.warn(`Discord logs: rate-limited pe #${channelInfo.name} — reîncercăm la următorul tur.`); return; }
+    if (!res.ok) { console.error(`Discord logs: eroare HTTP ${res.status} pe #${channelInfo.name}.`); return; }
+
+    const messages = await res.json();
+    if (!messages.length) return;
+
+    // Discord întoarce mereu cele mai noi mesaje primele — le procesăm de
+    // la cel mai vechi la cel mai nou, ca ordinea din baza noastră de date
+    // să urmeze ordinea reală din Discord.
+    const ordered = [...messages].reverse();
+    for (const msg of ordered) {
+      const { title, fields, content } = parseDiscordEmbed(msg);
+      await pool.query(
+        `INSERT INTO discord_channel_logs
+           (message_id, channel_id, channel_name, category_name, author_name, title, fields, content, posted_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+         ON CONFLICT (message_id) DO NOTHING`,
+        [
+          msg.id, channelInfo.id, channelInfo.name, channelInfo.categoryName,
+          msg.author?.username || null, title, fields ? JSON.stringify(fields) : null, content, msg.timestamp,
+        ]
+      );
+      if (snowflakeGreater(msg.id, lastSeen)) lastSeen = msg.id;
+    }
+    await saveDiscordCursor(channelInfo.id, lastSeen);
+    if (messages.length < 100) return; // ne-am prins din urmă
+  }
+}
+
+async function pollDiscordLogs() {
+  if (!DISCORD_LOGS_BOT_TOKEN || !DISCORD_LOGS_GUILD_ID) return;
+  const channels = await getDiscordChannelMap();
+  for (const channelInfo of channels.values()) {
+    try {
+      await pollDiscordChannel(channelInfo);
+    } catch (err) {
+      console.error(`Discord logs: eroare la #${channelInfo.name}:`, err.message);
+    }
+    // Pauză mică între canale, ca să nu trimitem toate cererile deodată
+    // către Discord (rate limits per-rută, plus un buget global comun).
+    await new Promise(r => setTimeout(r, 150));
+  }
+}
+
+if (DISCORD_LOGS_BOT_TOKEN && DISCORD_LOGS_GUILD_ID) {
+  setInterval(() => pollDiscordLogs().catch(err => console.error("pollDiscordLogs a eșuat:", err.message)), 30_000);
+  pollDiscordLogs().catch(err => console.error("pollDiscordLogs (prima rulare) a eșuat:", err.message));
+
+  // Aceeași politică de păstrare ca restul Logurilor — 30 de zile.
+  setInterval(() => {
+    pool.query("DELETE FROM discord_channel_logs WHERE posted_at < NOW() - INTERVAL '30 days'")
+      .catch(err => console.error("Curățarea discord_channel_logs a eșuat:", err.message));
+  }, 6 * 60 * 60 * 1000);
+} else {
+  console.log("Discord logs: DISCORD_LOGS_BOT_TOKEN/DISCORD_LOGS_GUILD_ID lipsesc — botul de citit loguri e dezactivat.");
+}
+
+// URL-ul panoului txAdmin al serverului de joc — NU e hardcodat în fișierele
+// statice (oricine ar putea deschide admin-txadmin.html și vedea sursa),
+// vine dintr-o variabilă de mediu și e servit doar către co-fondator/owner,
+// autentificați. txAdmin are oricum propriul login separat — asta doar evită
+// să afișăm public adresa panoului către vizitatori neautentificați.
+const TXADMIN_URL = process.env.TXADMIN_URL || "";
+
+app.get("/api/admin/txadmin-url", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (_req, res) => {
+  res.json({ url: TXADMIN_URL || null });
+}));
+
+app.post("/api/auth/register", asyncRoute(async (req, res) => {
+  const { username, email, password, referralCode } = req.body;
+  if (!username || !email || !password || password.length < 8)
+    return res.status(400).json({ error: "Username, email și parolă de minimum 8 caractere sunt obligatorii." });
+
+  const role = await pool.query("SELECT id FROM roles WHERE name='player'");
+  const hash = await bcrypt.hash(password, 12);
+  // Cod de referal opțional (ex: link "register.html?ref=CULIOK" distribuit
+  // de un streamer) — un cod inexistent/greșit e ignorat silențios, exact ca
+  // la reported_player din tichete: NU blocăm crearea contului pentru asta.
+  const referredBy = await resolveReferrerId(referralCode);
+  try {
+    const { rows } = await pool.query(
+      "INSERT INTO users(username,email,password_hash,role_id,referred_by_user_id) VALUES($1,$2,$3,$4,$5) RETURNING id,username,email",
+      [username.trim(), email.trim().toLowerCase(), hash, role.rows[0].id, referredBy]
+    );
+    await ensurePlayerRow(rows[0].id).catch(err => console.error("Fișa de jucător nu s-a creat la înscriere:", err.message));
+    res.status(201).json({ user: rows[0] });
+  } catch (e) {
+    if (e.code === "23505") return res.status(409).json({ error: "Username sau email deja folosit." });
+    throw e;
+  }
+}));
+
+app.post("/api/auth/login", asyncRoute(async (req, res) => {
+  const { login, password } = req.body;
+  const { rows } = await pool.query(
+    `SELECT u.*, r.name AS role_name
+     FROM users u JOIN roles r ON r.id=u.role_id
+     WHERE u.username=$1 OR u.email=$1 LIMIT 1`, [login?.trim()]
+  );
+  const user = rows[0];
+  if (!user || !user.is_active || !user.password_hash || !(await bcrypt.compare(password || "", user.password_hash)))
+    return res.status(401).json({ error: "Date de autentificare incorecte." });
+
+  const token = signUser(user);
+  await logAction(user.id, "auth.login", "user", user.id, null, req.ip);
+  res.json({
+    token,
+    user: { id: user.id, username: user.username, email: user.email, role: user.role_name }
+  });
+}));
+
+// ---------------------------------------------------------------------------
+// Email de confirmare (cod de 6 cifre) — folosit la "Setează parola"
+// ---------------------------------------------------------------------------
+// Trimitem prin API-ul HTTP al Brevo (nu prin SMTP!) — Railway blochează
+// traficul SMTP ieșit (porturile 465/587) pe planurile Free/Trial/Hobby, ceea
+// ce făcea ca trimiterea prin nodemailer să rămână agățată la infinit fără
+// nicio eroare vizibilă. API-ul e peste HTTPS normal, deci nu e blocat.
+// Variabile de mediu necesare: BREVO_API_KEY (din Brevo → SMTP & API → API
+// Keys, NU cheia SMTP) și EMAIL_FROM (adresa de expeditor — de obicei
+// adresa cu care te-ai înregistrat pe Brevo, care e verificată automat).
+function emailApiConfigured() {
+  return Boolean(process.env.BREVO_API_KEY && process.env.EMAIL_FROM);
+}
+
+// intro = propoziția care apare deasupra codului, adaptată la context (email
+// de confirmare la setarea parolei, vs. cod de resetare parolă uitată etc).
+async function sendCodeEmail(to, code, { subject, intro }) {
+  const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      "content-type": "application/json",
+      "api-key": process.env.BREVO_API_KEY,
+    },
+    body: JSON.stringify({
+      sender: { email: process.env.EMAIL_FROM, name: "Moldova RP" },
+      to: [{ email: to }],
+      subject,
+      textContent: `${intro} ${code}\n\nCodul expiră în 15 minute. Dacă nu ai cerut tu asta, ignoră acest email.`,
+      htmlContent: `<p>${intro}</p>
+           <p style="font-size:28px;font-weight:bold;letter-spacing:4px">${code}</p>
+           <p>Codul expiră în 15 minute. Dacă nu ai cerut tu asta, ignoră acest email.</p>`,
+    }),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`Brevo API a răspuns cu ${res.status}: ${body.slice(0, 300)}`);
+  }
+}
+
+function sendVerificationEmail(to, code) {
+  return sendCodeEmail(to, code, {
+    subject: `Codul tău de confirmare: ${code}`,
+    intro: "Codul tău de confirmare pentru contul de pe moldovarp.md este:",
+  });
+}
+
+function sendResetCodeEmail(to, code) {
+  return sendCodeEmail(to, code, {
+    subject: `Codul tău de resetare a parolei: ${code}`,
+    intro: "Cineva (probabil tu) a cerut resetarea parolei pentru contul de pe moldovarp.md. Codul tău este:",
+  });
+}
+
+function generateVerifyCode() {
+  return String(Math.floor(100000 + Math.random() * 900000)); // 6 cifre, 100000-999999
+}
+
+// Auto-service, în DOI PAȘI — cerut explicit, ca simpla deținere a unui cont
+// (chiar și prin Discord plafonat la "player", mai sus) să nu fie de-ajuns
+// ca să-ți pui o parolă pe un email pe care nu-l deții cu adevărat:
+//
+// Pasul 1 (acest endpoint): primește email+parolă, dar NU le salvează încă
+// pe cont — le ține "în așteptare" (pending_email/pending_password_hash) și
+// trimite un cod de 6 cifre pe emailul dat. Dacă emailul e deja folosit de
+// ALT cont, refuzăm aici (altfel am da acces la parola altcuiva, aparent).
+// Apelat a doua oară (ex: codul a expirat), pur și simplu suprascrie cererea
+// în așteptare și retrimite un cod nou — funcționează și ca "retrimite codul".
+//
+// Pasul 2 (endpoint-ul de mai jos, /confirm): abia după codul corect, emailul
+// și parola devin reale pe cont. Până atunci, contul rămâne exact cum era
+// (fără parolă utilizabilă), deci accesul de admin tot nu se poate obține
+// decât prin login.html cu email+parolă, DUPĂ confirmare.
+app.post("/api/auth/set-password", auth, asyncRoute(async (req, res) => {
+  const { email, password } = req.body;
+  const cleanEmail = (email || "").trim().toLowerCase();
+  if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail))
+    return res.status(400).json({ error: "Email invalid." });
+  if (!password || password.length < 8)
+    return res.status(400).json({ error: "Parola trebuie să aibă minimum 8 caractere." });
+  if (!emailApiConfigured())
+    return res.status(503).json({ error: "Trimiterea de email-uri nu este configurată încă pe server." });
+
+  const existing = await pool.query("SELECT id FROM users WHERE email=$1 AND id<>$2", [cleanEmail, req.user.sub]);
+  if (existing.rows[0]) return res.status(409).json({ error: "Acest email este deja folosit de alt cont." });
+
+  const hash = await bcrypt.hash(password, 12);
+  const code = generateVerifyCode();
+  await pool.query(
+    `UPDATE users SET pending_email=$1, pending_password_hash=$2,
+            email_verify_code=$3, email_verify_expires=NOW() + INTERVAL '15 minutes', updated_at=NOW()
+     WHERE id=$4`,
+    [cleanEmail, hash, code, req.user.sub]
+  );
+
+  try {
+    await sendVerificationEmail(cleanEmail, code);
+  } catch (e) {
+    console.error("Trimiterea emailului de confirmare a eșuat:", e.message);
+    return res.status(502).json({ error: "Nu am putut trimite emailul de confirmare. Încearcă din nou." });
+  }
+
+  res.json({ ok: true, message: "Cod trimis pe email." });
+}));
+
+app.post("/api/auth/set-password/confirm", auth, asyncRoute(async (req, res) => {
+  const { code } = req.body;
+  const { rows } = await pool.query(
+    `SELECT pending_email, pending_password_hash, email_verify_code, email_verify_expires
+     FROM users WHERE id=$1`, [req.user.sub]
+  );
+  const row = rows[0];
+  if (!row || !row.pending_email || !row.email_verify_code)
+    return res.status(400).json({ error: "Nu există nicio confirmare în așteptare — cere din nou codul." });
+  if (new Date(row.email_verify_expires) < new Date())
+    return res.status(400).json({ error: "Codul a expirat. Cere unul nou." });
+  if (String(code || "").trim() !== row.email_verify_code)
+    return res.status(400).json({ error: "Cod incorect." });
+
+  await pool.query(
+    `UPDATE users SET email=$1, password_hash=$2,
+            pending_email=NULL, pending_password_hash=NULL, email_verify_code=NULL, email_verify_expires=NULL,
+            updated_at=NOW()
+     WHERE id=$3`,
+    [row.pending_email, row.pending_password_hash, req.user.sub]
+  );
+  await logAction(req.user.sub, "auth.set_password", "user", req.user.sub, null, req.ip);
+  res.json({ ok: true });
+}));
+
+// ---------------------------------------------------------------------------
+// "Am uitat parola" — cod de 6 cifre pe email, apoi parolă nouă
+// ---------------------------------------------------------------------------
+// Merge DOAR pentru conturi care au deja un email+parolă reale (adică au
+// trecut prin înregistrare directă sau prin "Setează parola" de mai sus) —
+// un cont creat doar prin Discord nu are un email verificat de care să ne
+// putem folosi aici, deci îl tratăm la fel ca "email inexistent".
+//
+// Ca să nu dăm de gol cine are cont pe site (enumerare de emailuri), acest
+// endpoint răspunde mereu cu același mesaj de succes, indiferent dacă
+// emailul există sau nu — codul chiar pleacă doar dacă există un cont
+// potrivit, dar cel care întreabă nu poate distinge cele două cazuri.
+app.post("/api/auth/forgot-password", asyncRoute(async (req, res) => {
+  const cleanEmail = (req.body.email || "").trim().toLowerCase();
+  const genericOk = { ok: true, message: "Dacă adresa există în baza noastră de date, a fost trimis un cod pe email." };
+  if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) return res.json(genericOk);
+  if (!emailApiConfigured())
+    return res.status(503).json({ error: "Trimiterea de email-uri nu este configurată încă pe server." });
+
+  const { rows } = await pool.query(
+    "SELECT id FROM users WHERE email=$1 AND password_hash IS NOT NULL", [cleanEmail]
+  );
+  const user = rows[0];
+  if (!user) return res.json(genericOk);
+
+  const code = generateVerifyCode();
+  await pool.query(
+    `UPDATE users SET reset_password_code=$1, reset_password_expires=NOW() + INTERVAL '15 minutes', updated_at=NOW()
+     WHERE id=$2`,
+    [code, user.id]
+  );
+  try {
+    await sendResetCodeEmail(cleanEmail, code);
+  } catch (e) {
+    console.error("Trimiterea emailului de resetare a eșuat:", e.message);
+    // Tot răspuns generic — nu vrem să confirmăm existența contului prin
+    // diferența dintre "a mers" și "n-a mers să trimită".
+  }
+  res.json(genericOk);
+}));
+
+app.post("/api/auth/reset-password/confirm", asyncRoute(async (req, res) => {
+  const cleanEmail = (req.body.email || "").trim().toLowerCase();
+  const { code, password } = req.body;
+  if (!password || password.length < 8)
+    return res.status(400).json({ error: "Parola trebuie să aibă minimum 8 caractere." });
+
+  const { rows } = await pool.query(
+    "SELECT id, reset_password_code, reset_password_expires FROM users WHERE email=$1", [cleanEmail]
+  );
+  const user = rows[0];
+  if (!user || !user.reset_password_code)
+    return res.status(400).json({ error: "Cod invalid sau expirat. Cere unul nou." });
+  if (new Date(user.reset_password_expires) < new Date())
+    return res.status(400).json({ error: "Codul a expirat. Cere unul nou." });
+  if (String(code || "").trim() !== user.reset_password_code)
+    return res.status(400).json({ error: "Cod incorect." });
+
+  const hash = await bcrypt.hash(password, 12);
+  await pool.query(
+    `UPDATE users SET password_hash=$1, reset_password_code=NULL, reset_password_expires=NULL, updated_at=NOW()
+     WHERE id=$2`,
+    [hash, user.id]
+  );
+  await logAction(user.id, "auth.reset_password", "user", user.id, null, req.ip);
+  res.json({ ok: true });
+}));
+
+// ---------------------------------------------------------------------------
+// Discord OAuth login (v0.5)
+// ---------------------------------------------------------------------------
+
+function discordConfigured() {
+  return Boolean(process.env.DISCORD_CLIENT_ID && process.env.DISCORD_CLIENT_SECRET && process.env.DISCORD_REDIRECT_URI);
+}
+
+app.get("/api/auth/discord", (req, res) => {
+  if (!discordConfigured()) return res.status(503).send("Conectarea cu Discord nu este configurată.");
+  const params = new URLSearchParams({
+    client_id: process.env.DISCORD_CLIENT_ID,
+    redirect_uri: process.env.DISCORD_REDIRECT_URI,
+    response_type: "code",
+    scope: "identify"
+  });
+  // Cod de referal (27.09.2026) — register.html citește "?ref=COD" din URL-ul
+  // link-ului distribuit de streamer și îl adaugă și la butonul "Conectare cu
+  // Discord" (vezi acolo), ca să funcționeze indiferent cu ce metodă își
+  // creează cineva contul. "state" e parametrul standard OAuth pentru date
+  // arbitrare care fac dus-întors prin Discord — nu era folosit pentru CSRF
+  // aici înainte (callback-ul de mai jos nu-l verifica), deci refolosirea lui
+  // nu slăbește nimic. Validat/normalizat abia la callback (resolveReferrerId).
+  const ref = normalizeReferralCode(req.query.ref);
+  if (ref) params.set("state", ref);
+  res.redirect(`https://discord.com/api/oauth2/authorize?${params.toString()}`);
+});
+
+app.get("/api/auth/discord/callback", asyncRoute(async (req, res) => {
+  if (!discordConfigured()) return res.status(503).send("Conectarea cu Discord nu este configurată.");
+  const { code, error: discordError } = req.query;
+  if (discordError || !code) return res.redirect("/auth-callback.html?error=discord_denied");
+
+  try {
+    const tokenRes = await fetch("https://discord.com/api/oauth2/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: process.env.DISCORD_CLIENT_ID,
+        client_secret: process.env.DISCORD_CLIENT_SECRET,
+        grant_type: "authorization_code",
+        code,
+        redirect_uri: process.env.DISCORD_REDIRECT_URI
+      })
+    });
+    if (!tokenRes.ok) throw new Error(`Discord token exchange failed: ${tokenRes.status}`);
+    const { access_token } = await tokenRes.json();
+
+    const profileRes = await fetch("https://discord.com/api/users/@me", {
+      headers: { Authorization: `Bearer ${access_token}` }
+    });
+    if (!profileRes.ok) throw new Error(`Discord profile fetch failed: ${profileRes.status}`);
+    const profile = await profileRes.json();
+
+    const roleRes = await pool.query("SELECT id FROM roles WHERE name='player'");
+    const baseUsername = (profile.username || `player_${profile.id}`).replace(/[^a-zA-Z0-9_]/g, "").slice(0, 28) || "player";
+
+    let user;
+    const existing = await pool.query("SELECT * FROM users WHERE discord_id=$1", [profile.id]);
+    if (existing.rows[0]) {
+      const updated = await pool.query(
+        `UPDATE users SET discord_username=$1, discord_avatar=$2, updated_at=NOW()
+         WHERE id=$3 RETURNING *`,
+        [profile.username, profile.avatar, existing.rows[0].id]
+      );
+      user = updated.rows[0];
+    } else {
+      // "state" duce codul de referal (dacă a fost în link, vezi
+      // /api/auth/discord mai sus) — contează DOAR la crearea unui cont nou,
+      // niciodată la un cont Discord deja existent care doar se reconectează.
+      const referredBy = await resolveReferrerId(req.query.state);
+      let attemptUsername = baseUsername;
+      for (let attempt = 0; attempt < 5; attempt++) {
+        try {
+          const inserted = await pool.query(
+            `INSERT INTO users(username, role_id, discord_id, discord_username, discord_avatar, referred_by_user_id)
+             VALUES($1,$2,$3,$4,$5,$6) RETURNING *`,
+            [attemptUsername, roleRes.rows[0].id, profile.id, profile.username, profile.avatar, referredBy]
+          );
+          user = inserted.rows[0];
+          break;
+        } catch (e) {
+          if (e.code === "23505" && attempt < 4) {
+            attemptUsername = `${baseUsername}_${profile.id.slice(-4)}`;
+            continue;
+          }
+          throw e;
+        }
+      }
+      await pool.query(
+        `INSERT INTO players(user_id, display_name) VALUES($1,$2)
+         ON CONFLICT (user_id) DO NOTHING`,
+        [user.id, profile.username || attemptUsername]
+      );
+      await logAction(user.id, "auth.discord_signup", "user", user.id, { discordId: profile.id }, req.ip);
+    }
+
+    // SECURITATE (cerut explicit): un login prin Discord acordă în acest
+    // token MEREU doar rolul de jucător obișnuit, INDIFERENT ce rol are
+    // contul cu adevărat în baza de date. Motivul: dacă cineva fură contul
+    // de Discord al unui admin, autentificarea prin OAuth de mai sus tot ar
+    // reuși (Discord confirmă identitatea corect) — dar tokenul rezultat nu
+    // va avea niciodată voie să treacă de requireRole(...) pe rutele de
+    // admin, pentru că verificarea aia se uită STRICT la rolul din acest
+    // token (vezi funcția requireRole), nu la rolul din baza de date. Adminii
+    // trebuie să folosească întotdeauna email+parolă (/api/auth/login) ca
+    // să primească tokenul cu rolul lor real. Vezi și /api/me, care separă
+    // explicit rolul EFECTIV al sesiunii (din token) de rolul contului din
+    // baza de date, ca dashboard-ul să poată totuși recunoaște un admin fără
+    // parolă încă și să-i ceară să-și seteze una.
+    const token = signUser({ id: user.id, username: user.username, role_name: 'player' });
+    await logAction(user.id, "auth.discord_login", "user", user.id, null, req.ip);
+
+    res.redirect(`/auth-callback.html#token=${encodeURIComponent(token)}`);
+  } catch (e) {
+    console.error("Discord OAuth error:", e);
+    res.redirect("/auth-callback.html?error=discord_failed");
+  }
+}));
+
+app.get("/api/me", auth, asyncRoute(async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT u.id,u.username,u.email,r.name db_role,(u.password_hash IS NOT NULL) has_password,
+            u.discord_id, u.discord_username, u.discord_avatar, u.referral_code,
+            (u.game_identifier IS NOT NULL) game_linked, u.game_identifier_name,
+            u.notify_discord, u.notify_email,
+            (SELECT COUNT(*)::int FROM users ref WHERE ref.referred_by_user_id=u.id) referral_count,
+            p.id player_id,p.game_id,p.display_name,p.playtime_minutes,p.last_server_playtime,p.status,
+            f.id faction_id, f.name faction_name, fr.id rank_id, fr.name rank_name
+     FROM users u JOIN roles r ON r.id=u.role_id
+     LEFT JOIN players p ON p.user_id=u.id
+     LEFT JOIN faction_members fm ON fm.player_id=p.id
+     LEFT JOIN factions f ON f.id=fm.faction_id
+     LEFT JOIN faction_ranks fr ON fr.id=fm.rank_id
+     WHERE u.id=$1
+     LIMIT 1`, [req.user.sub]
+  );
+  if (!rows[0]) return res.status(404).json({ error: "Cont inexistent." });
+  const row = rows[0];
+  // "role" e rolul EFECTIV al sesiunii curente (vine din token — pentru un
+  // login prin Discord e mereu "player", vezi /api/auth/discord/callback),
+  // NU neapărat rolul contului din baza de date — acesta din urmă rămâne
+  // disponibil separat ca "dbRole", exact ca dashboard-ul să poată recunoaște
+  // "acest cont e de admin, dar sesiunea asta (prin Discord) nu are voie să
+  // acționeze ca admin" și să arate un buton de "Setează parolă" în loc să
+  // pretindă pur și simplu că userul n-are rang.
+  // referralCode/referralCount (27.09.2026): folosite de Dashboard ca să
+  // arate panoul de streamer DOAR pe baza rangului real din baza de date
+  // (dbRole), la fel ca panoul de "setează parolă" de mai sus — un login prin
+  // Discord tot vede corect aceste cifre, chiar dacă sesiunea e "player".
+  //
+  // referrals (27.09.2026, cerut explicit de Sergiu): streamerul vrea să
+  // vadă NU doar un număr, ci exact CINE s-a înregistrat cu codul lui — deci
+  // interogăm separat lista, dar DOAR pentru conturile cu rang streamer (nu
+  // are rost să facem încă un query la fiecare /api/me pentru restul
+  // conturilor, care n-au niciodată cod). Limită 200 — suficient pentru un
+  // streamer, și evită un răspuns nesfârșit dacă vreodată devine viral.
+  let referrals = [];
+  if (row.db_role === 'streamer') {
+    const { rows: refRows } = await pool.query(
+      `SELECT COALESCE(discord_username, username) AS name, created_at
+       FROM users WHERE referred_by_user_id=$1 ORDER BY created_at DESC LIMIT 200`,
+      [row.id]
+    );
+    referrals = refRows;
+  }
+  res.json({
+    ...row, role: req.user.role, dbRole: row.db_role, hasPassword: row.has_password,
+    referralCode: row.referral_code, referralCount: row.referral_count, referrals,
+    gameLinked: row.game_linked, gameName: row.game_identifier_name,
+    notifications: {
+      discord: row.notify_discord !== false, email: row.notify_email !== false,
+      hasDiscord: !!row.discord_id, hasEmail: !!row.email,
+      discordReady: !!DISCORD_LOGS_BOT_TOKEN, emailReady: emailApiConfigured(),
+    },
+  });
+}));
+
+// Setările de notificări pe Discord / email (01.10.2026) — din Contul meu.
+app.put("/api/me/notificari", auth, asyncRoute(async (req, res) => {
+  const discord = req.body?.discord !== false;
+  const email = req.body?.email !== false;
+  await pool.query(`UPDATE users SET notify_discord = $1, notify_email = $2 WHERE id = $3`, [discord, email, req.user.sub]);
+  res.json({ ok: true, discord, email });
+}));
+
+// Mesaj de test (doar pentru tine), ca să verifici că ajunge.
+app.post("/api/me/notificari/test", auth, asyncRoute(async (req, res) => {
+  const k = `test|${req.user.sub}`;
+  if (Date.now() - (externalSentAt.get(k) || 0) < 60_000) return res.status(429).json({ error: "Așteaptă un minut între teste." });
+  externalSentAt.set(k, Date.now());
+  const { rows } = await pool.query(`SELECT email, discord_id, notify_discord, notify_email FROM users WHERE id = $1`, [req.user.sub]);
+  const u = rows[0];
+  const msg = { title: "Test notificări", message: "Dacă vezi mesajul ăsta, notificările de la Moldova RP ajung la tine. 👍", link: "dashboard.html" };
+  let via = null;
+  if (u?.notify_discord && u.discord_id && await sendDiscordDm(u.discord_id, msg)) via = "discord";
+  else if (u?.notify_email && u.email && await sendNotificationEmail(u.email, msg).catch(() => false)) via = "email";
+  if (!via) return res.status(400).json({ error: "Nu am putut trimite: nu ai Discord legat (sau ai DM-urile închise) și nici email, sau le-ai oprit pe amândouă." });
+  res.json({ ok: true, via });
+}));
+
+app.get("/api/regulations", asyncRoute(async (_req, res) => {
+  const { rows } = await pool.query(
+    "SELECT id,title,slug,category,version,updated_at FROM regulations WHERE is_published=true ORDER BY category,title"
+  );
+  res.json(rows);
+}));
+
+app.get("/api/regulations/:slug", asyncRoute(async (req, res) => {
+  const { rows } = await pool.query(
+    "SELECT * FROM regulations WHERE slug=$1 AND is_published=true LIMIT 1", [req.params.slug]
+  );
+  if (!rows[0]) return res.status(404).json({ error: "Regulamentul nu există." });
+  res.json(rows[0]);
+}));
+
+app.get("/api/factions", asyncRoute(async (_req, res) => {
+  const { rows } = await pool.query(
+    "SELECT id,name,type,description,is_active FROM factions ORDER BY type,name"
+  );
+  res.json(rows);
+}));
+
+app.get("/api/announcements", asyncRoute(async (_req, res) => {
+  const { rows } = await pool.query(
+    `SELECT a.id,a.title,a.content,a.category,a.image_url,a.video_url,a.published_at,u.username author
+     FROM announcements a LEFT JOIN users u ON u.id=a.author_id
+     WHERE a.is_published=true ORDER BY a.published_at DESC LIMIT 30`
+  );
+  res.json(rows);
+}));
+
+// ---- Tema de sezon a site-ului (07.10.2026) ----
+// Fondatorul / co-fondatorul pornește din Admin o temă (deocamdată doar
+// „halloween") pentru tot site-ul și alege textul benzii de pe prima pagină.
+// Starea se ține în tabela vip_settings (cheia „site_theme") — există deja,
+// deci nu e nevoie de nicio modificare în baza de date. Fiecare pagină
+// întreabă /api/tema la încărcare (vezi tema.js); răspunsul se ține 30 de
+// secunde în memorie, ca să nu lovim baza de date la fiecare vizită.
+const SITE_THEMES = ["halloween"];
+const SITE_THEME_DEFAULT = { theme: null, bannerText: "", bannerLink: "" };
+let siteThemeCache = { at: 0, value: null };
+// linkul benzii: doar o pagină de-a noastră („/vip-shop.html") sau o adresă https
+function cleanThemeLink(v) {
+  const link = String(v ?? "").trim().slice(0, 300);
+  if (/^\/(?![\/\\])[^\s<>"']*$/.test(link) || /^https:\/\/[^\s<>"']+$/i.test(link)) return link;
+  return "";
+}
+function normalizeSiteTheme(v) {
+  return {
+    theme: SITE_THEMES.includes(v?.theme) ? v.theme : null,
+    bannerText: String(v?.bannerText ?? "").replace(/\s+/g, " ").trim().slice(0, 180),
+    bannerLink: cleanThemeLink(v?.bannerLink),
+  };
+}
+async function loadSiteTheme() {
+  if (siteThemeCache.value && Date.now() - siteThemeCache.at < 30_000) return siteThemeCache.value;
+  let value = SITE_THEME_DEFAULT;
+  try {
+    const { rows } = await pool.query(`SELECT value FROM vip_settings WHERE key = 'site_theme'`);
+    value = normalizeSiteTheme(rows[0]?.value || SITE_THEME_DEFAULT);
+  } catch (err) {
+    console.error("Tema site-ului: nu am putut citi setarea —", err.message);
+    if (siteThemeCache.value) value = siteThemeCache.value; // rămâne ultima stare cunoscută
+  }
+  siteThemeCache = { at: Date.now(), value };
+  return value;
+}
+app.get("/api/tema", asyncRoute(async (_req, res) => {
+  const t = await loadSiteTheme();
+  res.set("Cache-Control", "no-cache");
+  res.json({ theme: t.theme, banner: t.bannerText ? { text: t.bannerText, link: t.bannerLink } : null });
+}));
+app.get("/api/admin/tema", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (_req, res) => {
+  siteThemeCache.at = 0; // în Admin arătăm mereu starea din baza de date
+  res.set("Cache-Control", "no-store");
+  res.json({ settings: await loadSiteTheme(), themes: SITE_THEMES });
+}));
+app.put("/api/admin/tema", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
+  const wanted = req.body?.theme;
+  if (wanted != null && wanted !== "" && !SITE_THEMES.includes(wanted)) return res.status(400).json({ error: "Temă necunoscută." });
+  const rawLink = String(req.body?.bannerLink ?? "").trim();
+  if (rawLink && !cleanThemeLink(rawLink)) return res.status(400).json({ error: "Linkul benzii trebuie să fie o pagină de pe site (ex. /vip-shop.html) sau o adresă care începe cu https://." });
+  const settings = normalizeSiteTheme({ theme: wanted || null, bannerText: req.body?.bannerText, bannerLink: rawLink });
+  await pool.query(
+    `INSERT INTO vip_settings(key, value, updated_at) VALUES ('site_theme', $1, NOW())
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+    [JSON.stringify(settings)]
+  );
+  siteThemeCache = { at: Date.now(), value: settings };
+  await logAction(req.user.sub, "site.theme", "vip_settings", "site_theme", settings, req.ip);
+  res.json({ ok: true, settings });
+}));
+
+// Conținut editabil al paginilor publice (Admin → Conținut pagini — vezi
+// scripts/seed-content.js pentru valorile inițiale). Public: doar
+// block_key/type/content dintr-o singură pagină, ca hartă { block_key:
+// {type,content} } — cel mai simplu de consumat direct din scriptul fiecărei
+// pagini publice (index.html, joburi.html etc.), fără alt procesare.
+app.get("/api/content/:page", asyncRoute(async (req, res) => {
+  const { rows } = await pool.query(
+    "SELECT block_key, type, content FROM page_blocks WHERE page=$1 ORDER BY sort_order", [req.params.page]
+  );
+  const map = {};
+  for (const r of rows) map[r.block_key] = { type: r.type, content: r.content };
+  res.json(map);
+}));
+
+// Tichete — orice utilizator autentificat își poate deschide și vedea
+// propriile tichete. Dovezile (poze/filmări) se atașează ca LINK (Streamable,
+// YouTube, Discord etc.), nu ca fișier încărcat direct — evită complet
+// problema stocării persistente de fișiere mari pe Railway.
+//
+// (18.09.2026) Tichetele de categorie "reclamatie" funcționează ca un forum
+// public de reclamații — vizibile pentru ORICE utilizator logat, nu doar
+// autor + staff, ca restul categoriilor (general/bug/ban_appeal), care rămân
+// private. Editarea/ștergerea rămân însă restricționate la autor + staff
+// (staff prin rutele /api/admin/tickets/... de mai jos) — un vizitator poate
+// doar citi și, dacă e chiar autorul, edita/șterge/răspunde la al lui.
+const TICKET_CATEGORIES = ["general", "bug", "reclamatie", "ban_appeal"];
+
+function validTicketFields(body, existingCategory) {
+  const subject = body.subject?.trim();
+  const description = body.description?.trim();
+  const category = (body.category || existingCategory || "general").trim();
+  const link = body.evidence_url?.trim() || null;
+  if (!subject || !description) return { error: "Subiectul și descrierea sunt obligatorii." };
+  if (!link) return { error: "Linkul dovezii este obligatoriu." };
+  if (!/^https?:\/\/\S+$/i.test(link)) return { error: "Linkul trebuie să înceapă cu http:// sau https://." };
+  if (!TICKET_CATEGORIES.includes(category)) return { error: "Categorie invalidă." };
+  return { subject, description, category, link };
+}
+
+// Căutare jucători — folosită acum doar de staff (căutarea din formularul
+// public a fost înlocuită cu text liber, vezi mai jos); rămasă disponibilă
+// oricărui utilizator logat, nu doar staff.
+// (28.09.2026) Caută și după NUMELE RP și ID-ul STATIC (#336), nu doar după
+// numele de pe site, și include jucătorii ONLINE chiar dacă n-au cont pe
+// site (din /players al serverului). Nu întoarcem niciodată identificatorul
+// ESX (licența) — doar ce se vede oricum în joc.
+function likeEscape(s) { return s.replace(/[\\%_]/g, "\\$&"); }
+
+// (29.09.2026) Căutare în baza de date a JOCULUI (moldovarp-api
+// "/players/search", adăugată de echipa serverului): găsește și jucătorii
+// OFFLINE fără cont pe site. q numeric = ID static exact; altfel nume RP
+// (minim 3 litere). Nu stricăm căutarea dacă serverul nu răspunde.
+// (29.09.2026) Profilul unui jucător OFFLINE, fără cont pe site: îl căutăm în
+// baza jocului — după identificator (dacă serverul știe "?identifier="), altfel
+// după numele RP exact. Întoarce null dacă nu găsim nimic sigur.
+// (01.10.2026) Personajele unui jucător după ID-ul lui de Discord. FiveM
+// știe Discord-ul fiecărui jucător (identificatorul „discord:…"), iar site-ul
+// îl știe din login — așa găsim personajul și pentru conturile nelegate cu
+// /leagacont. Online: din /players (câmpul „discord"); offline: din
+// /players/search?discord=<id>. Acceptăm doar rezultatele al căror câmp
+// „discord" chiar se potrivește, ca să nu legăm pe cineva greșit.
+const normDiscordId = v => String(v || "").replace(/^discord:/i, "").trim();
+async function fetchGameCharsByDiscord(discordId, liveDetail) {
+  const id = normDiscordId(discordId);
+  if (!/^\d{5,25}$/.test(id)) return [];
+  const byId = new Map();
+  const detail = liveDetail || await getPlayersDetail();
+  for (const p of detail.players || []) {
+    if (normDiscordId(p.discord) !== id || !p.license) continue;
+    byId.set(p.license, {
+      identifier: p.license, rpName: p.serverName || null, staticId: staticIdOf(p),
+      job: p.job || null, jobLabel: p.jobLabel || null, online: true, serverId: p.id ?? null, lastSeen: null,
+    });
+  }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
+  try {
+    const r = await fetch(`http://${FIVEM_ADDRESS}/moldovarp-api/players/search?discord=${encodeURIComponent(id)}`, {
+      headers: { "x-api-key": FIVEM_API_SECRET }, signal: controller.signal,
+    });
+    if (r.ok) {
+      const body = await r.json();
+      noteGameFields("/players/search?discord", body.players);
+      for (const p of Array.isArray(body.players) ? body.players : []) {
+        if (normDiscordId(p.discord) !== id || !p.identifier || byId.has(p.identifier)) continue;
+        byId.set(p.identifier, {
+          identifier: p.identifier, rpName: p.rpName || null, staticId: p.staticId != null ? String(p.staticId) : null,
+          job: p.job || null, jobLabel: p.jobLabel || null, online: !!p.online, serverId: p.serverId ?? null, lastSeen: p.lastSeen || null,
+        });
+      }
+    }
+  } catch { /* serverul nu răspunde — rămânem cu ce e online */ } finally { clearTimeout(timeout); }
+  // online întâi, apoi cel mai recent văzut
+  return [...byId.values()].sort((a, b) => (b.online - a.online) || (new Date(b.lastSeen || 0) - new Date(a.lastSeen || 0)));
+}
+
+// (08.10.2026) Ce câmpuri trimite de fapt serverul de joc la căutare — doar
+// NUMELE câmpurilor (fără valori), o singură dată pentru fiecare combinație,
+// ca să vedem în jurnal când echipa serverului adaugă ceva nou.
+const gameFieldsSeen = new Set();
+function noteGameFields(route, list) {
+  if (!Array.isArray(list) || !list.length || gameFieldsSeen.size > 60) return;
+  const keys = [...new Set(list.flatMap(p => (p && typeof p === "object") ? Object.keys(p) : []))].sort().join(", ");
+  if (!keys || gameFieldsSeen.has(route + "|" + keys)) return;
+  gameFieldsSeen.add(route + "|" + keys);
+  console.log(`Joc ${route}: câmpuri primite — ${keys}`);
+}
+
+async function fetchGamePlayerLookup({ identifier, name } = {}) {
+  const get = async (qs) => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    try {
+      const r = await fetch(`http://${FIVEM_ADDRESS}/moldovarp-api/players/search?${qs}`, {
+        headers: { "x-api-key": FIVEM_API_SECRET }, signal: controller.signal,
+      });
+      if (!r.ok) return [];
+      const body = await r.json();
+      const list = Array.isArray(body.players) ? body.players : [];
+      noteGameFields(qs.startsWith("identifier=") ? "/players/search?identifier" : "/players/search?q", list);
+      return list;
+    } catch { return []; } finally { clearTimeout(timeout); }
+  };
+  if (identifier) {
+    const hit = (await get(`identifier=${encodeURIComponent(identifier)}`)).find(p => p.identifier === identifier);
+    if (hit) return hit;
+  }
+  const n = String(name || "").trim();
+  if (n.length >= 3) {
+    const hits = (await get(`q=${encodeURIComponent(n)}`)).filter(p => String(p.rpName || "").toLowerCase() === n.toLowerCase());
+    if (identifier) { const h = hits.find(p => p.identifier === identifier); if (h) return h; }
+    if (hits.length === 1) return hits[0];
+  }
+  return null;
+}
+
+async function fetchGamePlayerSearch(q) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
+  try {
+    const r = await fetch(`http://${FIVEM_ADDRESS}/moldovarp-api/players/search?q=${encodeURIComponent(q)}`, {
+      headers: { "x-api-key": FIVEM_API_SECRET },
+      signal: controller.signal,
+    });
+    if (!r.ok) return [];
+    const body = await r.json();
+    return Array.isArray(body.players) ? body.players : [];
+  } catch {
+    return [];
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+// (29.09.2026) Căutarea comună; câmpurile "priv" (identificator, nume CFX,
+// job, cont site) le primește doar staff-ul — vezi /api/admin/players/search.
+async function searchPlayers(rawQ, limit = 10) {
+  const q = String(rawQ || "").trim().slice(0, 64).replace(/^#\s*/, "");
+  const isNum = /^\d+$/.test(q);
+  if (!q || (!isNum && q.length < 2)) return [];
+  const lower = q.toLowerCase();
+  const [{ rows }, detail, gameHits] = await Promise.all([
+    pool.query(
+      `SELECT p.id, p.user_id, p.display_name, p.game_id, p.last_rp_name, p.last_static_id, p.last_identifier, p.last_job_label, p.last_grade_label, p.last_synced_at
+       FROM players p
+       WHERE p.display_name ILIKE $1 OR p.last_rp_name ILIKE $1
+          OR p.last_static_id = $2 OR CAST(p.game_id AS TEXT) ILIKE $1
+       ORDER BY p.last_synced_at DESC NULLS LAST LIMIT ${limit}`,
+      [`%${likeEscape(q)}%`, q]
+    ),
+    getPlayersDetail(),
+    (isNum || q.length >= 3) ? fetchGamePlayerSearch(q) : Promise.resolve([]),
+  ]);
+  const online = detail.players || [];
+  const onlineByLicense = new Map(online.filter(pl => pl.license).map(pl => [pl.license, pl]));
+  const out = [];
+  const seenLicenses = new Set();
+  for (const r of rows) {
+    const pl = r.last_identifier ? onlineByLicense.get(r.last_identifier) : null;
+    if (r.last_identifier) seenLicenses.add(r.last_identifier);
+    out.push({
+      id: r.id, display_name: r.display_name, game_id: r.game_id,
+      rp_name: pl?.serverName || r.last_rp_name || null,
+      static_id: staticIdOf(pl) || r.last_static_id || null,
+      server_id: pl ? pl.id : null, online: !!pl,
+      priv: { identifier: pl?.license || r.last_identifier || null, cfx_name: pl?.name || null, user_id: r.user_id,
+              job: pl ? [pl.jobLabel || pl.job, pl.gradeLabel].filter(Boolean).join(" · ") : [r.last_job_label, r.last_grade_label].filter(Boolean).join(" · ") || null,
+              last_seen: pl ? null : r.last_synced_at },
+    });
+  }
+  for (const pl of online) {
+    if (out.length >= limit) break;
+    if (pl.license && seenLicenses.has(pl.license)) continue;
+    const sid = staticIdOf(pl);
+    const hit = (isNum && (String(pl.id) === q || sid === q))
+      || (pl.serverName || "").toLowerCase().includes(lower)
+      || (pl.name || "").toLowerCase().includes(lower);
+    if (!hit) continue;
+    if (pl.license) seenLicenses.add(pl.license);
+    out.push({
+      id: null, display_name: pl.name || null, game_id: null,
+      rp_name: pl.serverName || null, static_id: sid, server_id: pl.id, online: true,
+      priv: { identifier: pl.license || null, cfx_name: pl.name || null, user_id: null,
+              job: [pl.jobLabel || pl.job, pl.gradeLabel].filter(Boolean).join(" · ") || null, last_seen: null },
+    });
+  }
+  // Rezultatele din baza jocului (inclusiv offline, fără cont pe site).
+  // Identificatorul îl folosim doar ca să nu dublăm pe cineva deja găsit.
+  for (const g of gameHits) {
+    if (out.length >= limit) break;
+    if (g.identifier && seenLicenses.has(g.identifier)) continue;
+    if (g.identifier) seenLicenses.add(g.identifier);
+    out.push({
+      id: null, display_name: null, game_id: null,
+      rp_name: g.rpName || null, static_id: staticIdOf(g),
+      server_id: g.online && g.serverId != null ? g.serverId : null, online: !!g.online,
+      priv: { identifier: g.identifier || null, cfx_name: null, user_id: null,
+              job: [g.jobLabel || g.job, g.gradeLabel || (g.grade != null ? `grad ${g.grade}` : null)].filter(Boolean).join(" · ") || null,
+              last_seen: g.lastSeen || null },
+    });
+  }
+  return out.slice(0, limit);
+}
+
+app.get("/api/players/search", auth, asyncRoute(async (req, res) => {
+  const out = await searchPlayers(req.query.q, 10);
+  res.json(out.map(({ priv, ...pub }) => pub));
+}));
+
+// Pagina „Caută jucător” (staff): aceleași rezultate + identificator, nume
+// CFX, job și cont site, ca profilul să se deschidă exact pe personajul găsit.
+app.get("/api/admin/players/search", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
+  const out = await searchPlayers(req.query.q, 25);
+  res.json(out.map(({ priv, ...pub }) => ({ ...pub, ...priv })));
+}));
+
+// (20.09.2026) Reclamantul scrie ID-ul/numele jucătorului reclamat ca text
+// liber (reported_player_label) — nu mai trebuie să-l găsească într-o
+// căutare live, care bloca trimiterea când jucătorul nu era încă în baza
+// noastră de date. Încercăm totuși, best-effort, o potrivire exactă (ID
+// numeric sau nume exact) ca să legăm structurat tichetul de players — dacă
+// nu găsim nimic, tichetul se salvează oricum, cu textul scris de reclamant.
+async function resolveReportedPlayer(label) {
+  // (01.10.2026) Rescris după un test în care notificarea „ai fost reclamat"
+  // a ajuns la alt om: înainte, un număr scris de jucător (ex. ID-ul de pe
+  // server din F10) era comparat și cu ID-ul INTERN al contului de pe site
+  // (players.game_id), iar conturile vechi (fondator, developer) au ID-uri
+  // mici — deci „#2" sau „5" putea nimeri contul lor. Acum găsim întâi
+  // PERSONAJUL din joc (ID static sau ID de server, apoi numele RP exact) și
+  // abia apoi contul de site legat de acel personaj. Dacă nu suntem siguri,
+  // nu legăm reclamația de nimeni (mai bine nicio notificare decât una greșită).
+  const text = (label || "").trim();
+  if (!text) return null;
+  const staticMatch = text.match(/#\s*([A-Za-z0-9]+)/);
+  const staticId = staticMatch ? staticMatch[1] : null;
+  const name = text.replace(/#\s*[A-Za-z0-9]+/, "").replace(/\(.*?\)/g, "").trim();
+  const bareNum = !staticId && /^\d+$/.test(name) ? name : null;
+  const num = staticId || bareNum;
+
+  let identifier = null;
+  const live = (await getPlayersDetail()).players || [];
+  if (num) {
+    // „#336" = ID static; un număr simplu („91") = ID-ul de pe server (F10)
+    // al unui jucător online acum, apoi ID static
+    const hit = bareNum
+      ? (live.find(p => String(p.id) === bareNum) || live.find(p => staticIdOf(p) === bareNum))
+      : live.find(p => staticIdOf(p) === num);
+    identifier = hit?.license || null;
+    if (!identifier) {
+      const g = (await fetchGamePlayerSearch(num)).find(p => p.staticId != null && String(p.staticId) === num);
+      identifier = g?.identifier || null;
+    }
+  } else if (name.length >= 3) {
+    const exact = live.filter(p => String(p.serverName || "").toLowerCase() === name.toLowerCase());
+    if (exact.length === 1) identifier = exact[0].license || null;
+    if (!identifier) identifier = (await fetchGamePlayerLookup({ name }))?.identifier || null;
+  }
+
+  if (identifier) {
+    const { rows } = await pool.query(
+      `SELECT p.id FROM players p LEFT JOIN users u ON u.id = p.user_id
+       WHERE u.game_identifier = $1 OR p.last_identifier = $1
+       ORDER BY COALESCE(u.game_identifier = $1, false) DESC, p.last_synced_at DESC NULLS LAST
+       LIMIT 1`,
+      [identifier]
+    );
+    // personaj găsit, dar fără cont pe site → nimeni de notificat
+    return rows[0]?.id || null;
+  }
+  // Serverul de joc nu răspunde: ne bazăm doar pe ce a salvat site-ul, și
+  // doar dacă potrivirea e UNICĂ.
+  // (un număr simplu fără „#" nu-l ghicim offline: poate fi un ID de server vechi)
+  if (staticId) {
+    const { rows } = await pool.query(`SELECT id FROM players WHERE last_static_id = $1 LIMIT 2`, [staticId]);
+    return rows.length === 1 ? rows[0].id : null;
+  }
+  if (!name || bareNum) return null;
+  const { rows } = await pool.query(
+    `SELECT id FROM players WHERE last_rp_name ILIKE $1 OR display_name ILIKE $1 LIMIT 2`,
+    [likeEscape(name)]
+  );
+  return rows.length === 1 ? rows[0].id : null;
+}
+
+app.get("/api/tickets", auth, asyncRoute(async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT t.id,t.subject,t.category,t.status,t.evidence_url,t.created_at,t.updated_at,
+            (t.user_id=$1) AS is_own, u.username submitted_by,
+            rp.id reported_player_id, t.reported_player_label,
+            COALESCE(rp.display_name, t.reported_player_label) reported_display
+     FROM tickets t
+     JOIN users u ON u.id = t.user_id
+     LEFT JOIN players rp ON rp.id = t.reported_player_id
+     WHERE t.user_id=$1 OR t.category='reclamatie'
+     ORDER BY t.created_at DESC`,
+    [req.user.sub]
+  );
+  res.json(rows);
+}));
+
+app.post("/api/tickets", auth, asyncRoute(async (req, res) => {
+  const v = validTicketFields(req.body);
+  if (v.error) return res.status(400).json({ error: v.error });
+
+  let reportedLabel = null;
+  let reportedId = null;
+  if (v.category === "reclamatie") {
+    reportedLabel = (req.body.reported_player_label || "").trim();
+    if (!reportedLabel)
+      return res.status(400).json({ error: "Scrie ID-ul sau numele jucătorului reclamat." });
+    reportedId = await resolveReportedPlayer(reportedLabel);
+  }
+
+  const { rows } = await pool.query(
+    `INSERT INTO tickets(user_id, subject, category, description, evidence_url, reported_player_id, reported_player_label)
+     VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+    [req.user.sub, v.subject, v.category, v.description, v.link, reportedId, reportedLabel]
+  );
+  await logAction(req.user.sub, "ticket.create", "ticket", rows[0].id, { subject: v.subject }, req.ip);
+
+  // Cerut explicit (24.09.2026): jucătorul reclamat e anunțat pe cont,
+  // imediat ce reclamația se depune — nu abia după ce staff o rezolvă.
+  // Mesajul rămâne INTENȚIONAT vag: fără identitatea reclamantului și fără
+  // conținutul reclamației, ca acesta să nu poată fi identificat sau
+  // răzbunat de cel reclamat înainte ca staff să apuce să verifice. Doar
+  // dacă am reușit să legăm structurat reclamația de un cont real (vezi
+  // resolveReportedPlayer) — un text liber nepotrivit nu are cont de
+  // notificat. (01.10.2026) Și când cineva se reclamă pe sine (ex. un test
+  // făcut de staff) primește mesajul — altfel testul pare stricat.
+  if (!reportedId && v.category === "reclamatie")
+    console.log(`Reclamație #${rows[0].id}: „${String(reportedLabel).slice(0, 40)}” nu e legat de niciun cont de pe site — nu anunț pe nimeni.`);
+  if (reportedId) {
+    const { rows: rp } = await pool.query(`SELECT user_id FROM players WHERE id = $1`, [reportedId]);
+    const reportedUserId = rp[0]?.user_id;
+    console.log(`Reclamație #${rows[0].id}: jucător găsit${reportedUserId ? `, anunț contul #${reportedUserId}` : ", dar fără cont pe site"}.`);
+    if (reportedUserId) {
+      await notifyUser(reportedUserId, {
+        type: "ticket_reported",
+        title: "Ai fost reclamat",
+        message: "A fost depusă o reclamație despre tine. Un membru al staff-ului o va analiza în curând.",
+        link: null,
+        // (01.10.2026) și pe Discord / email — tot fără detalii despre reclamant
+        external: true,
+        dedupeKey: `reported:${rows[0].id}`,
+      });
+    }
+  }
+  // (01.10.2026) staff-ul află imediat de tichetul nou
+  pool.query(`SELECT COALESCE(discord_username, username) AS name FROM users WHERE id = $1`, [req.user.sub])
+    .then(r => notifyStaffNewTicket(rows[0], r.rows[0]?.name))
+    .catch(err => console.error("Anunț staff tichet nou eșuat:", err.message));
+
+  res.status(201).json(rows[0]);
+}));
+
+app.get("/api/tickets/:id", auth, asyncRoute(async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT t.*, (t.user_id=$2) AS is_own, u.username submitted_by,
+            rp.id reported_player_id, COALESCE(rp.display_name, t.reported_player_label) reported_display
+     FROM tickets t
+     JOIN users u ON u.id = t.user_id
+     LEFT JOIN players rp ON rp.id = t.reported_player_id
+     WHERE t.id=$1 AND (t.user_id=$2 OR t.category='reclamatie')
+     LIMIT 1`,
+    [req.params.id, req.user.sub]
+  );
+  if (!rows[0]) return res.status(404).json({ error: "Tichetul nu există." });
+  const replies = await pool.query(
+    `SELECT tr.id, tr.message, tr.created_at, u.username author, r.name author_role
+     FROM ticket_replies tr
+     JOIN users u ON u.id = tr.author_id
+     JOIN roles r ON r.id = u.role_id
+     WHERE tr.ticket_id = $1 ORDER BY tr.created_at ASC`,
+    [req.params.id]
+  );
+  res.json({ ...rows[0], replies: replies.rows });
+}));
+
+// Editare — doar autorul propriu (staff editează prin /api/admin/tickets/:id
+// mai jos), și doar cât timp tichetul nu e închis/rezolvat.
+app.put("/api/tickets/:id", auth, asyncRoute(async (req, res) => {
+  const existing = await pool.query("SELECT user_id, category, status FROM tickets WHERE id=$1", [req.params.id]);
+  if (!existing.rows[0]) return res.status(404).json({ error: "Tichetul nu există." });
+  if (existing.rows[0].user_id !== req.user.sub)
+    return res.status(403).json({ error: "Poți edita doar propriile tichete." });
+  if (["resolved", "closed"].includes(existing.rows[0].status))
+    return res.status(400).json({ error: "Acest tichet este închis — nu mai poate fi editat." });
+
+  const v = validTicketFields(req.body, existing.rows[0].category);
+  if (v.error) return res.status(400).json({ error: v.error });
+
+  let reportedLabel = null;
+  let reportedId = null;
+  if (v.category === "reclamatie") {
+    reportedLabel = (req.body.reported_player_label || "").trim();
+    if (!reportedLabel)
+      return res.status(400).json({ error: "Scrie ID-ul sau numele jucătorului reclamat." });
+    reportedId = await resolveReportedPlayer(reportedLabel);
+  }
+
+  const { rows } = await pool.query(
+    `UPDATE tickets SET subject=$1, category=$2, description=$3, evidence_url=$4,
+       reported_player_id=$5, reported_player_label=$6, updated_at=NOW()
+     WHERE id=$7 RETURNING *`,
+    [v.subject, v.category, v.description, v.link, reportedId, reportedLabel, req.params.id]
+  );
+  await logAction(req.user.sub, "ticket.edit", "ticket", req.params.id, { subject: v.subject }, req.ip);
+  res.json(rows[0]);
+}));
+
+// Ștergere — doar autorul propriu (staff șterge prin /api/admin/tickets/:id
+// mai jos). Răspunsurile se șterg automat (ticket_replies.ticket_id e CASCADE).
+app.delete("/api/tickets/:id", auth, asyncRoute(async (req, res) => {
+  const existing = await pool.query("SELECT user_id FROM tickets WHERE id=$1", [req.params.id]);
+  if (!existing.rows[0]) return res.status(404).json({ error: "Tichetul nu există." });
+  if (existing.rows[0].user_id !== req.user.sub)
+    return res.status(403).json({ error: "Poți șterge doar propriile tichete." });
+  await pool.query("DELETE FROM tickets WHERE id=$1", [req.params.id]);
+  await logAction(req.user.sub, "ticket.delete", "ticket", req.params.id, {}, req.ip);
+  res.json({ ok: true });
+}));
+
+app.post("/api/tickets/:id/replies", auth, asyncRoute(async (req, res) => {
+  const { message } = req.body;
+  if (!message?.trim()) return res.status(400).json({ error: "Mesajul nu poate fi gol." });
+  const ticket = await pool.query(
+    "SELECT status, subject, category, assigned_to, reported_player_id FROM tickets WHERE id=$1 AND user_id=$2 LIMIT 1",
+    [req.params.id, req.user.sub]
+  );
+  if (!ticket.rows[0]) return res.status(404).json({ error: "Tichetul nu există sau nu îți aparține — doar autorul și staff-ul pot răspunde." });
+  if (["resolved", "closed"].includes(ticket.rows[0].status))
+    return res.status(400).json({ error: "Acest tichet este închis — nu mai poți adăuga răspunsuri." });
+  const { rows } = await pool.query(
+    "INSERT INTO ticket_replies(ticket_id, author_id, message) VALUES($1,$2,$3) RETURNING *",
+    [req.params.id, req.user.sub, message.trim()]
+  );
+  await pool.query("UPDATE tickets SET updated_at=NOW() WHERE id=$1", [req.params.id]);
+  // (01.10.2026) Anunțăm staff-ul care a preluat tichetul și, la o
+  // reclamație, pe jucătorul reclamat (are voie să vadă reclamația publică).
+  notifyTicketReply(req.params.id, ticket.rows[0], req.user.sub, { fromStaff: false })
+    .catch(err => console.error("Notificare răspuns eșuată:", err.message));
+  res.status(201).json(rows[0]);
+}));
+
+app.get("/api/admin/stats", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (_req, res) => {
+  const q = async sql => (await pool.query(sql)).rows[0].count;
+  res.json({
+    players: await q("SELECT COUNT(*) FROM players"),
+    online: await q("SELECT COUNT(*) FROM players WHERE status='online'"),
+    complaints: await q("SELECT COUNT(*) FROM complaints WHERE status NOT IN ('closed','resolved')"),
+    punishments: await q("SELECT COUNT(*) FROM punishments WHERE created_at >= date_trunc('month', NOW())")
+  });
+}));
+
+// (29.09.2026) Filtre: implicit doar acțiunile STAFF-ului (nu și ale
+// jucătorilor obișnuiți) și fără autentificări; opțional toată lumea,
+// autentificările, un singur om (actor) și pagini.
+app.get("/api/admin/audit-logs", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
+  const per = Math.min(Math.max(parseInt(req.query.per, 10) || 50, 1), 200);
+  const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+  const where = [];
+  const params = [];
+  if (req.query.scope !== "all") {
+    params.push(MOD_ROLES);
+    where.push(`r.name = ANY($${params.length})`);
+  }
+  if (req.query.auth !== "1") where.push(`l.action NOT LIKE 'auth.%'`);
+  if (/^[0-9a-f-]{36}$/i.test(String(req.query.actor || ""))) {
+    params.push(req.query.actor);
+    where.push(`l.actor_id = $${params.length}`);
+  }
+  const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
+  const base = `FROM audit_logs l LEFT JOIN users u ON u.id = l.actor_id LEFT JOIN roles r ON r.id = u.role_id ${whereSql}`;
+  const [{ rows }, { rows: cnt }] = await Promise.all([
+    pool.query(
+      `SELECT l.id, l.actor_id, l.action, l.entity_type, l.entity_id, l.metadata, l.created_at,
+              COALESCE(u.discord_username, u.username) actor, r.name actor_role,
+              tu.id target_user_id, COALESCE(tu.discord_username, tu.username) target_user
+       ${base.replace("LEFT JOIN roles r ON r.id = u.role_id", "LEFT JOIN roles r ON r.id = u.role_id LEFT JOIN users tu ON l.entity_type = 'user' AND tu.id::text = l.entity_id")}
+       ORDER BY l.created_at DESC LIMIT ${per} OFFSET ${(page - 1) * per}`, params),
+    pool.query(`SELECT COUNT(*)::int n ${base}`, params),
+  ]);
+  res.json({ rows, total: cnt[0]?.n || 0, page, per });
+}));
+
+// ---------------------------------------------------------------------------
+// Utilizatori — listă + schimbare rang (player/moderator/admin/owner).
+// Vizibilă pentru admin/owner; schimbarea rangului e restricționată la owner,
+// ca să nu poată un admin să se auto-promoveze sau să promoveze pe altcineva
+// la owner/admin fără acordul proprietarului contului.
+// ---------------------------------------------------------------------------
+
+const VALID_ROLES = ["player", "moderator", "admin", "co-fondator", "owner", "streamer"];
+
+// player_id/faction_id/faction_name adăugate (17.09.2026) ca admin-utilizatori.html
+// să poată asigna direct o facțiune de site (ex: FIB, pentru acces la MDT) —
+// reutilizează /api/admin/players/:id/faction de mai jos, care lucrează cu
+// player_id, nu user_id (fiecare user are exact un rând în players, creat la
+// signup, vezi INSERT INTO players din fluxul de Discord OAuth).
+app.get("/api/admin/users", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (_req, res) => {
+  const { rows } = await pool.query(
+    `SELECT u.id, u.username, u.email, u.discord_id, u.discord_username, u.discord_avatar,
+            u.is_active, u.created_at, r.name AS role, (u.password_hash IS NOT NULL) AS has_password,
+            u.referral_code,
+            (SELECT COUNT(*)::int FROM users ref WHERE ref.referred_by_user_id=u.id) AS referral_count,
+            p.id AS player_id, f.id AS faction_id, f.name AS faction_name
+     FROM users u
+     JOIN roles r ON r.id = u.role_id
+     LEFT JOIN players p ON p.user_id = u.id
+     LEFT JOIN faction_members fm ON fm.player_id = p.id
+     LEFT JOIN factions f ON f.id = fm.faction_id
+     ORDER BY u.created_at DESC`
+  );
+  res.json(rows);
+}));
+
+// Cod de referal (27.09.2026) — separat de schimbarea rangului (owner-only,
+// mai sus): setarea unui cod de referal nu e o escaladare de privilegii, doar
+// o etichetă de marketing, deci deschisă oricărui FOUNDER_ROLES ca restul
+// operațiunilor curente de aici (dezactivare cont, atribuire facțiune etc).
+// Body gol/lipsă ȘTERGE codul (streamerul nu mai are unul activ).
+app.put("/api/admin/users/:id/referral-code", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
+  const raw = (req.body.referralCode ?? "").toString().trim();
+  const code = raw ? normalizeReferralCode(raw) : null;
+  if (raw && !code)
+    return res.status(400).json({ error: "Cod invalid — doar litere, cifre și underscore, 3-32 caractere." });
+
+  try {
+    const { rows } = await pool.query(
+      `UPDATE users SET referral_code=$1, updated_at=NOW() WHERE id=$2
+       RETURNING id, username, referral_code`,
+      [code, req.params.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: "Utilizatorul nu există." });
+    await logAction(req.user.sub, "user.referral_code_change", "user", req.params.id, { code }, req.ip);
+    res.json(rows[0]);
+  } catch (e) {
+    if (e.code === "23505") return res.status(409).json({ error: "Acest cod e deja folosit de alt cont." });
+    throw e;
+  }
+}));
+
+// Staff: toate codurile de referal din joc, cu totaluri (GET /referal).
+app.get("/api/admin/referal", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
+  const result = await fetchReferal("/referal");
+  const body = result.body || {};
+  res.json({ online: result.online, generatLa: body.generatLa || null, coduri: Array.isArray(body.coduri) ? body.coduri : [] });
+}));
+
+// Staff: un singur cod, cu ultimele folosiri (GET /referal/<COD>, max 50).
+app.get("/api/admin/referal/:cod", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
+  const cod = String(req.params.cod || "");
+  if (!REFERAL_CODE_RE.test(cod)) return res.status(400).json({ error: "Cod invalid." });
+  const result = await fetchReferal(`/referal/${encodeURIComponent(cod)}`, { limit: 50 });
+  if (result.status === 404) return res.json({ online: true, notFound: true, folosiri: [] });
+  const body = result.body || {};
+  res.json({ online: result.online, ...body, folosiri: Array.isArray(body.folosiri) ? body.folosiri : [] });
+}));
+
+// Streamer: DOAR codul propriu, în vederea de streamer a serverului
+// (?identifier=<charN:licență>, din contul legat prin /leagacont). Serverul
+// răspunde 403 dacă personajul nu e al streamerului acelui cod.
+app.get("/api/me/referal", auth, asyncRoute(async (req, res) => {
+  const { rows } = await pool.query("SELECT referral_code, game_identifier FROM users WHERE id=$1", [req.user.sub]);
+  const code = rows[0]?.referral_code;
+  const identifier = rows[0]?.game_identifier;
+  if (!code) return res.json({ online: true, noCode: true, folosiri: [] });
+  if (!identifier) return res.json({ online: true, needsLink: true, folosiri: [] });
+  const result = await fetchReferal(`/referal/${encodeURIComponent(code)}`, { identifier, limit: 50 });
+  if (result.status === 403) return res.json({ online: true, forbidden: true, folosiri: [] });
+  if (result.status === 404) return res.json({ online: true, notFound: true, folosiri: [] });
+  const b = result.body || {};
+  res.json({
+    online: result.online,
+    total: b.total ?? null, azi: b.azi ?? null,
+    ultimele7Zile: b.ultimele7Zile ?? null, ultimele30Zile: b.ultimele30Zile ?? null,
+    nivel: b.nivel ?? null,
+    folosiri: (Array.isArray(b.folosiri) ? b.folosiri : []).map(f => ({ personaj: f.personaj, data: f.data, ore: f.ore })),
+  });
+}));
+
+app.put("/api/admin/users/:id/role", auth, requireRole("owner"), asyncRoute(async (req, res) => {
+  const { role } = req.body;
+  if (!VALID_ROLES.includes(role))
+    return res.status(400).json({ error: "Rang invalid." });
+
+  const roleRow = await pool.query("SELECT id FROM roles WHERE name=$1", [role]);
+  if (!roleRow.rows[0]) return res.status(400).json({ error: "Rang invalid." });
+
+  const { rows } = await pool.query(
+    `UPDATE users SET role_id=$1, updated_at=NOW() WHERE id=$2
+     RETURNING id, username, discord_username`,
+    [roleRow.rows[0].id, req.params.id]
+  );
+  if (!rows[0]) return res.status(404).json({ error: "Utilizatorul nu există." });
+
+  await logAction(req.user.sub, "user.role_change", "user", req.params.id, { role }, req.ip);
+  res.json({ ...rows[0], role });
+}));
+
+// Dezactivare/reactivare cont (18.09.2026) — reversibilă, blochează login-ul
+// (vezi verificarea is_active din /api/auth/login) fără să șteargă nimic.
+// Deschisă oricărui admin/co-fondator/owner, ca faction-urile mai jos.
+app.put("/api/admin/users/:id/active", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
+  const isActive = !!req.body.is_active;
+  if (req.params.id === req.user.sub && !isActive)
+    return res.status(400).json({ error: "Nu îți poți dezactiva propriul cont." });
+
+  const { rows } = await pool.query(
+    `UPDATE users SET is_active=$1, updated_at=NOW() WHERE id=$2
+     RETURNING id, username, discord_username, is_active`,
+    [isActive, req.params.id]
+  );
+  if (!rows[0]) return res.status(404).json({ error: "Utilizatorul nu există." });
+
+  await logAction(req.user.sub, isActive ? "user.activate" : "user.deactivate", "user", req.params.id, {}, req.ip);
+  res.json(rows[0]);
+}));
+
+// Ștergere definitivă cont (18.09.2026) — doar owner. Restricționată la owner
+// (nu tot FOUNDER_ROLES) fiindcă e ireversibilă, spre deosebire de dezactivare.
+// FK-urile pe users(id) sunt ON DELETE SET NULL (istoric: anunțuri, sancțiuni,
+// dosare/mandate/rapoarte MDT etc. rămân, doar leagătura cu contul dispare) în
+// afară de players.user_id și tickets.user_id, care sunt CASCADE — deci contul
+// de jucător și eventualele tichete de suport deschise de acel user (+
+// răspunsurile la ele) se șterg odată cu el. Vezi migrarea din schema.sql.
+app.delete("/api/admin/users/:id", auth, requireRole("owner"), asyncRoute(async (req, res) => {
+  if (req.params.id === req.user.sub)
+    return res.status(400).json({ error: "Nu îți poți șterge propriul cont." });
+
+  const { rows } = await pool.query(
+    "DELETE FROM users WHERE id=$1 RETURNING id, username, discord_username",
+    [req.params.id]
+  );
+  if (!rows[0]) return res.status(404).json({ error: "Utilizatorul nu există." });
+
+  await logAction(req.user.sub, "user.delete", "user", req.params.id, { username: rows[0].username }, req.ip);
+  res.json({ ok: true });
+}));
+
+// ---------------------------------------------------------------------------
+// Players (v0.4)
+// ---------------------------------------------------------------------------
+
+app.get("/api/admin/players", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
+  const q = (req.query.q || "").trim();
+  const limit = Math.min(Number(req.query.limit) || 50, 200);
+  const offset = Math.max(Number(req.query.offset) || 0, 0);
+  const params = [];
+  let where = "";
+  if (q) {
+    params.push(`%${q}%`);
+    where = `WHERE p.display_name ILIKE $${params.length} OR CAST(p.game_id AS TEXT) ILIKE $${params.length} OR u.username ILIKE $${params.length}`;
+  }
+  params.push(limit, offset);
+  const { rows } = await pool.query(
+    `SELECT p.id, p.game_id, p.display_name, p.playtime_minutes, p.status,
+            u.username, u.email,
+            f.name AS faction_name, fr.name AS rank_name
+     FROM players p
+     JOIN users u ON u.id = p.user_id
+     LEFT JOIN faction_members fm ON fm.player_id = p.id
+     LEFT JOIN factions f ON f.id = fm.faction_id
+     LEFT JOIN faction_ranks fr ON fr.id = fm.rank_id
+     ${where}
+     ORDER BY p.display_name
+     LIMIT $${params.length - 1} OFFSET $${params.length}`,
+    params
+  );
+  res.json(rows);
+}));
+
+app.get("/api/admin/players/:id", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
+  const { id } = req.params;
+  const { rows } = await pool.query(
+    `SELECT p.*, u.username, u.email
+     FROM players p JOIN users u ON u.id = p.user_id
+     WHERE p.id = $1`, [id]
+  );
+  const player = rows[0];
+  if (!player) return res.status(404).json({ error: "Jucătorul nu există." });
+
+  const [factions, punishments, complaints, ckRequests] = await Promise.all([
+    pool.query(
+      `SELECT f.id, f.name, f.type, fr.id rank_id, fr.name rank_name, fm.joined_at
+       FROM faction_members fm
+       JOIN factions f ON f.id = fm.faction_id
+       LEFT JOIN faction_ranks fr ON fr.id = fm.rank_id
+       WHERE fm.player_id = $1`, [id]
+    ),
+    pool.query(
+      `SELECT pu.id, pu.type, pu.reason, pu.duration_minutes, pu.created_at, u.username issued_by
+       FROM punishments pu LEFT JOIN users u ON u.id = pu.issued_by
+       WHERE pu.player_id = $1 ORDER BY pu.created_at DESC LIMIT 20`, [id]
+    ),
+    pool.query(
+      `SELECT id, subject, status, created_at, updated_at
+       FROM complaints WHERE player_id = $1 ORDER BY created_at DESC LIMIT 20`, [id]
+    ),
+    pool.query(
+      `SELECT id, status, reason, created_at, decided_at
+       FROM ck_requests WHERE player_id = $1 ORDER BY created_at DESC LIMIT 20`, [id]
+    )
+  ]);
+
+  res.json({
+    ...player,
+    factions: factions.rows,
+    punishments: punishments.rows,
+    complaints: complaints.rows,
+    ck_requests: ckRequests.rows
+  });
+}));
+
+app.put("/api/admin/players/:id", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
+  const { id } = req.params;
+  const { display_name, status, game_id } = req.body;
+  const allowedStatus = ["online", "offline", "banned"];
+  if (status && !allowedStatus.includes(status))
+    return res.status(400).json({ error: `Status invalid. Valori acceptate: ${allowedStatus.join(", ")}.` });
+
+  const { rows } = await pool.query(
+    `UPDATE players SET
+       display_name = COALESCE($1, display_name),
+       status = COALESCE($2, status),
+       game_id = COALESCE($3, game_id),
+       updated_at = NOW()
+     WHERE id = $4
+     RETURNING id, game_id, display_name, playtime_minutes, status`,
+    [display_name || null, status || null, game_id || null, id]
+  );
+  if (!rows[0]) return res.status(404).json({ error: "Jucătorul nu există." });
+
+  await logAction(req.user.sub, "player.update", "player", id, req.body, req.ip);
+  res.json(rows[0]);
+}));
+
+app.post("/api/admin/players/:id/faction", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
+  const { id } = req.params;
+  const { faction_id, rank_id } = req.body;
+  if (!faction_id) return res.status(400).json({ error: "faction_id este obligatoriu." });
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("DELETE FROM faction_members WHERE player_id = $1", [id]);
+    const { rows } = await client.query(
+      "INSERT INTO faction_members(player_id,faction_id,rank_id) VALUES($1,$2,$3) RETURNING *",
+      [id, faction_id, rank_id || null]
+    );
+    await client.query("COMMIT");
+    await logAction(req.user.sub, "player.faction_assign", "player", id, { faction_id, rank_id }, req.ip);
+    res.status(201).json(rows[0]);
+  } catch (e) {
+    await client.query("ROLLBACK");
+    if (e.code === "23503") return res.status(404).json({ error: "Jucătorul sau facțiunea nu există." });
+    throw e;
+  } finally {
+    client.release();
+  }
+}));
+
+app.delete("/api/admin/players/:id/faction", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
+  const { id } = req.params;
+  const { rowCount } = await pool.query("DELETE FROM faction_members WHERE player_id = $1", [id]);
+  await logAction(req.user.sub, "player.faction_remove", "player", id, null, req.ip);
+  res.json({ removed: rowCount });
+}));
+
+// ---------------------------------------------------------------------------
+// Sancțiuni — listă (active/toate) + emitere. Ținta e numele jucătorului din
+// JOC (target_name), nu un cont de site — majoritatea jucătorilor de pe
+// server nu au și cont pe site, deci nu poate fi obligatoriu un player_id.
+// player_id rămâne opțional, doar pentru cazul în care jucătorul chiar are
+// și profil pe site. Site-ul nu aplică singur banul pe serverul de FiveM,
+// e doar un jurnal vizibil pentru staff.
+// ---------------------------------------------------------------------------
+
+const PUNISHMENT_TYPES = ["ban", "mute", "kick", "warn"];
+
+app.get("/api/admin/punishments", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
+  const activeOnly = req.query.status !== "all";
+  const { rows } = await pool.query(
+    `SELECT pu.id, pu.type, pu.reason, pu.duration_minutes, pu.created_at,
+            u.username AS issued_by,
+            p.id AS player_id, COALESCE(p.display_name, pu.target_name) AS display_name, p.game_id,
+            CASE WHEN pu.duration_minutes IS NOT NULL
+                 THEN pu.created_at + (pu.duration_minutes || ' minutes')::interval
+                 ELSE NULL END AS expires_at
+     FROM punishments pu
+     LEFT JOIN players p ON p.id = pu.player_id
+     LEFT JOIN users u ON u.id = pu.issued_by
+     ${activeOnly ? "WHERE pu.duration_minutes IS NULL OR pu.created_at + (pu.duration_minutes || ' minutes')::interval > NOW()" : ""}
+     ORDER BY pu.created_at DESC
+     LIMIT 200`
+  );
+  res.json(rows);
+}));
+
+app.post("/api/admin/punishments", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
+  const { target_name, player_id, type, reason, duration_minutes } = req.body;
+  const name = target_name?.trim();
+  if (!name || !type || !reason?.trim())
+    return res.status(400).json({ error: "Numele jucătorului, tipul și motivul sunt obligatorii." });
+  if (!PUNISHMENT_TYPES.includes(type))
+    return res.status(400).json({ error: `Tip invalid. Valori acceptate: ${PUNISHMENT_TYPES.join(", ")}.` });
+
+  let linkedPlayerId = null;
+  if (player_id) {
+    const player = await pool.query("SELECT id FROM players WHERE id=$1", [player_id]);
+    if (player.rows[0]) linkedPlayerId = player.rows[0].id;
+  }
+
+  const minutes = duration_minutes ? Math.max(1, Number(duration_minutes)) : null;
+  if (duration_minutes && !Number.isFinite(minutes))
+    return res.status(400).json({ error: "Durata trebuie să fie un număr de minute." });
+
+  const { rows } = await pool.query(
+    `INSERT INTO punishments(player_id, target_name, type, reason, duration_minutes, issued_by)
+     VALUES($1,$2,$3,$4,$5,$6) RETURNING id, type, reason, duration_minutes, created_at`,
+    [linkedPlayerId, name, type, reason.trim(), minutes, req.user.sub]
+  );
+  await logAction(req.user.sub, "punishment.create", "player", linkedPlayerId, { target_name: name, type, reason: reason.trim(), duration_minutes: minutes }, req.ip);
+  res.status(201).json({ ...rows[0], display_name: name });
+}));
+
+// ---------------------------------------------------------------------------
+// Factions & ranks (v0.4)
+// ---------------------------------------------------------------------------
+
+app.get("/api/admin/factions/:id", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
+  const { id } = req.params;
+  const { rows } = await pool.query("SELECT * FROM factions WHERE id=$1", [id]);
+  const faction = rows[0];
+  if (!faction) return res.status(404).json({ error: "Facțiunea nu există." });
+  const ranks = await pool.query("SELECT * FROM faction_ranks WHERE faction_id=$1 ORDER BY level", [id]);
+  const members = await pool.query(
+    `SELECT p.id, p.display_name, fr.name rank_name
+     FROM faction_members fm JOIN players p ON p.id=fm.player_id
+     LEFT JOIN faction_ranks fr ON fr.id=fm.rank_id
+     WHERE fm.faction_id=$1`, [id]
+  );
+  res.json({ ...faction, ranks: ranks.rows, members: members.rows });
+}));
+
+app.post("/api/admin/factions", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
+  const { name, type, description } = req.body;
+  if (!name || !type) return res.status(400).json({ error: "Numele și tipul facțiunii sunt obligatorii." });
+  try {
+    const { rows } = await pool.query(
+      "INSERT INTO factions(name,type,description) VALUES($1,$2,$3) RETURNING *",
+      [name.trim(), type.trim(), description || null]
+    );
+    await logAction(req.user.sub, "faction.create", "faction", rows[0].id, req.body, req.ip);
+    res.status(201).json(rows[0]);
+  } catch (e) {
+    if (e.code === "23505") return res.status(409).json({ error: "Există deja o facțiune cu acest nume." });
+    throw e;
+  }
+}));
+
+app.put("/api/admin/factions/:id", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
+  const { id } = req.params;
+  const { name, type, description, is_active } = req.body;
+  const { rows } = await pool.query(
+    `UPDATE factions SET
+       name = COALESCE($1, name),
+       type = COALESCE($2, type),
+       description = COALESCE($3, description),
+       is_active = COALESCE($4, is_active)
+     WHERE id = $5 RETURNING *`,
+    [name || null, type || null, description ?? null, is_active ?? null, id]
+  );
+  if (!rows[0]) return res.status(404).json({ error: "Facțiunea nu există." });
+  await logAction(req.user.sub, "faction.update", "faction", id, req.body, req.ip);
+  res.json(rows[0]);
+}));
+
+app.post("/api/admin/factions/:id/ranks", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
+  const { id } = req.params;
+  const { name, level } = req.body;
+  if (!name || level === undefined) return res.status(400).json({ error: "Numele și nivelul rank-ului sunt obligatorii." });
+  try {
+    const { rows } = await pool.query(
+      "INSERT INTO faction_ranks(faction_id,name,level) VALUES($1,$2,$3) RETURNING *",
+      [id, name.trim(), Number(level)]
+    );
+    await logAction(req.user.sub, "faction_rank.create", "faction_rank", rows[0].id, { faction_id: id, ...req.body }, req.ip);
+    res.status(201).json(rows[0]);
+  } catch (e) {
+    if (e.code === "23505") return res.status(409).json({ error: "Există deja un rank cu acest nivel în facțiune." });
+    if (e.code === "23503") return res.status(404).json({ error: "Facțiunea nu există." });
+    throw e;
+  }
+}));
+
+app.put("/api/admin/factions/ranks/:rankId", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
+  const { rankId } = req.params;
+  const { name, level } = req.body;
+  const { rows } = await pool.query(
+    `UPDATE faction_ranks SET
+       name = COALESCE($1, name),
+       level = COALESCE($2, level)
+     WHERE id = $3 RETURNING *`,
+    [name || null, level ?? null, rankId]
+  );
+  if (!rows[0]) return res.status(404).json({ error: "Rank-ul nu există." });
+  await logAction(req.user.sub, "faction_rank.update", "faction_rank", rankId, req.body, req.ip);
+  res.json(rows[0]);
+}));
+
+app.delete("/api/admin/factions/ranks/:rankId", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
+  const { rankId } = req.params;
+  const { rowCount } = await pool.query("DELETE FROM faction_ranks WHERE id = $1", [rankId]);
+  if (!rowCount) return res.status(404).json({ error: "Rank-ul nu există." });
+  await logAction(req.user.sub, "faction_rank.delete", "faction_rank", rankId, null, req.ip);
+  res.status(204).end();
+}));
+
+// ---------------------------------------------------------------------------
+// MDT FIB — dosare de anchetă, mandate și probe (17.09.2026)
+// ---------------------------------------------------------------------------
+// Acces: oricine e membru al facțiunii FIB — asignată din admin-jucatori.html
+// exact ca orice altă facțiune (vezi /api/admin/players/:id/faction mai sus)
+// — SAU staff-ul site-ului (MOD_ROLES), care vede/gestionează tot pentru
+// moderare. NU e un rol nou de site: verificăm apartenența reală la
+// facțiune (players -> faction_members -> factions), la fel cum am fi
+// verificat orice altă facțiune, nu un rând separat în tabela roles.
+async function isFibMember(userId) {
+  const { rows } = await pool.query(
+    `SELECT 1 FROM players p
+     JOIN faction_members fm ON fm.player_id = p.id
+     JOIN factions f ON f.id = fm.faction_id
+     WHERE p.user_id = $1 AND f.name = 'FIB'
+     LIMIT 1`,
+    [userId]
+  );
+  return rows.length > 0;
+}
+
+async function requireFib(req, res, next) {
+  if (MOD_ROLES.includes(req.user.role)) return next();
+  if (await isFibMember(req.user.sub)) return next();
+  res.status(403).json({ error: "Acces permis doar membrilor FIB." });
+}
+
+// "Am acces?" — folosit de dashboard ca să arate/ascundă linkul spre MDT,
+// fără să oblige fiecare pagină să repete verificarea de mai sus doar ca să
+// decidă dacă afișează un buton.
+app.get("/api/mdt/acces", auth, asyncRoute(async (req, res) => {
+  const access = MOD_ROLES.includes(req.user.role) || await isFibMember(req.user.sub);
+  res.json({ access });
+}));
+
+const MDT_MANDAT_TYPES = ["perchezitie", "arestare", "aducere"];
+const MDT_DOSAR_STATUSES = ["deschis", "in_lucru", "la_parchet", "inchis", "clasat"];
+const MDT_MANDAT_STATUSES = ["activ", "executat", "expirat", "anulat"];
+const MDT_MANDAT_PRIORITIES = ["scazuta", "medie", "inalta"];
+const MDT_RAPORT_TYPES = ["agresiune", "talharie", "spargere", "furt", "altele"];
+const MDT_SUSPECT_ROLES = ["suspect", "martor", "victima"];
+
+// Limită proprie pentru fiecare fișier de probă (poză) încărcat ca base64 —
+// separată de limita globală a corpului cererii (express.json, mai sus),
+// ca baza de date (unde chiar se stochează bytes-ii, n-avem storage
+// persistent separat pe Railway) să rămână rezonabilă.
+const MDT_MAX_FILE_BYTES = 6 * 1024 * 1024;
+const MDT_ALLOWED_MIME = ["image/png", "image/jpeg", "image/webp"];
+
+function cleanSuspectsInput(suspects) {
+  return Array.isArray(suspects)
+    ? suspects
+        .filter(s => s && s.name && s.name.trim())
+        .map(s => ({
+          name: s.name.trim().slice(0, 120),
+          role: MDT_SUSPECT_ROLES.includes(s.role) ? s.role : "suspect",
+        }))
+    : [];
+}
+
+// Liste libere scrise de mână (etichete, polițiști/civili/suspecți/vehicule/
+// arme implicate) — nu sunt legate de alte tabele (players, vehicule reale
+// din joc etc.), doar text simplu, la fel ca "target_name" la mandate.
+function cleanStringList(list, maxLen = 120, maxItems = 30) {
+  if (!Array.isArray(list)) return [];
+  return list
+    .map(v => String(v ?? "").trim())
+    .filter(Boolean)
+    .slice(0, maxItems)
+    .map(v => v.slice(0, maxLen));
+}
+
+// case_number ("FIB-2026-0007") / report_number ("RAP-2026-0007") sunt
+// generate aici, nu stocate — "seq" e doar un SERIAL global, monoton
+// crescător, care există exclusiv ca să dea dosarelor/rapoartelor un număr
+// de referință scurt și lizibil (util în RP: scris pe mandate, citit pe
+// radio etc.), fără bătăi de cap cu coloane generate din TIMESTAMPTZ
+// (to_char pe timestamptz nu e IMMUTABLE în Postgres, deci n-ar putea fi o
+// coloană GENERATED).
+function mapDosarRow(row) {
+  const year = new Date(row.created_at).getFullYear();
+  return { ...row, case_number: `FIB-${year}-${String(row.seq).padStart(4, "0")}` };
+}
+function mapRaportRow(row) {
+  const year = new Date(row.created_at).getFullYear();
+  return { ...row, report_number: `RAP-${year}-${String(row.seq).padStart(4, "0")}` };
+}
+
+app.get("/api/mdt/agenti", auth, requireFib, asyncRoute(async (_req, res) => {
+  const { rows } = await pool.query(
+    `SELECT u.id, u.username, p.display_name
+     FROM users u
+     JOIN players p ON p.user_id = u.id
+     JOIN faction_members fm ON fm.player_id = p.id
+     JOIN factions f ON f.id = fm.faction_id
+     WHERE f.name = 'FIB'
+     ORDER BY p.display_name`
+  );
+  res.json(rows);
+}));
+
+app.get("/api/mdt/dosare", auth, requireFib, asyncRoute(async (req, res) => {
+  const { status, q } = req.query;
+  const clauses = [];
+  const params = [];
+  if (status && MDT_DOSAR_STATUSES.includes(status)) {
+    params.push(status);
+    clauses.push(`d.status = $${params.length}`);
+  }
+  if (q && q.trim()) {
+    params.push(`%${q.trim()}%`);
+    clauses.push(`(d.title ILIKE $${params.length} OR d.description ILIKE $${params.length} OR d.suspects::text ILIKE $${params.length})`);
+  }
+  const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+  const { rows } = await pool.query(
+    `SELECT d.*, cb.username AS created_by_name, ab.username AS assigned_to_name,
+            (SELECT COUNT(*) FROM mdt_mandate m WHERE m.dosar_id = d.id AND m.status = 'activ') AS mandate_active,
+            (SELECT COUNT(*) FROM mdt_probe pr WHERE pr.dosar_id = d.id) AS probe_count
+     FROM mdt_dosare d
+     LEFT JOIN users cb ON cb.id = d.created_by
+     LEFT JOIN users ab ON ab.id = d.assigned_to
+     ${where}
+     ORDER BY d.created_at DESC
+     LIMIT 300`,
+    params
+  );
+  res.json(rows.map(mapDosarRow));
+}));
+
+app.post("/api/mdt/dosare", auth, requireFib, asyncRoute(async (req, res) => {
+  const { title, category, description, suspects, assigned_to, tags, vehicles_involved, weapons_involved, officers_involved } = req.body;
+  if (!title || !title.trim()) return res.status(400).json({ error: "Titlul dosarului este obligatoriu." });
+  const { rows } = await pool.query(
+    `INSERT INTO mdt_dosare(title, category, description, suspects, created_by, assigned_to, tags, vehicles_involved, weapons_involved, officers_involved)
+     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+    [
+      title.trim(), (category || "altele").trim(), (description || "").trim(), JSON.stringify(cleanSuspectsInput(suspects)),
+      req.user.sub, assigned_to || null,
+      JSON.stringify(cleanStringList(tags, 40)), JSON.stringify(cleanStringList(vehicles_involved)),
+      JSON.stringify(cleanStringList(weapons_involved)), JSON.stringify(cleanStringList(officers_involved)),
+    ]
+  );
+  await logAction(req.user.sub, "mdt.dosar.create", "mdt_dosar", rows[0].id, { title: title.trim() }, req.ip);
+  res.status(201).json(mapDosarRow(rows[0]));
+}));
+
+app.get("/api/mdt/dosare/:id", auth, requireFib, asyncRoute(async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT d.*, cb.username AS created_by_name, ab.username AS assigned_to_name
+     FROM mdt_dosare d
+     LEFT JOIN users cb ON cb.id = d.created_by
+     LEFT JOIN users ab ON ab.id = d.assigned_to
+     WHERE d.id = $1`,
+    [req.params.id]
+  );
+  if (!rows[0]) return res.status(404).json({ error: "Dosarul nu există." });
+
+  const [mandate, probe, dosarRapoarte] = await Promise.all([
+    pool.query(
+      `SELECT m.*, u.username AS issued_by_name FROM mdt_mandate m
+       LEFT JOIN users u ON u.id = m.issued_by
+       WHERE m.dosar_id = $1 ORDER BY m.issued_at DESC`,
+      [req.params.id]
+    ),
+    pool.query(
+      `SELECT p.id, p.dosar_id, p.label, p.url, p.file_name, p.file_mime,
+              (p.file_data IS NOT NULL) AS has_file, p.added_by, p.created_at, u.username AS added_by_name
+       FROM mdt_probe p
+       LEFT JOIN users u ON u.id = p.added_by
+       WHERE p.dosar_id = $1 ORDER BY p.created_at DESC`,
+      [req.params.id]
+    ),
+    pool.query(
+      `SELECT rp.id, rp.seq, rp.title, rp.type, rp.created_at
+       FROM mdt_dosar_rapoarte dr JOIN mdt_rapoarte rp ON rp.id = dr.raport_id
+       WHERE dr.dosar_id = $1 ORDER BY rp.created_at DESC`,
+      [req.params.id]
+    ),
+  ]);
+
+  // Fiecare mandat își poate avea propriile rapoarte legate — o singură
+  // interogare suplimentară pentru toate mandatele dosarului ăsta deodată,
+  // nu una per mandat.
+  const mandateIds = mandate.rows.map(m => m.id);
+  let mandatRapoarte = [];
+  if (mandateIds.length) {
+    const r = await pool.query(
+      `SELECT mr.mandat_id, rp.id, rp.seq, rp.title, rp.type, rp.created_at
+       FROM mdt_mandat_rapoarte mr JOIN mdt_rapoarte rp ON rp.id = mr.raport_id
+       WHERE mr.mandat_id = ANY($1) ORDER BY rp.created_at DESC`,
+      [mandateIds]
+    );
+    mandatRapoarte = r.rows;
+  }
+  const mandateOut = mandate.rows.map(m => ({
+    ...m,
+    rapoarte: mandatRapoarte.filter(r => r.mandat_id === m.id).map(({ mandat_id, ...rest }) => mapRaportRow(rest)),
+  }));
+
+  res.json({
+    ...mapDosarRow(rows[0]),
+    mandate: mandateOut,
+    probe: probe.rows,
+    rapoarte: dosarRapoarte.rows.map(mapRaportRow),
+  });
+}));
+
+app.put("/api/mdt/dosare/:id", auth, requireFib, asyncRoute(async (req, res) => {
+  const { title, category, status, description, suspects, assigned_to, tags, vehicles_involved, weapons_involved, officers_involved } = req.body;
+  if (!title || !title.trim()) return res.status(400).json({ error: "Titlul dosarului este obligatoriu." });
+  if (status && !MDT_DOSAR_STATUSES.includes(status)) return res.status(400).json({ error: "Status invalid." });
+  const { rows } = await pool.query(
+    `UPDATE mdt_dosare SET title=$1, category=$2, status=$3, description=$4, suspects=$5, assigned_to=$6,
+       tags=$7, vehicles_involved=$8, weapons_involved=$9, officers_involved=$10, updated_at=NOW()
+     WHERE id=$11 RETURNING *`,
+    [
+      title.trim(), (category || "altele").trim(), status || "deschis", (description || "").trim(), JSON.stringify(cleanSuspectsInput(suspects)),
+      assigned_to || null,
+      JSON.stringify(cleanStringList(tags, 40)), JSON.stringify(cleanStringList(vehicles_involved)),
+      JSON.stringify(cleanStringList(weapons_involved)), JSON.stringify(cleanStringList(officers_involved)),
+      req.params.id,
+    ]
+  );
+  if (!rows[0]) return res.status(404).json({ error: "Dosarul nu există." });
+  await logAction(req.user.sub, "mdt.dosar.update", "mdt_dosar", req.params.id, { title: title.trim(), status }, req.ip);
+  res.json(mapDosarRow(rows[0]));
+}));
+
+app.delete("/api/mdt/dosare/:id", auth, requireFib, asyncRoute(async (req, res) => {
+  const { rowCount } = await pool.query("DELETE FROM mdt_dosare WHERE id=$1", [req.params.id]);
+  if (!rowCount) return res.status(404).json({ error: "Dosarul nu există." });
+  await logAction(req.user.sub, "mdt.dosar.delete", "mdt_dosar", req.params.id, null, req.ip);
+  res.status(204).end();
+}));
+
+app.post("/api/mdt/dosare/:id/mandate", auth, requireFib, asyncRoute(async (req, res) => {
+  const { type, target_name, details, expires_at, tags, priority } = req.body;
+  if (!MDT_MANDAT_TYPES.includes(type)) return res.status(400).json({ error: "Tip de mandat invalid." });
+  if (!target_name || !target_name.trim()) return res.status(400).json({ error: "Persoana/adresa vizată este obligatorie." });
+  if (priority && !MDT_MANDAT_PRIORITIES.includes(priority)) return res.status(400).json({ error: "Prioritate invalidă." });
+  const dosar = await pool.query("SELECT id FROM mdt_dosare WHERE id=$1", [req.params.id]);
+  if (!dosar.rows[0]) return res.status(404).json({ error: "Dosarul nu există." });
+  const { rows } = await pool.query(
+    `INSERT INTO mdt_mandate(dosar_id, type, target_name, details, issued_by, expires_at, tags, priority)
+     VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+    [req.params.id, type, target_name.trim(), (details || "").trim(), req.user.sub, expires_at || null, JSON.stringify(cleanStringList(tags, 40)), priority || "medie"]
+  );
+  await logAction(req.user.sub, "mdt.mandat.create", "mdt_mandat", rows[0].id, { dosar_id: req.params.id, type, target_name: target_name.trim() }, req.ip);
+  res.status(201).json(rows[0]);
+}));
+
+// Acceptă orice combinație de status/tags/priority — folosit atât pentru
+// schimbarea rapidă a statusului (butoanele din mdt-dosar.html), cât și
+// pentru o editare mai completă a mandatului, fără două rute separate.
+app.put("/api/mdt/mandate/:id", auth, requireFib, asyncRoute(async (req, res) => {
+  const { status, tags, priority } = req.body;
+  if (status && !MDT_MANDAT_STATUSES.includes(status)) return res.status(400).json({ error: "Status invalid." });
+  if (priority && !MDT_MANDAT_PRIORITIES.includes(priority)) return res.status(400).json({ error: "Prioritate invalidă." });
+  const current = await pool.query("SELECT status FROM mdt_mandate WHERE id=$1", [req.params.id]);
+  if (!current.rows[0]) return res.status(404).json({ error: "Mandatul nu există." });
+  const nextStatus = status || current.rows[0].status;
+  const { rows } = await pool.query(
+    `UPDATE mdt_mandate SET
+       status=$1,
+       tags=COALESCE($2, tags),
+       priority=COALESCE($3, priority),
+       executed_at=${status === "executat" ? "NOW()" : "executed_at"}
+     WHERE id=$4 RETURNING *`,
+    [nextStatus, tags ? JSON.stringify(cleanStringList(tags, 40)) : null, priority || null, req.params.id]
+  );
+  await logAction(req.user.sub, "mdt.mandat.update", "mdt_mandat", req.params.id, { status: nextStatus, priority }, req.ip);
+  res.json(rows[0]);
+}));
+
+app.delete("/api/mdt/mandate/:id", auth, requireFib, asyncRoute(async (req, res) => {
+  const { rowCount } = await pool.query("DELETE FROM mdt_mandate WHERE id=$1", [req.params.id]);
+  if (!rowCount) return res.status(404).json({ error: "Mandatul nu există." });
+  await logAction(req.user.sub, "mdt.mandat.delete", "mdt_mandat", req.params.id, null, req.ip);
+  res.status(204).end();
+}));
+
+// Proba poate fi un link extern (Discord/Streamable/imgur — la fel ca la
+// tichete) ȘI/SAU un fișier încărcat direct (poză), trimis ca base64 în
+// JSON. fileData poate veni ca data-URL brut ("data:image/png;base64,...")
+// direct din <input type="file"> + FileReader — prefixul e tăiat mai jos.
+app.post("/api/mdt/dosare/:id/probe", auth, requireFib, asyncRoute(async (req, res) => {
+  const { label, url, fileData, fileName, fileMime } = req.body;
+  if (!label || !label.trim()) return res.status(400).json({ error: "Eticheta probei este obligatorie." });
+  const cleanUrl = url && url.trim() ? url.trim() : null;
+
+  let buffer = null;
+  if (fileData) {
+    if (!MDT_ALLOWED_MIME.includes(fileMime)) return res.status(400).json({ error: "Doar imagini PNG, JPEG sau WEBP sunt acceptate." });
+    buffer = Buffer.from(String(fileData).replace(/^data:[^,]+,/, ""), "base64");
+    if (buffer.length > MDT_MAX_FILE_BYTES) return res.status(400).json({ error: "Fișierul este prea mare (limită 6MB)." });
+  }
+  if (!cleanUrl && !buffer) return res.status(400).json({ error: "Atașează un link sau un fișier." });
+
+  const dosar = await pool.query("SELECT id FROM mdt_dosare WHERE id=$1", [req.params.id]);
+  if (!dosar.rows[0]) return res.status(404).json({ error: "Dosarul nu există." });
+
+  const { rows } = await pool.query(
+    `INSERT INTO mdt_probe(dosar_id, label, url, file_data, file_mime, file_name, added_by)
+     VALUES($1,$2,$3,$4,$5,$6,$7)
+     RETURNING id, dosar_id, label, url, file_name, file_mime, (file_data IS NOT NULL) AS has_file, added_by, created_at`,
+    [req.params.id, label.trim(), cleanUrl, buffer, buffer ? fileMime : null, buffer ? String(fileName || "proba").slice(0, 160) : null, req.user.sub]
+  );
+  await logAction(req.user.sub, "mdt.proba.create", "mdt_proba", rows[0].id, { dosar_id: req.params.id, label: label.trim() }, req.ip);
+  res.status(201).json(rows[0]);
+}));
+
+// Fișierul propriu-zis al unei probe — servit separat de restul JSON-ului
+// (ar fi absurd de mare inclus la fiecare GET pe dosar). Necesită totuși
+// Authorization: Bearer ca orice altă rută MDT, deci frontend-ul îl încarcă
+// prin fetch()+blob (vezi mdt-dosar.html), nu direct într-un <img src>.
+app.get("/api/mdt/probe/:id/fisier", auth, requireFib, asyncRoute(async (req, res) => {
+  const { rows } = await pool.query("SELECT file_data, file_mime, file_name FROM mdt_probe WHERE id=$1", [req.params.id]);
+  if (!rows[0] || !rows[0].file_data) return res.status(404).end();
+  res.set("Content-Type", rows[0].file_mime || "application/octet-stream");
+  res.set("Content-Disposition", `inline; filename="${(rows[0].file_name || "proba").replace(/"/g, "")}"`);
+  res.send(rows[0].file_data);
+}));
+
+app.delete("/api/mdt/probe/:id", auth, requireFib, asyncRoute(async (req, res) => {
+  const { rowCount } = await pool.query("DELETE FROM mdt_probe WHERE id=$1", [req.params.id]);
+  if (!rowCount) return res.status(404).json({ error: "Proba nu există." });
+  await logAction(req.user.sub, "mdt.proba.delete", "mdt_proba", req.params.id, null, req.ip);
+  res.status(204).end();
+}));
+
+// Rapoarte (18.09.2026) — incidente punctuale, ca un proces verbal: separate
+// de dosare (un dosar e "ancheta mare", un raport e "un eveniment"), dar se
+// pot lega ulterior de unul sau mai multe dosare și/sau mandate (vezi rutele
+// de legare mai jos și tabelele mdt_dosar_rapoarte/mdt_mandat_rapoarte).
+app.get("/api/mdt/rapoarte", auth, requireFib, asyncRoute(async (req, res) => {
+  const { type, q } = req.query;
+  const clauses = [];
+  const params = [];
+  if (type && MDT_RAPORT_TYPES.includes(type)) {
+    params.push(type);
+    clauses.push(`r.type = $${params.length}`);
+  }
+  if (q && q.trim()) {
+    params.push(`%${q.trim()}%`);
+    clauses.push(`(r.title ILIKE $${params.length} OR r.description ILIKE $${params.length})`);
+  }
+  const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+  const { rows } = await pool.query(
+    `SELECT r.*, cb.username AS created_by_name
+     FROM mdt_rapoarte r
+     LEFT JOIN users cb ON cb.id = r.created_by
+     ${where}
+     ORDER BY r.created_at DESC
+     LIMIT 300`,
+    params
+  );
+  res.json(rows.map(mapRaportRow));
+}));
+
+app.post("/api/mdt/rapoarte", auth, requireFib, asyncRoute(async (req, res) => {
+  const { title, type, description, tags, officers_involved, civilians_involved, suspects_involved, weapons_involved } = req.body;
+  if (!title || !title.trim()) return res.status(400).json({ error: "Titlul raportului este obligatoriu." });
+  const { rows } = await pool.query(
+    `INSERT INTO mdt_rapoarte(title, type, description, tags, officers_involved, civilians_involved, suspects_involved, weapons_involved, created_by)
+     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+    [
+      title.trim(), MDT_RAPORT_TYPES.includes(type) ? type : "altele", (description || "").trim(),
+      JSON.stringify(cleanStringList(tags, 40)), JSON.stringify(cleanStringList(officers_involved)),
+      JSON.stringify(cleanStringList(civilians_involved)), JSON.stringify(cleanStringList(suspects_involved)),
+      JSON.stringify(cleanStringList(weapons_involved)), req.user.sub,
+    ]
+  );
+  await logAction(req.user.sub, "mdt.raport.create", "mdt_raport", rows[0].id, { title: title.trim() }, req.ip);
+  res.status(201).json(mapRaportRow(rows[0]));
+}));
+
+app.get("/api/mdt/rapoarte/:id", auth, requireFib, asyncRoute(async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT r.*, cb.username AS created_by_name FROM mdt_rapoarte r
+     LEFT JOIN users cb ON cb.id = r.created_by WHERE r.id = $1`,
+    [req.params.id]
+  );
+  if (!rows[0]) return res.status(404).json({ error: "Raportul nu există." });
+
+  const [dosare, mandate] = await Promise.all([
+    pool.query(
+      `SELECT d.id, d.seq, d.title, d.status, d.created_at FROM mdt_dosar_rapoarte dr
+       JOIN mdt_dosare d ON d.id = dr.dosar_id WHERE dr.raport_id = $1 ORDER BY d.created_at DESC`,
+      [req.params.id]
+    ),
+    pool.query(
+      `SELECT m.id, m.type, m.target_name, m.status, m.dosar_id FROM mdt_mandat_rapoarte mr
+       JOIN mdt_mandate m ON m.id = mr.mandat_id WHERE mr.raport_id = $1 ORDER BY m.issued_at DESC`,
+      [req.params.id]
+    ),
+  ]);
+
+  res.json({ ...mapRaportRow(rows[0]), dosare: dosare.rows.map(mapDosarRow), mandate: mandate.rows });
+}));
+
+app.put("/api/mdt/rapoarte/:id", auth, requireFib, asyncRoute(async (req, res) => {
+  const { title, type, description, tags, officers_involved, civilians_involved, suspects_involved, weapons_involved } = req.body;
+  if (!title || !title.trim()) return res.status(400).json({ error: "Titlul raportului este obligatoriu." });
+  const { rows } = await pool.query(
+    `UPDATE mdt_rapoarte SET title=$1, type=$2, description=$3, tags=$4, officers_involved=$5,
+       civilians_involved=$6, suspects_involved=$7, weapons_involved=$8, updated_at=NOW()
+     WHERE id=$9 RETURNING *`,
+    [
+      title.trim(), MDT_RAPORT_TYPES.includes(type) ? type : "altele", (description || "").trim(),
+      JSON.stringify(cleanStringList(tags, 40)), JSON.stringify(cleanStringList(officers_involved)),
+      JSON.stringify(cleanStringList(civilians_involved)), JSON.stringify(cleanStringList(suspects_involved)),
+      JSON.stringify(cleanStringList(weapons_involved)), req.params.id,
+    ]
+  );
+  if (!rows[0]) return res.status(404).json({ error: "Raportul nu există." });
+  await logAction(req.user.sub, "mdt.raport.update", "mdt_raport", req.params.id, { title: title.trim() }, req.ip);
+  res.json(mapRaportRow(rows[0]));
+}));
+
+app.delete("/api/mdt/rapoarte/:id", auth, requireFib, asyncRoute(async (req, res) => {
+  const { rowCount } = await pool.query("DELETE FROM mdt_rapoarte WHERE id=$1", [req.params.id]);
+  if (!rowCount) return res.status(404).json({ error: "Raportul nu există." });
+  await logAction(req.user.sub, "mdt.raport.delete", "mdt_raport", req.params.id, null, req.ip);
+  res.status(204).end();
+}));
+
+// Legarea unui raport existent de un dosar sau de un mandat — "Rapoarte
+// legate" din interfață. ON CONFLICT DO NOTHING: aceeași pereche nu poate fi
+// legată de două ori (cheia primară compusă de pe tabelele de legătură).
+app.post("/api/mdt/dosare/:id/rapoarte", auth, requireFib, asyncRoute(async (req, res) => {
+  const { raport_id } = req.body;
+  if (!raport_id) return res.status(400).json({ error: "raport_id este obligatoriu." });
+  try {
+    await pool.query(
+      "INSERT INTO mdt_dosar_rapoarte(dosar_id, raport_id) VALUES($1,$2) ON CONFLICT DO NOTHING",
+      [req.params.id, raport_id]
+    );
+    res.status(201).json({ ok: true });
+  } catch (e) {
+    if (e.code === "23503") return res.status(404).json({ error: "Dosarul sau raportul nu există." });
+    throw e;
+  }
+}));
+
+app.delete("/api/mdt/dosare/:id/rapoarte/:raportId", auth, requireFib, asyncRoute(async (req, res) => {
+  await pool.query("DELETE FROM mdt_dosar_rapoarte WHERE dosar_id=$1 AND raport_id=$2", [req.params.id, req.params.raportId]);
+  res.status(204).end();
+}));
+
+app.post("/api/mdt/mandate/:id/rapoarte", auth, requireFib, asyncRoute(async (req, res) => {
+  const { raport_id } = req.body;
+  if (!raport_id) return res.status(400).json({ error: "raport_id este obligatoriu." });
+  try {
+    await pool.query(
+      "INSERT INTO mdt_mandat_rapoarte(mandat_id, raport_id) VALUES($1,$2) ON CONFLICT DO NOTHING",
+      [req.params.id, raport_id]
+    );
+    res.status(201).json({ ok: true });
+  } catch (e) {
+    if (e.code === "23503") return res.status(404).json({ error: "Mandatul sau raportul nu există." });
+    throw e;
+  }
+}));
+
+app.delete("/api/mdt/mandate/:id/rapoarte/:raportId", auth, requireFib, asyncRoute(async (req, res) => {
+  await pool.query("DELETE FROM mdt_mandat_rapoarte WHERE mandat_id=$1 AND raport_id=$2", [req.params.id, req.params.raportId]);
+  res.status(204).end();
+}));
+
+// ---------------------------------------------------------------------------
+// Regulations content management (v0.5)
+// ---------------------------------------------------------------------------
+
+function slugify(text) {
+  return text
+    .toString()
+    .normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+app.get("/api/admin/regulations", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (_req, res) => {
+  const { rows } = await pool.query(
+    "SELECT * FROM regulations ORDER BY category, title"
+  );
+  res.json(rows);
+}));
+
+app.get("/api/admin/regulations/:id", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
+  const { rows } = await pool.query("SELECT * FROM regulations WHERE id=$1", [req.params.id]);
+  if (!rows[0]) return res.status(404).json({ error: "Regulamentul nu există." });
+  res.json(rows[0]);
+}));
+
+app.post("/api/admin/regulations", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
+  const { title, category, content, version, is_published, slug } = req.body;
+  if (!title || !category || !content)
+    return res.status(400).json({ error: "Titlu, categorie și conținut sunt obligatorii." });
+  const finalSlug = (slug && slug.trim()) || slugify(title);
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO regulations(title, slug, category, content, version, is_published)
+       VALUES($1,$2,$3,$4,$5,$6) RETURNING *`,
+      [title.trim(), finalSlug, category.trim(), content, version || "1.0", is_published ?? true]
+    );
+    await logAction(req.user.sub, "regulation.create", "regulation", rows[0].id, { title, category }, req.ip);
+    if (rows[0].is_published) notifyDiscordRegulation(rows[0], "adăugat", { editedBy: req.user.username });
+    res.status(201).json(rows[0]);
+  } catch (e) {
+    if (e.code === "23505") return res.status(409).json({ error: "Există deja un regulament cu acest slug." });
+    throw e;
+  }
+}));
+
+app.put("/api/admin/regulations/:id", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
+  const { id } = req.params;
+  const { title, category, content, version, is_published, slug } = req.body;
+  try {
+    // Citim starea dinainte de update, ca să putem trimite pe Discord exact
+    // ce s-a schimbat (titlu + diff de conținut), nu tot textul din nou.
+    const before = await pool.query("SELECT title, content FROM regulations WHERE id=$1", [id]);
+    const { rows } = await pool.query(
+      `UPDATE regulations SET
+         title = COALESCE($1, title),
+         slug = COALESCE($2, slug),
+         category = COALESCE($3, category),
+         content = COALESCE($4, content),
+         version = COALESCE($5, version),
+         is_published = COALESCE($6, is_published),
+         updated_at = NOW()
+       WHERE id = $7 RETURNING *`,
+      [title || null, slug || null, category || null, content || null, version || null, is_published ?? null, id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: "Regulamentul nu există." });
+    await logAction(req.user.sub, "regulation.update", "regulation", id, req.body, req.ip);
+    if (rows[0].is_published) {
+      const prev = before.rows[0];
+      const { added, removed } = prev ? diffLines(prev.content, rows[0].content) : { added: [], removed: [] };
+      notifyDiscordRegulation(rows[0], "modificat", {
+        editedBy: req.user.username,
+        addedLines: added,
+        removedLines: removed,
+        titleChanged: !!(prev && prev.title !== rows[0].title),
+        oldTitle: prev?.title,
+      });
+    }
+    res.json(rows[0]);
+  } catch (e) {
+    if (e.code === "23505") return res.status(409).json({ error: "Există deja un regulament cu acest slug." });
+    throw e;
+  }
+}));
+
+app.delete("/api/admin/regulations/:id", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
+  const { id } = req.params;
+  const { rowCount } = await pool.query("DELETE FROM regulations WHERE id = $1", [id]);
+  if (!rowCount) return res.status(404).json({ error: "Regulamentul nu există." });
+  await logAction(req.user.sub, "regulation.delete", "regulation", id, null, req.ip);
+  res.status(204).end();
+}));
+
+// ---------------------------------------------------------------------------
+// Announcements content management (v0.5)
+// ---------------------------------------------------------------------------
+
+// Trimite anunțul pe Discord printr-un Webhook (Server Settings > Integrations
+// > Webhooks — nu necesită bot). "Fire and forget": dacă Discord e jos sau
+// webhook-ul nu e configurat, publicarea anunțului tot reușește — doar
+// notificarea eșuează silențios (logată în consolă, nu blocată/afișată userului).
+const DISCORD_ANNOUNCE_WEBHOOK = process.env.DISCORD_ANNOUNCE_WEBHOOK || "";
+// Webhook separat pentru categoria specială "Actualizare" (patch notes de
+// server/joc) — de obicei alt canal Discord decât anunțurile generale, ca să
+// nu se amestece. Dacă nu e setat, cade automat pe DISCORD_ANNOUNCE_WEBHOOK.
+const DISCORD_UPDATE_WEBHOOK = process.env.DISCORD_UPDATE_WEBHOOK || "";
+const SITE_URL = process.env.SITE_URL || "https://web-production-4fd88.up.railway.app";
+
+// Ține sincronizat cu filtrul de pe pagina publică (app.js) și cu
+// admin-actualizari.html: orice anunț cu această categorie e tratat ca
+// "actualizare" (patch notes), nu ca anunț obișnuit.
+function isUpdateCategory(category) {
+  return (category || "").toString().trim().toLowerCase() === "actualizare";
+}
+
+// Discord cere un URL absolut pentru imaginile din embed (nu acceptă căi
+// relative de genul "assets/poza.jpg", care merg perfect pe site-ul nostru
+// unde browserul le rezolvă față de domeniu, dar Discord le respinge cu 400).
+// Adminul poate lipi orice formă în panou — o facem absolută aici, o singură
+// dată, indiferent unde e folosită.
+function toAbsoluteUrl(url) {
+  if (!url) return null;
+  const trimmed = url.trim();
+  if (!trimmed) return null;
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return `${SITE_URL}/${trimmed.replace(/^\/+/, "")}`;
+}
+
+async function notifyDiscordAnnouncement(announcement) {
+  if (!DISCORD_ANNOUNCE_WEBHOOK) return;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 6000);
+  try {
+    // image_url e opțional — dacă adminul a atașat o poză/banner anunțului,
+    // apare mare, jos în embed; logo-ul site-ului rămâne mic, sus (thumbnail).
+    const embed = {
+      author: { name: "Moldova RP — Anunțuri", icon_url: `${SITE_URL}/assets/logo.png` },
+      title: announcement.title,
+      description: announcement.content.length > 800
+        ? announcement.content.slice(0, 800).trim() + "…"
+        : announcement.content,
+      color: 0xff8a1f,
+      thumbnail: { url: `${SITE_URL}/assets/logo.png` },
+      fields: [
+        { name: "Categorie", value: announcement.category || "General", inline: true },
+        { name: "Autor", value: announcement.author || "Administrație", inline: true },
+      ],
+      footer: { text: "Moldova RP Portal · vezi anunțul complet pe site" },
+      url: `${SITE_URL}/index.html#anunturi`,
+      timestamp: new Date().toISOString(),
+    };
+    const absImageUrl = toAbsoluteUrl(announcement.image_url);
+    if (absImageUrl) embed.image = { url: absImageUrl };
+
+    const res = await fetch(DISCORD_ANNOUNCE_WEBHOOK, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      signal: controller.signal,
+      body: JSON.stringify({
+        content: "📢 **Anunț nou pe Moldova RP!** @everyone",
+        allowed_mentions: { parse: ["everyone"] },
+        embeds: [embed],
+      }),
+    });
+    if (!res.ok) console.error(`Discord webhook a răspuns cu ${res.status}: ${await res.text().catch(() => "")}`);
+  } catch (err) {
+    console.error("Trimiterea anunțului pe Discord a eșuat:", err.message);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+// La fel ca notifyDiscordAnnouncement, dar pentru categoria "Actualizare" —
+// trimite pe un webhook separat (canalul de patch notes), ca update-urile de
+// server/joc să nu apară în canalul general de anunțuri.
+async function notifyDiscordUpdate(announcement) {
+  const webhookUrl = DISCORD_UPDATE_WEBHOOK || DISCORD_ANNOUNCE_WEBHOOK;
+  if (!webhookUrl) return;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 6000);
+  try {
+    const embed = {
+      author: { name: "Moldova RP — Actualizări", icon_url: `${SITE_URL}/assets/logo.png` },
+      title: announcement.title,
+      description: announcement.content.length > 800
+        ? announcement.content.slice(0, 800).trim() + "…"
+        : announcement.content,
+      color: 0x3ba6ff,
+      thumbnail: { url: `${SITE_URL}/assets/logo.png` },
+      fields: [
+        { name: "Autor", value: announcement.author || "Administrație", inline: true },
+      ],
+      footer: { text: "Moldova RP Portal · vezi actualizarea completă pe site" },
+      url: `${SITE_URL}/index.html#actualizari`,
+      timestamp: new Date().toISOString(),
+    };
+    const absImageUrl = toAbsoluteUrl(announcement.image_url);
+    if (absImageUrl) embed.image = { url: absImageUrl };
+
+    const res = await fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      signal: controller.signal,
+      body: JSON.stringify({
+        content: "🆕 **Actualizare nouă pe Moldova RP!** @everyone",
+        allowed_mentions: { parse: ["everyone"] },
+        embeds: [embed],
+      }),
+    });
+    if (!res.ok) console.error(`Discord webhook (actualizare) a răspuns cu ${res.status}: ${await res.text().catch(() => "")}`);
+  } catch (err) {
+    console.error("Trimiterea actualizării pe Discord a eșuat:", err.message);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+// Diff simplu, linie cu linie (LCS), între conținutul vechi și cel nou al unui
+// regulament — ca notificarea de pe Discord la o modificare să arate exact ce
+// s-a adăugat/eliminat, nu tot textul din nou. Plafonat: pentru texte foarte
+// lungi (rar cazul unui regulament) sărim diff-ul in loc să riscăm un calcul
+// O(n*m) prea mare — funcția apelantă cade atunci pe un preview simplu.
+function diffLines(oldText, newText) {
+  const a = (oldText || "").split(/\r?\n/);
+  const b = (newText || "").split(/\r?\n/);
+  if (a.join("\n") === b.join("\n")) return { added: [], removed: [] };
+
+  // Tăiem întâi prefixul și sufixul comune, în O(n) — pentru un regulament
+  // lung unde s-a adăugat/modificat o singură secțiune (cazul obișnuit),
+  // asta reduce diff-ul costisitor (LCS) doar la porțiunea care chiar
+  // diferă, indiferent cât de mare e restul documentului neschimbat. Fără
+  // asta, un regulament de mii de linii lovea mereu plafonul de siguranță
+  // de mai jos și notificarea cădea pe un preview generic de la început,
+  // nu pe textul chiar adăugat.
+  let start = 0;
+  const maxStart = Math.min(a.length, b.length);
+  while (start < maxStart && a[start] === b[start]) start++;
+  let endA = a.length, endB = b.length;
+  while (endA > start && endB > start && a[endA - 1] === b[endB - 1]) { endA--; endB--; }
+
+  const midA = a.slice(start, endA);
+  const midB = b.slice(start, endB);
+  if (midA.length * midB.length > 250000) return { added: [], removed: [], skipped: true };
+
+  const n = midA.length, m = midB.length;
+  const dp = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      dp[i][j] = midA[i] === midB[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    }
+  }
+  const removed = [], added = [];
+  let i = 0, j = 0;
+  while (i < n && j < m) {
+    if (midA[i] === midB[j]) { i++; j++; }
+    else if (dp[i + 1][j] >= dp[i][j + 1]) { removed.push(midA[i]); i++; }
+    else { added.push(midB[j]); j++; }
+  }
+  while (i < n) { removed.push(midA[i]); i++; }
+  while (j < m) { added.push(midB[j]); j++; }
+  return { added: added.filter(l => l.trim()), removed: removed.filter(l => l.trim()) };
+}
+
+// Randează o listă de linii ca text pentru un field Discord (max 1024 caractere
+// per field), plafonat și ca număr de linii afișate.
+function formatDiffLines(lines, maxLines = 10, maxChars = 1000) {
+  if (!lines || !lines.length) return null;
+  const shown = lines.slice(0, maxLines).map(l => `• ${l.length > 200 ? l.slice(0, 200).trim() + "…" : l}`);
+  let text = shown.join("\n");
+  if (text.length > maxChars) text = text.slice(0, maxChars).trim() + "…";
+  if (lines.length > maxLines) text += `\n… și încă ${lines.length - maxLines} linii`;
+  return text;
+}
+
+// Aceeași logică ca la anunțuri, dar pentru regulamente — mesajul spune clar
+// dacă regulamentul a fost adăugat sau modificat, cum a cerut Sergiu, iar la
+// modificare arată exact ce s-a adăugat/eliminat din text (nu tot conținutul
+// din nou). Folosește același webhook (DISCORD_ANNOUNCE_WEBHOOK) — un singur
+// canal pentru toate notificările site-ului, nu unul separat per tip de conținut.
+async function notifyDiscordRegulation(regulation, action, extra = {}) {
+  if (!DISCORD_ANNOUNCE_WEBHOOK) return;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 6000);
+  try {
+    const { editedBy, addedLines = [], removedLines = [], titleChanged, oldTitle, skipped } = extra;
+    const hasDiff = addedLines.length > 0 || removedLines.length > 0;
+
+    const fields = [
+      { name: "Categorie", value: regulation.category || "General", inline: true },
+      { name: "Versiune", value: regulation.version || "1.0", inline: true },
+    ];
+    if (editedBy) fields.push({ name: action === "adăugat" ? "Adăugat de" : "Modificat de", value: editedBy, inline: true });
+    if (titleChanged) fields.push({ name: "Titlu schimbat", value: `${oldTitle} → ${regulation.title}`, inline: false });
+    const removedText = formatDiffLines(removedLines);
+    const addedText = formatDiffLines(addedLines);
+    if (removedText) fields.push({ name: "➖ Eliminat din text", value: removedText, inline: false });
+    if (addedText) fields.push({ name: "➕ Adăugat în text", value: addedText, inline: false });
+    if (action === "modificat" && !hasDiff && skipped) {
+      fields.push({ name: "Modificare", value: "Textul a fost rescris integral — prea mare pentru un rezumat linie-cu-linie.", inline: false });
+    }
+
+    // La adăugare, sau la o modificare fără diff de text (doar categorie/versiune
+    // schimbate), arătăm un preview din conținut — altfel embed-ul ar rămâne gol.
+    const description = (action === "adăugat" || (!hasDiff && !titleChanged))
+      ? (regulation.content.length > 800 ? regulation.content.slice(0, 800).trim() + "…" : regulation.content)
+      : undefined;
+
+    const res = await fetch(DISCORD_ANNOUNCE_WEBHOOK, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      signal: controller.signal,
+      body: JSON.stringify({
+        content: `📘 **Regulament ${action} pe Moldova RP!** @everyone`,
+        allowed_mentions: { parse: ["everyone"] },
+        embeds: [{
+          author: { name: "Moldova RP — Regulamente", icon_url: `${SITE_URL}/assets/logo.png` },
+          title: regulation.title,
+          description,
+          color: action === "adăugat" ? 0x2f81f7 : 0xf7b32f,
+          fields,
+          footer: { text: "Moldova RP Portal · vezi regulamentul complet pe site" },
+          url: `${SITE_URL}/regulament.html?slug=${encodeURIComponent(regulation.slug)}`,
+          timestamp: new Date().toISOString(),
+        }],
+      }),
+    });
+    if (!res.ok) console.error(`Discord webhook (regulament) a răspuns cu ${res.status}: ${await res.text().catch(() => "")}`);
+  } catch (err) {
+    console.error("Trimiterea regulamentului pe Discord a eșuat:", err.message);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+app.get("/api/admin/announcements", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (_req, res) => {
+  const { rows } = await pool.query(
+    `SELECT a.*, u.username author FROM announcements a
+     LEFT JOIN users u ON u.id = a.author_id
+     ORDER BY a.published_at DESC`
+  );
+  res.json(rows);
+}));
+
+app.get("/api/admin/announcements/:id", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
+  const { rows } = await pool.query("SELECT * FROM announcements WHERE id=$1", [req.params.id]);
+  if (!rows[0]) return res.status(404).json({ error: "Anunțul nu există." });
+  res.json(rows[0]);
+}));
+
+app.post("/api/admin/announcements", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
+  const { title, content, category, is_published, image_url, video_url } = req.body;
+  if (!title || !content)
+    return res.status(400).json({ error: "Titlu și conținut sunt obligatorii." });
+  const { rows } = await pool.query(
+    `INSERT INTO announcements(title, content, category, author_id, is_published, image_url, video_url)
+     VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+    [title.trim(), content, category?.trim() || "General", req.user.sub, is_published ?? true, image_url?.trim() || null, video_url?.trim() || null]
+  );
+  await logAction(req.user.sub, "announcement.create", "announcement", rows[0].id, { title }, req.ip);
+  if (rows[0].is_published) {
+    if (isUpdateCategory(rows[0].category)) notifyDiscordUpdate({ ...rows[0], author: req.user.username });
+    else notifyDiscordAnnouncement({ ...rows[0], author: req.user.username });
+  }
+  res.status(201).json(rows[0]);
+}));
+
+app.put("/api/admin/announcements/:id", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
+  const { id } = req.params;
+  const { title, content, category, is_published, image_url, video_url } = req.body;
+  const before = await pool.query("SELECT is_published FROM announcements WHERE id=$1", [id]);
+  if (!before.rows[0]) return res.status(404).json({ error: "Anunțul nu există." });
+  const wasPublished = before.rows[0].is_published;
+
+  const { rows } = await pool.query(
+    `UPDATE announcements SET
+       title = COALESCE($1, title),
+       content = COALESCE($2, content),
+       category = COALESCE($3, category),
+       is_published = COALESCE($4, is_published),
+       image_url = COALESCE($5, image_url),
+       video_url = COALESCE($6, video_url)
+     WHERE id = $7 RETURNING *`,
+    [title || null, content || null, category?.trim() || null, is_published ?? null, image_url?.trim() || null, video_url?.trim() || null, id]
+  );
+  if (!rows[0]) return res.status(404).json({ error: "Anunțul nu există." });
+  await logAction(req.user.sub, "announcement.update", "announcement", id, req.body, req.ip);
+  // Notifică pe Discord doar când anunțul TREE de la ciornă la publicat —
+  // nu la fiecare editare ulterioară a unuia deja publicat, ca să nu spamăm.
+  if (!wasPublished && rows[0].is_published) {
+    if (isUpdateCategory(rows[0].category)) notifyDiscordUpdate({ ...rows[0], author: req.user.username });
+    else notifyDiscordAnnouncement({ ...rows[0], author: req.user.username });
+  }
+  res.json(rows[0]);
+}));
+
+app.delete("/api/admin/announcements/:id", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
+  const { id } = req.params;
+  const { rowCount } = await pool.query("DELETE FROM announcements WHERE id = $1", [id]);
+  if (!rowCount) return res.status(404).json({ error: "Anunțul nu există." });
+  await logAction(req.user.sub, "announcement.delete", "announcement", id, null, req.ip);
+  res.status(204).end();
+}));
+
+// ---------------------------------------------------------------------------
+// Conținut pagini (Admin → Conținut pagini) — editare "câmpuri" pentru
+// paginile publice. Blocurile sunt pre-definite la seed (scripts/seed-content.js)
+// pentru fiecare pagină — aici doar se listează/editează, nu se creează sau
+// șterg (structura paginilor rămâne stabilă; doar conținutul e editabil).
+// ---------------------------------------------------------------------------
+
+const CONTENT_TYPES = ["text", "richtext", "html", "list"];
+
+app.get("/api/admin/content/:page", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
+  const { rows } = await pool.query(
+    "SELECT * FROM page_blocks WHERE page=$1 ORDER BY sort_order", [req.params.page]
+  );
+  res.json(rows);
+}));
+
+app.put("/api/admin/content/:id", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
+  const { id } = req.params;
+  const { type, content } = req.body;
+  if (!CONTENT_TYPES.includes(type))
+    return res.status(400).json({ error: "Tip de conținut invalid." });
+  if (type === "list") {
+    try {
+      const parsed = JSON.parse(content);
+      if (!Array.isArray(parsed)) throw new Error();
+    } catch {
+      return res.status(400).json({ error: "Conținutul unei liste trebuie să fie un JSON valid (array)." });
+    }
+  }
+  const { rows } = await pool.query(
+    `UPDATE page_blocks SET type=$1, content=$2, updated_at=NOW() WHERE id=$3 RETURNING *`,
+    [type, content ?? "", id]
+  );
+  if (!rows[0]) return res.status(404).json({ error: "Blocul de conținut nu există." });
+  await logAction(req.user.sub, "content.update", "page_block", id, { page: rows[0].page, block_key: rows[0].block_key }, req.ip);
+  res.json(rows[0]);
+}));
+
+app.get("/api/admin/tickets", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
+  const status = req.query.status;
+  const { rows } = await pool.query(
+    `SELECT t.*, u.username submitted_by, a.username assigned_username,
+            COALESCE(rp.display_name, t.reported_player_label) reported_display,
+            rp.last_rp_name reported_rp_name, rp.last_static_id reported_static_id
+     FROM tickets t
+     JOIN users u ON u.id = t.user_id
+     LEFT JOIN users a ON a.id = t.assigned_to
+     LEFT JOIN players rp ON rp.id = t.reported_player_id
+     ${status ? "WHERE t.status = $1" : ""}
+     ORDER BY t.created_at DESC`,
+    status ? [status] : []
+  );
+  res.json(rows);
+}));
+
+app.get("/api/admin/tickets/:id", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT t.*, u.username submitted_by, a.username assigned_username,
+            COALESCE(rp.display_name, t.reported_player_label) reported_display,
+            rp.last_rp_name reported_rp_name, rp.last_static_id reported_static_id
+     FROM tickets t
+     JOIN users u ON u.id = t.user_id
+     LEFT JOIN users a ON a.id = t.assigned_to
+     LEFT JOIN players rp ON rp.id = t.reported_player_id
+     WHERE t.id = $1`,
+    [req.params.id]
+  );
+  if (!rows[0]) return res.status(404).json({ error: "Tichetul nu există." });
+  const replies = await pool.query(
+    `SELECT tr.id, tr.message, tr.created_at, u.username author, r.name author_role
+     FROM ticket_replies tr
+     JOIN users u ON u.id = tr.author_id
+     JOIN roles r ON r.id = u.role_id
+     WHERE tr.ticket_id = $1 ORDER BY tr.created_at ASC`,
+    [req.params.id]
+  );
+  res.json({ ...rows[0], replies: replies.rows });
+}));
+
+// Staff poate schimba status/asignare ȘI corecta conținutul (subiect/
+// descriere/dovadă) unui tichet — de exemplu pentru moderare — toate câmpurile
+// sunt opționale (COALESCE), deci un PUT cu doar { status } se comportă ca
+// până acum.
+app.put("/api/admin/tickets/:id", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
+  const { id } = req.params;
+  const { status, assigned_to, subject, description, evidence_url, category } = req.body;
+  const allowedStatuses = ["open", "in_progress", "resolved", "closed"];
+  // (21.09.2026, cerut explicit) staff poate corecta și categoria unui tichet
+  // — de exemplu dacă jucătorul a ales-o greșit la creare — nu doar status.
+  const allowedCategories = ["general", "bug", "reclamatie", "ban_appeal"];
+  if (status && !allowedStatuses.includes(status))
+    return res.status(400).json({ error: "Status invalid." });
+  if (category && !allowedCategories.includes(category))
+    return res.status(400).json({ error: "Categorie invalidă." });
+  if (evidence_url && !/^https?:\/\/\S+$/i.test(evidence_url.trim()))
+    return res.status(400).json({ error: "Linkul trebuie să înceapă cu http:// sau https://." });
+  const before = await pool.query("SELECT status FROM tickets WHERE id=$1", [id]);
+  const { rows } = await pool.query(
+    `UPDATE tickets SET
+       status = COALESCE($1, status),
+       assigned_to = COALESCE($2, assigned_to),
+       subject = COALESCE($3, subject),
+       description = COALESCE($4, description),
+       evidence_url = COALESCE($5, evidence_url),
+       category = COALESCE($6, category),
+       updated_at = NOW()
+     WHERE id = $7 RETURNING *`,
+    [status || null, assigned_to || null, subject?.trim() || null, description?.trim() || null, evidence_url?.trim() || null, category || null, id]
+  );
+  if (!rows[0]) return res.status(404).json({ error: "Tichetul nu există." });
+  await logAction(req.user.sub, "ticket.update", "ticket", id, req.body, req.ip);
+  // (01.10.2026) Decizie: tichet rezolvat / închis → anunțăm autorul și,
+  // la o reclamație, jucătorul reclamat.
+  const oldStatus = before.rows[0]?.status;
+  if (status && status !== oldStatus && ["resolved", "closed"].includes(status)) {
+    notifyTicketDecision(rows[0], req.user.sub)
+      .catch(err => console.error("Notificare decizie eșuată:", err.message));
+  }
+  res.json(rows[0]);
+}));
+
+// Ștergere de către staff — orice tichet, indiferent de autor.
+app.delete("/api/admin/tickets/:id", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
+  const { rows } = await pool.query("DELETE FROM tickets WHERE id=$1 RETURNING id, subject", [req.params.id]);
+  if (!rows[0]) return res.status(404).json({ error: "Tichetul nu există." });
+  await logAction(req.user.sub, "ticket.delete", "ticket", req.params.id, { subject: rows[0].subject }, req.ip);
+  res.json({ ok: true });
+}));
+
+app.post("/api/admin/tickets/:id/replies", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
+  const { message } = req.body;
+  if (!message?.trim()) return res.status(400).json({ error: "Mesajul nu poate fi gol." });
+  const ticket = await pool.query("SELECT id, user_id, subject, category, assigned_to, reported_player_id FROM tickets WHERE id=$1", [req.params.id]);
+  if (!ticket.rows[0]) return res.status(404).json({ error: "Tichetul nu există." });
+  const { rows } = await pool.query(
+    "INSERT INTO ticket_replies(ticket_id, author_id, message) VALUES($1,$2,$3) RETURNING *",
+    [req.params.id, req.user.sub, message.trim()]
+  );
+  await pool.query(
+    "UPDATE tickets SET updated_at=NOW(), status = CASE WHEN status='open' THEN 'in_progress' ELSE status END WHERE id=$1",
+    [req.params.id]
+  );
+  await logAction(req.user.sub, "ticket.reply", "ticket", req.params.id, null, req.ip);
+  notifyTicketReply(req.params.id, ticket.rows[0], req.user.sub, { fromStaff: true })
+    .catch(err => console.error("Notificare răspuns eșuată:", err.message));
+  res.status(201).json(rows[0]);
+}));
+
+app.use((err, _req, res, _next) => {
+  console.error(err);
+  res.status(500).json({ error: "Eroare internă a serverului." });
+});
+
+app.listen(port, () => console.log(`Moldova RP API: http://localhost:${port}`));

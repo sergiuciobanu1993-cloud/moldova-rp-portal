@@ -6,7 +6,7 @@
 //     cache-ul doar dacă nu e internet.
 //   • Imaginile și fonturile: din cache, reîmprospătate în fundal.
 // La un update al acestui fișier schimbă VERSION, ca să se curețe cache-ul vechi.
-const VERSION = 'mrp-2026-09-30a';
+const VERSION = 'mrp-2026-10-08a';
 const SHELL = `${VERSION}-shell`;
 const RUNTIME = `${VERSION}-runtime`;
 const OFFLINE_URL = '/offline.html';
@@ -42,8 +42,18 @@ self.addEventListener('fetch', event => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;        // YouTube, fonturi externe etc.
-  if (url.pathname.startsWith('/api/')) return;           // date live, niciodată din cache
-  if (url.pathname.startsWith('/auth') || url.searchParams.has('code')) return; // login Discord
+  const live = url.pathname.startsWith('/api/') || url.pathname.startsWith('/auth') || url.searchParams.has('code');
+  // (08.10.2026) Cu „navigation preload" pornit, browserul trimite deja cererea
+  // unei PAGINI înainte să întrebe service worker-ul. Dacă aici doar ieșeam
+  // (return), browserul o trimitea încă o dată — de DOUĂ ori. La login-ul cu
+  // Discord asta strica totul: codul de la Discord e bun o singură dată, a doua
+  // cerere pica și jucătorul vedea „Autentificarea a eșuat". Pentru aceste
+  // pagini folosim deci răspunsul deja venit, fără cache.
+  if (live && req.mode === 'navigate') {
+    event.respondWith((async () => (await event.preloadResponse) || fetch(req))());
+    return;
+  }
+  if (live) return;                                         // date live, niciodată din cache
 
   // pagini: rețea întâi, apoi cache, apoi pagina offline
   if (req.mode === 'navigate') {

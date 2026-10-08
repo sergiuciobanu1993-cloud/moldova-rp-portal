@@ -328,6 +328,7 @@ function renderTrail(t) {
 
   out.innerHTML = `
     <p class="mt-note">Jucătorul ${charsText(r.characters)}${r.characters.length > 1 ? ' — același om, aceeași licență' : ''} · <b>${fromTxt} – ${toTxt}</b>${t.online === false ? ' · <span class="lf-unknown">serverul de joc nu răspunde</span>' : ''}</p>
+    ${t.incomplete && t.online !== false ? '<p class="lg-banner err" style="margin:0 22px 14px">Serverul de joc n-a răspuns la toate cererile — unele mișcări pot lipsi. Apasă din nou „Arată traseul" peste câteva secunde.</p>' : ''}
     <div class="mt-head">${chars}</div>
     <div class="mt-sum">
       <article><small>A INTRAT (CASH + BANCĂ)</small><strong class="mt-in">+${fmtSum(sumIn)}</strong><em>cash ${fmtSum(t.totals.cash.in)} · bancă ${fmtSum(t.totals.bank.in)}</em></article>

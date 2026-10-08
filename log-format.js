@@ -80,6 +80,8 @@
   const MONEY_ITEM_NAMES = new Set(['money', 'cash', 'bani']);
   function isMoneyItemName(name) { return MONEY_ITEM_NAMES.has(String(name || '').trim().toLowerCase()); }
   function isBlackMoneyItem(name) { return /^(black_?money|dirty_?money|bani_?murdari|marked_?bills|blackmoney)$/i.test(String(name || '').trim()); }
+  function plateOf(v) { return String(v || '?').trim().replace(/^(trunk|glovebox|glove)[\s:_-]*/i, '').trim().toUpperCase() || '?'; }
+  function stashSpot(v) { return /^trunk/i.test(String(v || '')) ? 'portbagajul' : /^glove/i.test(String(v || '')) ? 'torpedoul' : 'torpedoul/portbagajul'; }
   function isWeaponItem(name) { return /^weapon_|(^|[\s_])weapon([\s_]|$)/i.test(String(name || '').trim()); }
 
   // ---- Cine e jucătorul ------------------------------------------------------
@@ -242,7 +244,7 @@
         let change = parts.join(' și ') || 'schimbare de bani';
         let internal = false;
         // Depunere/scoatere la bancă: aceiași bani mutați dintr-un buzunar în altul
-        if (d.confirmedSource && typeof d.cashDelta === 'number' && typeof d.bankDelta === 'number'
+        if (typeof d.cashDelta === 'number' && typeof d.bankDelta === 'number'
             && d.cashDelta !== 0 && d.cashDelta === -d.bankDelta) {
           change = d.bankDelta > 0
             ? `a depus <strong>${fmtSum(d.bankDelta)}</strong> din cash în bancă`
@@ -255,7 +257,7 @@
         const inflow = (Number(d.cashDelta) || 0) + (Number(d.bankDelta) || 0) > 0;
         const lbl = inflow ? 'de unde' : 'unde s-au dus';
         const source = internal
-          ? ` <span class="lf-sure">confirmat</span>`
+          ? (d.confirmedSource ? ` <span class="lf-sure">confirmat de bancă</span>` : ` <span class="lf-maybe">probabil</span>`)
           : d.confirmedSource
           ? ` · ${lbl}: <strong>${sourceHtml(d.confirmedSource, log.peerWho)}</strong> <span class="lf-sure">sigur</span>`
           : (d.possibleSource
@@ -270,9 +272,11 @@
         return change + source + total + idInfo;
       }
       case 'item_buy': {
-        const parts = [`a cumpărat ${itemText(d.item, d.count)}`];
-        if (typeof d.totalPrice === 'number') parts.push(`cu <strong>${fmtSum(d.totalPrice)}</strong>`);
-        if (d.shop) parts.push(`<span class="muted">de la ${escapeHtml(String(d.shop))}</span>`);
+        const free = typeof d.totalPrice === 'number' && d.totalPrice === 0;
+        const parts = [free ? `a luat gratis ${itemText(d.item, d.count)}` : `a cumpărat ${itemText(d.item, d.count)}`];
+        if (typeof d.totalPrice === 'number' && !free) parts.push(`cu <strong>${fmtSum(d.totalPrice)}</strong>`);
+        if (d.shop && !/^\d+$/.test(String(d.shop))) parts.push(`<span class="muted">de la ${escapeHtml(String(d.shop))}</span>`);
+        else if (free) parts.push('<span class="muted">(magazin de facțiune / armurerie)</span>');
         return parts.join(' ');
       }
       case 'item_craft': {
@@ -306,11 +310,11 @@
       // vine din id-ul inventarului ox_inventory, best-effort).
       case 'money_vehicle_deposit': {
         const sum = (typeof d.count === 'number') ? fmtSum(d.count) : 'bani';
-        return `a ascuns <strong>${sum}</strong> în torpedoul/portbagajul vehiculului <strong>${escapeHtml(String(d.vehicle || 'necunoscut'))}</strong>`;
+        return `a ascuns <strong>${sum}</strong> în ${stashSpot(d.vehicle)} vehiculului <strong>${escapeHtml(plateOf(d.vehicle))}</strong>`;
       }
       case 'money_vehicle_withdraw': {
         const sum = (typeof d.count === 'number') ? fmtSum(d.count) : 'bani';
-        return `a scos <strong>${sum}</strong> din torpedoul/portbagajul vehiculului <strong>${escapeHtml(String(d.vehicle || 'necunoscut'))}</strong>`;
+        return `a scos <strong>${sum}</strong> din ${stashSpot(d.vehicle)} vehiculului <strong>${escapeHtml(plateOf(d.vehicle))}</strong>`;
       }
       case 'vehicle_acquired': {
         const label = d.vehicle || 'un vehicul';
@@ -364,9 +368,9 @@
       case 'money': {
         const m = Math.max(big(d.cashDelta), big(d.bankDelta));
         const inflow = (Number(d.cashDelta) || 0) > 0 || (Number(d.bankDelta) || 0) > 0;
-        const internal = d.confirmedSource && Number(d.cashDelta) === -Number(d.bankDelta);
+        const internal = Number(d.cashDelta) !== 0 && Number(d.cashDelta) === -Number(d.bankDelta);
         if (!internal) sizeFlag(m, 'Sumă');
-        if (inflow && !d.confirmedSource && !d.possibleSource && !log.explainedBy && m >= 50000) add(m >= MONEY_BIG ? 'crit' : 'warn', 'Bani primiți fără sursă cunoscută');
+        if (inflow && !internal && !d.confirmedSource && !d.possibleSource && !log.explainedBy && m >= 50000) add(m >= MONEY_BIG ? 'crit' : 'warn', 'Bani primiți fără sursă cunoscută');
         break;
       }
       case 'item_transfer':

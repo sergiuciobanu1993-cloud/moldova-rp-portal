@@ -1764,6 +1764,9 @@ const isCashItem = n => /^(money|cash|bani)$/i.test(String(n || "").trim());
 const isBlackItem = n => (LogFormat ? LogFormat.isBlackMoneyItem(n) : /^black_?money$/i.test(String(n || "").trim()));
 const lowerName = n => String(n || "").trim().toLowerCase();
 const CHAR_ID_RE = /^char\d+:[0-9a-f]{20,}$/i;
+// „gloveGS030349" / „trunkGS030349" (id-ul inventarului ox_inventory) → placa + locul
+const plateOf = v => String(v || "?").trim().replace(/^(trunk|glovebox|glove)[\s:_-]*/i, "").trim().toUpperCase() || "?";
+const stashSpot = v => (/^trunk/i.test(String(v || "")) ? "portbagajul" : /^glove/i.test(String(v || "")) ? "torpedoul" : "torpedoul/portbagajul");
 
 // --- Memoria identităților (tabela game_identities) ---------------------------
 // Adunată automat: din jucătorii online (la fiecare tur de sincronizare) și din
@@ -1931,7 +1934,7 @@ function explainMoneyRows(logs) {
     const d = row.details || {};
     if (d.confirmedSource || d.possibleSource) continue;
     const dC = Number(d.cashDelta) || 0;
-    if (!dC) continue;
+    if (!dC || dC === -(Number(d.bankDelta) || 0)) continue;
     const at = t(row);
     const near = others.filter(e => t(e) <= at + 2000 && t(e) >= at - 20000);
     const own = near.filter(e => e.identifier && e.identifier === row.identifier);
@@ -1944,7 +1947,7 @@ function explainMoneyRows(logs) {
         || near.find(e => e.category === "item_transfer" && cash(e) && lowerName(e.details?.to) === lowerName(row.player));
       if (hit) {
         const hd = hit.details || {};
-        text = hit.category === "money_vehicle_withdraw" ? `scoși din vehiculul ${hd.vehicle || "?"}`
+        text = hit.category === "money_vehicle_withdraw" ? `scoși din ${stashSpot(hd.vehicle)} vehiculului ${plateOf(hd.vehicle)}`
           : hit.category === "item_pickup" ? "ridicați de pe jos"
           : hit.category === "item_obtained" ? (hd.adminGrant ? `dați de admin ${hd.adminGrant.staff || ""}`.trim() : "dați de un script (job, vânzare, jaf…)")
           : `primiți de la ${hit.player}`;
@@ -1956,7 +1959,7 @@ function explainMoneyRows(logs) {
         || own.find(e => e.category === "item_buy" && Number(e.details?.totalPrice) === -dC);
       if (hit) {
         const hd = hit.details || {};
-        text = hit.category === "money_vehicle_deposit" ? `ascunși în vehiculul ${hd.vehicle || "?"}`
+        text = hit.category === "money_vehicle_deposit" ? `ascunși în ${stashSpot(hd.vehicle)} vehiculului ${plateOf(hd.vehicle)}`
           : hit.category === "item_transfer" ? (hd.lootedFromCorpse ? `luați de pe cadavru de ${hd.to || "?"}` : `dați lui ${hd.to || "?"}`)
           : hit.category === "item_drop" ? "aruncați pe jos"
           : `cumpărătură: ${hd.count ? hd.count + "x " : ""}${hd.item || ""}${hd.shop ? ` (${hd.shop})` : ""}`;
@@ -2073,13 +2076,41 @@ async function fetchLogsByIdentifier(identifier, opts) {
 
 // Toate logurile jucătorului rezolvat (pe toate numele + personajele lui),
 // unite, fără dubluri, doar ale lui (aceeași licență), cele mai noi întâi.
-async function fetchLogsForResolved(resolved, { category, after, before, limit = 300 } = {}) {
+// Câte cereri odată către serverul de joc — prea multe deodată îl încarcă și
+// unele expiră (8 s), iar rezultatul iese incomplet fără să știm.
+async function mapLimit(items, limit, fn) {
+  const out = new Array(items.length);
+  let next = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) { const i = next++; out[i] = await fn(items[i], i); }
+  });
+  await Promise.all(workers);
+  return out;
+}
+// o cerere de loguri; dacă serverul de joc nu răspunde, mai încercăm o dată
+async function fetchGameLogsRetry(opts) {
+  const r = await fetchGameLogs(opts);
+  return r.online ? r : fetchGameLogs(opts);
+}
+
+async function fetchLogsForResolved(resolved, { category, after, before, limit = 300, maxPages = 1 } = {}) {
   const lim = Math.max(1, Math.min(500, limit));
-  const calls = [
-    ...resolved.names.map(n => fetchGameLogs({ player: n, category, after, before, pageSize: lim })),
-    ...resolved.identifiers.slice(0, 5).map(id => fetchLogsByIdentifier(id, { category, after, before, pageSize: lim })),
+  // pe un nume cu multe loguri, mai cerem pagini (până la maxPages), ca să nu pierdem cele mai vechi
+  const byName = async n => {
+    const first = await fetchGameLogsRetry({ player: n, category, after, before, pageSize: lim });
+    let logs = first.logs || [];
+    for (let page = 2; page <= maxPages && first.online && logs.length >= (page - 1) * lim; page++) {
+      const r = await fetchGameLogsRetry({ player: n, category, after, before, pageSize: lim, page });
+      if (!r.online || !(r.logs || []).length) break;
+      logs = logs.concat(r.logs);
+    }
+    return { online: first.online, logs, full: logs.length >= maxPages * lim };
+  };
+  const jobs = [
+    ...resolved.names.map(n => () => byName(n)),
+    ...resolved.identifiers.slice(0, 5).map(id => () => fetchLogsByIdentifier(id, { category, after, before, pageSize: lim })),
   ];
-  const results = await Promise.all(calls);
+  const results = await mapLimit(jobs, 3, job => job());
   const nameSet = new Set(resolved.names.map(lowerName));
   const seen = new Set();
   const logs = [];
@@ -2093,8 +2124,9 @@ async function fetchLogsForResolved(resolved, { category, after, before, limit =
   logs.sort((a, b) => new Date(b.at) - new Date(a.at));
   return {
     online: results.length === 0 || results.some(r => r.online),
+    failed: results.filter(r => !r.online).length,
     logs,
-    truncated: results.some(r => (r.logs || []).length >= lim),
+    truncated: results.some(r => r.full || (r.full === undefined && (r.logs || []).length >= lim)),
   };
 }
 
@@ -2171,18 +2203,22 @@ function rewardAmount(e) {
 }
 
 async function buildMoneyTrail(resolved, { after, before }) {
-  const MONEY_CATS = ["money", "item_transfer", "item_obtained", "item_drop", "item_pickup", "money_vehicle_deposit", "money_vehicle_withdraw", "item_buy"];
+  // Puține cereri, câte 3 odată (mai multe categorii într-o cerere) — vezi mapLimit.
   const G = 500;
-  const [ownBatches, gTransfers, gDeposits, gWithdraws, gDrops, gPickups] = await Promise.all([
-    Promise.all(MONEY_CATS.map(c => fetchLogsForResolved(resolved, { category: c, after, before, limit: 500 }))),
-    fetchGameLogs({ category: "item_transfer", after, before, pageSize: G }),
-    fetchGameLogs({ category: "money_vehicle_deposit", after, before, pageSize: G }),
-    fetchGameLogs({ category: "money_vehicle_withdraw", after, before, pageSize: G }),
-    fetchGameLogs({ category: "item_drop", after, before, pageSize: G }),
-    fetchGameLogs({ category: "item_pickup", after, before, pageSize: G }),
-  ]);
+  const ownGroups = ["money,money_vehicle_deposit,money_vehicle_withdraw,item_transfer,item_drop,item_pickup", "item_obtained,item_buy"];
+  const ownBatches = [];
+  for (const c of ownGroups) ownBatches.push(await fetchLogsForResolved(resolved, { category: c, after, before, limit: 500, maxPages: 4 }));
+  const globals = await mapLimit(["item_transfer", "money_vehicle_deposit,money_vehicle_withdraw", "item_drop,item_pickup"], 3,
+    c => fetchGameLogsRetry({ category: c, after, before, pageSize: G }));
+  const pick = (r, cat) => ({ online: r.online, logs: (r.logs || []).filter(l => l.category === cat) });
+  const gTransfers = globals[0];
+  const gDeposits = pick(globals[1], "money_vehicle_deposit");
+  const gWithdraws = pick(globals[1], "money_vehicle_withdraw");
+  const gDrops = pick(globals[2], "item_drop");
+  const gPickups = pick(globals[2], "item_pickup");
+  const failedCalls = ownBatches.reduce((n, b) => n + (b.failed || 0), 0) + globals.filter(r => !r.online).length;
   const own = ownBatches.flatMap(b => b.logs || []);
-  const truncated = ownBatches.some(b => b.truncated) || [gTransfers, gDeposits, gWithdraws, gDrops, gPickups].some(r => (r.logs || []).length >= G);
+  const truncated = ownBatches.some(b => b.truncated) || globals.some(r => (r.logs || []).length >= G);
   const gameOnline = ownBatches.some(b => b.online) || gTransfers.online;
   const nameSet = new Set(resolved.names.map(lowerName));
   const isOwnLog = l => (l.identifier ? licenseOf(l.identifier) === resolved.license : nameSet.has(lowerName(l.player)));
@@ -2211,10 +2247,10 @@ async function buildMoneyTrail(resolved, { after, before }) {
         if (isMoneyish(d.item) && count) events.push({ at: l.at, account: acctOf(d.item), amount: count, cat: "pickup", text: "i-a ridicat de pe jos", confidence: "sigur", log: l });
         break;
       case "money_vehicle_deposit":
-        if (count) events.push({ at: l.at, account: "cash", amount: -count, cat: "stash_in", text: "i-a ascuns în vehiculul {where}", where: d.vehicle || "?", confidence: "sigur", log: l });
+        if (count) events.push({ at: l.at, account: "cash", amount: -count, cat: "stash_in", text: `i-a ascuns în ${stashSpot(d.vehicle)} vehiculului {where}`, where: plateOf(d.vehicle), confidence: "sigur", log: l });
         break;
       case "money_vehicle_withdraw":
-        if (count) events.push({ at: l.at, account: "cash", amount: count, cat: "stash_out", text: "i-a scos din vehiculul {where}", where: d.vehicle || "?", confidence: "sigur", log: l });
+        if (count) events.push({ at: l.at, account: "cash", amount: count, cat: "stash_out", text: `i-a scos din ${stashSpot(d.vehicle)} vehiculului {where}`, where: plateOf(d.vehicle), confidence: "sigur", log: l });
         break;
       case "item_obtained":
         if (isMoneyish(d.item) && count) events.push({ at: l.at, account: acctOf(d.item), amount: count, cat: "script", text: "i-au apărut în inventar (dați de un script)", confidence: "sigur", log: l });
@@ -2269,13 +2305,13 @@ async function buildMoneyTrail(resolved, { after, before }) {
   events.push(...vipEvents);
 
   // --- Ascunzători: vehiculele în care a umblat cu bani ---------------------------
-  const plates = new Set(own.filter(l => l.category === "money_vehicle_deposit" || l.category === "money_vehicle_withdraw").map(l => String(l.details?.vehicle || "?")));
+  const plates = new Set(own.filter(l => l.category === "money_vehicle_deposit" || l.category === "money_vehicle_withdraw").map(l => plateOf(l.details?.vehicle)));
   const ownedPlates = new Set();
   for (const c of resolved.characters) for (const v of c.vehicles || []) if (v?.plate) ownedPlates.add(String(v.plate).trim().toUpperCase());
   const stashes = [];
   for (const plate of plates) {
     const evs = [...(gDeposits.logs || []).map(l => ({ l, sign: 1 })), ...(gWithdraws.logs || []).map(l => ({ l, sign: -1 }))]
-      .filter(x => String(x.l.details?.vehicle || "?") === plate)
+      .filter(x => plateOf(x.l.details?.vehicle) === plate)
       .sort((a, b) => ms(a.l.at) - ms(b.l.at));
     const people = new Map();
     let net = 0, mineIn = 0, mineOut = 0, othersIn = 0;
@@ -2292,7 +2328,7 @@ async function buildMoneyTrail(resolved, { after, before }) {
     }
     const tookOthers = mineOut > mineIn && othersIn > 0;
     const othersTook = [...people.values()].filter(p => !p.mine).reduce((s, p) => s + p.took, 0);
-    if (tookOthers) for (const x of own) if (x.category === "money_vehicle_withdraw" && String(x.details?.vehicle || "?") === plate) x.notOwnStash = true;
+    if (tookOthers) for (const x of own) if (x.category === "money_vehicle_withdraw" && plateOf(x.details?.vehicle) === plate) x.notOwnStash = true;
     stashes.push({
       plate, ownVehicle: ownedPlates.has(plate.trim().toUpperCase()),
       people: [...people.values()].sort((a, b) => (b.put + b.took) - (a.put + a.took)),
@@ -2385,8 +2421,8 @@ async function buildMoneyTrail(resolved, { after, before }) {
       parts: [], flags: logFlags(row),
     };
     // depunere / scoatere la bancă: aceiași bani, mutați dintr-un buzunar în altul
-    if (d.confirmedSource && dC !== 0 && dC === -dB) {
-      entry.parts.push({ account: "bank", amount: dB, cat: "move", text: dB > 0 ? "a depus din cash în bancă" : "a scos din bancă în cash", confidence: "sigur" });
+    if (dC !== 0 && dC === -dB) {
+      entry.parts.push({ account: "bank", amount: dB, cat: "move", text: dB > 0 ? "a depus din cash în bancă" : "a scos din bancă în cash", confidence: d.confirmedSource ? "sigur" : "probabil" });
       moved += Math.abs(dB);
       entries.push(entry);
       continue;
@@ -2461,6 +2497,7 @@ async function buildMoneyTrail(resolved, { after, before }) {
   const sortBy = obj => Object.values(obj).sort((a, b) => b.amount - a.amount);
   return {
     online: gameOnline,
+    incomplete: failedCalls > 0,
     range: { from: after, to: before },
     truncated,
     resolved: resolvedSummary(resolved),
@@ -2538,9 +2575,9 @@ app.get("/api/admin/logs", auth, requireRole(...MOD_ROLES), asyncRoute(async (re
   if (suspect) {
     const cats = category ? [category] : SUSPECT_CATEGORIES;
     const per = 300;
-    const batches = await Promise.all(cats.map(c => resolved
+    const batches = await mapLimit(cats, 3, c => resolved
       ? fetchLogsForResolved(resolved, { category: c, after: from, before: to, limit: per })
-      : fetchGameLogs({ player, category: c, after: from, before: to, pageSize: per })));
+      : fetchGameLogsRetry({ player, category: c, after: from, before: to, pageSize: per }));
     let all = batches.flatMap(b => b.logs || []);
     if (!category) {
       const staff = await fetchStaffLogs({ player: resolved ? (resolved.characters[0]?.rpName || resolved.names[0]) : player, after: from || undefined, before: to || undefined, limit: 300 });

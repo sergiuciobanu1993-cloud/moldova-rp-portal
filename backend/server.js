@@ -757,6 +757,8 @@ async function syncPlayerSnapshots() {
     // fiecare 20s, indiferent câte locuri din site au nevoie de date.
     const detail = await getPlayersDetail();
     if (!detail.online || !detail.players.length) return;
+    // (08.10.2026) memoria identităților pentru Loguri (nume RP, ID static, nume FiveM)
+    rememberIdentities(detail.players.map(pl => ({ identifier: pl.license, rpName: pl.serverName, staticId: staticIdOf(pl), cfxName: pl.name })), { live: true }).catch(() => {});
 
     // (19.09.2026, optimizare resurse) Înainte, acest tur trimitea câte un
     // UPDATE separat pentru FIECARE jucător online — cu zeci de jucători pe
@@ -1120,6 +1122,7 @@ async function fetchGameLogs({ player, identifier, category, limit, before, afte
     });
     if (!r.ok) throw new Error(`moldovarp-api HTTP ${r.status}`);
     const body = await r.json();
+    noteLogIdentities(body.logs);
     return { online: true, logs: body.logs || [], total: typeof body.total === "number" ? body.total : null };
   } catch {
     return { online: false, logs: [], total: null };
@@ -1747,6 +1750,731 @@ function correlateStaffAction(gameLogs, staffLogs, gameCategory, keywordRegex, d
   }
 }
 
+// ===========================================================================
+// Loguri mai clare (08.10.2026): cine e fiecare jucător (nume RP + ID static),
+// căutare după jucător (nume, #ID static sau licență — pe ambele personaje),
+// interval de date, semnalare suspecte și Traseul banilor.
+// Formatarea și regulile de „suspect" sunt în log-format.js (comun cu paginile).
+// ===========================================================================
+let LogFormat = null;
+try { LogFormat = require(path.join(__dirname, "..", "log-format.js")); }
+catch (err) { console.warn("log-format.js nu a putut fi încărcat — logurile merg, dar fără etichete de suspect:", err.message); }
+const logFlags = log => { try { return LogFormat ? LogFormat.flagsFor(log) : []; } catch { return []; } };
+const isCashItem = n => /^(money|cash|bani)$/i.test(String(n || "").trim());
+const isBlackItem = n => (LogFormat ? LogFormat.isBlackMoneyItem(n) : /^black_?money$/i.test(String(n || "").trim()));
+const lowerName = n => String(n || "").trim().toLowerCase();
+const CHAR_ID_RE = /^char\d+:[0-9a-f]{20,}$/i;
+
+// --- Memoria identităților (tabela game_identities) ---------------------------
+// Adunată automat: din jucătorii online (la fiecare tur de sincronizare) și din
+// fiecare log citit din joc (are identificatorul, numele RP și numele de FiveM).
+const identitySeen = new Map();
+async function rememberIdentities(list, { live = false } = {}) {
+  // un personaj poate apărea cu mai multe nume de FiveM în același lot (și-a
+  // schimbat numele) — le scriem în „runde", câte un nume pe personaj pe rundă
+  const rounds = [];
+  const roundOf = new Map();
+  const now = Date.now();
+  for (const it of list || []) {
+    const identifier = String(it?.identifier || "").trim();
+    if (!CHAR_ID_RE.test(identifier)) continue;
+    const cfx = String(it.cfxName || "").trim().slice(0, 120) || null;
+    const rp = String(it.rpName || "").trim().slice(0, 120) || null;
+    const sid = it.staticId != null && it.staticId !== "" ? String(it.staticId).slice(0, 32) : null;
+    const key = `${identifier}|${lowerName(cfx)}|${rp || ""}|${sid || ""}|${live ? 1 : 0}`;
+    if (now - (identitySeen.get(key) || 0) < 30 * 60 * 1000) continue;
+    identitySeen.set(key, now);
+    const k = roundOf.get(identifier) || 0;
+    roundOf.set(identifier, k + 1);
+    if (k >= 5) continue;
+    (rounds[k] = rounds[k] || []).push([identifier, licenseOf(identifier), rp, sid, cfx]);
+  }
+  if (identitySeen.size > 20000) identitySeen.clear();
+  for (const round of rounds) {
+    const cols = [[], [], [], [], []];
+    for (const row of round) row.forEach((v, i) => cols[i].push(v));
+    try {
+      await pool.query(
+        `INSERT INTO game_identities(identifier, license, rp_name, static_id, cfx_names, last_cfx_name, updated_at)
+         SELECT x.identifier, x.license, x.rp_name, x.static_id,
+                CASE WHEN x.cfx IS NULL THEN '{}'::text[] ELSE ARRAY[LOWER(x.cfx)] END,
+                CASE WHEN $6::boolean THEN x.cfx ELSE NULL END, NOW()
+         FROM unnest($1::text[], $2::text[], $3::text[], $4::text[], $5::text[]) AS x(identifier, license, rp_name, static_id, cfx)
+         ON CONFLICT (identifier) DO UPDATE SET
+           license = COALESCE(EXCLUDED.license, game_identities.license),
+           rp_name = COALESCE(EXCLUDED.rp_name, game_identities.rp_name),
+           static_id = COALESCE(EXCLUDED.static_id, game_identities.static_id),
+           last_cfx_name = COALESCE(EXCLUDED.last_cfx_name, game_identities.last_cfx_name),
+           cfx_names = (SELECT ARRAY(SELECT DISTINCT n FROM unnest(game_identities.cfx_names || EXCLUDED.cfx_names) AS n WHERE n IS NOT NULL LIMIT 40)),
+           updated_at = NOW()`,
+        [...cols, live]
+      );
+    } catch (err) {
+      // tabela apare la deploy (schema.sql) — până atunci, doar fără memorie
+      if (!/game_identities/.test(err.message)) console.warn("rememberIdentities:", err.message);
+      for (const row of round) for (const k of identitySeen.keys()) if (k.startsWith(row[0] + "|")) identitySeen.delete(k);
+      return;
+    }
+  }
+}
+function noteLogIdentities(logs) {
+  if (!logs || !logs.length) return;
+  rememberIdentities(logs.map(l => ({ identifier: l.identifier, rpName: l.rpName, cfxName: l.player }))).catch(() => {});
+}
+
+// Cine e fiecare identificator / nume de FiveM: jucătorii online, memoria de
+// mai sus și (pentru cei fără ID static încă) baza jocului, pe câțiva odată.
+const identityLookupCache = new Map();
+async function identityLookup({ identifiers = [], names = [] } = {}) {
+  const ids = [...new Set(identifiers.filter(x => CHAR_ID_RE.test(String(x || ""))))].slice(0, 400);
+  const lnames = [...new Set(names.map(lowerName).filter(Boolean))].slice(0, 400);
+  const byId = new Map();
+  const byName = new Map();
+  const put = (map, key, w) => {
+    const cur = map.get(key);
+    if (!cur) map.set(key, { ...w });
+    else { if (!cur.rpName && w.rpName) cur.rpName = w.rpName; if (!cur.staticId && w.staticId) cur.staticId = w.staticId; }
+  };
+  const detail = await getPlayersDetail().catch(() => ({ players: [] }));
+  for (const p of detail.players || []) {
+    if (!p.license) continue;
+    const w = { identifier: p.license, rpName: p.serverName || null, staticId: staticIdOf(p), online: true };
+    put(byId, p.license, w);
+    if (p.name) put(byName, lowerName(p.name), w);
+  }
+  if (ids.length || lnames.length) {
+    const { rows } = await pool.query(
+      `SELECT identifier, rp_name, static_id, cfx_names, last_cfx_name FROM game_identities
+       WHERE identifier = ANY($1::text[]) OR cfx_names && $2::text[]
+       ORDER BY updated_at DESC LIMIT 800`, [ids, lnames]).catch(() => ({ rows: [] }));
+    // întâi cine are numele ca nume ACTUAL, apoi cel mai recent văzut cu el
+    for (const r of rows) if (r.last_cfx_name && lnames.includes(lowerName(r.last_cfx_name))) put(byName, lowerName(r.last_cfx_name), { identifier: r.identifier, rpName: r.rp_name, staticId: r.static_id });
+    for (const r of rows) {
+      const w = { identifier: r.identifier, rpName: r.rp_name, staticId: r.static_id };
+      put(byId, r.identifier, w);
+      for (const n of r.cfx_names || []) if (lnames.includes(n) && !byName.has(n)) byName.set(n, { ...w });
+    }
+  }
+  // Personaje fără ID static în memorie → le cerem jocului (max. 6 pe cerere, cu cache)
+  const missing = ids.filter(id => !byId.get(id)?.staticId);
+  const now = Date.now();
+  const toFetch = [];
+  for (const id of missing) {
+    const c = identityLookupCache.get(id);
+    if (c && now - c.at < 30 * 60 * 1000) { if (c.w) put(byId, id, c.w); }
+    else if (toFetch.length < 6) toFetch.push(id);
+  }
+  if (toFetch.length && FIVEM_API_SECRET) {
+    const got = await Promise.all(toFetch.map(id => fetchGamePlayerLookup({ identifier: id }).catch(() => null)));
+    const learned = [];
+    toFetch.forEach((id, i) => {
+      const g = got[i];
+      const w = g && g.identifier === id ? { identifier: id, rpName: g.rpName || null, staticId: g.staticId != null ? String(g.staticId) : null } : null;
+      identityLookupCache.set(id, { at: now, w });
+      if (w) { put(byId, id, w); learned.push(w); }
+    });
+    if (learned.length) rememberIdentities(learned).catch(() => {});
+    if (identityLookupCache.size > 5000) identityLookupCache.clear();
+  }
+  return { byId, byName };
+}
+
+// „transfer de la X (prin bancă)" → X
+function peerNameOf(d) {
+  const m = /^transfer (?:bani )?(?:de la|către) (.+?)(?: \(.+\))?$/.exec(String(d?.possibleSource || d?.confirmedSource || ""));
+  return m ? m[1] : null;
+}
+
+// Pune pe fiecare log: who (cine e), toWho/killerWho/peerWho (ceilalți jucători
+// pomeniți) și flags (de ce e suspect, dacă e).
+async function enrichLogs(logs) {
+  if (!logs || !logs.length) return logs || [];
+  const ids = [];
+  const names = [];
+  for (const l of logs) {
+    const d = l.details || {};
+    if (l.identifier) ids.push(l.identifier); else if (l.player) names.push(l.player);
+    if (d.to) names.push(d.to);
+    if (d.killer) names.push(d.killer);
+    const peer = peerNameOf(d);
+    if (peer) names.push(peer);
+    if (l.pickedBy?.player) names.push(l.pickedBy.player);
+    if (l.droppedBy?.player) names.push(l.droppedBy.player);
+  }
+  let idx = { byId: new Map(), byName: new Map() };
+  try { idx = await identityLookup({ identifiers: ids, names }); } catch (err) { console.warn("identityLookup:", err.message); }
+  const byName = n => (n ? idx.byName.get(lowerName(n)) || null : null);
+  explainMoneyRows(logs);
+  for (const l of logs) {
+    const d = l.details || {};
+    const w = (l.identifier && idx.byId.get(l.identifier)) || (l.category !== "admin" && l.category !== "discord" ? byName(l.player) : null);
+    if (w || l.rpName) l.who = { rpName: l.rpName || w?.rpName || null, staticId: w?.staticId || null, identifier: l.identifier || w?.identifier || null };
+    if (d.to) l.toWho = byName(d.to);
+    if (d.killer) l.killerWho = byName(d.killer);
+    const peer = peerNameOf(d);
+    if (peer) l.peerWho = byName(peer);
+    if (l.pickedBy) l.pickedBy.who = byName(l.pickedBy.player);
+    if (l.droppedBy) l.droppedBy.who = byName(l.droppedBy.player);
+    l.flags = logFlags(l);
+  }
+  return logs;
+}
+
+// O creștere de bani fără sursă scrisă de joc, dar cu o explicație chiar
+// înainte, în aceleași loguri (a scos bani din vehicul, a ridicat de jos, i-a
+// dat cineva) → o legăm, ca să nu apară fals „fără sursă".
+function explainMoneyRows(logs) {
+  const t = l => new Date(l.at).getTime();
+  const others = logs.filter(l => l.category !== "money");
+  for (const row of logs) {
+    if (row.category !== "money") continue;
+    const d = row.details || {};
+    if (d.confirmedSource || d.possibleSource) continue;
+    const dC = Number(d.cashDelta) || 0;
+    if (!dC) continue;
+    const at = t(row);
+    const near = others.filter(e => t(e) <= at + 2000 && t(e) >= at - 20000);
+    const own = near.filter(e => e.identifier && e.identifier === row.identifier);
+    const cash = e => isCashItem(e.details?.item);
+    let hit = null, text = null;
+    if (dC > 0) {
+      hit = own.find(e => e.category === "money_vehicle_withdraw")
+        || own.find(e => e.category === "item_pickup" && cash(e))
+        || own.find(e => e.category === "item_obtained" && cash(e))
+        || near.find(e => e.category === "item_transfer" && cash(e) && lowerName(e.details?.to) === lowerName(row.player));
+      if (hit) {
+        const hd = hit.details || {};
+        text = hit.category === "money_vehicle_withdraw" ? `scoși din vehiculul ${hd.vehicle || "?"}`
+          : hit.category === "item_pickup" ? "ridicați de pe jos"
+          : hit.category === "item_obtained" ? (hd.adminGrant ? `dați de admin ${hd.adminGrant.staff || ""}`.trim() : "dați de un script (job, vânzare, jaf…)")
+          : `primiți de la ${hit.player}`;
+      }
+    } else {
+      hit = own.find(e => e.category === "money_vehicle_deposit")
+        || own.find(e => e.category === "item_transfer" && cash(e))
+        || own.find(e => e.category === "item_drop" && cash(e))
+        || own.find(e => e.category === "item_buy" && Number(e.details?.totalPrice) === -dC);
+      if (hit) {
+        const hd = hit.details || {};
+        text = hit.category === "money_vehicle_deposit" ? `ascunși în vehiculul ${hd.vehicle || "?"}`
+          : hit.category === "item_transfer" ? (hd.lootedFromCorpse ? `luați de pe cadavru de ${hd.to || "?"}` : `dați lui ${hd.to || "?"}`)
+          : hit.category === "item_drop" ? "aruncați pe jos"
+          : `cumpărătură: ${hd.count ? hd.count + "x " : ""}${hd.item || ""}${hd.shop ? ` (${hd.shop})` : ""}`;
+      }
+    }
+    if (text) row.explainedBy = text;
+  }
+  return logs;
+}
+
+// --- Căutare după jucător ------------------------------------------------------
+// „Ana Ulibka", „#1672", „1672", numele de FiveM sau licența → toate
+// personajele jucătorului (aceeași licență) + toate numele de FiveM cu care
+// le-am văzut (logurile din joc sunt scrise pe numele de FiveM).
+const charactersCache = new Map();
+async function charactersOfLicense(lic, detail) {
+  const c = charactersCache.get(lic);
+  if (c && Date.now() - c.at < 5 * 60 * 1000) return c.list;
+  const list = await fetchPlayerCharacters(`char0:${lic}`, detail).catch(() => []);
+  charactersCache.set(lic, { at: Date.now(), list });
+  if (charactersCache.size > 500) charactersCache.clear();
+  return list;
+}
+
+async function resolveLogPlayer(raw) {
+  const q = String(raw || "").trim().slice(0, 80);
+  if (!q) return null;
+  const detail = await getPlayersDetail().catch(() => ({ players: [] }));
+  const livePlayers = detail.players || [];
+  let seed = null;
+  let kind = "nume";
+  const lic = licenseOf(q);
+  if (lic) {
+    kind = "licență";
+    seed = CHAR_ID_RE.test(q) ? q : `char0:${lic}`;
+  } else if (/^#?\s*\d{1,7}$/.test(q)) {
+    kind = "ID static";
+    const sid = q.replace(/\D/g, "");
+    seed = livePlayers.find(p => staticIdOf(p) === sid)?.license || null;
+    if (!seed) seed = (await pool.query(`SELECT identifier FROM game_identities WHERE static_id = $1 ORDER BY updated_at DESC LIMIT 1`, [sid]).catch(() => ({ rows: [] }))).rows[0]?.identifier || null;
+    if (!seed) seed = (await pool.query(`SELECT last_identifier FROM players WHERE last_static_id = $1 AND last_identifier IS NOT NULL ORDER BY last_synced_at DESC NULLS LAST LIMIT 1`, [sid]).catch(() => ({ rows: [] }))).rows[0]?.last_identifier || null;
+    if (!seed && FIVEM_API_SECRET) {
+      const hit = (await fetchGamePlayerSearch(sid)).find(p => String(p.staticId ?? "") === sid);
+      seed = hit?.identifier || null;
+    }
+    if (!seed) return { notFound: true, query: q, kind };
+  } else {
+    const lower = q.toLowerCase();
+    seed = livePlayers.find(p => lowerName(p.name) === lower || lowerName(p.serverName) === lower)?.license || null;
+    if (!seed) seed = (await pool.query(
+      `SELECT identifier FROM game_identities WHERE LOWER(rp_name) = $1 OR cfx_names @> ARRAY[$1]::text[]
+       ORDER BY (LOWER(rp_name) = $1) DESC, updated_at DESC LIMIT 1`, [lower]).catch(() => ({ rows: [] }))).rows[0]?.identifier || null;
+    if (!seed) seed = (await pool.query(
+      `SELECT p.last_identifier FROM players p WHERE p.last_identifier IS NOT NULL AND (LOWER(p.display_name) = $1 OR LOWER(p.last_rp_name) = $1)
+       ORDER BY p.last_synced_at DESC NULLS LAST LIMIT 1`, [lower]).catch(() => ({ rows: [] }))).rows[0]?.last_identifier || null;
+    if (!seed && FIVEM_API_SECRET && q.length >= 3) seed = (await fetchGamePlayerLookup({ name: q }).catch(() => null))?.identifier || null;
+    if (!seed) return null; // nu-l știm — căutare simplă după nume, ca înainte
+  }
+  const license = licenseOf(seed);
+  if (!license) return null;
+
+  const chars = new Map();
+  const names = new Map(); // lower → nume
+  const addName = n => { const t = String(n || "").trim(); if (t.length >= 2 && !names.has(t.toLowerCase())) names.set(t.toLowerCase(), t); };
+  const { rows } = await pool.query(
+    `SELECT identifier, rp_name, static_id, cfx_names, last_cfx_name FROM game_identities WHERE license = $1 ORDER BY updated_at DESC`, [license]
+  ).catch(() => ({ rows: [] }));
+  for (const r of rows) {
+    chars.set(r.identifier, { identifier: r.identifier, rpName: r.rp_name, staticId: r.static_id, online: false });
+    addName(r.last_cfx_name);
+    for (const n of r.cfx_names || []) addName(n);
+  }
+  for (const p of livePlayers) {
+    if (!p.license || licenseOf(p.license) !== license) continue;
+    chars.set(p.license, { ...(chars.get(p.license) || {}), identifier: p.license, rpName: p.serverName || chars.get(p.license)?.rpName || null, staticId: staticIdOf(p) || chars.get(p.license)?.staticId || null, online: true });
+    addName(p.name);
+  }
+  const fromGame = await charactersOfLicense(license, detail);
+  for (const c of fromGame) {
+    const cur = chars.get(c.identifier) || {};
+    chars.set(c.identifier, { ...cur, ...c, rpName: c.rpName || cur.rpName || null, staticId: c.staticId || cur.staticId || null });
+  }
+  // numele de FiveM salvate pe site pentru conturile legate de acest jucător
+  const acc = await pool.query(
+    `SELECT p.display_name FROM players p JOIN users u ON u.id = p.user_id
+     WHERE split_part(u.game_identifier, ':', 2) = $1 OR split_part(p.last_identifier, ':', 2) = $1 LIMIT 3`, [license]).catch(() => ({ rows: [] }));
+  for (const r of acc.rows) addName(r.display_name);
+  if (fromGame.length) rememberIdentities(fromGame.map(c => ({ identifier: c.identifier, rpName: c.rpName, staticId: c.staticId }))).catch(() => {});
+
+  const slot = id => Number((/^char(\d+):/i.exec(id) || [])[1] || 0);
+  const characters = [...chars.values()].filter(c => c.identifier).sort((a, b) => slot(a.identifier) - slot(b.identifier));
+  return {
+    query: q, kind, license,
+    characters,
+    identifiers: characters.map(c => c.identifier),
+    names: [...names.values()].slice(0, 8),
+  };
+}
+
+// Serverul de joc știe (încă) să filtreze /logs doar după nume. Filtrul exact
+// după personaj (identifier=) e cerut echipei serverului — îl detectăm singuri:
+// dacă un apel doar cu identifier= întoarce rânduri ale altor personaje, încă
+// nu e suportat și nu-l mai folosim (reverificăm la 6 ore).
+let identifierFilter = { state: "unknown", at: 0 };
+async function fetchLogsByIdentifier(identifier, opts) {
+  if (identifierFilter.state === "no" && Date.now() - identifierFilter.at < 6 * 3600 * 1000) return { online: true, logs: [] };
+  const r = await fetchGameLogs({ ...opts, identifier, player: undefined });
+  if (!r.online || !r.logs.length) return r;
+  const supported = r.logs.every(l => l.identifier === identifier);
+  if (identifierFilter.state !== (supported ? "yes" : "no")) console.log(`Loguri: filtrul după personaj (identifier=) ${supported ? "FUNCȚIONEAZĂ pe serverul de joc" : "nu e încă suportat de serverul de joc — căutăm după nume"}.`);
+  identifierFilter = { state: supported ? "yes" : "no", at: Date.now() };
+  return supported ? r : { online: true, logs: [] };
+}
+
+// Toate logurile jucătorului rezolvat (pe toate numele + personajele lui),
+// unite, fără dubluri, doar ale lui (aceeași licență), cele mai noi întâi.
+async function fetchLogsForResolved(resolved, { category, after, before, limit = 300 } = {}) {
+  const lim = Math.max(1, Math.min(500, limit));
+  const calls = [
+    ...resolved.names.map(n => fetchGameLogs({ player: n, category, after, before, pageSize: lim })),
+    ...resolved.identifiers.slice(0, 5).map(id => fetchLogsByIdentifier(id, { category, after, before, pageSize: lim })),
+  ];
+  const results = await Promise.all(calls);
+  const nameSet = new Set(resolved.names.map(lowerName));
+  const seen = new Set();
+  const logs = [];
+  for (const l of results.flatMap(r => r.logs || [])) {
+    const k = l.id != null ? `id:${l.id}` : `${l.at}|${l.category}|${l.player}|${JSON.stringify(l.details || {})}`;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    const own = l.identifier ? licenseOf(l.identifier) === resolved.license : nameSet.has(lowerName(l.player));
+    if (own) logs.push(l);
+  }
+  logs.sort((a, b) => new Date(b.at) - new Date(a.at));
+  return {
+    online: results.length === 0 || results.some(r => r.online),
+    logs,
+    truncated: results.some(r => (r.logs || []).length >= lim),
+  };
+}
+
+function parseDateParam(v) {
+  if (!v) return null;
+  const d = new Date(String(v).slice(0, 40));
+  return Number.isFinite(d.getTime()) ? d : null;
+}
+function resolvedSummary(r) {
+  if (!r) return null;
+  if (r.notFound) return { notFound: true, query: r.query, kind: r.kind };
+  return {
+    query: r.query, kind: r.kind,
+    characters: r.characters.map(c => ({ identifier: c.identifier, rpName: c.rpName || null, staticId: c.staticId || null, online: !!c.online })),
+    names: r.names,
+    exactFilter: identifierFilter.state === "yes",
+  };
+}
+
+const SUSPECT_CATEGORIES = ["money", "item_transfer", "item_obtained", "item_drop", "item_pickup", "money_vehicle_deposit", "money_vehicle_withdraw", "vehicle_acquired", "death"];
+
+// ===========================================================================
+// Traseul banilor (08.10.2026) — cerut explicit: „vreau să știu fiecare detaliu,
+// de unde vine fiecare bănuț, unde se duce, unde e pus, unde e ascuns".
+// Pentru un jucător (ambele personaje) și un interval:
+//   - fiecare schimbare de sold (cash/bancă, citită de joc la 15 s) și ce a
+//     explicat-o: bani dați/primiți de la cineva, ridicați/aruncați, puși/scoși
+//     din vehicule, cumpărături, salariu, admin, VIP Shop…; ce rămâne
+//     neexplicat apare ca atare;
+//   - ascunzătorile: vehiculele în care a pus/scos bani, cine altcineva a umblat
+//     acolo și cât ar mai fi rămas (estimare din interval);
+//   - cu cine a făcut schimb de bani (dat/primit, net);
+//   - banii murdari (item), din transferuri/aruncat/ridicat/obținut.
+// Tot ce e dedus (nu sigur) e marcat „probabil"; ce lipsește din jurnalul
+// jocului (stash-uri de case, conturi de facțiune etc.) e spus explicit.
+// ===========================================================================
+const TRAIL_IN = {
+  transfer_in: "Primiți de la alți jucători",
+  pickup: "Ridicați de pe jos",
+  stash_out: "Scoși din vehicule",
+  loot_in: "Luați de pe cadavre",
+  salary: "Salariu (posibil)",
+  bank_op: "Operațiuni la bancă (confirmate)",
+  admin: "Dați de admin",
+  vip: "VIP Shop",
+  discord: "Văzuți în logurile Discord (bancă, facturi…)",
+  script: "Dați de scripturi (job, vânzare, jaf, cazino…)",
+  other_possible: "Alte surse posibile",
+  unknown: "Sursă necunoscută",
+};
+const TRAIL_OUT = {
+  transfer_out: "Dați altor jucători",
+  drop: "Aruncați pe jos",
+  stash_in: "Ascunși în vehicule",
+  buy: "Cumpărături",
+  looted_out: "Luați de pe cadavrul lui",
+  bank_op: "Operațiuni la bancă (confirmate)",
+  discord: "Văzuți în logurile Discord (bancă, facturi…)",
+  other_possible: "Alte destinații posibile",
+  unknown: "Destinație necunoscută",
+};
+
+// toate sumele (numere de 3+ cifre) dintr-un mesaj Discord copiat
+function discordAmounts(x) {
+  const txt = `${x.title || ""} ${x.fields ? JSON.stringify(x.fields) : ""} ${x.content || ""}`;
+  return (txt.match(/\d[\d.,\s]{2,}\d/g) || []).map(s => Number(s.replace(/[.,\s]/g, ""))).filter(n => Number.isFinite(n) && n >= 100);
+}
+function rewardAmount(e) {
+  const data = parseRewardData(e.rewardData ?? e.reward_data);
+  const n = Number(data.amount ?? data.count ?? data.money);
+  if (Number.isFinite(n) && n > 0) return { amount: Math.round(n), account: data.account || "money" };
+  const m = String(e.rewardLabel || e.reward_label || "").replace(/[.\s]/g, "").match(/\d{2,}/);
+  return m ? { amount: Number(m[0]), account: data.account || "money" } : null;
+}
+
+async function buildMoneyTrail(resolved, { after, before }) {
+  const MONEY_CATS = ["money", "item_transfer", "item_obtained", "item_drop", "item_pickup", "money_vehicle_deposit", "money_vehicle_withdraw", "item_buy"];
+  const G = 500;
+  const [ownBatches, gTransfers, gDeposits, gWithdraws, gDrops, gPickups] = await Promise.all([
+    Promise.all(MONEY_CATS.map(c => fetchLogsForResolved(resolved, { category: c, after, before, limit: 500 }))),
+    fetchGameLogs({ category: "item_transfer", after, before, pageSize: G }),
+    fetchGameLogs({ category: "money_vehicle_deposit", after, before, pageSize: G }),
+    fetchGameLogs({ category: "money_vehicle_withdraw", after, before, pageSize: G }),
+    fetchGameLogs({ category: "item_drop", after, before, pageSize: G }),
+    fetchGameLogs({ category: "item_pickup", after, before, pageSize: G }),
+  ]);
+  const own = ownBatches.flatMap(b => b.logs || []);
+  const truncated = ownBatches.some(b => b.truncated) || [gTransfers, gDeposits, gWithdraws, gDrops, gPickups].some(r => (r.logs || []).length >= G);
+  const gameOnline = ownBatches.some(b => b.online) || gTransfers.online;
+  const nameSet = new Set(resolved.names.map(lowerName));
+  const isOwnLog = l => (l.identifier ? licenseOf(l.identifier) === resolved.license : nameSet.has(lowerName(l.player)));
+  const charOf = id => resolved.characters.find(c => c.identifier === id) || null;
+  const ms = d => new Date(d).getTime();
+  const isMoneyish = n => isCashItem(n) || isBlackItem(n);
+  const acctOf = n => (isBlackItem(n) ? "black" : "cash");
+  const num = v => (Number.isFinite(Number(v)) ? Number(v) : 0);
+
+  // --- Evenimentele „cu bani" (din inventar) ale jucătorului ---------------------
+  // fiecare: { at, account, amount (+ intră / − iese), cat, text, counterpart, where, confidence, log }
+  const events = [];
+  for (const l of own) {
+    const d = l.details || {};
+    const count = num(d.count);
+    switch (l.category) {
+      case "item_transfer":
+        if (!isMoneyish(d.item) || !count) break;
+        if (d.lootedFromCorpse) events.push({ at: l.at, account: acctOf(d.item), amount: -count, cat: "looted_out", text: "i-au fost luați de pe cadavru de {cp}", counterpart: d.to, confidence: "sigur", log: l });
+        else events.push({ at: l.at, account: acctOf(d.item), amount: -count, cat: "transfer_out", text: "i-a dat lui {cp}", counterpart: d.to, confidence: "sigur", log: l });
+        break;
+      case "item_drop":
+        if (isMoneyish(d.item) && count) events.push({ at: l.at, account: acctOf(d.item), amount: -count, cat: "drop", text: "i-a aruncat pe jos", confidence: "sigur", log: l });
+        break;
+      case "item_pickup":
+        if (isMoneyish(d.item) && count) events.push({ at: l.at, account: acctOf(d.item), amount: count, cat: "pickup", text: "i-a ridicat de pe jos", confidence: "sigur", log: l });
+        break;
+      case "money_vehicle_deposit":
+        if (count) events.push({ at: l.at, account: "cash", amount: -count, cat: "stash_in", text: "i-a ascuns în vehiculul {where}", where: d.vehicle || "?", confidence: "sigur", log: l });
+        break;
+      case "money_vehicle_withdraw":
+        if (count) events.push({ at: l.at, account: "cash", amount: count, cat: "stash_out", text: "i-a scos din vehiculul {where}", where: d.vehicle || "?", confidence: "sigur", log: l });
+        break;
+      case "item_obtained":
+        if (isMoneyish(d.item) && count) events.push({ at: l.at, account: acctOf(d.item), amount: count, cat: "script", text: "i-au apărut în inventar (dați de un script)", confidence: "sigur", log: l });
+        break;
+      case "item_buy":
+        if (num(d.totalPrice) > 0) events.push({ at: l.at, account: "cash", amount: -num(d.totalPrice), cat: "buy", text: `a cumpărat ${d.count ? d.count + "x " : ""}${d.item || "ceva"}${d.shop ? ` de la ${d.shop}` : ""}`, confidence: "probabil", soft: true, log: l });
+        break;
+      default:
+        break;
+    }
+  }
+  // Bani primiți direct de la alți jucători (rândul e scris pe cel care DĂ)
+  for (const t of gTransfers.logs || []) {
+    const d = t.details || {};
+    if (!isMoneyish(d.item) || !num(d.count) || !nameSet.has(lowerName(d.to)) || isOwnLog(t)) continue;
+    events.push({
+      at: t.at, account: acctOf(d.item), amount: num(d.count),
+      cat: d.lootedFromCorpse ? "loot_in" : "transfer_in",
+      text: d.lootedFromCorpse ? "i-a luat de pe cadavrul lui {cp}" : "i-a primit de la {cp}",
+      counterpart: t.player, confidence: "sigur", log: t, incoming: true,
+    });
+  }
+  // Admin: item de bani dat din panou
+  for (const e of events) if (e.cat === "script" && e.log.details?.adminGrant) { e.cat = "admin"; e.text = `i-a primit de la admin ${e.log.details.adminGrant.staff || ""}`.trim(); }
+
+  // --- VIP Shop (site): vânzări înapoi, schimb legal, cutii cu bani ---------------
+  const vipEvents = [];
+  try {
+    const { rows } = await pool.query(
+      `SELECT l.action, l.metadata, l.created_at FROM audit_logs l JOIN users u ON u.id = l.actor_id
+       WHERE l.action IN ('vip_shop.sell_back', 'vip_shop.legal_exchange')
+         AND split_part(u.game_identifier, ':', 2) = $1
+         AND l.created_at >= $2 AND ($3::timestamptz IS NULL OR l.created_at < $3)
+       ORDER BY l.created_at DESC LIMIT 200`, [resolved.license, after.toISOString(), before ? before.toISOString() : null]);
+    for (const r of rows) {
+      const m = r.metadata || {};
+      if (r.action === "vip_shop.sell_back" && m.currency === "money" && num(m.amount) > 0)
+        vipEvents.push({ at: r.created_at, account: "bank", amount: num(m.amount), cat: "vip", text: `a vândut înapoi „${m.label || "recompensă"}" în VIP Shop`, confidence: "sigur", site: true });
+      if (r.action === "vip_shop.legal_exchange" && num(m.amount) > 0)
+        vipEvents.push({ at: r.created_at, account: "bank", amount: num(m.amount), cat: "vip", text: `a schimbat bani murdari în bani curați (${m.pct || "?"}%) — „${m.label || ""}"`, confidence: "sigur", site: true });
+    }
+  } catch (err) { console.warn("money-trail VIP audit:", err.message); }
+  const caseHistories = await Promise.all(resolved.identifiers.slice(0, 4).map(id => fetchCaseHistory(id, 100).catch(() => ({ history: [] }))));
+  for (const h of caseHistories) for (const e of h.history || []) {
+    if (e.rewardType !== "cash" || !e.claimedAt) continue;
+    const t = ms(e.claimedAt);
+    if (t < after.getTime() || (before && t >= before.getTime())) continue;
+    const r = rewardAmount(e);
+    if (!r) continue;
+    vipEvents.push({ at: e.claimedAt, account: /black/i.test(r.account) ? "black" : (/bank/i.test(r.account) ? "bank" : "cash"), amount: r.amount, cat: "vip", text: `a ridicat câștigul „${e.rewardLabel || "bani"}" din cutia ${e.caseName || "VIP"}`, confidence: "sigur", site: true });
+  }
+  events.push(...vipEvents);
+
+  // --- Ascunzători: vehiculele în care a umblat cu bani ---------------------------
+  const plates = new Set(own.filter(l => l.category === "money_vehicle_deposit" || l.category === "money_vehicle_withdraw").map(l => String(l.details?.vehicle || "?")));
+  const ownedPlates = new Set();
+  for (const c of resolved.characters) for (const v of c.vehicles || []) if (v?.plate) ownedPlates.add(String(v.plate).trim().toUpperCase());
+  const stashes = [];
+  for (const plate of plates) {
+    const evs = [...(gDeposits.logs || []).map(l => ({ l, sign: 1 })), ...(gWithdraws.logs || []).map(l => ({ l, sign: -1 }))]
+      .filter(x => String(x.l.details?.vehicle || "?") === plate)
+      .sort((a, b) => ms(a.l.at) - ms(b.l.at));
+    const people = new Map();
+    let net = 0, mineIn = 0, mineOut = 0, othersIn = 0;
+    for (const { l, sign } of evs) {
+      const c = num(l.details?.count);
+      net += sign * c;
+      const mine = isOwnLog(l);
+      if (mine) { if (sign > 0) mineIn += c; else mineOut += c; }
+      else if (sign > 0) othersIn += c;
+      const key = l.identifier || lowerName(l.player);
+      const p = people.get(key) || { name: l.player, identifier: l.identifier || null, rpName: l.rpName || null, mine, put: 0, took: 0 };
+      if (sign > 0) p.put += c; else p.took += c;
+      people.set(key, p);
+    }
+    const tookOthers = mineOut > mineIn && othersIn > 0;
+    const othersTook = [...people.values()].filter(p => !p.mine).reduce((s, p) => s + p.took, 0);
+    if (tookOthers) for (const x of own) if (x.category === "money_vehicle_withdraw" && String(x.details?.vehicle || "?") === plate) x.notOwnStash = true;
+    stashes.push({
+      plate, ownVehicle: ownedPlates.has(plate.trim().toUpperCase()),
+      people: [...people.values()].sort((a, b) => (b.put + b.took) - (a.put + a.took)),
+      net, mineIn, mineOut, tookOthers, othersTook: mineIn > 0 ? othersTook : 0,
+      events: evs.slice(-30).reverse().map(({ l, sign }) => ({ at: l.at, name: l.player, rpName: l.rpName || null, amount: sign * num(l.details?.count), mine: isOwnLog(l) })),
+    });
+  }
+  stashes.sort((a, b) => Math.abs(b.net) - Math.abs(a.net));
+
+  // --- Aruncat ↔ ridicat: cine a luat banii aruncați de el, de la cine a ridicat ---
+  const TEN_MIN = 10 * 60 * 1000;
+  for (const l of own) {
+    const d = l.details || {};
+    if (!isMoneyish(d.item)) continue;
+    if (l.category === "item_drop") {
+      const hit = (gPickups.logs || []).filter(p => !isOwnLog(p) && isMoneyish(p.details?.item) && ms(p.at) >= ms(l.at) && ms(p.at) - ms(l.at) <= TEN_MIN && num(p.details?.count) <= num(d.count))
+        .sort((a, b) => ms(a.at) - ms(b.at))[0];
+      if (hit) l.pickedBy = { player: hit.player, at: hit.at };
+    } else if (l.category === "item_pickup") {
+      const hit = (gDrops.logs || []).filter(p => !isOwnLog(p) && isMoneyish(p.details?.item) && ms(p.at) <= ms(l.at) && ms(l.at) - ms(p.at) <= TEN_MIN && num(p.details?.count) >= num(d.count))
+        .sort((a, b) => ms(b.at) - ms(a.at))[0];
+      if (hit) l.droppedBy = { player: hit.player, at: hit.at };
+    }
+  }
+  // texte mai precise acum că știm cine a ridicat / de la cine / al cui era ascunsul
+  for (const e of events) {
+    const l = e.log;
+    if (!l) continue;
+    if (e.cat === "drop" && l.pickedBy) { e.text = "i-a aruncat pe jos — ridicați apoi de {cp}"; e.counterpart = l.pickedBy.player; e.confidence = "probabil"; }
+    if (e.cat === "pickup" && l.droppedBy) { e.text = "i-a ridicat de pe jos — aruncați de {cp}"; e.counterpart = l.droppedBy.player; e.confidence = "probabil"; }
+  }
+
+  // --- Discord (bancă/facturi…) și acțiuni de staff care îl pomenesc ------------------
+  const mentions = [...new Set([...resolved.characters.map(c => c.rpName), ...resolved.names].filter(n => n && String(n).length >= 4))].slice(0, 6);
+  let discord = [];
+  if (mentions.length) {
+    try {
+      const pats = mentions.map(n => `%${likeEscape(String(n))}%`);
+      const { rows } = await pool.query(
+        `SELECT channel_name, category_name, title, fields, content, posted_at FROM discord_channel_logs
+         WHERE posted_at >= $2 AND ($3::timestamptz IS NULL OR posted_at < $3)
+           AND (fields::text ILIKE ANY($1::text[]) OR content ILIKE ANY($1::text[]) OR title ILIKE ANY($1::text[]))
+         ORDER BY posted_at DESC LIMIT 150`, [pats, after.toISOString(), before ? before.toISOString() : null]);
+      discord = rows.filter(r => /bank|banc|factur|bill|money|bani|cash|plat|pay|transfer|heist|jaf|rob|laund|spal|atm|shop|magazin|cazino|casino/i.test(`${r.channel_name} ${r.category_name} ${r.title}`))
+        .map(r => ({ at: r.posted_at, channel: r.channel_name, category: r.category_name, title: r.title, fields: r.fields, content: r.content ? String(r.content).slice(0, 600) : null }));
+    } catch (err) { console.warn("money-trail discord:", err.message); }
+  }
+  let staff = [];
+  try {
+    const lists = await Promise.all(mentions.slice(0, 4).map(n => fetchStaffLogs({ player: n, after, before, limit: 60 })));
+    const seen = new Set();
+    staff = lists.flat().filter(s => /money|cash|bani|bank|account|give|item|set|vehic/i.test(`${s.details.action || ""} ${s.details.reason || ""}`))
+      .filter(s => { const k = `${s.at}|${s.details.action}|${s.details.target}`; if (seen.has(k)) return false; seen.add(k); return true; })
+      .map(s => ({ at: s.at, staff: s.details.staff, target: s.details.target, action: s.details.action, reason: s.details.reason }));
+  } catch (err) { console.warn("money-trail staff:", err.message); }
+
+  // --- Fiecare schimbare de sold, cu explicațiile ei ------------------------------
+  const moneyRows = own.filter(l => l.category === "money").sort((a, b) => ms(a.at) - ms(b.at));
+  const used = new Set();
+  const entries = [];
+  const inBy = {}, outBy = {};
+  const totals = { cash: { in: 0, out: 0 }, bank: { in: 0, out: 0 }, black: { in: 0, out: 0 } };
+  let moved = 0;
+  const addTotal = (bucket, cat, account, amount) => {
+    if (!amount) return;
+    const map = amount > 0 ? inBy : outBy;
+    const key = cat;
+    map[key] = map[key] || { key, label: (amount > 0 ? TRAIL_IN : TRAIL_OUT)[key] || key, amount: 0, count: 0, byAccount: {} };
+    map[key].amount += Math.abs(amount);
+    map[key].count += 1;
+    map[key].byAccount[account] = (map[key].byAccount[account] || 0) + Math.abs(amount);
+    totals[account][amount > 0 ? "in" : "out"] += Math.abs(amount);
+  };
+  const evOut = e => ({
+    at: e.at, account: e.account, amount: e.amount, cat: e.cat, text: e.text, confidence: e.confidence,
+    counterpart: e.counterpart ? { name: e.counterpart } : null, where: e.where || null, site: !!e.site,
+    flags: e.log ? logFlags(e.log) : [],
+  });
+
+  for (const row of moneyRows) {
+    const d = row.details || {};
+    const t = ms(row.at);
+    const dC = num(d.cashDelta), dB = num(d.bankDelta);
+    // evenimentele din cele ~20 s dinaintea citirii (jocul citește soldul la 15 s)
+    const expl = events.filter((e, i) => !used.has(i) && (e.account === "cash" || e.account === "bank") && (e.site ? Math.abs(ms(e.at) - t) <= 120000 : ms(e.at) <= t + 2000 && ms(e.at) >= t - 20000))
+      .map(e => ({ e, i: events.indexOf(e) }));
+    const entry = {
+      at: row.at, kind: "balance", character: charOf(row.identifier), deltaCash: dC, deltaBank: dB,
+      balanceAfter: (typeof d.cash === "number" || typeof d.bank === "number") ? { cash: d.cash ?? null, bank: d.bank ?? null } : null,
+      parts: [], flags: logFlags(row),
+    };
+    // depunere / scoatere la bancă: aceiași bani, mutați dintr-un buzunar în altul
+    if (d.confirmedSource && dC !== 0 && dC === -dB) {
+      entry.parts.push({ account: "bank", amount: dB, cat: "move", text: dB > 0 ? "a depus din cash în bancă" : "a scos din bancă în cash", confidence: "sigur" });
+      moved += Math.abs(dB);
+      entries.push(entry);
+      continue;
+    }
+    let restCash = dC, restBank = dB;
+    for (const { e, i } of expl) {
+      // o cumpărătură doar „probabil" a fost plătită cu cash — o legăm doar dacă încape
+      if (e.soft && !(restCash < 0 && Math.abs(restCash) >= Math.abs(e.amount))) continue;
+      if (e.account === "cash" && !restCash) continue;
+      if (e.account === "bank" && !restBank) continue;
+      used.add(i);
+      entry.parts.push(evOut(e));
+      addTotal(null, e.cat, e.account, e.amount);
+      if (e.account === "cash") restCash -= e.amount; else restBank -= e.amount;
+    }
+    // ce n-a explicat inventarul: sursa scrisă de joc (sigur/posibil) sau „necunoscut"
+    const peer = peerNameOf(d);
+    const src = d.confirmedSource || d.possibleSource || "";
+    const pushRest = (account, amount) => {
+      if (!amount) return;
+      let cat = "unknown", text = amount > 0 ? "sursă necunoscută" : "destinație necunoscută", confidence = "necunoscut", counterpart = null;
+      if (peer) { cat = amount > 0 ? "transfer_in" : "transfer_out"; text = amount > 0 ? `i-a primit de la {cp} (${/bancă/.test(src) ? "prin bancă" : "cash"})` : `i-a dat lui {cp} (${/bancă/.test(src) ? "prin bancă" : "cash"})`; counterpart = { name: peer }; confidence = d.confirmedSource ? "sigur" : "probabil"; }
+      else if (d.confirmedSource) { cat = "bank_op"; text = d.confirmedSource; confidence = "sigur"; }
+      else if (/^salariu/.test(src) && amount > 0) { cat = "salary"; text = src; confidence = "probabil"; }
+      else if (src) { cat = "other_possible"; text = `posibil legat de: ${src}`; confidence = "probabil"; }
+      if (cat === "unknown") {
+        // un mesaj din canalele Discord (bancă, facturi…) cu exact suma asta, în același minut
+        const hit = discord.find(x => Math.abs(ms(x.at) - t) <= 90000 && discordAmounts(x).includes(Math.abs(amount)));
+        if (hit) { cat = "discord"; text = `Discord #${hit.channel || "?"}: ${hit.title || "mesaj"}`; confidence = "probabil"; }
+      }
+      entry.parts.push({ account, amount, cat, text, confidence, counterpart });
+      addTotal(null, cat, account, amount);
+    };
+    pushRest("cash", restCash);
+    pushRest("bank", restBank);
+    if (!entry.parts.some(p => p.cat === "unknown" && p.amount > 0)) entry.flags = entry.flags.filter(f => !/fără sursă/.test(f.text));
+    entries.push(entry);
+  }
+  // Evenimente fără o citire de sold potrivită (ex. a ieșit de pe server imediat),
+  // banii murdari (nu apar în citirile de sold) și cele de pe site.
+  events.forEach((e, i) => {
+    if (used.has(i)) return;
+    if (e.soft) return; // cumpărătură nelegată de o scădere de bani — nu o numărăm
+    entries.push({ at: e.at, kind: "event", character: e.log && !e.incoming ? charOf(e.log.identifier) : null, parts: [evOut(e)], flags: [] });
+    addTotal(null, e.cat, e.account, e.amount);
+  });
+
+  // --- Cu cine a făcut schimb ----------------------------------------------------
+  const partners = new Map();
+  for (const entry of entries) for (const p of entry.parts || []) {
+    if (!p.counterpart?.name) continue;
+    const k = lowerName(p.counterpart.name);
+    const x = partners.get(k) || { name: p.counterpart.name, received: 0, gave: 0, count: 0 };
+    if (p.amount > 0) x.received += p.amount; else x.gave += -p.amount;
+    x.count += 1;
+    partners.set(k, x);
+  }
+
+  // --- Identități (nume RP + ID static) pentru toți cei pomeniți ---------------------
+  const mention = [...partners.values()].map(p => p.name);
+  for (const s of stashes) for (const p of s.people) mention.push(p.name);
+  const idx = await identityLookup({ identifiers: stashes.flatMap(s => s.people.map(p => p.identifier).filter(Boolean)), names: mention }).catch(() => ({ byId: new Map(), byName: new Map() }));
+  const whoOf = (name, identifier) => {
+    const w = (identifier && idx.byId.get(identifier)) || idx.byName.get(lowerName(name)) || null;
+    return w ? { identifier: w.identifier || identifier || null, rpName: w.rpName || null, staticId: w.staticId || null } : null;
+  };
+  for (const entry of entries) for (const p of entry.parts || []) if (p.counterpart?.name) p.counterpart.who = whoOf(p.counterpart.name);
+  for (const p of partners.values()) p.who = whoOf(p.name);
+  for (const s of stashes) for (const p of s.people) p.who = whoOf(p.name, p.identifier);
+
+  entries.sort((a, b) => ms(b.at) - ms(a.at));
+  const sortBy = obj => Object.values(obj).sort((a, b) => b.amount - a.amount);
+  return {
+    online: gameOnline,
+    range: { from: after, to: before },
+    truncated,
+    resolved: resolvedSummary(resolved),
+    balances: resolved.characters.map(c => ({ rpName: c.rpName || null, staticId: c.staticId || null, online: !!c.online, cash: c.cash ?? null, bank: c.bank ?? null, blackMoney: c.blackMoney ?? null, lastSeen: c.lastSeen || null })),
+    totals, moved,
+    inBy: sortBy(inBy), outBy: sortBy(outBy),
+    stashes,
+    partners: [...partners.values()].sort((a, b) => (b.received + b.gave) - (a.received + a.gave)).slice(0, 25),
+    entries: entries.slice(0, 600),
+    entriesTotal: entries.length,
+    discord, staff,
+  };
+}
+
 // Fix (2026-09): paginarea veche ("Încarcă mai vechi", cursor pe timp) avea
 // EXACT bug-ul găsit inițial la Kill Logs — cand nu era ales niciun filtru de
 // categorie ("Toate categoriile", vizualizarea implicită), interogam TOATE
@@ -1759,17 +2487,26 @@ function correlateStaffAction(gameLogs, staffLogs, gameCategory, keywordRegex, d
 // `pageSize` rânduri, indiferent de amestecul de categorii, deci nu se mai
 // poate "bloca" pe același interval de timp.
 app.get("/api/admin/logs", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
-  const player = req.query.player ? String(req.query.player).slice(0, 64) : "";
+  const player = req.query.player ? String(req.query.player).slice(0, 80) : "";
   const category = LOG_CATEGORIES.includes(req.query.category) ? req.query.category : "";
   const pageSize = Math.min(100, Math.max(1, Number(req.query.pageSize) || 50));
   const page = Math.max(1, Number(req.query.page) || 1);
+  // (08.10.2026) interval de date, „doar suspecte" și căutare după jucător
+  // (nume, #ID static sau licență → toate personajele și numele lui de FiveM)
+  const from = parseDateParam(req.query.from);
+  const to = parseDateParam(req.query.to);
+  const suspect = req.query.suspect === "1";
+  const resolved = player && category !== "admin" && category !== "discord" ? await resolveLogPlayer(player) : null;
+  const resolvedInfo = resolvedSummary(resolved);
+  if (resolved?.notFound) return res.json({ online: true, logs: [], page, pageSize, total: 0, totalPages: 1, resolved: resolvedInfo });
 
   // Categoria "Acțiuni staff (Luxu)" e o sursă unică (Postgres, a noastră) —
   // paginăm direct pe ea, cu total/totalPages proprii.
   if (category === "admin") {
     const { logs, total } = await fetchStaffLogsPage({ player, page, pageSize });
     const totalPages = Math.max(1, Math.ceil((total || 0) / pageSize));
-    return res.json({ online: true, logs, page, pageSize, total, totalPages });
+    for (const l of logs) l.flags = logFlags(l);
+    return res.json({ online: true, logs: suspect ? logs.filter(l => l.flags.length) : logs, page, pageSize, total, totalPages });
   }
 
   // La fel ca "admin" mai sus — sursă proprie (Postgres, botul de Discord),
@@ -1780,36 +2517,93 @@ app.get("/api/admin/logs", auth, requireRole(...MOD_ROLES), asyncRoute(async (re
     return res.json({ online: true, logs, page, pageSize, total, totalPages });
   }
 
+  // Acțiunile de staff (Luxu) atașate în fereastra de timp a paginii — ca rânduri
+  // proprii și ca sursă de corelare pentru "adminKill"/"adminGrant".
+  async function withStaff(gameLogs, staffPlayer) {
+    let staffLogs = [];
+    if (!category && gameLogs.length) {
+      const times = gameLogs.map(l => new Date(l.at).getTime());
+      const oldest = new Date(Math.min(...times));
+      const newest = new Date(Math.max(...times) + 1000);
+      staffLogs = await fetchStaffLogs({ player: staffPlayer, after: oldest, before: newest, limit: 200 });
+    }
+    correlateStaffAction(gameLogs, staffLogs, "item_obtained", /item/i, "adminGrant");
+    correlateStaffAction(gameLogs, staffLogs, "death", /kill/i, "adminKill");
+    correlateStaffAction(gameLogs, staffLogs, "vehicle_acquired", /vehic|masin/i, "adminGrant");
+    return [...gameLogs, ...staffLogs].sort((a, b) => new Date(b.at) - new Date(a.at));
+  }
+
+  // „Doar suspecte": citim un lot din fiecare categorie relevantă (în intervalul
+  // ales, pentru jucătorul ales) și păstrăm doar rândurile cu motive de suspect.
+  if (suspect) {
+    const cats = category ? [category] : SUSPECT_CATEGORIES;
+    const per = 300;
+    const batches = await Promise.all(cats.map(c => resolved
+      ? fetchLogsForResolved(resolved, { category: c, after: from, before: to, limit: per })
+      : fetchGameLogs({ player, category: c, after: from, before: to, pageSize: per })));
+    let all = batches.flatMap(b => b.logs || []);
+    if (!category) {
+      const staff = await fetchStaffLogs({ player: resolved ? (resolved.characters[0]?.rpName || resolved.names[0]) : player, after: from || undefined, before: to || undefined, limit: 300 });
+      correlateStaffAction(all, staff, "item_obtained", /item/i, "adminGrant");
+      correlateStaffAction(all, staff, "death", /kill/i, "adminKill");
+      correlateStaffAction(all, staff, "vehicle_acquired", /vehic|masin/i, "adminGrant");
+      all = all.concat(staff);
+    }
+    explainMoneyRows(all);
+    for (const l of all) l.flags = logFlags(l);
+    const flagged = all.filter(l => l.flags.length).sort((a, b) => new Date(b.at) - new Date(a.at));
+    const pageLogs = await enrichLogs(flagged.slice((page - 1) * pageSize, page * pageSize));
+    const scanned = batches.some(b => (b.logs || []).length >= per || b.truncated);
+    return res.json({
+      online: batches.some(b => b.online), logs: pageLogs, page, pageSize,
+      total: flagged.length, totalPages: Math.max(1, Math.ceil(flagged.length / pageSize)),
+      resolved: resolvedInfo, suspectScan: { perCategory: per, partial: scanned },
+    });
+  }
+
+  // Jucător recunoscut: toate numele + personajele lui, unite și paginate aici.
+  if (resolved) {
+    const need = Math.min(500, page * pageSize + 1);
+    const r = await fetchLogsForResolved(resolved, { category, after: from, before: to, limit: need });
+    const slice = r.logs.slice((page - 1) * pageSize, page * pageSize);
+    const hasMore = r.logs.length > page * pageSize || r.truncated;
+    const merged = await withStaff(slice, resolved.characters[0]?.rpName || resolved.names[0] || player);
+    await enrichLogs(merged);
+    const known = Math.ceil(r.logs.length / pageSize);
+    return res.json({
+      online: r.online, logs: merged, page, pageSize,
+      total: hasMore ? null : r.logs.length,
+      totalPages: hasMore ? Math.max(page + 1, known) : Math.max(1, known),
+      hasMore, resolved: resolvedInfo,
+    });
+  }
+
   // "Toate categoriile" sau o singură categorie de joc aleasă — o singură
   // sursă (moldovarp-api, de pe serverul de joc), paginată pe OFFSET direct
   // (vezi getLogs în server.lua) — total/totalPages calculate de acolo.
   const { online: gameOnline, logs: gameLogs, total: gameTotal } = await fetchGameLogs({
-    player, category, page, pageSize, withTotal: true,
+    player, category, page, pageSize, withTotal: true, after: from || undefined, before: to || undefined,
   });
-
-  // Acțiunile de staff se ATAȘEAZĂ (ca rânduri proprii + ca sursă de corelare
-  // pentru "adminKill"/"adminGrant") doar cand se vede "Toate categoriile",
-  // și doar în fereastra de timp acoperită STRICT de rândurile din pagina
-  // curentă — la fel ca jaful de cadavru de la Kill Logs — ca să nu
-  // reintroducem o a doua sursă paginată separat, cu propriul ei cursor, care
-  // ar putea din nou "aluneca" independent de prima. Cine vrea DOAR acțiunile
-  // de staff alege categoria dedicată de mai sus, unde sunt paginate exact.
-  let staffLogs = [];
-  if (!category && gameLogs.length) {
-    const times = gameLogs.map(l => new Date(l.at).getTime());
-    const oldest = new Date(Math.min(...times));
-    const newest = new Date(Math.max(...times) + 1000);
-    staffLogs = await fetchStaffLogs({ player, after: oldest, before: newest, limit: 200 });
-  }
-
-  correlateStaffAction(gameLogs, staffLogs, "item_obtained", /item/i, "adminGrant");
-  correlateStaffAction(gameLogs, staffLogs, "death", /kill/i, "adminKill");
-  correlateStaffAction(gameLogs, staffLogs, "vehicle_acquired", /vehic|masin/i, "adminGrant");
-
-  const merged = [...gameLogs, ...staffLogs].sort((a, b) => new Date(b.at) - new Date(a.at));
-
+  const merged = await withStaff(gameLogs, player);
+  await enrichLogs(merged);
   const totalPages = gameTotal != null ? Math.max(1, Math.ceil(gameTotal / pageSize)) : null;
   res.json({ online: gameOnline, logs: merged, page, pageSize, total: gameTotal, totalPages });
+}));
+
+// Traseul banilor — vezi buildMoneyTrail mai sus. Implicit ultimele 7 zile
+// (jocul păstrează logurile 30 de zile).
+app.get("/api/admin/money-trail", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
+  const player = String(req.query.player || "").trim().slice(0, 80);
+  if (!player) return res.status(400).json({ error: "Scrie jucătorul: nume, #ID static sau licență." });
+  const to = parseDateParam(req.query.to);
+  let from = parseDateParam(req.query.from) || new Date((to ? to.getTime() : Date.now()) - 7 * 24 * 3600 * 1000);
+  const oldest = new Date(Date.now() - 31 * 24 * 3600 * 1000);
+  if (from < oldest) from = oldest;
+  const resolved = await resolveLogPlayer(player);
+  if (!resolved) return res.status(404).json({ error: `Nu l-am găsit pe „${player}". Încearcă numele RP exact, #ID-ul static sau licența.` });
+  if (resolved.notFound) return res.status(404).json({ error: `Niciun personaj cu ID static ${player.replace(/\D/g, "")}.` });
+  const trail = await buildMoneyTrail(resolved, { after: from, before: to });
+  res.json(trail);
 }));
 
 // Pagina separata "Kill Logs" — cerută explicit: cine pe cine a ucis, și ce
@@ -1841,13 +2635,20 @@ app.get("/api/admin/kill-logs", auth, requireRole(...MOD_ROLES), asyncRoute(asyn
   const pageSize = Math.min(100, Math.max(1, Number(req.query.pageSize) || 20));
   const page = Math.max(1, Number(req.query.page) || 1);
 
-  const { online, logs: deaths, total } = await fetchGameLogs({
-    player,
-    category: "death",
-    page,
-    pageSize,
-    withTotal: true,
-  });
+  // (08.10.2026) victima căutată după nume RP / #ID static / licență → morțile
+  // ambelor personaje, pe toate numele lui de FiveM
+  const resolved = player ? await resolveLogPlayer(player) : null;
+  let online, deaths, total;
+  if (resolved && !resolved.notFound) {
+    const r = await fetchLogsForResolved(resolved, { category: "death", limit: Math.min(500, page * pageSize + 1) });
+    online = r.online;
+    deaths = r.logs.slice((page - 1) * pageSize, page * pageSize);
+    total = r.logs.length > page * pageSize || r.truncated ? (page + 1) * pageSize : r.logs.length;
+  } else if (resolved?.notFound) {
+    online = true; deaths = []; total = 0;
+  } else {
+    ({ online, logs: deaths, total } = await fetchGameLogs({ player, category: "death", page, pageSize, withTotal: true }));
+  }
 
   let kills = [];
   if (deaths.length) {
@@ -1860,7 +2661,7 @@ app.get("/api/admin/kill-logs", auth, requireRole(...MOD_ROLES), asyncRoute(asyn
     // un interval neobișnuit de aglomerat — fereastra fiind deja restrânsă la
     // mortile paginii curente, în practică e mult sub atât.
     const { logs: transfers } = await fetchGameLogs({
-      player,
+      player: resolved ? undefined : player,
       category: "item_transfer",
       after: oldest,
       before: newest,
@@ -1895,12 +2696,20 @@ app.get("/api/admin/kill-logs", auth, requireRole(...MOD_ROLES), asyncRoute(asyn
           const dt = new Date(t.at).getTime() - deathTime;
           return dt >= 0 && dt <= 3 * 60 * 1000;
         })
-        .map(t => ({ item: t.details.item, count: t.details.count, to: t.details.to, at: t.at }));
+        .map(t => ({ item: t.details.item, count: t.details.count, to: t.details.to, toWho: t.toWho || null, at: t.at }));
     }
+
+    // (08.10.2026) nume RP + ID static pentru victimă, ucigaș și cine a jefuit
+    await enrichLogs(deaths);
+    await enrichLogs(transfers.filter(t => t.details?.lootedFromCorpse || deaths.some(d => d.player === t.player)));
 
     kills = deaths
       .map(d => ({
         victim: d.player,
+        victimIdentifier: d.identifier || null,
+        victimWho: d.who || null,
+        killerWho: d.killerWho || null,
+        flags: d.flags || [],
         victimRpName: d.rpName || null,
         killer: d.details.killer || null,
         adminKill: d.details.adminKill || null,
@@ -1914,7 +2723,7 @@ app.get("/api/admin/kill-logs", auth, requireRole(...MOD_ROLES), asyncRoute(asyn
   }
 
   const totalPages = total != null ? Math.max(1, Math.ceil(total / pageSize)) : null;
-  res.json({ online, kills, page, pageSize, total, totalPages });
+  res.json({ online, kills, page, pageSize, total, totalPages, resolved: resolvedSummary(resolved) });
 }));
 
 // Sancțiuni Luxu Admin, pentru pagina Sancțiuni de pe site — cerută explicit,
@@ -2001,6 +2810,7 @@ async function fetchPlayerCharacters(identifier, liveDetail, extraIds = []) {
       identifier: id, online: true, rpName: pl.serverName || null, staticId: staticIdOf(pl) || null,
       jobLabel: pl.jobLabel || pl.job || null, gradeLabel: pl.gradeLabel || null, playtimeMinutes: playtimeOf(pl),
       cash: num(pl.cash), bank: num(pl.bank), blackMoney: num(pl.blackMoney), lastSeen: null,
+      vehicles: Array.isArray(pl.vehicles) ? pl.vehicles : [],
     };
     const g = await fetchGamePlayerLookup({ identifier: id });
     if (!g || g.identifier !== id) return null;
@@ -2008,6 +2818,7 @@ async function fetchPlayerCharacters(identifier, liveDetail, extraIds = []) {
       identifier: id, online: false, rpName: g.rpName || null, staticId: g.staticId != null ? String(g.staticId) : null,
       jobLabel: g.jobLabel || g.job || null, gradeLabel: g.gradeLabel || null, playtimeMinutes: playtimeOf(g),
       cash: num(g.cash), bank: num(g.bank), blackMoney: num(g.blackMoney), lastSeen: g.lastSeen || null,
+      vehicles: Array.isArray(g.vehicles) ? g.vehicles : [],
     };
   }));
   const slot = id => Number((/^char(\d+):/i.exec(id) || [])[1] || 0);
@@ -2218,6 +3029,7 @@ async function buildPlayerProfile(name, opts = {}) {
   const recentActivity = [...activityResult.logs, ...staffActivity]
     .sort((a, b) => new Date(b.at) - new Date(a.at))
     .slice(0, 25);
+  await enrichLogs(recentActivity).catch(() => {});
 
   const allDeaths = deathsResult.logs;
   correlateStaffAction(allDeaths, staffActivity, "death", /kill/i, "adminKill");

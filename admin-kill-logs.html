@@ -17,10 +17,11 @@
   <div class="title">
     <h2>Kill-uri recente</h2>
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-      <input id="f-player" class="filter-select" placeholder="Filtrează după victimă..." autocomplete="off" style="min-width:180px">
+      <input id="f-player" class="filter-select" placeholder="Victimă: nume RP, #ID static sau nume FiveM" autocomplete="off" style="min-width:260px">
       <button id="refresh-btn" class="btn-ghost" type="button">Reîmprospătează</button>
     </div>
   </div>
+  <p class="muted" id="resolved-note" style="margin:0 22px 14px" hidden></p>
   <p class="muted" id="offline-note" style="margin:0 22px 16px" hidden>Serverul de joc nu răspunde momentan — lista poate fi incompletă.</p>
   <table id="kills-table"><thead><tr><th>VICTIMĂ</th><th>UCIGAȘ</th><th>CAUZĂ</th><th>JAF DUPĂ MOARTE</th><th>DATA</th></tr></thead>
   <tbody id="list-body"><tr><td colspan="5">Se încarcă…</td></tr></tbody></table>
@@ -29,8 +30,11 @@
 
 </main>
 <script src="auth-client.js"></script>
+<style>#kills-table th:nth-child(1),#kills-table td:nth-child(1){width:auto;min-width:170px;white-space:normal;overflow:visible}</style>
+<script src="log-format.js?v=20261008a"></script>
 <script src="player-profile-modal.js"></script>
 <script>
+LogFormat.injectStyles();
 const escapeHtml = s => (s ?? '').toString()
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
@@ -54,7 +58,7 @@ function formatKiller(k) {
   if (k.adminKill) {
     return `<strong>admin ${escapeHtml(k.adminKill.staff || 'necunoscut')}</strong> <span class="muted">(comandă din panoul de admin)</span>`;
   }
-  if (k.killer) return `<strong>${playerButton(k.killer)}</strong>`;
+  if (k.killer) return LogFormat.otherHtml(k.killer, k.killerWho);
   if (k.detectedBy === 'health') {
     return '<span class="muted">necunoscut — detectat automat (fără ucigaș cunoscut)</span>';
   }
@@ -70,7 +74,7 @@ function formatKiller(k) {
 function formatLoot(looted) {
   if (!looted || !looted.length) return '<span class="muted">—</span>';
   const items = looted.map(l =>
-    `<span class="pill off" style="margin:0;white-space:nowrap">${escapeHtml((l.count ? l.count + 'x ' : '') + (l.item || 'un item'))} → ${escapeHtml(l.to || 'necunoscut')}</span>`
+    `<span class="pill off" style="margin:0;white-space:nowrap">${LogFormat.isMoneyItemName(l.item) && typeof l.count === 'number' ? LogFormat.fmtSum(l.count) : escapeHtml((l.count ? l.count + 'x ' : '') + (l.item || 'un item'))} → ${escapeHtml(l.toWho && l.toWho.rpName ? l.toWho.rpName + (l.toWho.staticId ? ' #' + l.toWho.staticId : '') : (l.to || 'necunoscut'))}</span>`
   );
   return `<div style="display:flex;flex-wrap:wrap;gap:4px;max-width:340px">${items.join('')}</div>`;
 }
@@ -78,9 +82,9 @@ function formatLoot(looted) {
 function rowsHtml(kills) {
   return kills.map(k => `
       <tr>
-        <td><strong>${k.victim ? playerButton(k.victim, k.victimIdentifier, k.victimRpName) : 'necunoscut'}</strong>${k.job ? ` <span class="muted">· job: ${escapeHtml(k.job)}</span>` : ''}${k.victimRpName ? `<br><span class="muted" style="font-size:11px">${escapeHtml(k.victimRpName)}</span>` : ''}</td>
+        <td>${k.victim ? LogFormat.whoHtml({ player: k.victim, identifier: k.victimIdentifier, rpName: k.victimRpName, who: k.victimWho }) : 'necunoscut'}${k.job ? `<br><span class="muted" style="font-size:11px">job: ${escapeHtml(k.job)}</span>` : ''}</td>
         <td>${formatKiller(k)}</td>
-        <td>${k.cause ? escapeHtml(truncate(String(k.cause), 100)) : '<span class="muted">—</span>'}</td>
+        <td>${k.cause ? escapeHtml(truncate(String(k.cause), 100)) : '<span class="muted">—</span>'}${(k.flags || []).length ? '<br>' + LogFormat.flagsHtml(k.flags) : ''}</td>
         <td>${formatLoot(k.looted)}</td>
         <td>${fmtDate(k.at)}</td>
       </tr>`).join('');
@@ -154,6 +158,12 @@ async function loadKills(page) {
     offlineNote.hidden = d.online !== false;
     currentPage = d.page || currentPage;
     currentTotalPages = d.totalPages || null;
+    const rn = document.getElementById('resolved-note');
+    const r = d.resolved;
+    rn.hidden = !player;
+    rn.innerHTML = !player ? '' : !r ? `Caut victima după numele de FiveM „${escapeHtml(player)}".`
+      : r.notFound ? `Niciun personaj cu ${escapeHtml(r.kind)} ${escapeHtml(r.query)}.`
+      : `Morțile lui ${r.characters.map(c => `<strong>${escapeHtml(c.rpName || '?')}</strong>${LogFormat.staticTag(c.staticId)}`).join(' și ')}${r.characters.length > 1 ? ' (același jucător)' : ''}.`;
     if (!d.kills || !d.kills.length) {
       tbody.innerHTML = `<tr><td colspan="5">${currentPage > 1 ? 'Nicio moarte pe această pagină.' : 'Nicio moarte găsită.'}</td></tr>`;
     } else {

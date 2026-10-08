@@ -6,540 +6,404 @@
 <main>
 <header><div><small>PANEL ADMINISTRATIV</small><h1>Loguri</h1></div><a class="admin" href="dashboard.html" title="Înapoi la contul meu" style="text-decoration:none"><span id="admin-name">…</span> <i></i></a></header>
 
-<p class="muted" style="margin:-10px 0 18px">
-  Jurnal de activitate, din trei surse: serverul de joc (chat/comenzi, conectări/deconectări, morți/kill-uri, bani, cumpărături/crafting/transfer de iteme din inventar), panoul Luxu Admin (acțiuni de staff — kill, revive, dă/ia item etc.), trimise direct pe site prin webhook, și canalele de loguri din Discord (bancă/facturi, heist-uri, protecție exploit-uri etc.), citite automat de botul nostru.
-  Banii arată <strong>diferența</strong> observată (cumpărare/vânzare/salariu etc.) — pentru bancă (depunere/scoatere) și pentru torpedou/portbagaj sursa e acum <strong>confirmată</strong>, afișată clar fără cuvântul "posibil"; restul rămân presupuneri marcate ca atare.
-  Istoricul este păstrat timp de <strong>30 de zile</strong> — după acest interval, înregistrările sunt șterse automat.
+<style>
+  .lg-tabs{display:flex;gap:6px;margin:-8px 0 16px;flex-wrap:wrap}
+  .lg-tabs button{background:var(--panel);border:1px solid var(--line);color:#9da2a8;border-radius:9px;padding:10px 16px;font:inherit;font-weight:800;cursor:pointer}
+  .lg-tabs button[aria-selected="true"]{color:#fff;border-color:rgba(255,138,31,.55);box-shadow:inset 0 -2px 0 var(--orange)}
+  .lg-filters{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;padding:0 22px 16px}
+  .lg-filters label{display:flex;flex-direction:column;gap:4px;font-size:9px;font-weight:900;letter-spacing:.1em;color:#777}
+  .lg-filters .grow{flex:1 1 260px}
+  .lg-filters .grow input{width:100%}
+  .lg-check{flex-direction:row!important;align-items:center;gap:7px!important;font-size:12px!important;letter-spacing:0!important;color:var(--text)!important;font-weight:700!important;padding:8px 10px;border:1px solid var(--line);border-radius:8px;cursor:pointer}
+  .lg-check input{accent-color:#ff6b6b}
+  .lg-banner{margin:0 22px 14px;padding:10px 14px;border-radius:10px;background:rgba(255,138,31,.07);border:1px solid rgba(255,138,31,.25);font-size:12px;line-height:1.7}
+  .lg-banner.err{background:rgba(255,107,107,.08);border-color:rgba(255,107,107,.35)}
+  .lg-banner .btn-ghost{padding:5px 10px;font-size:11px;margin-left:6px}
+  #logs-table th:nth-child(2),#logs-table td:nth-child(2){width:auto;min-width:170px;white-space:normal;overflow:visible}
+  #logs-table td:first-child .pill{white-space:nowrap}
+  #logs-table td:nth-child(4){white-space:nowrap}
+  .lg-what{line-height:1.6}
+
+  /* Traseul banilor */
+  .mt-head{display:flex;gap:10px;flex-wrap:wrap;margin:0 22px 18px}
+  .mt-char{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;min-width:220px;flex:1 1 220px}
+  .mt-char b{font-size:14px;color:var(--text)}
+  .mt-char dl{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;margin:8px 0 0;font-size:12px}
+  .mt-char dt{color:#777}
+  .mt-char dd{margin:0;text-align:right;font-variant-numeric:tabular-nums;color:var(--text)}
+  .mt-sum{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:0 22px 18px}
+  .mt-sum article{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+  .mt-sum small{color:#777;font-size:9px;font-weight:900;letter-spacing:.12em}
+  .mt-sum strong{display:block;font-size:21px;margin:4px 0 2px;font-variant-numeric:tabular-nums}
+  .mt-sum em{font-style:normal;font-size:11px;color:var(--muted)}
+  .mt-in{color:#3ddc84}.mt-out{color:#ff7a7a}.mt-hide{color:#f3c34b}
+  .mt-cols{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:0 22px 18px}
+  .mt-box{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:14px 16px;min-width:0}
+  .mt-box h3{margin:0 0 10px;font-size:13px}
+  .mt-bar{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;margin-bottom:9px;font-size:12px}
+  .mt-bar span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .mt-bar b{font-variant-numeric:tabular-nums;color:var(--text);font-size:12px}
+  .mt-bar i{grid-column:1/-1;height:5px;border-radius:3px;background:rgba(255,255,255,.06);overflow:hidden}
+  .mt-bar i::after{content:"";display:block;height:100%;width:var(--w);background:var(--c)}
+  .mt-section{margin:0 22px 8px;font-size:14px}
+  .mt-amt{font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .mt-acc{font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#777;margin-left:4px}
+  .mt-part{padding:3px 0}
+  .mt-part + .mt-part{border-top:1px dashed var(--line)}
+  .mt-stash td{vertical-align:top}
+  .mt-note{margin:0 22px 18px;font-size:12px;color:var(--muted);line-height:1.7}
+  .mt-note b{color:var(--text)}
+  .mt-empty{padding:30px 22px;color:var(--muted)}
+  @media(max-width:900px){.mt-sum{grid-template-columns:repeat(2,minmax(0,1fr))}.mt-cols{grid-template-columns:1fr}}
+</style>
+
+<p class="muted" style="margin:-10px 0 14px">
+  Jurnal de activitate din trei surse: serverul de joc, panoul Luxu Admin (acțiuni de staff) și canalele de loguri din Discord.
+  Caută un jucător după <strong>numele RP</strong>, <strong>#ID-ul static</strong>, licență sau numele de FiveM — vezi logurile <strong>ambelor personaje</strong>, chiar dacă și-a schimbat numele.
+  Rândurile cu <span class="lf-flag lf-warn" style="margin:0">⚠ galben</span> sunt de urmărit, cele cu <span class="lf-flag lf-crit" style="margin:0">⚠ roșu</span> de verificat imediat. Istoricul se păstrează <strong>30 de zile</strong>.
 </p>
 
-<section class="tablebox">
-  <div class="title">
-    <h2>Activitate recentă</h2>
-    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-      <input id="f-player" class="filter-select" placeholder="Filtrează după jucător..." autocomplete="off" style="min-width:180px">
+<div class="lg-tabs" role="tablist">
+  <button type="button" role="tab" id="tab-logs" aria-selected="true">🗂 Toate logurile</button>
+  <button type="button" role="tab" id="tab-bani" aria-selected="false">💰 Traseul banilor</button>
+</div>
+
+<section class="tablebox" id="panel-logs">
+  <div class="title"><h2>Activitate</h2><button id="refresh-btn" type="button">Reîmprospătează</button></div>
+  <div class="lg-filters">
+    <label class="grow">JUCĂTOR
+      <input id="f-player" class="filter-select" placeholder="Nume RP, #ID static, licență sau nume FiveM" autocomplete="off">
+    </label>
+    <label>CATEGORIE
       <select id="f-category" class="filter-select">
         <option value="">Toate categoriile</option>
+        <option value="money">Bani (cash / bancă)</option>
+        <option value="item_transfer">Transfer iteme / bani între jucători</option>
+        <option value="money_vehicle_deposit">Bani ascunși în vehicule</option>
+        <option value="money_vehicle_withdraw">Bani scoși din vehicule</option>
+        <option value="item_drop">Aruncat pe jos</option>
+        <option value="item_pickup">Ridicat de jos</option>
+        <option value="item_obtained">Alte iteme obținute</option>
+        <option value="item_buy">Cumpărături</option>
+        <option value="item_craft">Crafting</option>
+        <option value="vehicle_acquired">Vehicul nou</option>
+        <option value="death">Morți / Kill-uri</option>
         <option value="chat">Chat</option>
         <option value="command">Comenzi</option>
         <option value="connect">Conectări</option>
         <option value="disconnect">Deconectări</option>
-        <option value="death">Morți / Kill-uri</option>
-        <option value="money">Bani</option>
-        <option value="money_vehicle_deposit">Bani puși în torpedou/portbagaj</option>
-        <option value="money_vehicle_withdraw">Bani scoși din torpedou/portbagaj</option>
-        <option value="item_buy">Cumpărături</option>
-        <option value="item_craft">Crafting</option>
-        <option value="item_transfer">Transfer iteme</option>
-        <option value="item_obtained">Alte iteme obținute</option>
-        <option value="item_drop">Aruncat pe jos</option>
-        <option value="item_pickup">Ridicat de jos</option>
-        <option value="vehicle_acquired">Vehicul nou</option>
         <option value="admin">Acțiuni staff (Luxu)</option>
-        <option value="discord">Discord (bancă, heist, protecție exploit-uri...)</option>
+        <option value="discord">Discord (bancă, heist, protecție exploit-uri…)</option>
       </select>
-      <button id="refresh-btn" class="btn-ghost" type="button">Reîmprospătează</button>
-    </div>
+    </label>
+    <label>DE LA<input id="f-from" type="date" class="filter-select"></label>
+    <label>PÂNĂ LA<input id="f-to" type="date" class="filter-select"></label>
+    <label class="lg-check"><input id="f-suspect" type="checkbox"> ⚠ Doar suspecte</label>
   </div>
+  <div id="resolved-bar" class="lg-banner" hidden></div>
   <p class="muted" id="offline-note" style="margin:0 22px 16px" hidden>Serverul de joc nu răspunde momentan — se văd doar acțiunile de staff (Luxu), dacă există.</p>
-  <table id="logs-table"><thead><tr><th>CATEGORIE</th><th>JUCĂTOR</th><th>DETALII</th><th>DATA</th></tr></thead>
+  <table id="logs-table"><thead><tr><th>CATEGORIE</th><th>JUCĂTOR</th><th>CE S-A ÎNTÂMPLAT</th><th>DATA</th></tr></thead>
   <tbody id="list-body"><tr><td colspan="4">Se încarcă…</td></tr></tbody></table>
   <div id="pagination" style="padding:16px 22px;display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap"></div>
 </section>
 
+<section class="tablebox" id="panel-bani" hidden>
+  <div class="title"><h2>Traseul banilor</h2></div>
+  <form class="lg-filters" id="mt-form">
+    <label class="grow">JUCĂTOR
+      <input id="mt-player" class="filter-select" placeholder="Nume RP, #ID static sau licență" autocomplete="off" required>
+    </label>
+    <label>DE LA<input id="mt-from" type="date" class="filter-select"></label>
+    <label>PÂNĂ LA<input id="mt-to" type="date" class="filter-select"></label>
+    <button type="submit" class="btn-primary">Arată traseul</button>
+  </form>
+  <div id="mt-out"><p class="mt-empty">Scrie un jucător și apasă „Arată traseul": vezi de unde i-a venit fiecare ban, unde s-a dus, ce a ascuns în vehicule și cu cine a făcut schimb. Implicit ultimele 7 zile.</p></div>
+</section>
+
 </main>
 <script src="auth-client.js"></script>
+<script src="log-format.js?v=20261008a"></script>
 <script src="player-profile-modal.js"></script>
 <script>
-const CATEGORY_LABEL = {
-  chat: 'Chat', command: 'Comandă', connect: 'Conectare', disconnect: 'Deconectare', death: 'Moarte / Kill', money: 'Bani',
-  money_vehicle_deposit: 'Depus în torpedou/portbagaj', money_vehicle_withdraw: 'Scos din torpedou/portbagaj',
-  item_buy: 'Cumpărare', item_craft: 'Crafting', item_transfer: 'Transfer item', item_obtained: 'Item obținut', item_drop: 'Aruncat pe jos',
-  item_pickup: 'Ridicat de jos',
-  vehicle_acquired: 'Vehicul nou',
-  admin: 'Acțiune staff',
-  discord: 'Discord',
-};
-const CATEGORY_PILL = {
-  chat: 'info', command: 'info', connect: 'on', disconnect: 'off', death: 'warn', money: 'warn',
-  money_vehicle_deposit: 'warn', money_vehicle_withdraw: 'warn',
-  item_buy: 'info', item_craft: 'info', item_transfer: 'info', item_obtained: 'info', item_drop: 'warn',
-  item_pickup: 'info',
-  vehicle_acquired: 'info',
-  admin: 'warn',
-  discord: 'info',
-};
+const { CATEGORY_LABEL, CATEGORY_PILL, escapeHtml, fmtDate, fmtSum, formatDetails, whoHtml, otherHtml, flagsHtml, staticTag } = LogFormat;
+LogFormat.injectStyles();
 
-// Traducem cele mai comune actiuni de staff din Luxu Admin (kill, revive,
-// ban, kick etc.) intr-un text usor de citit in romana. Potrivirea e dupa
-// cuvinte-cheie in stringul de actiune trimis de Luxu (schema lor exacta nu
-// e documentata public) — daca actiunea nu se potriveste cu niciun tipar de
-// mai jos, arătăm textul brut trimis de Luxu, ca sa nu pierdem informatie.
-const ADMIN_ACTION_PATTERNS = [
-  [/revive|reviv/i, 'a reînviat'],
-  [/kill/i, 'a ucis'],
-  [/\bban\b/i, 'a interzis (ban)'],
-  [/kick/i, 'a dat kick'],
-  [/mute/i, 'a dat mute'],
-  [/teleport/i, 'a teleportat'],
-  [/heal|vindec/i, 'a vindecat'],
-  [/give.*item|item.*give|da.*item|item.*dat/i, 'a dat un item'],
-  [/take.*item|item.*take|ia.*item|item.*luat/i, 'a luat un item'],
-  [/give.*vehic|vehic.*give|da.*masin|masin.*dat/i, 'a dat un vehicul'],
-  [/freeze|inghet/i, 'a înghețat'],
-  [/noclip/i, 'a activat noclip'],
-];
-function humanizeAdminAction(action) {
-  if (!action) return null;
-  for (const [re, label] of ADMIN_ACTION_PATTERNS) {
-    if (re.test(action)) return label;
-  }
-  return null;
+// ---- Zile ↔ interval: „De la" = începutul zilei, „Până la" = sfârșitul zilei (ora României)
+function dayStartIso(v) { return v ? new Date(v + 'T00:00:00').toISOString() : ''; }
+function dayEndIso(v) { if (!v) return ''; const d = new Date(v + 'T00:00:00'); d.setDate(d.getDate() + 1); return d.toISOString(); }
+function ymd(d) { const z = n => String(n).padStart(2, '0'); return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}`; }
+
+// ---- Tab-uri ----------------------------------------------------------------
+function showTab(name) {
+  document.getElementById('tab-logs').setAttribute('aria-selected', String(name === 'logs'));
+  document.getElementById('tab-bani').setAttribute('aria-selected', String(name === 'bani'));
+  document.getElementById('panel-logs').hidden = name !== 'logs';
+  document.getElementById('panel-bani').hidden = name !== 'bani';
 }
+document.getElementById('tab-logs').addEventListener('click', () => showTab('logs'));
+document.getElementById('tab-bani').addEventListener('click', () => showTab('bani'));
 
-const escapeHtml = s => (s ?? '').toString()
-  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-  .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-
-// Numele jucătorului — buton clickabil, la fel ca la Kill Logs/Jucători, ca
-// să deschidă fereastra flotantă de profil direct din Loguri (cerut explicit
-// — până acum trebuia căutat manual jucătorul în altă pagină).
-function playerButton(name, identifier, rpName) {
-  return `<button type="button" class="player-link" data-player="${escapeHtml(name)}"${identifier ? ` data-identifier="${escapeHtml(identifier)}"` : ''}${rpName ? ` data-rpname="${escapeHtml(rpName)}"` : ''}>${escapeHtml(name)}</button>`;
-}
-
-// Unele campuri libere (metadata de item, motivul unei actiuni de staff,
-// payload-ul brut Luxu) pot contine, in practica, orice — inclusiv text
-// urias (ex: date de item incapsulate, imagini in base64 la iteme cu poza
-// custom). Fara o limita, un singur rand din tabel poate deveni cat un ecran
-// intreg de text. Taiem cu "…" ce trece de o lungime rezonabila — informatia
-// completa tot exista in baza de date, doar afisarea e limitata.
-function truncate(value, max) {
-  const s = (value ?? '').toString();
-  return s.length > max ? s.slice(0, max) + '…' : s;
-}
-
-// Botul de loguri Discord aduce mesaje "brute" (fără embed) de la zeci de
-// scripturi diferite, fiecare cu formatarea lui — de multe ori markdown de
-// Discord (### Secțiune, **bold**) scris direct în conținut. Fără curățare,
-// "###" și "**" apăreau ca text literal, iar liniile noi erau înghițite de
-// HTML (totul într-un singur rând lipit). Randăm minimal, fără librărie:
-// liniile "### ..." devin un mic subtitlu, "**text**" devine bold, iar
-// liniile noi chiar se văd. Sursele au adesea "**" nepereche (bug de
-// formatare în scriptul original) — un "**" rămas fără pereche e scos, nu
-// lăsat ca text brut pe pagină.
-function formatDiscordContent(value, max) {
-  const escaped = escapeHtml(truncate(value, max));
-  // "**" nepereche (bug frecvent in scripturile sursa, ex: "**ID:** **3" —
-  // al doilea "**" nu se mai inchide) sunt tratate PE RAND, nu pe tot
-  // textul deodata — altfel un singur "**" ramas fara pereche pe primul
-  // rand "inghite" restul continutului intr-un singur <strong> urias, pana
-  // gaseste urmatorul "**" nepotrivit, de multe randuri mai incolo.
-  const boldPair = /\*\*([^*]+?)\*\*/g;
-  return escaped.split('\n').map(line => {
-    const heading = line.match(/^#{1,6}\s*(.+)$/);
-    const text = (heading ? heading[1] : line).replace(boldPair, '<strong>$1</strong>');
-    return heading
-      ? `<span class="muted" style="text-transform:uppercase;font-size:11px;letter-spacing:.03em">${text}</span>`
-      : text;
-  }).join('<br>');
-}
-
-function fmtDate(d) { return new Date(d).toLocaleString('ro-RO'); }
-function fmtMoney(n) { return (n > 0 ? '+' : '') + n.toLocaleString('ro-RO') + '$'; }
-
-// Pe acest server, banii cash sunt și un item fizic în inventar (numit
-// "money"/"cash"/"bani" — vezi server.lua, isMoneyItem). Când un item_buy/
-// item_transfer/item_obtained/item_drop se întâmplă să fie chiar acest item,
-// arătăm clar suma ca bani (ex: "i-a dat $500 lui X"), nu generic "a dat
-// 500x money lui X" — mult mai ușor de citit pentru staff.
-const MONEY_ITEM_NAMES = new Set(['money', 'cash', 'bani']);
-function isMoneyItemName(name) {
-  return MONEY_ITEM_NAMES.has(String(name || '').trim().toLowerCase());
-}
-
-// Metadata unui item venea afișată ca JSON brut, trunchiat — util pentru un
-// dezvoltator, inutil (și, cum ați semnalat, urât/greu de citit) la un
-// control rapid. Se întâmplă la MULTE tipuri de iteme, nu doar arme — actele
-// (buletin/permis) au propriul lor set de câmpuri, la fel orice alt item cu
-// metadata custom. Scoatem explicit câmpurile cunoscute și utile pentru
-// staff (cine e proprietarul/pe cine e înregistrat itemul, serie, etc.) —
-// exact ce ajută la un control: dacă numele de pe act/armă NU se potrivește
-// cu cine îl poartă acum, e un semnal clar de urmărit.
-//
-// Unele câmpuri sunt ascunse INTENȚIONAT, nu uitate: `license` e un
-// identificator tehnic intern (hash-ul contului, nu ceva citibil), `jobName`
-// dublează coloana de job deja afișată separat la finalul rândului, iar
-// `label`/`card_type`/`mainName`/`clothType` dublează practic numele itemului
-// (ex: "driver_license", "Shoes"). `clothingNum`/`clothingTexture` sunt indici
-// tehnici de model, ilizibili fără să te uiți direct în joc.
-const ITEM_META_HIDDEN_KEYS = new Set([
-  'label', 'license', 'jobName', 'card_type',
-  'mainName', 'clothType', 'clothingNum', 'clothingTexture',
-]);
-// Orice cheie care conține unul din aceste cuvinte e o poză/imagine (ex:
-// "card_photo": {"base64": "data:image/png;base64,..."}) — poate fi uriașă
-// (o poză reală în base64) și nu are niciun sens ca text într-un jurnal, deci
-// o ascundem complet, nu doar o trunchiem.
-const ITEM_META_PHOTO_KEY_PATTERN = /photo|poza|poză|image|picture|avatar/i;
-
-// { cheie_în_metadata: eticheta_afișată } — ordinea de aici e și ordinea de afișare.
-const ITEM_META_FRIENDLY_FIELDS = [
-  ['card_name', 'nume'],
-  ['registered', 'înregistrată pe'],
-  ['card_category', 'categorii'],
-  ['card_sex', 'sex'],
-  ['card_birthdate', 'născut'],
-  ['variationNumber', 'variantă'],
-];
-
-// Plasă de siguranță pentru câmpurile NEprevăzute (cele care ajung în "extra"
-// mai jos): dacă un script nou, pe care nu l-am văzut încă, bagă în metadata
-// un text foarte lung (poză, fișier, orice blob) sub un nume de câmp pe care
-// nu-l recunoaștem după nume, tot îl ascundem — nu doar îl trunchiem la un
-// număr de caractere, ca să nu mai apară niciodată o mizerie de tip base64 în
-// Loguri, oricât de neprevăzut ar fi câmpul.
-function redactLongBlobs(value, depth) {
-  if (depth > 2) return '[…omis…]';
-  if (typeof value === 'string') return value.length > 60 ? '[text lung omis]' : value;
-  if (Array.isArray(value)) return value.map(v => redactLongBlobs(v, depth + 1));
-  if (value && typeof value === 'object') {
-    const out = {};
-    for (const k of Object.keys(value)) out[k] = redactLongBlobs(value[k], depth + 1);
-    return out;
-  }
-  return value;
-}
-
-function describeItemMetadata(metadata) {
-  if (!metadata || typeof metadata !== 'object') return '';
-  const bits = [];
-  const seenKeys = new Set(ITEM_META_HIDDEN_KEYS);
-  Object.keys(metadata).filter(k => ITEM_META_PHOTO_KEY_PATTERN.test(k)).forEach(k => seenKeys.add(k));
-
-  const serial = metadata.serial ?? metadata.serie;
-  if (serial) { bits.push(`serie: <code>${escapeHtml(String(serial))}</code>`); seenKeys.add('serial'); seenKeys.add('serie'); }
-
-  for (const [key, label] of ITEM_META_FRIENDLY_FIELDS) {
-    seenKeys.add(key);
-    const value = metadata[key];
-    if (value === undefined || value === null || value === '') continue;
-    const strong = key === 'card_name' || key === 'registered';
-    const text = escapeHtml(String(value));
-    bits.push(`${label}: ${strong ? `<strong>${text}</strong>` : text}`);
-  }
-
-  if (typeof metadata.durability === 'number') { bits.push(`durabilitate: ${Math.round(metadata.durability)}%`); seenKeys.add('durability'); }
-  if (typeof metadata.ammo === 'number') { bits.push(`muniție: ${metadata.ammo}`); seenKeys.add('ammo'); }
-  if (Array.isArray(metadata.components) && metadata.components.length) {
-    bits.push(`atașamente: ${metadata.components.map(c => escapeHtml(String(c))).join(', ')}`);
-    seenKeys.add('components');
-  }
-
-  // Orice câmp NECUNOSCUT rămas tot apare, ca JSON scurt — ca să nu pierdem
-  // nicio informație doar pentru că nu am prevăzut acel câmp anume. Trecut
-  // prin redactLongBlobs, ca să nu strecurăm din greșeală vreun text uriaș.
-  const extraKeys = Object.keys(metadata).filter(k => !seenKeys.has(k));
-  let extra = '';
-  if (extraKeys.length) {
-    const extraObj = {};
-    extraKeys.forEach(k => { extraObj[k] = redactLongBlobs(metadata[k], 0); });
-    extra = escapeHtml(truncate(JSON.stringify(extraObj), 150));
-  }
-
-  const summary = bits.join(' · ');
-  if (!summary && !extra) return '';
-  return `<span class="muted">(${summary}${summary && extra ? ' · ' : ''}${extra})</span>`;
-}
-
-// Fiecare categorie de log are un format diferit de "details" — transformăm
-// obiectul JSON venit din joc într-o linie de text ușor de citit. Jobul
-// jucătorului (cand e disponibil din joc) se adaugă la final, la fel pentru
-// orice categorie, ca sa nu repetăm logica in fiecare "case" de mai jos.
-function formatDetails(log) {
-  const d = log.details || {};
-  const body = formatDetailsBody(log, d);
-  return d.job ? `${body} <span class="muted">· job: ${escapeHtml(d.job)}</span>` : body;
-}
-
-function formatDetailsBody(log, d) {
-  switch (log.category) {
-    case 'chat':
-    case 'command':
-      return d.message ? escapeHtml(truncate(d.message, 400)) : '<span class="muted">—</span>';
-    case 'connect':
-      return '<span class="muted">s-a conectat</span>';
-    case 'disconnect':
-      return d.reason ? `s-a deconectat <span class="muted">(${escapeHtml(truncate(d.reason, 200))})</span>` : '<span class="muted">s-a deconectat</span>';
-    case 'death': {
-      const parts = [];
-      // Daca in fereastra scurta de dinaintea mortii a existat o actiune de
-      // staff Luxu de tip "kill" pe acelasi jucator, aratam clar ca a fost
-      // un kill de admin (comanda din panou, nu o luptă reală) — vezi
-      // corelarea din backend/server.js.
-      if (d.adminKill) {
-        parts.push(`ucis de <strong>admin ${escapeHtml(d.adminKill.staff || 'necunoscut')}</strong>`);
-        parts.push('<span class="muted">(comandă din panoul de admin)</span>');
-      } else if (d.killer) {
-        parts.push(`ucis de <strong>${escapeHtml(d.killer)}</strong>`);
-      } else {
-        parts.push('a murit');
-      }
-      if (d.cause) parts.push(`<span class="muted">(${escapeHtml(String(d.cause))})</span>`);
-      return parts.join(' ');
-    }
-    case 'money': {
-      const parts = [];
-      if (typeof d.cashDelta === 'number' && d.cashDelta !== 0) parts.push(`cash ${fmtMoney(d.cashDelta)}`);
-      if (typeof d.bankDelta === 'number' && d.bankDelta !== 0) parts.push(`bancă ${fmtMoney(d.bankDelta)}`);
-      const change = parts.join(', ') || 'schimbare bani';
-      const total = (typeof d.cash === 'number' && typeof d.bank === 'number')
-        ? `<span class="muted"> · total: ${d.cash.toLocaleString('ro-RO')}$ cash, ${d.bank.toLocaleString('ro-RO')}$ bancă</span>`
-        : '';
-      // Cea mai recentă cumpărare/craftare a aceluiași jucător, în fereastra
-      // scurtă de dinainte de această verificare — o presupunere ("posibil"),
-      // nu o certitudine (vezi server.lua). Când avem însă o sursă CONFIRMATĂ
-      // (ex: evenimentul ESX de bancă, esx:setAccountMoney — vezi server.lua),
-      // o arătăm distinct, fără cuvântul "posibil" și fără stil "muted", ca
-      // să fie limpede că e sigură, nu o ghiceală.
-      const source = d.confirmedSource
-        ? ` · <strong>${escapeHtml(d.confirmedSource)}</strong>`
-        : (d.possibleSource ? `<span class="muted"> · posibil: ${escapeHtml(d.possibleSource)}</span>` : '');
-      // Identificare sigura a jucatorului — cerut explicit de staff, pentru
-      // ca numele din joc se pot schimba sau suprapune intre jucatori diferiti.
-      // Licenta vine din coloana "identifier" a jurnalului (nu din "details"),
-      // Discord-ul (daca jucatorul avea Discord deschis) vine din details.discord.
-      const idBits = [];
-      if (log.identifier) idBits.push(`licență: <code>${escapeHtml(log.identifier)}</code>`);
-      if (d.discord) idBits.push(`Discord: <code>${escapeHtml(d.discord)}</code>`);
-      const idInfo = idBits.length ? `<span class="muted"> · ${idBits.join(' · ')}</span>` : '';
-      return change + total + source + idInfo;
-    }
-    case 'item_buy': {
-      const parts = [`a cumpărat`];
-      parts.push(`<strong>${escapeHtml((d.count ? d.count + 'x ' : '') + (d.item || 'un item'))}</strong>`);
-      if (typeof d.totalPrice === 'number') parts.push(`pentru <strong>${fmtMoney(d.totalPrice).replace('+', '')}</strong>`);
-      if (d.shop) parts.push(`<span class="muted">(${escapeHtml(String(d.shop))})</span>`);
-      return parts.join(' ');
-    }
-    case 'item_craft': {
-      const parts = ['a craftat'];
-      parts.push(`<strong>${escapeHtml(d.recipe || 'un item')}</strong>`);
-      if (d.bench) parts.push(`<span class="muted">(bench: ${escapeHtml(String(d.bench))})</span>`);
-      return parts.join(' ');
-    }
-    case 'item_transfer': {
-      if (isMoneyItemName(d.item) && typeof d.count === 'number') {
-        return `i-a dat <strong>${fmtMoney(d.count).replace('+', '')}</strong> lui <strong>${escapeHtml(d.to || 'necunoscut')}</strong> <span class="muted">(bani ca item fizic)</span>`;
-      }
-      const parts = ['a dat'];
-      parts.push(`<strong>${escapeHtml((d.count ? d.count + 'x ' : '') + (d.item || 'un item'))}</strong>`);
-      parts.push(`lui <strong>${escapeHtml(d.to || 'necunoscut')}</strong>`);
-      return parts.join(' ');
-    }
-    case 'item_obtained': {
-      // Dat de un admin din panou (corelat pe server cu o acțiune de staff
-      // foarte apropiată în timp — vezi backend/server.js) — arătăm asta în
-      // loc de "obținut" generic, ca să nu pară că jucătorul l-a găsit/l-a
-      // primit organic din joc.
-      if (d.adminGrant) {
-        const parts = ['a primit'];
-        if (isMoneyItemName(d.item) && typeof d.count === 'number') {
-          parts.push(`<strong>${fmtMoney(d.count).replace('+', '')}</strong>`);
-        } else {
-          parts.push(`<strong>${escapeHtml((d.count ? d.count + 'x ' : '') + (d.item || 'un item'))}</strong>`);
-        }
-        parts.push(`de la <strong>admin ${escapeHtml(d.adminGrant.staff || 'necunoscut')}</strong>`);
-        return parts.join(' ');
-      }
-      if (isMoneyItemName(d.item) && typeof d.count === 'number') {
-        return `a obținut <strong>${fmtMoney(d.count).replace('+', '')}</strong> <span class="muted">(bani ca item fizic)</span>`;
-      }
-      const parts = ['a obținut'];
-      parts.push(`<strong>${escapeHtml((d.count ? d.count + 'x ' : '') + (d.item || 'un item'))}</strong>`);
-      const metaDesc = describeItemMetadata(d.metadata);
-      if (metaDesc) parts.push(metaDesc);
-      return parts.join(' ');
-    }
-    case 'item_drop': {
-      if (isMoneyItemName(d.item) && typeof d.count === 'number') {
-        return `a aruncat pe jos <strong>${fmtMoney(d.count).replace('+', '')}</strong> <span class="muted">(bani ca item fizic)</span>`;
-      }
-      const parts = ['a aruncat pe jos'];
-      parts.push(`<strong>${escapeHtml((d.count ? d.count + 'x ' : '') + (d.item || 'un item'))}</strong>`);
-      return parts.join(' ');
-    }
-    case 'item_pickup': {
-      if (isMoneyItemName(d.item) && typeof d.count === 'number') {
-        return `a ridicat de jos <strong>${fmtMoney(d.count).replace('+', '')}</strong> <span class="muted">(bani ca item fizic)</span>`;
-      }
-      const parts = ['a ridicat de jos'];
-      parts.push(`<strong>${escapeHtml((d.count ? d.count + 'x ' : '') + (d.item || 'un item'))}</strong>`);
-      return parts.join(' ');
-    }
-    // v1.28.0: bani puși/luați din torpedoul sau portbagajul unui vehicul —
-    // vezi server.lua (registerOxInventoryHooks, hook-ul swapItems). Placuta
-    // vehiculului vine din id-ul inventarului ox_inventory, best-effort — nu
-    // e garantat mereu prezentă.
-    case 'money_vehicle_deposit': {
-      const sum = (typeof d.count === 'number') ? fmtMoney(d.count).replace('+', '') : 'bani';
-      const parts = [`a pus <strong>${sum}</strong> în torpedou/portbagaj`];
-      if (d.vehicle) parts.push(`<span class="muted">(${escapeHtml(String(d.vehicle))})</span>`);
-      return parts.join(' ');
-    }
-    case 'money_vehicle_withdraw': {
-      const sum = (typeof d.count === 'number') ? fmtMoney(d.count).replace('+', '') : 'bani';
-      const parts = [`a scos <strong>${sum}</strong> din torpedou/portbagaj`];
-      if (d.vehicle) parts.push(`<span class="muted">(${escapeHtml(String(d.vehicle))})</span>`);
-      return parts.join(' ');
-    }
-    case 'vehicle_acquired': {
-      // La fel ca la item_obtained: daca a fost corelat cu o actiune de
-      // staff Luxu de tip "da vehicul" foarte apropiata in timp, aratam ca a
-      // fost primit de la admin, nu cumparat organic — vezi server.js.
-      const label = d.vehicle || 'un vehicul';
-      if (d.adminGrant) {
-        const parts = ['a primit vehiculul'];
-        parts.push(`<strong>${escapeHtml(label)}</strong>`);
-        parts.push(`de la <strong>admin ${escapeHtml(d.adminGrant.staff || 'necunoscut')}</strong>`);
-        if (d.plate) parts.push(`<span class="muted">(${escapeHtml(d.plate)})</span>`);
-        return parts.join(' ');
-      }
-      const parts = ['a intrat în posesia vehiculului'];
-      parts.push(`<strong>${escapeHtml(label)}</strong>`);
-      if (d.plate) parts.push(`<span class="muted">(${escapeHtml(d.plate)})</span>`);
-      parts.push('<span class="muted">· nu știm sigur dacă a fost cumpărat, primit sau transferat</span>');
-      return parts.join(' ');
-    }
-    case 'admin': {
-      const parts = [];
-      const nice = humanizeAdminAction(d.action);
-      if (nice) parts.push(`<strong>${escapeHtml(nice)}</strong>`);
-      else if (d.action) parts.push(`<strong>${escapeHtml(d.action)}</strong>`);
-      if (d.target) parts.push(`→ <strong>${escapeHtml(d.target)}</strong>`);
-      if (d.reason) parts.push(`<span class="muted">(${escapeHtml(truncate(d.reason, 300))})</span>`);
-      if (nice && d.action) parts.push(`<span class="muted">· acțiune brută: ${escapeHtml(truncate(d.action, 200))}</span>`);
-      return parts.length ? parts.join(' ') : `<span class="muted">${escapeHtml(truncate(JSON.stringify(d.raw || {}), 300))}</span>`;
-    }
-    // Copiate din canalele Discord de loguri (bancă/facturi, heist-uri,
-    // protecție exploit-uri etc.) de botul nostru — vezi backend/server.js
-    // (pollDiscordLogs). "fields" e obiectul luat din embed-ul mesajului
-    // (Jucator/Detinator/Transferat/etc, exact cum apar în Discord).
-    case 'discord': {
-      const parts = [];
-      if (d.title) parts.push(`<strong>${escapeHtml(d.title)}</strong>`);
-      if (d.fields && Object.keys(d.fields).length) {
-        parts.push(Object.entries(d.fields).map(([k, v]) => `${escapeHtml(k)}: <strong>${escapeHtml(String(v))}</strong>`).join(' · '));
-      } else if (d.content) {
-        parts.push(formatDiscordContent(d.content, 300));
-      }
-      const source = [d.channel ? `#${d.channel}` : null, d.category].filter(Boolean).join(' · ');
-      if (source) parts.push(`<span class="muted">(${escapeHtml(source)})</span>`);
-      return parts.length ? parts.join(' ') : '<span class="muted">—</span>';
-    }
-    default:
-      return `<span class="muted">${escapeHtml(truncate(JSON.stringify(d), 300))}</span>`;
-  }
-}
-
-let debounceTimer = null;
-function scheduleReload() {
-  clearTimeout(debounceTimer);
-  debounceTimer = setTimeout(() => loadLogs(1), 300);
-}
-
+// ---- Pagina de loguri ---------------------------------------------------------
 function rowsHtml(logs) {
-  return logs.map(log => `
-      <tr>
+  return logs.map(log => {
+    const flags = log.flags || LogFormat.flagsFor(log);
+    const sev = flags.some(f => f.level === 'crit') ? 'lf-row-crit' : flags.length ? 'lf-row-warn' : '';
+    return `
+      <tr class="${sev}">
         <td><span class="pill ${CATEGORY_PILL[log.category] || 'off'}">${escapeHtml((CATEGORY_LABEL[log.category] || log.category).toUpperCase())}</span></td>
-        <td><strong>${log.player ? playerButton(log.player, log.identifier, log.rpName) : escapeHtml('necunoscut')}</strong>${log.rpName ? `<br><span class="muted" style="font-size:11px">${escapeHtml(log.rpName)}</span>` : ''}</td>
-        <td>${formatDetails(log)}</td>
+        <td>${log.category === 'admin' || log.category === 'discord' ? `<strong>${escapeHtml(log.player || '—')}</strong>` : whoHtml(log)}</td>
+        <td class="lg-what">${formatDetails(log)}${flags.length ? `<br>${flagsHtml(flags)}` : ''}</td>
         <td>${fmtDate(log.at)}</td>
-      </tr>`).join('');
+      </tr>`;
+  }).join('');
 }
 
-// Paginare pe NUMĂR de pagină (1, 2, 3...), nu pe cursor "Încarcă mai vechi"
-// — cel vechi se dovedise nefiabil EXACT ca la Kill Logs: la "Toate
-// categoriile" (vizualizarea implicită), categoriile foarte frecvente
-// (chat/comenzi/transfer de iteme) umpleau aproape toată limita comună, iar
-// cursorul de timp abia avansa — staff a raportat că "Încarcă mai vechi"
-// părea să reîncarce loguri din aceeași zi la nesfârșit. Acum backend-ul
-// (vezi /api/admin/logs) paginează pe OFFSET direct, deci fiecare pagină
-// avansează mereu exact cu numărul de rânduri cerut, indiferent de amestecul
-// de categorii — și poți naviga oricât de departe în istoric (până la 30 de
-// zile), nu doar câteva ore.
+function charsText(chars) {
+  return chars.map(c => `<strong>${escapeHtml(c.rpName || 'personaj fără nume')}</strong>${staticTag(c.staticId)}${c.online ? ' <span class="pill on" style="font-size:8px;padding:2px 6px">ONLINE</span>' : ''}`).join(' și ');
+}
+function renderResolved(r, player) {
+  const bar = document.getElementById('resolved-bar');
+  if (!player) { bar.hidden = true; return; }
+  bar.hidden = false;
+  bar.classList.remove('err');
+  if (!r) {
+    bar.innerHTML = `Caut după numele de FiveM <strong>„${escapeHtml(player)}"</strong> (nu l-am recunoscut ca jucător). Pentru toate logurile unui jucător, scrie numele RP exact sau <strong>#ID-ul static</strong>.`;
+    return;
+  }
+  if (r.notFound) {
+    bar.classList.add('err');
+    bar.innerHTML = `Niciun personaj cu ${escapeHtml(r.kind)} <strong>${escapeHtml(r.query)}</strong>.`;
+    return;
+  }
+  const many = r.characters.length > 1;
+  bar.innerHTML = `Arăt logurile lui ${charsText(r.characters)}${many ? ' — <strong>același jucător</strong> (aceeași licență)' : ''}.`
+    + (r.names.length ? `<br><span class="muted">Nume de FiveM folosite: ${r.names.map(n => escapeHtml(n)).join(', ')}</span>` : '<br><span class="muted">Încă nu știu ce nume de FiveM folosește — apar pe măsură ce intră pe server.</span>')
+    + ` <button type="button" class="btn-ghost" id="to-trail">💰 Traseul banilor</button>`;
+  document.getElementById('to-trail').addEventListener('click', () => {
+    document.getElementById('mt-player').value = player;
+    document.getElementById('mt-from').value = document.getElementById('f-from').value;
+    document.getElementById('mt-to').value = document.getElementById('f-to').value;
+    showTab('bani');
+    loadTrail();
+  });
+}
+
 let currentPage = 1;
 let currentTotalPages = null;
-
-function renderPagination(page, totalPages) {
+function renderPagination(page, totalPages, hasMore) {
   const el = document.getElementById('pagination');
   if (!totalPages || totalPages <= 1) { el.innerHTML = ''; return; }
-
   const pages = new Set([1, totalPages]);
   for (let p = page - 2; p <= page + 2; p++) if (p >= 1 && p <= totalPages) pages.add(p);
   const sorted = [...pages].sort((a, b) => a - b);
-
   let html = `<button type="button" class="btn-ghost" data-page="${page - 1}" ${page <= 1 ? 'disabled' : ''}>‹ Precedenta</button>`;
   let prev = 0;
   for (const p of sorted) {
     if (p - prev > 1) html += `<span class="muted" style="padding:0 4px">…</span>`;
-    html += `<button type="button" class="btn-ghost${p === page ? ' active' : ''}" data-page="${p}" ${p === page ? 'style="background:var(--orange);color:#000;border-color:var(--orange)"' : ''}>${p}</button>`;
+    html += `<button type="button" class="btn-ghost${p === page ? ' active' : ''}" data-page="${p}" ${p === page ? 'style="background:var(--orange);color:#000;border-color:var(--orange)"' : ''}>${p}${hasMore && p === totalPages ? '+' : ''}</button>`;
     prev = p;
   }
   html += `<button type="button" class="btn-ghost" data-page="${page + 1}" ${page >= totalPages ? 'disabled' : ''}>Următoarea ›</button>`;
   el.innerHTML = html;
-  el.querySelectorAll('button[data-page]').forEach(btn => {
-    btn.addEventListener('click', () => loadLogs(Number(btn.dataset.page)));
-  });
+  el.querySelectorAll('button[data-page]').forEach(btn => btn.addEventListener('click', () => loadLogs(Number(btn.dataset.page))));
 }
 
+let loadSeq = 0;
 async function loadLogs(page) {
   currentPage = page || currentPage || 1;
+  const seq = ++loadSeq;
   const tbody = document.getElementById('list-body');
   const offlineNote = document.getElementById('offline-note');
   const player = document.getElementById('f-player').value.trim();
   const category = document.getElementById('f-category').value;
+  const from = document.getElementById('f-from').value;
+  const to = document.getElementById('f-to').value;
+  const suspect = document.getElementById('f-suspect').checked;
   const qs = new URLSearchParams();
   if (player) qs.set('player', player);
   if (category) qs.set('category', category);
+  if (from) qs.set('from', dayStartIso(from));
+  if (to) qs.set('to', dayEndIso(to));
+  if (suspect) qs.set('suspect', '1');
   qs.set('page', String(currentPage));
   qs.set('pageSize', '50');
+  if (currentPage === 1 && (player || suspect)) tbody.innerHTML = '<tr><td colspan="4">Se caută…</td></tr>';
   try {
     const res = await apiFetch(`/api/admin/logs?${qs.toString()}`);
     if (!res.ok) throw new Error();
     const d = await res.json();
+    if (seq !== loadSeq) return;
     offlineNote.hidden = d.online !== false;
     currentPage = d.page || currentPage;
     currentTotalPages = d.totalPages || null;
+    renderResolved(d.resolved, player);
     if (!d.logs || !d.logs.length) {
-      tbody.innerHTML = `<tr><td colspan="4">${currentPage > 1 ? 'Nicio înregistrare pe această pagină.' : 'Nicio înregistrare găsită.'}</td></tr>`;
+      const empty = suspect ? 'Nimic suspect în ce am verificat.' : (currentPage > 1 ? 'Nicio înregistrare pe această pagină.' : 'Nicio înregistrare găsită.');
+      tbody.innerHTML = `<tr><td colspan="4">${empty}</td></tr>`;
     } else {
       tbody.innerHTML = rowsHtml(d.logs);
     }
-    renderPagination(currentPage, currentTotalPages);
+    if (suspect && d.suspectScan && d.suspectScan.partial) {
+      tbody.insertAdjacentHTML('beforeend', `<tr><td colspan="4" class="muted">Am verificat ultimele ${d.suspectScan.perCategory} înregistrări din fiecare categorie${from || to ? ' din intervalul ales' : ''}. Pentru mai vechi, alege un interval de date sau un jucător.</td></tr>`);
+    }
+    renderPagination(currentPage, currentTotalPages, d.hasMore);
   } catch {
-    tbody.innerHTML = '<tr><td colspan="4">Nu am putut încărca logurile.</td></tr>';
+    if (seq === loadSeq) tbody.innerHTML = '<tr><td colspan="4">Nu am putut încărca logurile.</td></tr>';
   }
 }
 
+let debounceTimer = null;
+function scheduleReload() { clearTimeout(debounceTimer); debounceTimer = setTimeout(() => loadLogs(1), 450); }
 document.getElementById('f-player').addEventListener('input', scheduleReload);
-document.getElementById('f-category').addEventListener('change', () => loadLogs(1));
+['f-category', 'f-from', 'f-to', 'f-suspect'].forEach(id => document.getElementById(id).addEventListener('change', () => loadLogs(1)));
 document.getElementById('refresh-btn').addEventListener('click', () => loadLogs(currentPage));
 
-// Click pe numele jucătorului (buton .player-link) deschide profilul flotant,
-// la fel ca la Kill Logs/Jucători — cerut explicit de admin.
-document.getElementById('list-body').addEventListener('click', (e) => {
+// ---- Traseul banilor -------------------------------------------------------------
+const ACC = { cash: 'cash', bank: 'bancă', black: 'murdari' };
+const CONF = { sigur: 'lf-sure', probabil: 'lf-maybe', necunoscut: 'lf-unknown' };
+function amt(n, account) {
+  const cls = n > 0 ? 'mt-in' : n < 0 ? 'mt-out' : '';
+  return `<span class="mt-amt ${cls}">${n > 0 ? '+' : n < 0 ? '−' : ''}${fmtSum(n)}</span><span class="mt-acc">${ACC[account] || account || ''}</span>`;
+}
+function whoChip(name, who) { return name ? otherHtml(name, who && who.rpName ? who : null) : '<strong>?</strong>'; }
+function partHtml(p) {
+  let text = escapeHtml(p.text || '');
+  text = text.replace('{cp}', p.counterpart ? whoChip(p.counterpart.name, p.counterpart.who) : 'cineva')
+             .replace('{where}', `<strong>${escapeHtml(p.where || '?')}</strong>`);
+  const conf = p.cat === 'move' ? '' : ` <span class="${CONF[p.confidence] || 'lf-maybe'}">${escapeHtml(p.confidence || '')}</span>`;
+  const src = p.site ? ' <span class="muted">(site)</span>' : '';
+  return `<div class="mt-part">${amt(p.amount, p.account)} — ${text}${src}${conf}${(p.flags || []).length ? ' ' + flagsHtml(p.flags) : ''}</div>`;
+}
+function bars(list, color) {
+  if (!list.length) return '<p class="muted" style="margin:0">Nimic în acest interval.</p>';
+  const max = Math.max(...list.map(b => b.amount)) || 1;
+  return list.map(b => `<div class="mt-bar"><span title="${escapeHtml(b.label)}">${escapeHtml(b.label)} <span class="muted">· ${b.count}×</span></span><b>${fmtSum(b.amount)}</b><i style="--w:${Math.max(2, Math.round(b.amount / max * 100))}%;--c:${color}"></i></div>`).join('');
+}
+function moneyCell(v) { return v == null ? '<span class="muted">—</span>' : fmtSum(v); }
+
+function renderTrail(t) {
+  const out = document.getElementById('mt-out');
+  const r = t.resolved || { characters: [], names: [] };
+  const fromTxt = new Date(t.range.from).toLocaleDateString('ro-RO');
+  const toTxt = t.range.to ? new Date(new Date(t.range.to).getTime() - 1).toLocaleDateString('ro-RO') : 'azi';
+  const sumIn = t.totals.cash.in + t.totals.bank.in;
+  const sumOut = t.totals.cash.out + t.totals.bank.out;
+  const unknownIn = (t.inBy.find(b => b.key === 'unknown') || {}).amount || 0;
+  const unknownOut = (t.outBy.find(b => b.key === 'unknown') || {}).amount || 0;
+  const hidden = t.stashes.reduce((s, x) => s + Math.max(0, x.net), 0);
+
+  const chars = (t.balances || []).map(b => `
+    <div class="mt-char"><b>${escapeHtml(b.rpName || '?')}</b>${staticTag(b.staticId)} ${b.online ? '<span class="pill on" style="font-size:8px">ONLINE</span>' : `<span class="muted" style="font-size:11px">${b.lastSeen ? 'văzut ' + fmtDate(b.lastSeen) : 'offline'}</span>`}
+      <dl><dt>Cash acum</dt><dd>${moneyCell(b.cash)}</dd><dt>Bancă acum</dt><dd>${moneyCell(b.bank)}</dd><dt>Bani murdari</dt><dd>${moneyCell(b.blackMoney)}</dd></dl>
+    </div>`).join('');
+
+  const stashRows = t.stashes.map(s => `
+    <tr class="mt-stash${s.tookOthers ? ' lf-row-crit' : s.othersTook ? ' lf-row-warn' : ''}">
+      <td><strong>${escapeHtml(s.plate)}</strong><br><span class="muted">${s.ownVehicle ? 'vehiculul lui' : 'vehicul al altcuiva / necunoscut'}</span></td>
+      <td>${s.people.map(p => `${whoChip(p.name, p.who)}${p.put ? ` a pus <span class="mt-amt mt-out">${fmtSum(p.put)}</span>` : ''}${p.took ? ` a scos <span class="mt-amt mt-in">${fmtSum(p.took)}</span>` : ''}`).join('<br>')}</td>
+      <td><span class="mt-amt ${s.net > 0 ? 'mt-hide' : ''}">${s.net > 0 ? fmtSum(s.net) : '0$'}</span><br><span class="muted">${s.net > 0 ? 'ar mai fi înăuntru' : s.net < 0 ? `golit — s-au scos cu ${fmtSum(-s.net)} mai mult decât s-a pus în interval (erau acolo dinainte)` : 'golit'}</span>${s.tookOthers ? `<br>${flagsHtml([{ level: 'crit', text: 'A scos bani puși de altcineva' }])}` : ''}${s.othersTook ? `<br>${flagsHtml([{ level: 'warn', text: `Alții au scos ${fmtSum(s.othersTook)} de aici` }])}` : ''}</td>
+    </tr>`).join('');
+
+  const partnerRows = t.partners.map(p => `
+    <tr><td>${whoChip(p.name, p.who)}</td><td><span class="mt-amt mt-in">${p.received ? '+' + fmtSum(p.received) : '—'}</span></td><td><span class="mt-amt mt-out">${p.gave ? '−' + fmtSum(p.gave) : '—'}</span></td>
+    <td><span class="mt-amt ${p.received - p.gave >= 0 ? 'mt-in' : 'mt-out'}">${p.received - p.gave >= 0 ? '+' : '−'}${fmtSum(p.received - p.gave)}</span></td><td>${p.count}</td></tr>`).join('');
+
+  const entryRows = t.entries.map(e => {
+    const flags = e.flags || [];
+    const sev = flags.some(f => f.level === 'crit') || (e.parts || []).some(p => (p.flags || []).some(f => f.level === 'crit')) ? 'lf-row-crit' : (flags.length ? 'lf-row-warn' : '');
+    const change = e.kind === 'balance'
+      ? [e.deltaCash ? amt(e.deltaCash, 'cash') : '', e.deltaBank ? amt(e.deltaBank, 'bank') : ''].filter(Boolean).join('<br>')
+      : '<span class="muted">—</span>';
+    const after = e.balanceAfter ? `<br><span class="muted" style="font-size:11px">după: ${e.balanceAfter.cash != null ? fmtSum(e.balanceAfter.cash) + ' cash' : ''}${e.balanceAfter.bank != null ? ' · ' + fmtSum(e.balanceAfter.bank) + ' bancă' : ''}</span>` : '';
+    return `<tr class="${sev}">
+      <td style="white-space:nowrap">${fmtDate(e.at)}</td>
+      <td>${e.character ? `<strong>${escapeHtml(e.character.rpName || '?')}</strong>${staticTag(e.character.staticId)}` : '<span class="muted">—</span>'}</td>
+      <td>${change}${after}</td>
+      <td>${(e.parts || []).map(partHtml).join('')}${flags.length ? flagsHtml(flags) : ''}</td>
+    </tr>`;
+  }).join('');
+
+  const discordRows = (t.discord || []).map(x => `<tr><td style="white-space:nowrap">${fmtDate(x.at)}</td><td>${formatDetails({ category: 'discord', details: { channel: x.channel, category: x.category, title: x.title, fields: x.fields, content: x.content } })}</td></tr>`).join('');
+  const staffRows = (t.staff || []).map(x => `<tr><td style="white-space:nowrap">${fmtDate(x.at)}</td><td><strong>${escapeHtml(x.staff || '?')}</strong> → ${escapeHtml(x.target || '?')}: ${escapeHtml(x.action || '')} <span class="muted">${escapeHtml(x.reason || '')}</span></td></tr>`).join('');
+
+  out.innerHTML = `
+    <p class="mt-note">Jucătorul ${charsText(r.characters)}${r.characters.length > 1 ? ' — același om, aceeași licență' : ''} · <b>${fromTxt} – ${toTxt}</b>${t.online === false ? ' · <span class="lf-unknown">serverul de joc nu răspunde</span>' : ''}</p>
+    <div class="mt-head">${chars}</div>
+    <div class="mt-sum">
+      <article><small>A INTRAT (CASH + BANCĂ)</small><strong class="mt-in">+${fmtSum(sumIn)}</strong><em>cash ${fmtSum(t.totals.cash.in)} · bancă ${fmtSum(t.totals.bank.in)}</em></article>
+      <article><small>A IEȘIT (CASH + BANCĂ)</small><strong class="mt-out">−${fmtSum(sumOut)}</strong><em>cash ${fmtSum(t.totals.cash.out)} · bancă ${fmtSum(t.totals.bank.out)}${t.moved ? ` · mutat cash↔bancă ${fmtSum(t.moved)}` : ''}</em></article>
+      <article><small>FĂRĂ EXPLICAȚIE</small><strong class="${unknownIn ? 'lf-unknown' : ''}" style="background:none;padding:0;font-size:21px">${fmtSum(unknownIn)}</strong><em>intrați fără sursă · ${fmtSum(unknownOut)} ieșiți fără destinație</em></article>
+      <article><small>ASCUNS ÎN VEHICULE</small><strong class="mt-hide">${fmtSum(hidden)}</strong><em>${t.stashes.length} vehicul(e) · bani murdari: +${fmtSum(t.totals.black.in)} / −${fmtSum(t.totals.black.out)}</em></article>
+    </div>
+    <div class="mt-cols">
+      <div class="mt-box"><h3>De unde vin banii</h3>${bars(t.inBy, '#3ddc84')}</div>
+      <div class="mt-box"><h3>Unde se duc banii</h3>${bars(t.outBy, '#ff7a7a')}</div>
+    </div>
+    ${t.stashes.length ? `<h3 class="mt-section">🚗 Ascunzători — vehicule în care a umblat cu bani</h3>
+      <div style="overflow-x:auto;margin-bottom:18px"><table><thead><tr><th>VEHICUL</th><th>CINE A PUS / A SCOS</th><th>RĂMAS (ESTIMARE)</th></tr></thead><tbody>${stashRows}</tbody></table></div>` : ''}
+    ${t.partners.length ? `<h3 class="mt-section">🤝 Cu cine a făcut schimb de bani</h3>
+      <div style="overflow-x:auto;margin-bottom:18px"><table><thead><tr><th>JUCĂTOR</th><th>A PRIMIT DE LA EL</th><th>I-A DAT LUI</th><th>NET</th><th>DE CÂTE ORI</th></tr></thead><tbody>${partnerRows}</tbody></table></div>` : ''}
+    <h3 class="mt-section">📜 Fiecare mișcare de bani (${t.entriesTotal})</h3>
+    <div style="overflow-x:auto;margin-bottom:18px"><table><thead><tr><th>CÂND</th><th>PERSONAJ</th><th>SOLD</th><th>DE UNDE / UNDE</th></tr></thead>
+      <tbody>${entryRows || '<tr><td colspan="4">Nicio mișcare de bani în acest interval.</td></tr>'}</tbody></table></div>
+    ${discordRows ? `<h3 class="mt-section">💬 Din canalele Discord (bancă, facturi, jafuri…) care îl pomenesc</h3><div style="overflow-x:auto;margin-bottom:18px"><table><tbody>${discordRows}</tbody></table></div>` : ''}
+    ${staffRows ? `<h3 class="mt-section">🛡 Acțiuni de staff cu bani / iteme asupra lui</h3><div style="overflow-x:auto;margin-bottom:18px"><table><tbody>${staffRows}</tbody></table></div>` : ''}
+    <p class="mt-note">
+      <b>Cum se citește:</b> jocul verifică soldul fiecărui jucător la 15 secunde; fiecare schimbare e legată de ce s-a întâmplat chiar înainte (bani dați, ridicați, scoși din vehicul…).
+      <span class="lf-sure">sigur</span> = scris direct de joc, <span class="lf-maybe">probabil</span> = dedus din momentul în care s-a întâmplat, <span class="lf-unknown">necunoscut</span> = jocul nu ne-a spus de unde/unde.
+      ${t.truncated ? '<br><b>Interval mare:</b> am citit doar cele mai noi 500 de înregistrări pe categorie — alege un interval mai scurt pentru tot detaliul.' : ''}
+      <br><b>Ce nu vede încă jocul:</b> bani puși în dulapuri/stash-uri de case, de facțiune sau de gașcă, conturile facțiunilor, banii murdari puși în vehicule și sursa exactă a banilor dați de scripturi (job, jaf, cazino) — le-am cerut echipei serverului.
+    </p>`;
+}
+
+let trailSeq = 0;
+async function loadTrail() {
+  const player = document.getElementById('mt-player').value.trim();
+  const out = document.getElementById('mt-out');
+  if (!player) return;
+  const seq = ++trailSeq;
+  const qs = new URLSearchParams({ player });
+  const from = document.getElementById('mt-from').value;
+  const to = document.getElementById('mt-to').value;
+  if (from) qs.set('from', dayStartIso(from));
+  if (to) qs.set('to', dayEndIso(to));
+  out.innerHTML = '<p class="mt-empty">Adun toate mișcările de bani… (poate dura câteva secunde)</p>';
+  try {
+    const res = await apiFetch('/api/admin/money-trail?' + qs.toString());
+    const d = await res.json().catch(() => ({}));
+    if (seq !== trailSeq) return;
+    if (!res.ok) { out.innerHTML = `<p class="mt-empty">${escapeHtml(d.error || 'Nu am putut încărca traseul banilor.')}</p>`; return; }
+    renderTrail(d);
+  } catch {
+    if (seq === trailSeq) out.innerHTML = '<p class="mt-empty">Nu am putut încărca traseul banilor.</p>';
+  }
+}
+document.getElementById('mt-form').addEventListener('submit', e => { e.preventDefault(); loadTrail(); });
+
+// Click pe un jucător (buton .player-link) deschide profilul flotant.
+document.querySelector('main').addEventListener('click', (e) => {
   const btn = e.target.closest('.player-link');
-  if (btn) window.openPlayerProfile(btn.dataset.player, { identifier: btn.dataset.identifier, rpName: btn.dataset.rpname });
+  if (btn && btn.dataset.player) window.openPlayerProfile(btn.dataset.player, { identifier: btn.dataset.identifier, rpName: btn.dataset.rpname });
 });
 
 (async () => {
   const me = await requireRole('moderator', 'admin', 'co-fondator', 'owner');
   if (!me) return;
   document.getElementById('admin-name').textContent = me.username;
+  // Link direct (din profilul jucătorului): ?tab=bani&player=…
+  const params = new URLSearchParams(location.search);
+  const qp = params.get('player');
+  if (params.get('tab') === 'bani' && qp) {
+    document.getElementById('mt-player').value = qp;
+    showTab('bani');
+    loadTrail();
+  } else if (qp) {
+    document.getElementById('f-player').value = qp;
+  }
   loadLogs(1);
-  // Reîmprospătarea automată nu trebuie să te tragă înapoi la pagina 1 dacă
-  // răsfoiești istoricul — rulează doar cât timp ești chiar pe pagina 1.
-  setInterval(() => { if (currentPage === 1) loadLogs(1); }, 60000);
+  // Reîmprospătarea automată nu te trage înapoi la pagina 1 dacă răsfoiești
+  // istoricul — rulează doar cât timp ești pe pagina 1, fără căutare suspecte.
+  setInterval(() => { if (currentPage === 1 && !document.getElementById('f-suspect').checked && !document.getElementById('panel-logs').hidden) loadLogs(1); }, 60000);
 })();
 </script>
 </body></html>

@@ -83,14 +83,50 @@ const ACTION_LABEL = {
 const ROLE_LABEL = { player: 'Jucător', streamer: 'Streamer', moderator: 'Moderator', admin: 'Admin', 'co-fondator': 'Co-fondator', owner: 'Fondator' };
 const auditState = { page: 1, per: 50, scope: 'staff', auth: false, actor: null, actorName: '' };
 
+// (08.10.2026) Detaliile fiecărei acțiuni, pe înțeles: o frază scurtă în loc de
+// „cheie: valoare", iar ce ține de bani e marcat cu 💰.
+const AUDIT_KEY = {
+  subject: 'subiect', title: 'titlu', name: 'nume', price: 'preț', label: 'recompensă', amount: 'sumă', currency: 'monedă',
+  reason: 'motiv', role: 'rang', type: 'tip', code: 'cod', coins: 'coins', money: 'bani', status: 'status', category: 'categorie',
+  page: 'pagina', block_key: 'secțiunea', target_name: 'jucător', duration_minutes: 'durată (min)', rpName: 'personaj', theme: 'temă',
+  active: 'activ', count: 'număr', priority: 'prioritate', username: 'cont', pct: 'procent', from: 'din',
+};
+const MONEY_AUDIT = new Set(['vip_shop.sell_back', 'vip_shop.legal_exchange', 'vip_shop.item_value', 'vip_shop.legal_exchange_settings']);
+const auditUsd = n => Number(n || 0).toLocaleString('ro-RO') + '$';
+function auditSentence(l) {
+  const m = l.metadata || {};
+  switch (l.action) {
+    case 'vip_shop.sell_back':
+      return `a vândut înapoi <strong>„${esc(m.label || 'recompensă')}"</strong> pentru <strong>${m.currency === 'coins' ? esc(m.amount) + ' coins' : auditUsd(m.amount)}</strong>${m.currency === 'money' ? ' <span class="muted">(bani intrați în joc)</span>' : ''}`;
+    case 'vip_shop.legal_exchange':
+      return `a schimbat bani murdari în <strong>${auditUsd(m.amount)}</strong> bani curați <span class="muted">(${esc(m.pct ?? '?')}%${m.label ? ', „' + esc(m.label) + '"' : ''})</span>`;
+    case 'vip_shop.item_value':
+      return `a setat valoarea de vânzare: <strong>${esc(m.coins ?? 0)} coins</strong> / <strong>${auditUsd(m.money)}</strong>`;
+    case 'user.role_change':
+      return `rang nou: <strong>${esc(ROLE_LABEL[m.role] || m.role || '?')}</strong>`;
+    case 'punishment.create':
+      return `<strong>${esc(m.type || 'sancțiune')}</strong> pentru <strong>${esc(m.target_name || '?')}</strong>${m.duration_minutes ? ` · ${esc(m.duration_minutes)} min` : ''}${m.reason ? ` — <span class="muted">${esc(String(m.reason).slice(0, 120))}</span>` : ''}`;
+    case 'account.link_game_discord':
+      return `personaj legat: <strong>${esc(m.rpName || '?')}</strong>`;
+    case 'user.referral_code_change':
+      return m.code ? `cod: <strong>${esc(m.code)}</strong>` : 'a șters codul de referal';
+    default:
+      return '';
+  }
+}
 function auditDetails(l) {
   const m = l.metadata || {};
   const bits = [];
+  const sentence = auditSentence(l);
+  if (MONEY_AUDIT.has(l.action)) bits.push('<span class="pill warn" title="Ține de bani">💰 BANI</span>');
   if (l.target_user) bits.push(`cont: <button type="button" class="player-link" data-profile-user="${esc(l.target_user_id)}" data-profile-name="${esc(l.target_user)}">${esc(l.target_user)}</button>`);
-  else if (l.entity_type) bits.push(`<span class="muted">${esc(l.entity_type)}${l.entity_id ? ' #' + esc(String(l.entity_id).slice(0, 8)) : ''}</span>`);
-  for (const [k, v] of Object.entries(m)) {
-    if (v == null || typeof v === 'object' || k === 'discordId') continue;
-    bits.push(`<span class="muted">${esc(k)}:</span> ${esc(String(v).slice(0, 80))}`);
+  if (sentence) bits.push(sentence);
+  else {
+    if (!l.target_user && l.entity_type) bits.push(`<span class="muted">${esc(l.entity_type)}${l.entity_id ? ' #' + esc(String(l.entity_id).slice(0, 8)) : ''}</span>`);
+    for (const [k, v] of Object.entries(m)) {
+      if (v == null || v === '' || typeof v === 'object' || k === 'discordId' || /_id$|^id$|identifier/i.test(k)) continue;
+      bits.push(`<span class="muted">${esc(AUDIT_KEY[k] || k)}:</span> ${esc(String(v).slice(0, 80))}`);
+    }
   }
   return bits.join(' · ') || '—';
 }

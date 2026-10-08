@@ -12,6 +12,17 @@
 // clasice dintr-un singur document partajează același scop global pentru
 // let/const, deci o redeclarare ar arunca eroare de sintaxă fără acest IIFE).
 window.openPlayerProfile = (function () {
+  // (08.10.2026) Frazele, numele RP + ID static și etichetele de „suspect" din
+  // Loguri (log-format.js) — încărcate o singură dată, dacă pagina nu le are deja.
+  if (!window.LogFormat && !document.querySelector('script[data-log-format]')) {
+    const lf = document.createElement('script');
+    lf.src = '/log-format.js?v=20261008a';
+    lf.dataset.logFormat = '1';
+    lf.onload = () => window.LogFormat && window.LogFormat.injectStyles();
+    document.head.appendChild(lf);
+  } else if (window.LogFormat) {
+    window.LogFormat.injectStyles();
+  }
   const escapeHtml = s => (s ?? '').toString()
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
@@ -46,6 +57,14 @@ window.openPlayerProfile = (function () {
   // multi = în listă sunt rânduri de la mai multe personaje ale jucătorului →
   // arătăm și numele personajului, ca să se știe de pe care a fost
   function activityLine(log, multi) {
+    const LF = window.LogFormat;
+    if (LF) {
+      const flags = log.flags || LF.flagsFor(log);
+      const label = LF.CATEGORY_LABEL[log.category] || log.category || '?';
+      const who = multi && (log.who?.rpName || log.rpName)
+        ? ` <span class="pp-char-tag">${escapeHtml(log.who?.rpName || log.rpName)}${log.who?.staticId ? ' #' + escapeHtml(log.who.staticId) : ''}</span>` : '';
+      return `<div class="msg"><b>${escapeHtml(label)}${who}</b><span>${LF.formatDetails(log)}${flags.length ? '<br>' + LF.flagsHtml(flags) : ''}</span><small>${fmtDate(log.at)}</small></div>`;
+    }
     const cat = escapeHtml(log.category || '?');
     const who = escapeHtml(log.player || '') + (multi && log.rpName ? ` <span class="pp-char-tag">${escapeHtml(log.rpName)}</span>` : '');
     const d = log.details || {};
@@ -308,6 +327,10 @@ window.openPlayerProfile = (function () {
       ${propertyHtml(p)}
       ${fold('🎁 VIP Shop — cutii deschise', `${(p.vipHistory || []).length} cutii`, vipHtml(p.vipHistory), (p.vipHistory || []).length)}
       ${fold('🎫 Tichete', `${p.tickets.length}`, tickets, p.tickets.length)}
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin:18px 0 0">
+        <a class="btn-ghost" style="text-decoration:none;padding:8px 12px" href="admin-loguri.html?player=${encodeURIComponent(p.charIdentifier || p.name)}">🗂 Toate logurile lui</a>
+        <a class="btn-ghost" style="text-decoration:none;padding:8px 12px" href="admin-loguri.html?tab=bani&player=${encodeURIComponent(p.charIdentifier || p.name)}">💰 Traseul banilor</a>
+      </div>
       ${fold('🗂 Activitate recentă', `${p.recentActivity.length} acțiuni`, activity, p.recentActivity.length)}
       ${fold('🔪 Kill-uri — ca victimă', `${p.killsAsVictim.length}`, killsVictim, p.killsAsVictim.length)}
       ${fold('🔪 Kill-uri — ca ucigaș', `${p.killsAsKiller.length}`, killsKiller, p.killsAsKiller.length)}

@@ -605,3 +605,24 @@ CREATE TABLE IF NOT EXISTS live_snapshots (
   data JSONB NOT NULL,
   saved_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Identitățile din joc (08.10.2026), pentru loguri mai clare. Logurile din joc
+-- sunt scrise pe NUMELE de FiveM (care se schimbă și se poate asemăna între
+-- jucători). Ținem aici, pentru fiecare personaj (char0:/char1:… + licența),
+-- numele RP, ID-ul static și TOATE numele de FiveM văzute la el — adunate
+-- automat din jucătorii online și din logurile citite. Așa căutarea după
+-- „#313" sau după numele RP găsește toate logurile jucătorului, pe ambele
+-- personaje, chiar dacă între timp și-a schimbat numele.
+CREATE TABLE IF NOT EXISTS game_identities (
+  identifier VARCHAR(80) PRIMARY KEY,
+  license VARCHAR(64),
+  rp_name VARCHAR(120),
+  static_id VARCHAR(32),
+  cfx_names TEXT[] NOT NULL DEFAULT '{}',
+  last_cfx_name VARCHAR(120),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_game_identities_license ON game_identities(license);
+CREATE INDEX IF NOT EXISTS idx_game_identities_static ON game_identities(static_id);
+CREATE INDEX IF NOT EXISTS idx_game_identities_rp ON game_identities(LOWER(rp_name));
+CREATE INDEX IF NOT EXISTS idx_game_identities_names ON game_identities USING GIN(cfx_names);

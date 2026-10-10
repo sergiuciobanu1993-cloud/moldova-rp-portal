@@ -236,6 +236,29 @@ window.openPlayerProfile = (function () {
       <table><thead><tr><th>CUTIE</th><th>RECOMPENSĂ</th><th>PREȚ</th><th>STATUS</th><th>CÂND</th></tr></thead><tbody>${rows}</tbody></table>`;
   }
 
+  // (10.10.2026) Cum se loghează pe site — doar pentru admin/fondatori (serverul
+  // trimite „login" doar lor). Ajută când un jucător își uită datele.
+  function loginHtml(l) {
+    if (!l) return '';
+    const when = d => d ? ` <span class="muted">· ultima dată: ${fmtDate(d)}</span>` : ` <span class="muted">· nu s-a logat încă așa</span>`;
+    const rows = [];
+    if (l.discordId) rows.push(`<div style="margin:4px 0"><span class="pill info">DISCORD</span> <strong>${escapeHtml(l.discordUsername || '—')}</strong> <span class="muted">(ID ${escapeHtml(l.discordId)})</span>${when(l.lastDiscordLogin)}</div>`);
+    if (l.hasPassword) rows.push(`<div style="margin:4px 0"><span class="pill on">EMAIL + PAROLĂ</span> ${l.email ? `<strong>${escapeHtml(l.email)}</strong>` : '<span class="muted">fără email</span>'} <span class="muted">sau username</span> <strong>${escapeHtml(l.username)}</strong>${when(l.lastPasswordLogin)}</div>`);
+    if (!l.discordId && !l.hasPassword) rows.push(`<div style="margin:4px 0"><span class="pill warn">FĂRĂ METODĂ</span> <span class="muted">contul nu are nici Discord, nici parolă setată</span></div>`);
+    if (l.pendingEmail) rows.push(`<div style="margin:4px 0" class="muted">Email în curs de confirmare: <strong>${escapeHtml(l.pendingEmail)}</strong> (n-a introdus încă codul primit)</div>`);
+    if (!l.isActive) rows.push(`<div style="margin:4px 0"><span class="pill warn">CONT DEZACTIVAT</span> <span class="muted">nu se poate loga până nu e reactivat (Utilizatori)</span></div>`);
+    const tip = l.hasPassword && l.email
+      ? 'A uitat parola? Pe pagina de logare → „Ai uitat parola?" primește un cod pe emailul de mai sus.'
+      : l.discordId
+      ? 'Se loghează cu butonul „Conectare cu Discord", cu contul de Discord de mai sus.'
+      : '';
+    return `<div style="margin:-6px 0 18px;padding:10px 12px;border:1px solid var(--line);border-radius:10px">
+      <b style="font-size:11px;color:var(--muted);letter-spacing:.08em">🔑 CUM SE LOGHEAZĂ PE SITE</b> <span class="muted" style="font-size:11px">(doar staff — nu da datele altcuiva decât jucătorului)</span>
+      ${rows.join('')}
+      ${tip ? `<div class="muted" style="font-size:12px;margin-top:6px">${escapeHtml(tip)}</div>` : ''}
+    </div>`;
+  }
+
   function renderProfile(p) {
     const body = document.getElementById('profile-body');
     document.getElementById('profile-title').textContent = `Profil — ${p.name}`;
@@ -283,7 +306,7 @@ window.openPlayerProfile = (function () {
           : (p.discordCharacters || []).length
             ? `<span class="pill info">GĂSIT DUPĂ DISCORD</span> <span class="muted">— n-a folosit /leagacont, dar personajele cu același Discord sunt: ${p.discordCharacters.map(c => `<b>${escapeHtml(c.rpName || c.identifier)}</b>${c.staticId ? ` #${escapeHtml(c.staticId)}` : ''}${c.online ? ' (online)' : ''}`).join(', ')}. Mai sus sunt datele ${p.discordCharacters.length > 1 ? 'primului' : 'lui'}.</span>`
             : `<span class="pill warn">NELEGAT DE JOC</span> <span class="muted">— n-a folosit încă /leagacont</span>`}
-      </p>` : `<p class="muted" style="margin:0 0 18px">Jucătorul nu are (încă) cont pe site.</p>`;
+      </p>${loginHtml(p.login)}` : `<p class="muted" style="margin:0 0 18px">Jucătorul nu are (încă) cont pe site.</p>`;
 
     const punishments = p.punishments.length ? `<table><thead><tr><th>TIP</th><th>MOTIV</th><th>DE CINE</th><th>CÂND</th></tr></thead><tbody>${
       p.punishments.map(pu => `<tr><td><span class="pill warn">${escapeHtml(pu.type)}</span></td><td>${escapeHtml(pu.reason)}</td><td>${escapeHtml(pu.issued_by || '—')}</td><td>${fmtDate(pu.created_at)}</td></tr>`).join('')

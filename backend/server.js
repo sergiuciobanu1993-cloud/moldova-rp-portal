@@ -3507,7 +3507,7 @@ async function buildPlayerProfile(name, opts = {}) {
     } : null,
     lastKnown,
     account: account ? {
-      id: account.id, game_id: account.game_id, display_name: account.display_name,
+      id: account.id, user_id: account.user_id, game_id: account.game_id, display_name: account.display_name,
       playtime_minutes: account.playtime_minutes, status: account.status, created_at: account.created_at,
       server_playtime_minutes: playtimeOf(live) ?? offlinePlaytime,
       username: account.username, faction_name: account.faction_name, rank_name: account.rank_name,
@@ -3560,12 +3560,34 @@ app.get("/api/admin/player-profile", auth, requireRole(...MOD_ROLES), asyncRoute
       ...(u.last_rp_name ? { rpName: u.last_rp_name } : {}),
     });
     if (!prof) return res.status(400).json({ error: "Nume invalid." });
+    if (ADMIN_ROLES.includes(req.user.role)) prof.login = await loginInfoFor(u.id);
     return res.json(prof);
   }
   const profile = await buildPlayerProfile(name, { ...(identifier ? { identifier } : {}), ...(rpName ? { rpName } : {}) });
   if (!profile) return res.status(400).json({ error: "Nume invalid." });
+  if (ADMIN_ROLES.includes(req.user.role) && profile.account?.user_id) profile.login = await loginInfoFor(profile.account.user_id);
   res.json(profile);
 }));
+
+// (10.10.2026) Cum se loghează contul pe site — cerut de Sergiu, pentru jucătorii
+// care își uită datele: Discord (care cont) sau email + parolă (ce email).
+// Doar pentru admin / co-fondator / fondator; parola nu se vede niciodată.
+async function loginInfoFor(userId) {
+  const { rows } = await pool.query(
+    `SELECT u.username, u.email, u.pending_email, u.discord_id, u.discord_username,
+            (u.password_hash IS NOT NULL) AS has_password, u.is_active, u.created_at,
+            (SELECT MAX(created_at) FROM audit_logs WHERE actor_id = u.id AND action = 'auth.login') AS last_password_login,
+            (SELECT MAX(created_at) FROM audit_logs WHERE actor_id = u.id AND action IN ('auth.discord_login', 'auth.discord_signup')) AS last_discord_login
+     FROM users u WHERE u.id = $1`, [userId]).catch(() => ({ rows: [] }));
+  const u = rows[0];
+  if (!u) return null;
+  return {
+    username: u.username, email: u.email || null, pendingEmail: u.pending_email || null,
+    hasPassword: !!u.has_password, discordId: u.discord_id || null, discordUsername: u.discord_username || null,
+    isActive: u.is_active !== false, createdAt: u.created_at,
+    lastPasswordLogin: u.last_password_login || null, lastDiscordLogin: u.last_discord_login || null,
+  };
+}
 
 // Profilul PROPRIU al jucătorului logat — aceeași agregare ca mai sus, dar
 // legată strict de contul autentificat (nu poate cere profilul altcuiva).

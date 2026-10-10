@@ -681,6 +681,8 @@ const PLAYERS_CACHE_MS = 20_000;
 let playersDetailCache = { data: null, fetchedAt: 0 };
 
 async function fetchPlayersDetail() {
+  // (10.10.2026) serverul de joc tocmai n-a răspuns → nu-l mai așteptăm 6 s
+  if (gameIsDown()) throw new Error("serverul de joc nu răspunde");
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 6000);
   try {
@@ -721,7 +723,9 @@ async function getPlayersDetail(force) {
     if ((data.players || []).length) saveLiveSnapshot("players", data);
     return data;
   } catch {
-    if (playersDetailCache.data) return { ...playersDetailCache.data, stale: true };
+    // (10.10.2026) o scăpare scurtă: lista de acum câteva secunde; serverul oprit
+    // de mai mult timp: nimeni nu mai e „online" (profilurile arată ultima fișă salvată)
+    if (playersDetailCache.data && Date.now() - playersDetailCache.fetchedAt < 2 * 60 * 1000) return { ...playersDetailCache.data, stale: true };
     return { online: false, players: [] };
   }
 }
@@ -759,6 +763,13 @@ async function syncPlayerSnapshots() {
     if (!detail.online || !detail.players.length) return;
     // (08.10.2026) memoria identităților pentru Loguri (nume RP, ID static, nume FiveM)
     rememberIdentities(detail.players.map(pl => ({ identifier: pl.license, rpName: pl.serverName, staticId: staticIdOf(pl), cfxName: pl.name })), { live: true }).catch(() => {});
+    // (10.10.2026) ultima fișă a fiecărui personaj online — pentru când serverul e oprit
+    savePlayersCache(detail.players.filter(pl => pl.license).map(pl => ({
+      identifier: pl.license, rpName: pl.serverName || null, staticId: staticIdOf(pl), discord: pl.discord || null,
+      cash: pl.cash ?? null, bank: pl.bank ?? null, blackMoney: pl.blackMoney ?? null,
+      job: pl.job || null, jobLabel: pl.jobLabel || null, grade: pl.grade ?? null, gradeLabel: pl.gradeLabel || null,
+      playtimeMinutes: playtimeOf(pl), vehicles: Array.isArray(pl.vehicles) ? pl.vehicles : [], lastSeen: new Date().toISOString(),
+    }))).catch(() => {});
 
     // (19.09.2026, optimizare resurse) Înainte, acest tur trimitea câte un
     // UPDATE separat pentru FIECARE jucător online — cu zeci de jucători pe
@@ -1088,7 +1099,14 @@ const LOG_CATEGORIES = [...GAME_LOG_CATEGORIES, "admin", "discord"];
 // doar cursorul "beforeAt" pe categoriile combinate death+item_transfer).
 // `withTotal` cere și numărul total de rânduri care s-ar potrivi (fără
 // limit/offset), pentru calculul numărului de pagini.
-async function fetchGameLogs({ player, identifier, category, limit, before, after, page, pageSize, withTotal }) {
+// (10.10.2026) Live de la joc; dacă serverul nu răspunde → copia de pe site (game_logs).
+async function fetchGameLogs(opts = {}) {
+  const live = await fetchGameLogsLive(opts);
+  if (live.online) return live;
+  try { return await fetchMirrorLogs(opts); } catch { return live; }
+}
+async function fetchGameLogsLive({ player, identifier, category, limit, before, after, page, pageSize, withTotal, force } = {}) {
+  if (gameIsDown() && !force) return { online: false, logs: [], total: null };
   const qs = new URLSearchParams();
   if (player) qs.set("player", player);
   // (08.10.2026) Filtru exact după personaj — cerut echipei serverului. Până îl
@@ -1122,9 +1140,11 @@ async function fetchGameLogs({ player, identifier, category, limit, before, afte
     });
     if (!r.ok) throw new Error(`moldovarp-api HTTP ${r.status}`);
     const body = await r.json();
+    markGameUp();
     noteLogIdentities(body.logs);
     return { online: true, logs: body.logs || [], total: typeof body.total === "number" ? body.total : null };
   } catch {
+    markGameDown();
     return { online: false, logs: [], total: null };
   } finally {
     clearTimeout(timeout);
@@ -1250,15 +1270,22 @@ async function fetchCoins(identifier) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8000);
   try {
+    if (gameIsDown()) throw GAME_SKIP;
     const r = await fetch(`http://${FIVEM_ADDRESS}/moldovarp-api/coins?identifier=${encodeURIComponent(identifier)}`, {
       headers: { "x-api-key": FIVEM_API_SECRET },
       signal: controller.signal,
     });
     if (!r.ok) throw new Error(`moldovarp-api HTTP ${r.status}`);
     const body = await r.json();
-    return { online: true, coins: body.coins || 0, pending: body.pending || [] };
-  } catch {
-    return { online: false, coins: 0, pending: [] };
+    markGameUp();
+    const out = { online: true, coins: body.coins || 0, pending: body.pending || [] };
+    saveGameCache(`coins:${identifier}`, { coins: out.coins, pending: out.pending }, 10_000);
+    return out;
+  } catch (err) {
+    if (err !== GAME_SKIP) markGameDown();
+    // serverul nu răspunde → ultimele coins și recompense știute (doar de văzut)
+    const c = await loadGameCache(`coins:${identifier}`);
+    return { online: false, coins: c?.data?.coins || 0, pending: c?.data?.pending || [], savedAt: c?.savedAt || null };
   } finally {
     clearTimeout(timeout);
   }
@@ -1268,15 +1295,20 @@ async function fetchCasesList() {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8000);
   try {
+    if (gameIsDown()) throw GAME_SKIP;
     const r = await fetch(`http://${FIVEM_ADDRESS}/moldovarp-api/cases`, {
       headers: { "x-api-key": FIVEM_API_SECRET },
       signal: controller.signal,
     });
     if (!r.ok) throw new Error(`moldovarp-api HTTP ${r.status}`);
     const body = await r.json();
+    markGameUp();
+    if ((body.cases || []).length) saveGameCache("cases", body.cases);
     return { online: true, cases: body.cases || [] };
-  } catch {
-    return { online: false, cases: [] };
+  } catch (err) {
+    if (err !== GAME_SKIP) markGameDown();
+    const c = await loadGameCache("cases");
+    return { online: false, cases: c?.data || [], savedAt: c?.savedAt || null };
   } finally {
     clearTimeout(timeout);
   }
@@ -1340,15 +1372,20 @@ async function fetchCaseHistory(identifier, limit) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8000);
   try {
+    if (gameIsDown()) throw GAME_SKIP;
     const r = await fetch(`http://${FIVEM_ADDRESS}/moldovarp-api/cases/history?identifier=${encodeURIComponent(identifier)}&limit=${encodeURIComponent(limit)}`, {
       headers: { "x-api-key": FIVEM_API_SECRET },
       signal: controller.signal,
     });
     if (!r.ok) throw new Error(`moldovarp-api HTTP ${r.status}`);
     const body = await r.json();
+    markGameUp();
+    saveGameCache(`hist:${identifier}`, body.history || [], 20_000);
     return { online: true, history: body.history || [] };
-  } catch {
-    return { online: false, history: [] };
+  } catch (err) {
+    if (err !== GAME_SKIP) markGameDown();
+    const c = await loadGameCache(`hist:${identifier}`);
+    return { online: false, history: (c?.data || []).slice(0, limit || 100), savedAt: c?.savedAt || null };
   } finally {
     clearTimeout(timeout);
   }
@@ -1768,6 +1805,230 @@ const CHAR_ID_RE = /^char\d+:[0-9a-f]{20,}$/i;
 const plateOf = v => String(v || "?").trim().replace(/^(trunk|glovebox|glove)[\s:_-]*/i, "").trim().toUpperCase() || "?";
 const stashSpot = v => (/^trunk/i.test(String(v || "")) ? "portbagajul" : /^glove/i.test(String(v || "")) ? "torpedoul" : "torpedoul/portbagajul");
 
+// ===========================================================================
+// Când serverul de joc e oprit (10.10.2026) — cerut explicit: „chiar și când
+// serverul e offline să rămână istoric la loguri, kill logs, profile, cutii;
+// ultimele informații până la restart".
+//  1. game_logs: copie pe site a logurilor din joc. Cât timp serverul merge, la
+//     fiecare 15 s aducem ce e nou; în fundal aducem treptat și istoricul vechi
+//     (30 de zile). Când serverul nu răspunde, fetchGameLogs citește de aici.
+//  2. game_players_cache / game_cache: ultima fișă a fiecărui personaj, lista
+//     de cutii, coins-urile și istoricul VIP Shop — arătate cu „ultima dată
+//     văzut", nu ca date live.
+//  3. Siguranță: după ce serverul de joc nu răspunde, nu-l mai așteptăm 8 s la
+//     fiecare cerere timp de 30 s (paginile se încarcă imediat din copie).
+// ===========================================================================
+let gameDownUntil = 0;
+const gameIsDown = () => Date.now() < gameDownUntil;
+const markGameDown = () => { gameDownUntil = Date.now() + 30_000; };
+const markGameUp = () => { gameDownUntil = 0; };
+const GAME_SKIP = new Error("serverul de joc nu răspunde (pauză 30 s)");
+
+// detalii prea mari (poze base64 în metadata itemelor) nu le copiem întregi
+function slimDetails(value, depth = 0) {
+  if (typeof value === "string") return value.length > 400 ? value.slice(0, 120) + "…[omis]" : value;
+  if (depth > 4 || value === null || typeof value !== "object") return value;
+  if (Array.isArray(value)) return value.slice(0, 50).map(v => slimDetails(v, depth + 1));
+  const out = {};
+  for (const [k, v] of Object.entries(value)) out[k] = /photo|poza|image|picture|avatar|base64/i.test(k) ? "[omis]" : slimDetails(v, depth + 1);
+  return out;
+}
+const msOf = at => (typeof at === "number" ? at : /^\d+$/.test(String(at)) ? Number(at) : Date.parse(at));
+
+const mirrorSync = { lastOkAt: 0, busy: false, backfillCursor: null, backfillDone: false, backfillBusy: false };
+
+async function saveMirrorRows(logs) {
+  const seen = new Set();
+  const cols = [[], [], [], [], [], [], []];
+  for (const l of logs || []) {
+    const t = msOf(l?.at);
+    if (!l || l.id == null || !l.category || !Number.isFinite(t) || seen.has(String(l.id))) continue;
+    seen.add(String(l.id));
+    cols[0].push(String(l.id));
+    cols[1].push(String(l.category).slice(0, 40));
+    cols[2].push(l.player != null ? String(l.player).slice(0, 120) : null);
+    cols[3].push(l.identifier ? String(l.identifier).slice(0, 80) : null);
+    cols[4].push(l.rpName ? String(l.rpName).slice(0, 120) : null);
+    cols[5].push(JSON.stringify(slimDetails(l.details || {})));
+    cols[6].push(new Date(t).toISOString());
+  }
+  if (!cols[0].length) return 0;
+  await pool.query(
+    `INSERT INTO game_logs(id, category, player, identifier, rp_name, details, at)
+     SELECT x.id, x.category, x.player, x.identifier, x.rp_name, x.details::jsonb, x.at
+     FROM unnest($1::bigint[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[], $7::timestamptz[])
+          AS x(id, category, player, identifier, rp_name, details, at)
+     ON CONFLICT (id) DO UPDATE SET rp_name = COALESCE(game_logs.rp_name, EXCLUDED.rp_name)`,
+    cols
+  );
+  return cols[0].length;
+}
+
+// Aceleași filtre ca /logs din joc, dar din copia de pe site.
+async function fetchMirrorLogs({ player, identifier, license, category, limit, before, after, page, pageSize, withTotal } = {}) {
+  const where = [];
+  const params = [];
+  const add = (sql, v) => { params.push(v); where.push(sql.replace("?", `$${params.length}`)); };
+  if (player) add("player ILIKE ?", `%${likeEscape(String(player))}%`);
+  if (identifier) add("identifier = ?", String(identifier));
+  if (license) add("identifier LIKE ?", `char%:${String(license).toLowerCase()}`);
+  if (category) add("category = ANY(?)", String(category).split(",").map(s => s.trim()).filter(Boolean));
+  if (before) add("at < ?", before.toISOString());
+  if (after) add("at > ?", after.toISOString());
+  const lim = Math.max(1, Math.min(500, Number(pageSize || limit) || 100));
+  const off = page > 1 ? (page - 1) * lim : 0;
+  const w = where.length ? `WHERE ${where.join(" AND ")}` : "";
+  const [list, cnt] = await Promise.all([
+    pool.query(`SELECT id, category, player, identifier, rp_name, details, at FROM game_logs ${w} ORDER BY at DESC, id DESC LIMIT ${lim} OFFSET ${off}`, params),
+    withTotal ? pool.query(`SELECT COUNT(*)::int AS n FROM game_logs ${w}`, params) : Promise.resolve(null),
+  ]);
+  return {
+    online: false,
+    mirror: true,
+    logs: list.rows.map(r => ({
+      id: Number(r.id), category: r.category, player: r.player, identifier: r.identifier,
+      rpName: r.rp_name, details: r.details || {}, at: new Date(r.at).getTime(),
+    })),
+    total: cnt ? cnt.rows[0].n : null,
+  };
+}
+
+// Până când avem logurile salvate (pentru mesajul „istoric salvat până la…")
+let mirrorLatestCache = { at: 0, value: null };
+async function offlineInfo(online) {
+  return online ? {} : { mirror: true, savedUntil: await mirrorLatest() };
+}
+async function mirrorLatest() {
+  if (Date.now() - mirrorLatestCache.at < 30_000) return mirrorLatestCache.value;
+  const { rows } = await pool.query("SELECT MAX(at) AS last FROM game_logs").catch(() => ({ rows: [] }));
+  mirrorLatestCache = { at: Date.now(), value: rows[0]?.last || null };
+  return mirrorLatestCache.value;
+}
+
+// Înainte: ce e nou de la ultima copie (cu 5 s suprapunere; dublurile se sar).
+async function syncLogMirror() {
+  if (!FIVEM_API_SECRET || mirrorSync.busy) return;
+  mirrorSync.busy = true;
+  try {
+    const { rows } = await pool.query("SELECT MAX(at) AS last FROM game_logs");
+    const last = rows[0]?.last ? new Date(rows[0].last).getTime() : Date.now() - 10 * 60 * 1000;
+    const after = new Date(last - 5000);
+    for (let page = 1; page <= 20; page++) {
+      const r = await fetchGameLogsLive({ after, pageSize: 500, page, force: page === 1 });
+      if (!r.online) return;
+      await saveMirrorRows(r.logs);
+      if (r.logs.length < 500) break;
+    }
+    mirrorSync.lastOkAt = Date.now();
+    mirrorLatestCache.at = 0;
+  } catch (err) {
+    if (!/game_logs/.test(err.message)) console.warn("Copia logurilor:", err.message);
+  } finally {
+    mirrorSync.busy = false;
+  }
+}
+
+// Înapoi: istoricul vechi, câte 500 de rânduri, până la 31 de zile (cât ține jocul).
+async function backfillLogMirror() {
+  if (!FIVEM_API_SECRET || mirrorSync.backfillDone || mirrorSync.backfillBusy || gameIsDown()) return;
+  mirrorSync.backfillBusy = true;
+  try {
+    if (mirrorSync.backfillCursor == null) {
+      const st = await loadLiveSnapshot("log_mirror").catch(() => null);
+      if (st?.data?.backfillDone) { mirrorSync.backfillDone = true; return; }
+      const { rows } = await pool.query("SELECT MIN(at) AS first FROM game_logs");
+      mirrorSync.backfillCursor = rows[0]?.first ? new Date(rows[0].first).getTime() + 1 : Date.now();
+    }
+    const oldest = Date.now() - 31 * 24 * 3600 * 1000;
+    const r = await fetchGameLogsLive({ before: new Date(mirrorSync.backfillCursor), pageSize: 500 });
+    if (!r.online) return;
+    await saveMirrorRows(r.logs);
+    const times = r.logs.map(l => msOf(l.at)).filter(Number.isFinite);
+    const minAt = times.length ? Math.min(...times) : null;
+    if (!r.logs.length || minAt == null || minAt < oldest) {
+      mirrorSync.backfillDone = true;
+      saveLiveSnapshot("log_mirror", { backfillDone: true, at: new Date().toISOString() });
+      console.log("Copia logurilor: istoricul vechi e adus complet.");
+      return;
+    }
+    // același milisecund poate avea mai multe rânduri — reluăm de la el (dublurile se sar)
+    mirrorSync.backfillCursor = minAt + 1 < mirrorSync.backfillCursor ? minAt + 1 : minAt;
+  } catch (err) {
+    if (!/game_logs/.test(err.message)) console.warn("Istoricul logurilor:", err.message);
+  } finally {
+    mirrorSync.backfillBusy = false;
+  }
+}
+
+async function pruneLogMirror() {
+  await pool.query("DELETE FROM game_logs WHERE at < NOW() - INTERVAL '31 days'").catch(() => {});
+}
+
+if (FIVEM_API_SECRET) {
+  setTimeout(syncLogMirror, 20_000);
+  setInterval(syncLogMirror, 15_000);
+  setInterval(backfillLogMirror, 6_000);
+  setInterval(pruneLogMirror, 6 * 3600 * 1000);
+}
+
+// --- Fișele personajelor și restul datelor (cutii, coins, istoric VIP) -------
+const playersCacheSeen = new Map();
+async function savePlayersCache(list) {
+  const now = Date.now();
+  const rows = [];
+  for (const p of Array.isArray(list) ? list : []) {
+    if (!p || !CHAR_ID_RE.test(String(p.identifier || ""))) continue;
+    const key = p.identifier;
+    if (now - (playersCacheSeen.get(key) || 0) < 2 * 60 * 1000) continue;
+    playersCacheSeen.set(key, now);
+    rows.push(p);
+  }
+  if (playersCacheSeen.size > 20000) playersCacheSeen.clear();
+  for (const p of rows) {
+    await pool.query(
+      `INSERT INTO game_players_cache(identifier, rp_name, static_id, discord, data, updated_at) VALUES ($1,$2,$3,$4,$5,NOW())
+       ON CONFLICT (identifier) DO UPDATE SET rp_name = EXCLUDED.rp_name, static_id = COALESCE(EXCLUDED.static_id, game_players_cache.static_id),
+         discord = COALESCE(EXCLUDED.discord, game_players_cache.discord), data = EXCLUDED.data, updated_at = NOW()`,
+      [p.identifier, p.rpName ? String(p.rpName).slice(0, 120) : null, p.staticId != null && p.staticId !== "" ? String(p.staticId).slice(0, 32) : null,
+       p.discord ? String(p.discord).replace(/\D/g, "").slice(0, 40) || null : null, JSON.stringify(p)]
+    ).catch(() => {});
+  }
+}
+// identifier= / discord= / q= (număr = ID static, altfel nume RP) → ultima fișă salvată
+async function cachedPlayers(qs) {
+  const p = new URLSearchParams(qs);
+  let sql = null;
+  let val = null;
+  if (p.get("identifier")) { sql = "identifier = $1"; val = p.get("identifier"); }
+  else if (p.get("discord")) { sql = "discord = $1"; val = p.get("discord").replace(/\D/g, ""); }
+  else if (p.get("q")) {
+    const q = p.get("q").trim();
+    if (/^\d+$/.test(q)) { sql = "static_id = $1"; val = q; }
+    else if (q.length >= 2) { sql = "rp_name ILIKE $1"; val = `%${likeEscape(q)}%`; }
+  }
+  if (!sql) return [];
+  const { rows } = await pool.query(`SELECT data, updated_at FROM game_players_cache WHERE ${sql} ORDER BY updated_at DESC LIMIT 20`, [val])
+    .catch(() => ({ rows: [] }));
+  return rows.map(r => ({ ...r.data, online: false, cachedAt: r.updated_at }));
+}
+
+const gameCacheSeen = new Map();
+async function saveGameCache(key, data, everyMs = 60_000) {
+  const now = Date.now();
+  if (now - (gameCacheSeen.get(key) || 0) < everyMs) return;
+  gameCacheSeen.set(key, now);
+  if (gameCacheSeen.size > 20000) gameCacheSeen.clear();
+  await pool.query(
+    `INSERT INTO game_cache(key, data, saved_at) VALUES ($1, $2, NOW())
+     ON CONFLICT (key) DO UPDATE SET data = EXCLUDED.data, saved_at = NOW()`,
+    [String(key).slice(0, 200), JSON.stringify(data)]
+  ).catch(() => {});
+}
+async function loadGameCache(key) {
+  const { rows } = await pool.query("SELECT data, saved_at FROM game_cache WHERE key = $1", [String(key).slice(0, 200)]).catch(() => ({ rows: [] }));
+  return rows[0] ? { data: rows[0].data, savedAt: rows[0].saved_at } : null;
+}
+
 // --- Memoria identităților (tabela game_identities) ---------------------------
 // Adunată automat: din jucătorii online (la fiecare tur de sincronizare) și din
 // fiecare log citit din joc (are identificatorul, numele RP și numele de FiveM).
@@ -2065,13 +2326,17 @@ async function resolveLogPlayer(raw) {
 // nu e suportat și nu-l mai folosim (reverificăm la 6 ore).
 let identifierFilter = { state: "unknown", at: 0 };
 async function fetchLogsByIdentifier(identifier, opts) {
-  if (identifierFilter.state === "no" && Date.now() - identifierFilter.at < 6 * 3600 * 1000) return { online: true, logs: [] };
+  // (10.10.2026) copia de pe site (game_logs) știe filtrul exact după personaj
+  const fromMirror = () => fetchMirrorLogs({ ...opts, identifier, player: undefined })
+    .then(r => ({ ...r, online: !gameIsDown() })).catch(() => ({ online: !gameIsDown(), logs: [] }));
+  if (identifierFilter.state === "no" && Date.now() - identifierFilter.at < 6 * 3600 * 1000) return fromMirror();
   const r = await fetchGameLogs({ ...opts, identifier, player: undefined });
+  if (r.mirror) return r; // serverul de joc oprit — deja exact, din copie
   if (!r.online || !r.logs.length) return r;
   const supported = r.logs.every(l => l.identifier === identifier);
-  if (identifierFilter.state !== (supported ? "yes" : "no")) console.log(`Loguri: filtrul după personaj (identifier=) ${supported ? "FUNCȚIONEAZĂ pe serverul de joc" : "nu e încă suportat de serverul de joc — căutăm după nume"}.`);
+  if (identifierFilter.state !== (supported ? "yes" : "no")) console.log(`Loguri: filtrul după personaj (identifier=) ${supported ? "FUNCȚIONEAZĂ pe serverul de joc" : "nu e încă suportat de serverul de joc — folosim copia de pe site"}.`);
   identifierFilter = { state: supported ? "yes" : "no", at: Date.now() };
-  return supported ? r : { online: true, logs: [] };
+  return supported ? r : fromMirror();
 }
 
 // Toate logurile jucătorului rezolvat (pe toate numele + personajele lui),
@@ -2090,7 +2355,7 @@ async function mapLimit(items, limit, fn) {
 // o cerere de loguri; dacă serverul de joc nu răspunde, mai încercăm o dată
 async function fetchGameLogsRetry(opts) {
   const r = await fetchGameLogs(opts);
-  return r.online ? r : fetchGameLogs(opts);
+  return r.online || r.mirror ? r : fetchGameLogs(opts);
 }
 
 async function fetchLogsForResolved(resolved, { category, after, before, limit = 300, maxPages = 1 } = {}) {
@@ -2523,7 +2788,8 @@ async function buildMoneyTrail(resolved, { after, before }) {
   const sortBy = obj => Object.values(obj).sort((a, b) => b.amount - a.amount);
   return {
     online: gameOnline,
-    incomplete: failedCalls > 0,
+    ...(await offlineInfo(gameOnline)),
+    incomplete: gameOnline && failedCalls > 0,
     range: { from: after, to: before },
     truncated,
     resolved: resolvedSummary(resolved),
@@ -2617,8 +2883,9 @@ app.get("/api/admin/logs", auth, requireRole(...MOD_ROLES), asyncRoute(async (re
     const flagged = all.filter(l => l.flags.length).sort((a, b) => new Date(b.at) - new Date(a.at));
     const pageLogs = await enrichLogs(flagged.slice((page - 1) * pageSize, page * pageSize));
     const scanned = batches.some(b => (b.logs || []).length >= per || b.truncated);
+    const anyOnline = batches.some(b => b.online);
     return res.json({
-      online: batches.some(b => b.online), logs: pageLogs, page, pageSize,
+      online: anyOnline, ...(await offlineInfo(anyOnline)), logs: pageLogs, page, pageSize,
       total: flagged.length, totalPages: Math.max(1, Math.ceil(flagged.length / pageSize)),
       resolved: resolvedInfo, suspectScan: { perCategory: per, partial: scanned },
     });
@@ -2634,7 +2901,7 @@ app.get("/api/admin/logs", auth, requireRole(...MOD_ROLES), asyncRoute(async (re
     await enrichLogs(merged);
     const known = Math.ceil(r.logs.length / pageSize);
     return res.json({
-      online: r.online, logs: merged, page, pageSize,
+      online: r.online, ...(await offlineInfo(r.online)), logs: merged, page, pageSize,
       total: hasMore ? null : r.logs.length,
       totalPages: hasMore ? Math.max(page + 1, known) : Math.max(1, known),
       hasMore, resolved: resolvedInfo,
@@ -2650,7 +2917,7 @@ app.get("/api/admin/logs", auth, requireRole(...MOD_ROLES), asyncRoute(async (re
   const merged = await withStaff(gameLogs, player);
   await enrichLogs(merged);
   const totalPages = gameTotal != null ? Math.max(1, Math.ceil(gameTotal / pageSize)) : null;
-  res.json({ online: gameOnline, logs: merged, page, pageSize, total: gameTotal, totalPages });
+  res.json({ online: gameOnline, ...(await offlineInfo(gameOnline)), logs: merged, page, pageSize, total: gameTotal, totalPages });
 }));
 
 // Traseul banilor — vezi buildMoneyTrail mai sus. Implicit ultimele 7 zile
@@ -2786,7 +3053,7 @@ app.get("/api/admin/kill-logs", auth, requireRole(...MOD_ROLES), asyncRoute(asyn
   }
 
   const totalPages = total != null ? Math.max(1, Math.ceil(total / pageSize)) : null;
-  res.json({ online, kills, page, pageSize, total, totalPages, resolved: resolvedSummary(resolved) });
+  res.json({ online, ...(await offlineInfo(online)), kills, page, pageSize, total, totalPages, resolved: resolvedSummary(resolved) });
 }));
 
 // Sancțiuni Luxu Admin, pentru pagina Sancțiuni de pe site — cerută explicit,
@@ -4830,12 +5097,15 @@ async function fetchGameCharsByDiscord(discordId, liveDetail) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 5000);
   try {
-    const r = await fetch(`http://${FIVEM_ADDRESS}/moldovarp-api/players/search?discord=${encodeURIComponent(id)}`, {
-      headers: { "x-api-key": FIVEM_API_SECRET }, signal: controller.signal,
-    });
+    // (10.10.2026) serverul de joc oprit → personajele salvate pe site
+    const r = gameIsDown() ? { ok: true, json: async () => ({ players: await cachedPlayers(`discord=${id}`) }) }
+      : await fetch(`http://${FIVEM_ADDRESS}/moldovarp-api/players/search?discord=${encodeURIComponent(id)}`, {
+        headers: { "x-api-key": FIVEM_API_SECRET }, signal: controller.signal,
+      });
     if (r.ok) {
       const body = await r.json();
       noteGameFields("/players/search?discord", body.players);
+      if (!gameIsDown()) savePlayersCache(body.players).catch(() => {});
       for (const p of Array.isArray(body.players) ? body.players : []) {
         if (normDiscordId(p.discord) !== id || !p.identifier || byId.has(p.identifier)) continue;
         byId.set(p.identifier, {
@@ -4844,7 +5114,17 @@ async function fetchGameCharsByDiscord(discordId, liveDetail) {
         });
       }
     }
-  } catch { /* serverul nu răspunde — rămânem cu ce e online */ } finally { clearTimeout(timeout); }
+  } catch {
+    // serverul nu răspunde — ce e online + personajele salvate pe site
+    markGameDown();
+    for (const p of await cachedPlayers(`discord=${id}`)) {
+      if (!p.identifier || byId.has(p.identifier)) continue;
+      byId.set(p.identifier, {
+        identifier: p.identifier, rpName: p.rpName || null, staticId: p.staticId != null ? String(p.staticId) : null,
+        job: p.job || null, jobLabel: p.jobLabel || null, online: false, serverId: null, lastSeen: p.lastSeen || null,
+      });
+    }
+  } finally { clearTimeout(timeout); }
   // online întâi, apoi cel mai recent văzut
   return [...byId.values()].sort((a, b) => (b.online - a.online) || (new Date(b.lastSeen || 0) - new Date(a.lastSeen || 0)));
 }
@@ -4871,6 +5151,8 @@ function noteGameFields(route, list) {
 
 async function fetchGamePlayerLookup({ identifier, name } = {}) {
   const get = async (qs) => {
+    // (10.10.2026) serverul de joc oprit → ultima fișă salvată pe site
+    if (gameIsDown()) return cachedPlayers(qs);
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
     try {
@@ -4879,10 +5161,12 @@ async function fetchGamePlayerLookup({ identifier, name } = {}) {
       });
       if (!r.ok) return [];
       const body = await r.json();
+      markGameUp();
       const list = Array.isArray(body.players) ? body.players : [];
       noteGameFields(qs.startsWith("identifier=") ? "/players/search?identifier" : "/players/search?q", list);
+      savePlayersCache(list).catch(() => {});
       return list;
-    } catch { return []; } finally { clearTimeout(timeout); }
+    } catch { markGameDown(); return cachedPlayers(qs); } finally { clearTimeout(timeout); }
   };
   if (identifier) {
     const hit = (await get(`identifier=${encodeURIComponent(identifier)}`)).find(p => p.identifier === identifier);
@@ -4898,6 +5182,7 @@ async function fetchGamePlayerLookup({ identifier, name } = {}) {
 }
 
 async function fetchGamePlayerSearch(q) {
+  if (gameIsDown()) return cachedPlayers(`q=${encodeURIComponent(q)}`);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 5000);
   try {
@@ -4907,9 +5192,13 @@ async function fetchGamePlayerSearch(q) {
     });
     if (!r.ok) return [];
     const body = await r.json();
-    return Array.isArray(body.players) ? body.players : [];
+    markGameUp();
+    const list = Array.isArray(body.players) ? body.players : [];
+    savePlayersCache(list).catch(() => {});
+    return list;
   } catch {
-    return [];
+    markGameDown();
+    return cachedPlayers(`q=${encodeURIComponent(q)}`);
   } finally {
     clearTimeout(timeout);
   }

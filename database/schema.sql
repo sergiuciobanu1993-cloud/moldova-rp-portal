@@ -626,3 +626,44 @@ CREATE INDEX IF NOT EXISTS idx_game_identities_license ON game_identities(licens
 CREATE INDEX IF NOT EXISTS idx_game_identities_static ON game_identities(static_id);
 CREATE INDEX IF NOT EXISTS idx_game_identities_rp ON game_identities(LOWER(rp_name));
 CREATE INDEX IF NOT EXISTS idx_game_identities_names ON game_identities USING GIN(cfx_names);
+
+-- Istoricul rămâne și când serverul de joc e oprit (10.10.2026).
+-- game_logs: copia pe site a logurilor din joc (moldovarp_logs), adusă la
+-- fiecare 15 s cât timp serverul merge, plus istoricul vechi adus treptat.
+-- Când serverul nu răspunde, paginile Loguri / Kill Logs / Profil / Traseul
+-- banilor citesc de aici. Păstrăm 31 de zile, cât și jocul.
+CREATE TABLE IF NOT EXISTS game_logs (
+  id BIGINT PRIMARY KEY,
+  category VARCHAR(40) NOT NULL,
+  player VARCHAR(120),
+  identifier VARCHAR(80),
+  rp_name VARCHAR(120),
+  details JSONB,
+  at TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_game_logs_at ON game_logs(at DESC);
+CREATE INDEX IF NOT EXISTS idx_game_logs_cat_at ON game_logs(category, at DESC);
+CREATE INDEX IF NOT EXISTS idx_game_logs_identifier ON game_logs(identifier, at DESC);
+CREATE INDEX IF NOT EXISTS idx_game_logs_player ON game_logs(LOWER(player));
+
+-- Ultimele date bune primite de la joc (cutii, coins, istoric VIP Shop…),
+-- arătate când serverul de joc nu răspunde.
+CREATE TABLE IF NOT EXISTS game_cache (
+  key VARCHAR(200) PRIMARY KEY,
+  data JSONB NOT NULL,
+  saved_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Ultima fișă cunoscută a fiecărui personaj (bani, job, mașini, ID static…),
+-- pentru căutări și profiluri când serverul de joc e oprit.
+CREATE TABLE IF NOT EXISTS game_players_cache (
+  identifier VARCHAR(80) PRIMARY KEY,
+  rp_name VARCHAR(120),
+  static_id VARCHAR(32),
+  discord VARCHAR(40),
+  data JSONB NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_game_players_cache_static ON game_players_cache(static_id);
+CREATE INDEX IF NOT EXISTS idx_game_players_cache_discord ON game_players_cache(discord);
+CREATE INDEX IF NOT EXISTS idx_game_players_cache_rp ON game_players_cache(LOWER(rp_name));

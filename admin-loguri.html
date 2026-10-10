@@ -234,6 +234,13 @@ async function loadLogs(page) {
     const d = await res.json();
     if (seq !== loadSeq) return;
     offlineNote.hidden = d.online !== false;
+    if (d.online === false) {
+      // (10.10.2026) serverul de joc e oprit — paginile arată copia salvată pe site
+      const until = d.savedUntil ? new Date(d.savedUntil).toLocaleString('ro-RO') : null;
+      offlineNote.innerHTML = d.mirror
+        ? `<strong>Serverul de joc e oprit</strong> — vezi istoricul salvat pe site${until ? ` (ultimul log: <strong>${until}</strong>)` : ''}. Se actualizează singur când pornește serverul.`
+        : 'Serverul de joc nu răspunde momentan.';
+    }
     currentPage = d.page || currentPage;
     currentTotalPages = d.totalPages || null;
     renderResolved(d.resolved, player);
@@ -327,7 +334,7 @@ function renderTrail(t) {
   const staffRows = (t.staff || []).map(x => `<tr><td style="white-space:nowrap">${fmtDate(x.at)}</td><td><strong>${escapeHtml(x.staff || '?')}</strong> → ${escapeHtml(x.target || '?')}: ${escapeHtml(x.action || '')} <span class="muted">${escapeHtml(x.reason || '')}</span></td></tr>`).join('');
 
   out.innerHTML = `
-    <p class="mt-note">Jucătorul ${charsText(r.characters)}${r.characters.length > 1 ? ' — același om, aceeași licență' : ''} · <b>${fromTxt} – ${toTxt}</b>${t.online === false ? ' · <span class="lf-unknown">serverul de joc nu răspunde</span>' : ''}</p>
+    <p class="mt-note">Jucătorul ${charsText(r.characters)}${r.characters.length > 1 ? ' — același om, aceeași licență' : ''} · <b>${fromTxt} – ${toTxt}</b>${t.online === false ? ` · <span class="lf-unknown">serverul de joc e oprit</span> — din istoricul salvat pe site${t.savedUntil ? ` (până la ${new Date(t.savedUntil).toLocaleString('ro-RO')})` : ''}; soldurile „acum" sunt ultimele știute` : ''}</p>
     ${t.incomplete && t.online !== false ? '<p class="lg-banner err" style="margin:0 22px 14px">Serverul de joc n-a răspuns la toate cererile — unele mișcări pot lipsi. Apasă din nou „Arată traseul" peste câteva secunde.</p>' : ''}
     <div class="mt-head">${chars}</div>
     <div class="mt-sum">

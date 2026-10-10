@@ -156,6 +156,13 @@ async function loadKills(page) {
     if (!res.ok) throw new Error();
     const d = await res.json();
     offlineNote.hidden = d.online !== false;
+    if (d.online === false) {
+      // (10.10.2026) serverul de joc e oprit — paginile arată copia salvată pe site
+      const until = d.savedUntil ? new Date(d.savedUntil).toLocaleString('ro-RO') : null;
+      offlineNote.innerHTML = d.mirror
+        ? `<strong>Serverul de joc e oprit</strong> — vezi istoricul salvat pe site${until ? ` (ultimul log: <strong>${until}</strong>)` : ''}. Se actualizează singur când pornește serverul.`
+        : 'Serverul de joc nu răspunde momentan.';
+    }
     currentPage = d.page || currentPage;
     currentTotalPages = d.totalPages || null;
     const rn = document.getElementById('resolved-note');

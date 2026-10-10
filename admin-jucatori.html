@@ -81,18 +81,18 @@
 
 <section class="tablebox" style="margin-top:18px">
   <div class="title">
-    <h2>Găști (op-crime)</h2>
+    <h2>Bande (VX Banda) și mafii (op-crime)</h2>
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
       <input id="f-gang-nick" class="filter-select" placeholder="Filtrează după poreclă..." autocomplete="off" style="min-width:180px">
       <button id="gangs-refresh-btn" class="btn-ghost" type="button">Reîmprospătează</button>
     </div>
   </div>
   <p class="muted" style="margin:0 22px 16px">
-    Jucătorul e identificat după porecla setată în op-crime — de obicei numele personajului, dar poate fi diferită dacă a fost schimbată manual.
+    Bandele vin din VX Banda, mafiile din op-crime. La mafii, jucătorul e identificat după porecla din op-crime — de obicei numele personajului, dar poate fi diferită dacă a fost schimbată manual.
   </p>
   <p class="muted" id="gangs-offline-note" style="margin:0 22px 16px" hidden>Serverul de joc nu răspunde momentan — lista poate fi incompletă.</p>
-  <table><thead><tr><th>JUCĂTOR</th><th>GAȘCĂ</th><th>RANG</th></tr></thead>
-  <tbody id="gangs-body"><tr><td colspan="3">Se încarcă…</td></tr></tbody></table>
+  <table><thead><tr><th>JUCĂTOR</th><th>TIP</th><th>BANDĂ / MAFIE</th><th>RANG</th></tr></thead>
+  <tbody id="gangs-body"><tr><td colspan="4">Se încarcă…</td></tr></tbody></table>
 </section>
 
 <section class="tablebox" style="margin-top:18px">
@@ -340,14 +340,25 @@ async function loadGangs() {
     offlineNote.hidden = d.online !== false && !d.snapshot;
     if (d.snapshot) offlineNote.textContent = `📦 Serverul de joc e offline — ultimele date salvate (${fmtDate(d.savedAt)}).`;
     const gangs = d.gangs || [];
-    tbody.innerHTML = gangs.length ? gangs.map(g => `
+    // (10.10.2026) bandele (VX Banda) întâi, apoi mafiile (op-crime)
+    const isBand = g => /vx|band/i.test(String(g.system || g.source || ''));
+    const BAND_COLORS = { ballas: '#9b4dff', families: '#2fc46b', bloods: '#e23b3b', marabunta: '#3fb6f0', vagos: '#f2c230' };
+    const colorOf = g => g.color || BAND_COLORS[Object.keys(BAND_COLORS).find(k => String(g.label || g.org || '').toLowerCase().includes(k))] || null;
+    gangs.sort((a, b) => isBand(b) - isBand(a));
+    tbody.innerHTML = gangs.length ? gangs.map(g => {
+      const name = g.label || g.org || g.name || '—';
+      const rank = g.gradeLabel || g.rank || g.grade;
+      const c = isBand(g) ? colorOf(g) : null;
+      return `
       <tr>
-        <td><strong>${assetPlayerButton(g.nick)}</strong> ${g.isOwner ? '<span class="pill warn">LIDER</span>' : ''}</td>
-        <td>${escapeHtml(g.org)}</td>
-        <td>${escapeHtml(g.rank || '—')}</td>
-      </tr>`).join('') : '<tr><td colspan="3">Niciun membru găsit.</td></tr>';
+        <td><strong>${assetPlayerButton(g.nick || g.rpName)}</strong> ${g.isOwner || g.isLeader ? '<span class="pill warn">LIDER</span>' : ''}</td>
+        <td><span class="pill ${isBand(g) ? 'info' : 'off'}">${isBand(g) ? 'BANDĂ' : 'MAFIE'}</span></td>
+        <td>${c ? `<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${escapeHtml(c)};margin-right:6px"></span>` : ''}${escapeHtml(name)}</td>
+        <td>${escapeHtml(rank != null ? String(rank) : '—')}</td>
+      </tr>`;
+    }).join('') : '<tr><td colspan="4">Niciun membru găsit.</td></tr>';
   } catch {
-    tbody.innerHTML = '<tr><td colspan="3">Nu am putut încărca găștile.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="4">Nu am putut încărca bandele și mafiile.</td></tr>';
   }
 }
 

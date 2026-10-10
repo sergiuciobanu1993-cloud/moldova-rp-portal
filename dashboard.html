@@ -172,8 +172,12 @@ function propertyBlock(p) {
   const stationsBlock = stationsHtml
     ? `<small style="color:var(--muted);display:block;margin:18px 0 8px">⛽ BENZINĂRII &amp; MAGAZINE</small><p style="margin:0">${stationsHtml}</p>` : '';
 
-  const gangBlock = p.gang
-    ? `<small style="color:var(--muted);display:block;margin:18px 0 8px">🔫 GAȘCĂ (OP-CRIME)</small><p style="margin:0"><span class="pill ${p.gang.isOwner ? 'warn' : 'off'}">${p.gang.isOwner ? 'LIDER' : 'MEMBRU'}</span> <strong>${escapeHtml(p.gang.org)}</strong>${p.gang.rank ? ` <span class="muted">— ${escapeHtml(p.gang.rank)}</span>` : ''}</p>` : '';
+  // (10.10.2026) Banda (VX Banda) și mafia (op-crime)
+  const orgHtml = (o, title) => o
+    ? `<small style="color:var(--muted);display:block;margin:18px 0 8px">${title}</small><p style="margin:0">${o.color ? `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${escapeHtml(o.color)};margin-right:6px;vertical-align:middle"></span>` : ''}<strong>${escapeHtml(o.org || '—')}</strong> <span class="pill ${o.isOwner ? 'warn' : 'off'}">${escapeHtml((o.rank || (o.isOwner ? 'Lider' : 'Membru')).toUpperCase())}</span></p>` : '';
+  const band = p.band !== undefined ? p.band : (p.gang && p.gang.kind === 'band' ? p.gang : null);
+  const mafia = p.mafia !== undefined ? p.mafia : (p.gang && p.gang.kind !== 'band' ? p.gang : null);
+  const gangBlock = orgHtml(band, '🏴 BANDA MEA') + orgHtml(mafia, '🎩 MAFIA (OP-CRIME)');
 
   return housesBlock + businessesBlock + stationsBlock + gangBlock;
 }
@@ -254,7 +258,9 @@ async function loadProfileExtra() {
         ${p.online && p.live?.serverId != null ? `<div><small style="display:block;font-size:11px;color:var(--muted);margin-bottom:4px">ID SERVER</small><strong style="font-size:20px">${escapeHtml(String(p.live.serverId))}</strong></div>` : ''}
         ${src?.staticId ? `<div><small style="display:block;font-size:11px;color:var(--muted);margin-bottom:4px">ID STATIC</small><strong style="font-size:20px">#${escapeHtml(String(src.staticId))}</strong></div>` : ''}
         ${jobText ? `<div><small style="display:block;font-size:11px;color:var(--muted);margin-bottom:4px">JOB</small><strong>${escapeHtml(jobText)}</strong></div>` : ''}
-        ${p.gang ? `<div><small style="display:block;font-size:11px;color:var(--muted);margin-bottom:4px">GAȘCĂ</small><strong>${escapeHtml(p.gang.org || '—')}</strong></div>` : ''}
+        ${p.band ? `<div><small style="display:block;font-size:11px;color:var(--muted);margin-bottom:4px">BANDA</small><strong${p.band.color ? ` style="color:${escapeHtml(p.band.color)}"` : ''}>${escapeHtml(p.band.org || '—')}</strong>${p.band.rank ? ` <span class="muted" style="font-size:12px">· ${escapeHtml(p.band.rank)}</span>` : ''}</div>` : ''}
+        ${p.mafia ? `<div><small style="display:block;font-size:11px;color:var(--muted);margin-bottom:4px">MAFIA</small><strong>${escapeHtml(p.mafia.org || '—')}</strong>${p.mafia.rank ? ` <span class="muted" style="font-size:12px">· ${escapeHtml(p.mafia.rank)}</span>` : ''}</div>` : ''}
+        ${!p.band && !p.mafia && p.gang ? `<div><small style="display:block;font-size:11px;color:var(--muted);margin-bottom:4px">GAȘCĂ</small><strong>${escapeHtml(p.gang.org || '—')}</strong></div>` : ''}
         ${p.account?.server_playtime_minutes != null
           ? `<div><small style="display:block;font-size:11px;color:var(--muted);margin-bottom:4px">ORE JUCATE</small><strong>${Math.floor(p.account.server_playtime_minutes / 60)}h</strong></div>`
           : (p.account?.playtime_minutes ? `<div><small style="display:block;font-size:11px;color:var(--muted);margin-bottom:4px">ORE JUCATE (de pe site)</small><strong>${Math.floor(p.account.playtime_minutes / 60)}h</strong></div>` : '')}

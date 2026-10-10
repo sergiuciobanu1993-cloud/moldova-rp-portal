@@ -190,18 +190,25 @@ window.openPlayerProfile = (function () {
     const gasStationsHtml = stationsHtml(p.gasStations, 'Nicio benzinărie (doar cât jucătorul e online — vezi pagina Jucători pentru lista completă).');
     const storesHtml = stationsHtml(p.stores, 'Niciun magazin (doar cât jucătorul e online — vezi pagina Jucători pentru lista completă).');
 
-    const gang = p.gang ? `
+    // (10.10.2026) Banda (VX Banda) și mafia (op-crime) — pot fi ambele
+    const orgLine = (o, none) => o ? `
       <p style="margin:0 0 14px">
-        <span class="pill ${p.gang.isOwner ? 'warn' : 'off'}">${p.gang.isOwner ? 'LIDER' : 'MEMBRU'}</span>
-        <strong>${escapeHtml(p.gang.org)}</strong> ${p.gang.rank ? `<span class="muted">— ${escapeHtml(p.gang.rank)}</span>` : ''}
-      </p>` : `<p class="muted" style="margin:0 0 14px">Nu face parte din nicio gașcă (op-crime).</p>`;
+        ${o.color ? `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${escapeHtml(o.color)};margin-right:6px;vertical-align:middle"></span>` : ''}
+        <strong>${escapeHtml(o.org || '—')}</strong>
+        <span class="pill ${o.isOwner ? 'warn' : 'off'}" style="margin-left:6px">${escapeHtml((o.rank || (o.isOwner ? 'Lider' : 'Membru')).toUpperCase())}</span>
+      </p>` : `<p class="muted" style="margin:0 0 14px">${none}</p>`;
+    const band = p.band !== undefined ? p.band : (p.gang && p.gang.kind === 'band' ? p.gang : null);
+    const mafia = p.mafia !== undefined ? p.mafia : (p.gang && p.gang.kind !== 'band' ? p.gang : null);
+    const gang = orgLine(band, 'Nu face parte din nicio bandă.');
+    const mafiaHtml = orgLine(mafia, 'Nu face parte din nicio mafie (op-crime).');
 
     return `
       <h2 style="font-size:14px;margin:22px 0 10px">🏠 Case</h2>${housesTable}
       <h2 style="font-size:14px;margin:22px 0 10px">🏢 Business-uri</h2>${businessesTable}
       <h2 style="font-size:14px;margin:22px 0 10px">⛽ Benzinării</h2>${gasStationsHtml}
       <h2 style="font-size:14px;margin:22px 0 10px">🏪 Magazine</h2>${storesHtml}
-      <h2 style="font-size:14px;margin:22px 0 10px">🔫 Gașcă (op-crime)</h2>${gang}
+      <h2 style="font-size:14px;margin:22px 0 10px">🏴 Bandă</h2>${gang}
+      <h2 style="font-size:14px;margin:22px 0 10px">🎩 Mafie (op-crime)</h2>${mafiaHtml}
     `;
   }
 

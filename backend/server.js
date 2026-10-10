@@ -3155,6 +3155,28 @@ async function fetchPlayerCharacters(identifier, liveDetail, extraIds = []) {
   return found.filter(Boolean).sort((a, b) => slot(a.identifier) - slot(b.identifier));
 }
 
+// (10.10.2026) Bandă (VX Banda) sau mafie (op-crime) — din lista „gangs" a /assets.
+const BAND_COLORS = { ballas: "#9b4dff", families: "#2fc46b", bloods: "#e23b3b", marabunta: "#3fb6f0", vagos: "#f2c230" };
+function isVxBand(g) { return /vx|band/i.test(String(g?.system || g?.source || "")); }
+function normOrg(g, kind) {
+  if (!g) return null;
+  const name = String(g.label || g.org || g.name || "").trim() || null;
+  const key = Object.keys(BAND_COLORS).find(k => (name || "").toLowerCase().includes(k));
+  const grade = g.gradeLabel || g.rank || g.grade || null;
+  const leader = !!(g.isOwner || g.isLeader || /^lider/i.test(String(grade || "")));
+  return {
+    kind, org: name, rank: grade != null ? String(grade) : null, isOwner: leader,
+    color: g.color || (kind === "band" && key ? BAND_COLORS[key] : null),
+    plate: g.plate || g.platePrefix || null, since: g.joinedAt || g.since || null,
+    nick: g.nick || g.rpName || null,
+  };
+}
+const bandOf = gangs => normOrg((gangs || []).find(isVxBand), "band");
+const mafiaOf = gangs => normOrg((gangs || []).find(g => !isVxBand(g)), "mafia");
+function charIdentifierForOrgs(live, effIdentifier, gameHit, account) {
+  return live?.license || effIdentifier || gameHit?.identifier || account?.last_identifier || account?.game_identifier || null;
+}
+
 async function buildPlayerProfile(name, opts = {}) {
   const cleanName = (name || "").toString().trim().slice(0, 64);
   if (!cleanName) return null;
@@ -3399,7 +3421,21 @@ async function buildPlayerProfile(name, opts = {}) {
   // (fără identificator exact, resursa nu are cum să caute în aceste tabele).
   const gasStations = assetsResult.online ? assetsResult.gasStations : [];
   const stores = assetsResult.online ? assetsResult.stores : [];
-  const gang = assetsResult.online ? (assetsResult.gangs[0] || null) : null;
+  // (10.10.2026) Bandele (VX Banda) și mafiile (op-crime) rulează în paralel pe
+  // server. Moldovarp-api trimite membrii ambelor în „gangs"; cele din VX Banda
+  // vin marcate cu system: "vx_banda" (vezi bandOf/mafiaOf). Ultimele știute
+  // rămân salvate pe site, ca să le vedem și când serverul de joc e oprit.
+  const orgKey = charIdentifierForOrgs(live, effIdentifier, gameHit, account);
+  let band = null, mafia = null;
+  if (assetsResult.online) {
+    band = bandOf(assetsResult.gangs);
+    mafia = mafiaOf(assetsResult.gangs);
+    if (orgKey) saveGameCache(`orgs:${orgKey}`, { band, mafia }, 30_000);
+  } else if (orgKey) {
+    const c = await loadGameCache(`orgs:${orgKey}`);
+    if (c?.data) { band = c.data.band || null; mafia = c.data.mafia || null; }
+  }
+  const gang = band || mafia;
 
   // Pentru un cont legat, arătăm poza salvată doar dacă e chiar a
   // personajului legat (nu una rămasă dintr-o potrivire veche după nume).
@@ -3485,6 +3521,8 @@ async function buildPlayerProfile(name, opts = {}) {
     gasStations,
     stores,
     gang,
+    band,
+    mafia,
     tickets,
     recentActivity,
     killsAsVictim,

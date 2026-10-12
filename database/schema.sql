@@ -667,3 +667,33 @@ CREATE TABLE IF NOT EXISTS game_players_cache (
 CREATE INDEX IF NOT EXISTS idx_game_players_cache_static ON game_players_cache(static_id);
 CREATE INDEX IF NOT EXISTS idx_game_players_cache_discord ON game_players_cache(discord);
 CREATE INDEX IF NOT EXISTS idx_game_players_cache_rp ON game_players_cache(LOWER(rp_name));
+
+-- Mașina pentru jucătorii noi (12.10.2026): joci 50h → primești o mașină,
+-- doar dacă aveai sub 10h la lansarea ofertei. newbie_car_seen = orele fiecărui
+-- personaj la PRIMA vedere online după lansare (+ ultimele știute);
+-- newbie_car_claims = cererile făcute de pe site, date de staff în joc.
+CREATE TABLE IF NOT EXISTS newbie_car_seen (
+  identifier VARCHAR(120) PRIMARY KEY,
+  license VARCHAR(80),
+  first_minutes INTEGER NOT NULL,
+  first_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_minutes INTEGER,
+  last_seen_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_newbie_car_seen_license ON newbie_car_seen(license);
+CREATE TABLE IF NOT EXISTS newbie_car_claims (
+  id BIGSERIAL PRIMARY KEY,
+  license VARCHAR(120) NOT NULL UNIQUE,
+  identifier VARCHAR(120) NOT NULL,
+  user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  rp_name VARCHAR(120),
+  static_id VARCHAR(20),
+  minutes INTEGER,
+  model VARCHAR(60),
+  label VARCHAR(80),
+  status VARCHAR(12) NOT NULL DEFAULT 'pending',
+  note TEXT,
+  handled_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  handled_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

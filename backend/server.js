@@ -770,6 +770,8 @@ async function syncPlayerSnapshots() {
       job: pl.job || null, jobLabel: pl.jobLabel || null, grade: pl.grade ?? null, gradeLabel: pl.gradeLabel || null,
       playtimeMinutes: playtimeOf(pl), vehicles: Array.isArray(pl.vehicles) ? pl.vehicles : [], lastSeen: new Date().toISOString(),
     }))).catch(() => {});
+    // (12.10.2026) mașina pentru jucătorii noi — orele la prima vedere după lansare
+    noteNewbieSeen(detail.players).catch(err => console.error("Jucători noi (mașina 50h):", err.message));
 
     // (19.09.2026, optimizare resurse) Înainte, acest tur trimitea câte un
     // UPDATE separat pentru FIECARE jucător online — cu zeci de jucători pe
@@ -4493,6 +4495,173 @@ app.put("/api/admin/premium", auth, requireRole(...FOUNDER_ROLES), asyncRoute(as
   );
   await logAction(req.user.sub, "premium.settings", "vip_settings", "premium", settings, req.ip);
   res.json({ ok: true, settings });
+}));
+
+// ============================================================================
+// MAȘINA PENTRU JUCĂTORII NOI (12.10.2026, cerut de Sergiu)
+// Joci 50 de ore pe server → primești o mașină. Doar pentru cine avea sub 10
+// ore când a pornit oferta (sau a venit după). Cum știm: prima dată când vedem
+// un personaj online după lansare îi notăm orele (tabela newbie_car_seen). Cine
+// era offline la lansare intră cu exact orele de atunci (orele cresc doar cât
+// joacă), deci „prima vedere” = orele de la lansare. Un cont vechi nu poate
+// lua mașina pe un personaj nou: verificăm și celelalte personaje cu aceeași
+// licență. La 50 de ore jucătorul o cere de pe site, iar staff-ul i-o dă în
+// joc și bifează „Am dat-o” (newbie_car_claims) — fără nimic de făcut pe
+// serverul de joc.
+// ============================================================================
+const NEWBIE_CAR_DEFAULT = { enabled: true, launchAt: null, model: "m3e46", label: "BMW M3 E46", hours: 50, maxStartHours: 10 };
+function normalizeNewbieCar(v) {
+  const s = v && typeof v === "object" ? v : {};
+  const int = (x, min, max, def) => { const n = Math.floor(Number(x)); return Number.isFinite(n) && n >= min && n <= max ? n : def; };
+  const model = String(s.model ?? NEWBIE_CAR_DEFAULT.model).trim().toLowerCase();
+  return {
+    enabled: s.enabled !== false,
+    launchAt: s.launchAt && Number.isFinite(Date.parse(s.launchAt)) ? new Date(s.launchAt).toISOString() : null,
+    model: /^[a-z0-9_-]{2,40}$/.test(model) ? model : NEWBIE_CAR_DEFAULT.model,
+    label: String(s.label ?? NEWBIE_CAR_DEFAULT.label).trim().slice(0, 60) || NEWBIE_CAR_DEFAULT.label,
+    hours: int(s.hours, 1, 1000, NEWBIE_CAR_DEFAULT.hours),
+    maxStartHours: int(s.maxStartHours, 0, 1000, NEWBIE_CAR_DEFAULT.maxStartHours),
+  };
+}
+let newbieCarCache = { at: 0, v: null };
+async function loadNewbieCar() {
+  if (newbieCarCache.v && Date.now() - newbieCarCache.at < 30_000) return newbieCarCache.v;
+  let v;
+  try {
+    const { rows } = await pool.query(`SELECT value FROM vip_settings WHERE key = 'newbie_car'`);
+    v = normalizeNewbieCar(rows[0]?.value || NEWBIE_CAR_DEFAULT);
+    // prima pornire: oferta începe acum
+    if (v.enabled && !v.launchAt) {
+      v.launchAt = new Date().toISOString();
+      await pool.query(
+        `INSERT INTO vip_settings(key, value, updated_at) VALUES ('newbie_car', $1, NOW())
+         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`, [JSON.stringify(v)]);
+    }
+  } catch {
+    v = normalizeNewbieCar(NEWBIE_CAR_DEFAULT);
+  }
+  newbieCarCache = { at: Date.now(), v };
+  return v;
+}
+// Apelată la fiecare tur de sincronizare a jucătorilor online.
+async function noteNewbieSeen(players) {
+  const cfg = await loadNewbieCar();
+  if (!cfg.enabled || !cfg.launchAt) return;
+  const rows = (players || []).map(pl => ({ id: pl.license, lic: licenseOf(pl.license), min: playtimeOf(pl) }))
+    .filter(r => r.id && Number.isFinite(r.min));
+  if (!rows.length) return;
+  const vals = [], params = [];
+  rows.forEach((r, k) => { params.push(r.id, r.lic, Math.round(r.min)); vals.push(`($${k * 3 + 1}::text,$${k * 3 + 2}::text,$${k * 3 + 3}::int)`); });
+  await pool.query(
+    `INSERT INTO newbie_car_seen(identifier, license, first_minutes, last_minutes, last_seen_at)
+     SELECT v.id, v.lic, v.min, v.min, NOW() FROM (VALUES ${vals.join(",")}) AS v(id, lic, min)
+     ON CONFLICT (identifier) DO UPDATE SET last_minutes = GREATEST(newbie_car_seen.last_minutes, EXCLUDED.last_minutes), last_seen_at = NOW()`,
+    params);
+}
+// Starea unui personaj: e nou? câte ore are? a cerut deja?
+async function newbieStatusFor(identifier, cfg) {
+  const lic = licenseOf(identifier);
+  const need = cfg.hours * 60, maxStart = cfg.maxStartHours * 60;
+  const [seenQ, claimQ, liveDetail] = await Promise.all([
+    pool.query(`SELECT identifier, first_minutes, last_minutes FROM newbie_car_seen WHERE identifier = $1 OR ($2::text IS NOT NULL AND license = $2)`, [identifier, lic]),
+    pool.query(`SELECT id, status, note, model, created_at, handled_at FROM newbie_car_claims WHERE license = $1 OR identifier = $2 ORDER BY created_at DESC LIMIT 1`, [lic || identifier, identifier]),
+    getPlayersDetail().catch(() => ({ players: [] })),
+  ]);
+  const me = seenQ.rows.find(r => r.identifier === identifier);
+  const live = (liveDetail.players || []).find(p => p.license === identifier);
+  const liveMin = live ? playtimeOf(live) : null;
+  const minutes = Math.max(Number(liveMin) || 0, Number(me?.last_minutes) || 0);
+  const claim = claimQ.rows[0] || null;
+  const base = { minutes, needMinutes: need, claim: claim ? { status: claim.status, note: claim.note, model: claim.model, at: claim.created_at, handledAt: claim.handled_at } : null };
+  if (claim) return { ...base, state: "claimed" };
+  if (!me) return { ...base, state: "unseen" };
+  // cont vechi: oricare personaj al licenței văzut prima dată peste prag
+  const veteran = seenQ.rows.some(r => Number(r.first_minutes) >= maxStart);
+  if (veteran) return { ...base, state: "not_new" };
+  return { ...base, state: minutes >= need ? "ready" : "progress" };
+}
+
+app.get("/api/jucator-nou", asyncRoute(async (_req, res) => {
+  const cfg = await loadNewbieCar();
+  res.set("Cache-Control", "public, max-age=60");
+  res.json({ enabled: cfg.enabled, model: cfg.model, label: cfg.label, hours: cfg.hours, maxStartHours: cfg.maxStartHours, launchAt: cfg.launchAt });
+}));
+
+app.get("/api/jucator-nou/eu", auth, asyncRoute(async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  const cfg = await loadNewbieCar();
+  if (!cfg.enabled) return res.json({ enabled: false });
+  const { rows } = await pool.query(`SELECT game_identifier, game_identifier_name FROM users WHERE id = $1`, [req.user.sub]);
+  const identifier = rows[0]?.game_identifier;
+  if (!identifier) return res.json({ enabled: true, linked: false });
+  res.json({ enabled: true, linked: true, name: rows[0].game_identifier_name, ...(await newbieStatusFor(identifier, cfg)) });
+}));
+
+app.post("/api/jucator-nou/cere", auth, asyncRoute(async (req, res) => {
+  const cfg = await loadNewbieCar();
+  if (!cfg.enabled) return res.status(400).json({ error: "Oferta nu mai e activă." });
+  const { rows } = await pool.query(`SELECT game_identifier, game_identifier_name FROM users WHERE id = $1`, [req.user.sub]);
+  const identifier = rows[0]?.game_identifier;
+  if (!identifier) return res.status(400).json({ error: "Leagă-ți mai întâi contul de personajul din joc (/leagacont)." });
+  const st = await newbieStatusFor(identifier, cfg);
+  if (st.state === "claimed") return res.status(400).json({ error: "Ai cerut deja mașina." });
+  if (st.state === "not_new") return res.status(400).json({ error: `Oferta e doar pentru jucătorii care aveau sub ${cfg.maxStartHours} ore la lansare.` });
+  if (st.state !== "ready") return res.status(400).json({ error: `Mai ai de jucat ${Math.ceil((st.needMinutes - st.minutes) / 60)} ore.` });
+  let identity = null;
+  try { identity = (await identityLookup({ identifiers: [identifier] })).byId.get(identifier) || null; } catch { /* fără nume RP */ }
+  try {
+    await pool.query(
+      `INSERT INTO newbie_car_claims(license, identifier, user_id, rp_name, static_id, minutes, model, label)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [licenseOf(identifier) || identifier, identifier, req.user.sub, identity?.rpName || rows[0].game_identifier_name || null, identity?.staticId || null, st.minutes, cfg.model, cfg.label]);
+  } catch (err) {
+    if (err.code === "23505") return res.status(400).json({ error: "Ai cerut deja mașina." });
+    throw err;
+  }
+  await logAction(req.user.sub, "newbie_car.claim", "newbie_car", identifier, { model: cfg.model, minutes: st.minutes }, req.ip);
+  res.json({ ok: true, ...(await newbieStatusFor(identifier, cfg)) });
+}));
+
+app.get("/api/admin/jucator-nou", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (_req, res) => {
+  res.set("Cache-Control", "no-store");
+  const cfg = await loadNewbieCar();
+  const [claims, stats] = await Promise.all([
+    pool.query(`SELECT c.*, u.username, h.username AS handled_by_name FROM newbie_car_claims c
+                LEFT JOIN users u ON u.id = c.user_id LEFT JOIN users h ON h.id = c.handled_by
+                ORDER BY (c.status = 'pending') DESC, c.created_at DESC LIMIT 200`),
+    pool.query(`SELECT COUNT(*) FILTER (WHERE first_minutes < $1)::int AS eligible,
+                       COUNT(*) FILTER (WHERE first_minutes < $1 AND last_minutes >= $2 * 0.5)::int AS halfway,
+                       COUNT(*)::int AS seen
+                FROM newbie_car_seen`, [cfg.maxStartHours * 60, cfg.hours * 60]),
+  ]);
+  res.json({ settings: cfg, claims: claims.rows, stats: stats.rows[0] });
+}));
+
+app.put("/api/admin/jucator-nou", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
+  const prev = await loadNewbieCar();
+  const v = normalizeNewbieCar({ ...prev, ...req.body, launchAt: prev.launchAt });
+  if (v.enabled && !v.launchAt) v.launchAt = new Date().toISOString();
+  await pool.query(
+    `INSERT INTO vip_settings(key, value, updated_at) VALUES ('newbie_car', $1, NOW())
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`, [JSON.stringify(v)]);
+  newbieCarCache = { at: 0, v: null };
+  await logAction(req.user.sub, "newbie_car.settings", "vip_settings", "newbie_car", v, req.ip);
+  res.json({ ok: true, settings: v });
+}));
+
+app.post("/api/admin/jucator-nou/:id", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+  const status = String(req.body?.status || "");
+  if (!["given", "rejected", "pending"].includes(status)) return res.status(400).json({ error: "Stare necunoscută." });
+  const note = String(req.body?.note || "").trim().slice(0, 300) || null;
+  const { rows } = await pool.query(
+    `UPDATE newbie_car_claims SET status = $2, note = $3, handled_by = $4, handled_at = NOW() WHERE id = $1 RETURNING *`,
+    [req.params.id, status, note, req.user.sub]);
+  const c = rows[0];
+  if (!c) return res.status(404).json({ error: "Cererea nu există." });
+  await logAction(req.user.sub, `newbie_car.${status}`, "newbie_car", c.identifier, { id: c.id, note, model: c.model }, req.ip);
+  if (status === "given") notifyUser(c.user_id, { type: "newbie_car", title: `🚗 Ai primit ${c.label || c.model}!`, message: "Mașina pentru cele 50 de ore e în garajul tău din joc. Drum bun!", link: "index.html", external: true }).catch(() => {});
+  if (status === "rejected") notifyUser(c.user_id, { type: "newbie_car", title: "Cererea pentru mașină a fost respinsă", message: note || "Deschide un tichet dacă ai întrebări.", link: "tichete.html", external: true }).catch(() => {});
+  res.json({ ok: true, claim: c });
 }));
 
 // Webhook primit direct de la Luxu Admin (panoul lor cloud, tab "Webhooks"),

@@ -149,6 +149,21 @@
   <div class="pm-sales" id="pm-sales"></div>
 </details>
 
+<details class="formbox lx-box" id="jucator-nou">
+  <summary><h2>🚗 Mașina pentru jucătorii noi (50h)</h2><span class="lx-state" id="nb-state">Se încarcă…</span></summary>
+  <p class="vip-intro" style="margin:0 0 16px">Pe pagina principală: cine avea sub pragul de ore când a pornit oferta (sau a venit după) și ajunge la orele cerute își cere mașina de pe site. Tu i-o dai în joc (în garaj) și apeși <b>„Am dat-o”</b> — jucătorul primește notificare pe site și pe Discord.</p>
+  <div class="pm-grid" style="grid-template-columns:repeat(4,minmax(0,1fr))">
+    <div class="field"><label>Cod mașină (spawn)</label><input type="text" id="nb-model" maxlength="40" placeholder="m3e46"></div>
+    <div class="field"><label>Nume afișat</label><input type="text" id="nb-label" maxlength="60" placeholder="BMW M3 E46"></div>
+    <div class="field"><label>Ore de jucat</label><input type="number" id="nb-hours" min="1" max="1000"></div>
+    <div class="field"><label>Prag „nou” (ore la lansare)</label><input type="number" id="nb-max" min="0" max="1000"></div>
+  </div>
+  <div class="field checkbox" style="margin:10px 0 0"><input type="checkbox" id="nb-enabled"><label for="nb-enabled">Oferta e activă (apare pe pagina principală)</label></div>
+  <div class="formactions"><button type="button" class="btn-primary" id="nb-save">Salvează</button><a class="btn-ghost" href="index.html#acasa" target="_blank" rel="noopener">Vezi pe site</a><span class="order-saved" id="nb-saved" hidden></span></div>
+  <h3 style="margin:22px 0 8px;font-size:13px">Cereri</h3>
+  <div id="nb-claims" class="case-table-scroll"><p class="muted">Se încarcă…</p></div>
+</details>
+
 <div class="title" style="padding:0 0 16px"><h2>Cutii</h2><button id="new-case-btn">+ Cutie nouă</button></div>
 <div id="cases-list"><p class="muted">Se încarcă…</p></div>
 
@@ -950,6 +965,60 @@ document.getElementById('lx-save').addEventListener('click', async () => {
       const d = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(d.error || 'Nu am putut salva.');
       pm.settings = d.settings; render();
+      saved.hidden = false; saved.style.color = 'var(--green)'; saved.textContent = '✓ Salvat';
+      setTimeout(() => { saved.hidden = true; }, 2500);
+    } catch (err) { saved.hidden = false; saved.style.color = '#ff8a8a'; saved.textContent = err.message; }
+  });
+  load();
+})();
+
+// ---- Mașina pentru jucătorii noi (12.10.2026) ----
+(function newbieCarAdmin() {
+  const e = x => (x ?? '').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const hm = m => m == null ? '—' : `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m`;
+  const ST = { pending: '<span class="pill warn">DE DAT</span>', given: '<span class="pill on">DATĂ</span>', rejected: '<span class="pill off">RESPINSĂ</span>' };
+  let nb = null;
+  function render() {
+    const s = nb.settings;
+    document.getElementById('nb-model').value = s.model;
+    document.getElementById('nb-label').value = s.label;
+    document.getElementById('nb-hours').value = s.hours;
+    document.getElementById('nb-max').value = s.maxStartHours;
+    document.getElementById('nb-enabled').checked = s.enabled;
+    const pend = nb.claims.filter(c => c.status === 'pending').length;
+    document.getElementById('nb-state').textContent = `${s.enabled ? 'Activă' : 'Oprită'}${s.launchAt ? ' din ' + new Date(s.launchAt).toLocaleDateString('ro-RO') : ''} · ${nb.stats.eligible} jucători noi · ${pend} de dat`;
+    const el = document.getElementById('nb-claims');
+    if (!nb.claims.length) { el.innerHTML = `<p class="muted" style="margin:0">Nicio cerere încă. Jucători noi urmăriți: ${nb.stats.eligible} (la jumătatea drumului: ${nb.stats.halfway}).</p>`; return; }
+    el.innerHTML = `<table class="reward-table" style="min-width:720px"><thead><tr><th>JUCĂTOR</th><th>ORE</th><th>MAȘINA</th><th>CERUTĂ</th><th>STARE</th><th></th></tr></thead><tbody>${nb.claims.map(c => `
+      <tr><td><b style="color:var(--text);font-size:12px">${e(c.rp_name || c.username || '—')}</b>${c.static_id ? ` <span class="muted">#${e(c.static_id)}</span>` : ''}<br><small class="muted"><code>${e(c.identifier)}</code></small></td>
+        <td>${hm(c.minutes)}</td><td>${e(c.label || c.model)} <small class="muted">(${e(c.model)})</small></td>
+        <td>${new Date(c.created_at).toLocaleString('ro-RO')}</td>
+        <td>${ST[c.status] || e(c.status)}${c.handled_by_name ? `<br><small class="muted">${e(c.handled_by_name)}${c.note ? ' · ' + e(c.note) : ''}</small>` : ''}</td>
+        <td><div class="rowactions">${c.status === 'pending'
+          ? `<button data-nb="${c.id}" data-st="given">✓ Am dat-o</button><button class="danger" data-nb="${c.id}" data-st="rejected">Respinge</button>`
+          : `<button data-nb="${c.id}" data-st="pending">Repune</button>`}</div></td></tr>`).join('')}</tbody></table>`;
+    el.querySelectorAll('[data-nb]').forEach(b => b.addEventListener('click', async () => {
+      let note = '';
+      if (b.dataset.st === 'rejected') { note = prompt('Motivul (îl vede jucătorul):', '') ; if (note === null) return; }
+      if (b.dataset.st === 'given' && !confirm('Ai pus mașina în garajul jucătorului în joc?')) return;
+      b.disabled = true;
+      const r = await apiFetch(`/api/admin/jucator-nou/${b.dataset.nb}`, { method: 'POST', body: JSON.stringify({ status: b.dataset.st, note }) });
+      if (!r.ok) { const j = await r.json().catch(() => ({})); alert(j.error || 'Nu a mers.'); b.disabled = false; return; }
+      load();
+    }));
+  }
+  async function load() {
+    try { const r = await apiFetch('/api/admin/jucator-nou'); if (!r.ok) throw new Error(); nb = await r.json(); render(); if (location.hash === '#jucator-nou') document.getElementById('jucator-nou').open = true; }
+    catch { document.getElementById('nb-state').textContent = 'Nu am putut încărca.'; }
+  }
+  document.getElementById('nb-save').addEventListener('click', async () => {
+    const saved = document.getElementById('nb-saved');
+    const body = { enabled: document.getElementById('nb-enabled').checked, model: document.getElementById('nb-model').value.trim(), label: document.getElementById('nb-label').value.trim(), hours: Number(document.getElementById('nb-hours').value), maxStartHours: Number(document.getElementById('nb-max').value) };
+    try {
+      const r = await apiFetch('/api/admin/jucator-nou', { method: 'PUT', body: JSON.stringify(body) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || 'Nu am putut salva.');
+      nb.settings = d.settings; render();
       saved.hidden = false; saved.style.color = 'var(--green)'; saved.textContent = '✓ Salvat';
       setTimeout(() => { saved.hidden = true; }, 2500);
     } catch (err) { saved.hidden = false; saved.style.color = '#ff8a8a'; saved.textContent = err.message; }

@@ -1545,10 +1545,10 @@ async function canExchangeDirty(identifier, settings) {
 // (răspund 404), NU mai arătăm butoanele jucătorilor — altfel apasă și
 // primesc doar „nu e încă activ". Verificăm singuri la pornire și la 15 min;
 // cererea de verificare n-are identificator, deci nu poate face nimic în joc.
-const gameRouteReady = { sell: null, convert: null };
+const gameRouteReady = { sell: null, convert: null, premium: null, starter: null };
 let gameRoutesCheckedAt = null;
 async function probeGameRoutes() {
-  for (const [key, path] of [["sell", "/cases/sell"], ["convert", "/cases/convert"]]) {
+  for (const [key, path] of [["sell", "/cases/sell"], ["convert", "/cases/convert"], ["premium", "/premium/buy"], ["starter", "/starter/buy"]]) {
     const r = await vipShopAdminRequest("POST", path, {});
     if (r.status === 503) continue; // server oprit — nu știm, păstrăm ce aveam
     const ready = r.status !== 404;
@@ -3561,13 +3561,25 @@ app.get("/api/admin/player-profile", auth, requireRole(...MOD_ROLES), asyncRoute
     });
     if (!prof) return res.status(400).json({ error: "Nume invalid." });
     if (ADMIN_ROLES.includes(req.user.role)) prof.login = await loginInfoFor(u.id);
+    await attachPremium(prof);
     return res.json(prof);
   }
   const profile = await buildPlayerProfile(name, { ...(identifier ? { identifier } : {}), ...(rpName ? { rpName } : {}) });
   if (!profile) return res.status(400).json({ error: "Nume invalid." });
   if (ADMIN_ROLES.includes(req.user.role) && profile.account?.user_id) profile.login = await loginInfoFor(profile.account.user_id);
+  await attachPremium(profile);
   res.json(profile);
 }));
+
+// (12.10.2026) Premium-ul jucătorului în profil — doar după ce serverul de joc
+// are ruta /premium (până atunci nu întrebăm deloc).
+async function attachPremium(prof) {
+  if (gameRouteReady.premium === false || !prof?.charIdentifier) return;
+  try {
+    const st = await fetchPremiumStatus(prof.charIdentifier);
+    if (st && st.supported) prof.premium = { active: st.active, until: st.until, days: st.days, starter: st.starter, online: st.online, savedAt: st.savedAt || null };
+  } catch { /* fără premium în profil */ }
+}
 
 // (10.10.2026) Cum se loghează contul pe site — cerut de Sergiu, pentru jucătorii
 // care își uită datele: Discord (care cont) sau email + parolă (ce email).
@@ -4256,6 +4268,231 @@ app.delete("/api/admin/vip-shop/cutii/:id/recompense/:rewardId", auth, requireRo
   if (!result.ok) return vipShopAdminError(res, result);
   await logAction(req.user.sub, "vip_shop.reward.delete", "vip_shop_reward", req.params.rewardId, { caseId: req.params.id }, req.ip);
   res.json(result.data);
+}));
+
+// ============================================================================
+// PREMIUM (abonament) și PACHETE DE START (12.10.2026, cerut de Sergiu)
+// Abonamentul și pachetele se cumpără cu coins, ca cutiile. Coins-urile, zilele
+// de Premium și bonusurile din joc le ține SERVERUL DE JOC (moldovarp-api:
+// GET /premium, POST /premium/buy, POST /starter/buy — vezi specificația dată
+// colegului). Site-ul ține aici doar ce se vede: lista de bonusuri, prețurile
+// (editabile din Editorul VIP Shop) și dacă pagina e deschisă jucătorilor.
+// Premium e pe CONT (ambele personaje, după licență); pachetul de start e unul
+// singur pe personaj.
+// ============================================================================
+const PREMIUM_PERKS_START = [
+  { id: "joburi20", icon: "💼", cat: "Bani", title: "+20% la câștigul din joburile civile", text: "Taxi, pescuit, livrări, mecanic: tot ce câștigi muncind vine cu 20% mai mult." },
+  { id: "salariu", icon: "💵", cat: "Bani", title: "+1.000$ la fiecare salariu", text: "La fiecare salariu de pe server primești în plus 1.000$ în bancă." },
+  { id: "spital", icon: "🏥", cat: "Personaj", title: "Aștepți la jumătate până la spital", text: "Când ești inconștient, poți cere transportul la spital după jumătate din timpul obișnuit." },
+  { id: "insigna", icon: "⭐", cat: "Site", title: "Insigna Premium pe site", text: "Apare lângă numele tău în contul de pe moldovarp.md." },
+];
+// Se deblochează după zilele de Premium adunate (toate abonamentele la un loc).
+const PREMIUM_PERKS_TIME = [
+  { id: "sala", icon: "🏋️", cat: "Personaj", title: "Sala merge mai repede", text: "Forța și rezistența cresc mai repede la antrenament.", tiers: [{ days: 5, value: "+15%" }, { days: 45, value: "+25%" }] },
+  { id: "foame", icon: "🍔", cat: "Personaj", title: "Foamea și setea scad mai încet", text: "Mănânci și bei mai rar.", tiers: [{ days: 10, value: "−20%" }, { days: 60, value: "−35%" }, { days: 150, value: "−50%" }] },
+  { id: "acte", icon: "📄", cat: "Transport", title: "Reducere la asigurare și înmatriculare", text: "Actele mașinii te costă mai puțin.", tiers: [{ days: 15, value: "−20%" }] },
+  { id: "garaj", icon: "🅿️", cat: "Transport", title: "Locuri în plus în garaj", text: "Ții mai multe mașini în garaj.", tiers: [{ days: 20, value: "+2" }, { days: 75, value: "+4" }, { days: 140, value: "+6" }] },
+  { id: "peste", icon: "🎣", cat: "Bani", title: "Peștele se vinde mai scump", text: "Primești mai mult pe peștele vândut.", tiers: [{ days: 25, value: "+15%" }] },
+  { id: "spitalhp", icon: "❤️", cat: "Personaj", title: "Ieși din spital cu viața plină", text: "După spital nu mai pornești cu viața la jumătate.", tiers: [{ days: 30, value: "" }] },
+  { id: "magazin", icon: "🛒", cat: "Bani", title: "Reducere la magazinele 24/7", text: "Mâncare, apă și tot ce cumperi de la 24/7, mai ieftin.", tiers: [{ days: 40, value: "−10%" }] },
+  { id: "inchisoare", icon: "⛓️", cat: "Facțiuni", title: "Pedeapsa la închisoare mai scurtă", text: "Stai mai puțin după gratii.", tiers: [{ days: 50, value: "−10%" }, { days: 120, value: "−20%" }] },
+  { id: "joburi25", icon: "📈", cat: "Bani", title: "Încă +5% la joburile civile", text: "Bonusul de la joburi urcă la +25% în total.", tiers: [{ days: 60, value: "+25%" }] },
+  { id: "skilluri", icon: "🎯", cat: "Personaj", title: "Toate skill-urile cresc mai repede", text: "Forță, tragere, rezistență, condus: progres mai rapid peste tot.", tiers: [{ days: 90, value: "+10%" }, { days: 180, value: "+20%" }] },
+  { id: "efecte", icon: "🧃", cat: "Personaj", title: "Efectele bune țin mai mult", text: "Efectele bune de la mâncare și băutură durează mai mult (fără regenerarea vieții).", tiers: [{ days: 100, value: "+25%" }] },
+  { id: "spawn", icon: "📍", cat: "Personaj", title: "Alegi spitalul în care apari", text: "După moarte alegi la ce spital apari.", tiers: [{ days: 180, value: "" }] },
+];
+const PREMIUM_BURN_PER_DAY = 1; // după expirare, zilele adunate scad cu 1 pe zi
+const STARTER_PACKS = [
+  { id: "bronz", name: "Bronz", tone: "bronz", premiumDays: 3, cash: 20000, skillPct: 20,
+    lines: ["Permis auto (categoria B)", "Forță, tragere și rezistență urcate la 20%", "Premium 3 zile", "20.000$ în bancă"] },
+  { id: "aur", name: "Aur", tone: "aur", premiumDays: 5, cash: 45000, skillPct: 45,
+    lines: ["Permis auto (B) + permis camion (C)", "Forță, tragere și rezistență urcate la 45%", "Premium 5 zile", "45.000$ în bancă"] },
+  { id: "platina", name: "Platină", tone: "platina", premiumDays: 7, cash: 100000, skillPct: 80,
+    lines: ["Toate permisele de conducere", "Asigurare + înmatriculare pentru o mașină", "Forță, tragere și rezistență urcate la 80%", "Premium 7 zile", "100.000$ în bancă"] },
+];
+const PREMIUM_DEFAULT = {
+  public: false, // până nu e gata partea din joc, pagina o vede doar staff-ul
+  plans: [
+    { id: "p7", days: 7, price: 30, on: true },
+    { id: "p30", days: 30, price: 100, on: true },
+    { id: "p90", days: 90, price: 250, on: true },
+  ],
+  packs: { bronz: { price: 40, on: true }, aur: { price: 80, on: true }, platina: { price: 150, on: true } },
+};
+function normalizePremiumSettings(v) {
+  const src = v && typeof v === "object" ? v : {};
+  const int = (x, min, max, def) => { const n = Math.floor(Number(x)); return Number.isFinite(n) && n >= min && n <= max ? n : def; };
+  const plansIn = Array.isArray(src.plans) ? src.plans : PREMIUM_DEFAULT.plans;
+  const plans = PREMIUM_DEFAULT.plans.map(d => {
+    const p = plansIn.find(x => x && x.id === d.id) || d;
+    return { id: d.id, days: int(p.days, 1, 365, d.days), price: int(p.price, 1, 100000, d.price), on: p.on !== false };
+  });
+  const packs = {};
+  for (const sp of STARTER_PACKS) {
+    const d = PREMIUM_DEFAULT.packs[sp.id];
+    const p = (src.packs && src.packs[sp.id]) || d;
+    packs[sp.id] = { price: int(p.price, 1, 100000, d.price), on: p.on !== false };
+  }
+  return { public: src.public === true, plans, packs };
+}
+async function loadPremiumSettings() {
+  try {
+    const { rows } = await pool.query(`SELECT value FROM vip_settings WHERE key = 'premium'`);
+    return normalizePremiumSettings(rows[0]?.value || PREMIUM_DEFAULT);
+  } catch {
+    return normalizePremiumSettings(PREMIUM_DEFAULT);
+  }
+}
+const premiumVisibleTo = (settings, role) => settings.public || ADMIN_ROLES.includes(role);
+
+// Starea de pe serverul de joc. 404 = ruta nu există încă (colegul n-a pus-o).
+function normalizePremiumStatus(d) {
+  const toMs = x => { if (x == null || x === "") return null; const n = Number(x); if (Number.isFinite(n)) return n < 1e12 ? n * 1000 : n; const t = Date.parse(x); return Number.isFinite(t) ? t : null; };
+  const until = toMs(d?.until ?? d?.activeUntil);
+  const st = d?.starter && (d.starter.packId || d.starter.pack) ? { packId: String(d.starter.packId || d.starter.pack), at: toMs(d.starter.at) } : null;
+  return {
+    active: until ? until > Date.now() : !!d?.active,
+    until,
+    days: Math.max(0, Math.floor(Number(d?.days ?? d?.activeDays) || 0)),
+    starter: st,
+  };
+}
+async function fetchPremiumStatus(identifier) {
+  if (!identifier) return null;
+  const key = `premium:${identifier}`;
+  const r = gameIsDown() ? { ok: false, status: 503 } : await vipShopAdminRequest("GET", `/premium?identifier=${encodeURIComponent(identifier)}`);
+  if (r.ok) {
+    markGameUp();
+    const status = normalizePremiumStatus(r.data || {});
+    saveGameCache(key, status, 10_000);
+    return { supported: true, online: true, ...status };
+  }
+  if (r.status === 404) { gameRouteReady.premium = false; return { supported: false, online: true, active: false, until: null, days: 0, starter: null }; }
+  if (r.status === 503) markGameDown();
+  const c = await loadGameCache(key);
+  if (!c) return { supported: null, online: false, active: false, until: null, days: 0, starter: null };
+  const s = c.data || {};
+  return { supported: true, online: false, savedAt: c.savedAt, ...s, active: s.until ? s.until > Date.now() : !!s.active };
+}
+const PREMIUM_ERRORS = {
+  coins_insuficienti: "Nu ai suficienți coins.",
+  deja_cumparat: "Ai luat deja un pachet de start pe acest personaj.",
+  pachet_necunoscut: "Pachetul nu mai există.",
+  server_offline: "Serverul de joc nu răspunde acum. Încearcă după ce pornește.",
+};
+function premiumErrorText(r) {
+  if (r.status === 404) return "Cumpărarea se activează în curând — serverul de joc încă se pregătește.";
+  if (PREMIUM_ERRORS[r.error]) return PREMIUM_ERRORS[r.error];
+  if (r.status >= 500) return `Serverul de joc a dat o eroare (cod: ${String(r.error || "necunoscut").slice(0, 40)}). Dacă ți s-au scăzut coins fără să primești nimic, deschide un tichet.`;
+  return `Serverul de joc a refuzat cumpărarea (cod: ${String(r.error || "necunoscut").slice(0, 40)}).`;
+}
+async function premiumBuyer(req) {
+  const { rows } = await pool.query(`SELECT game_identifier, game_identifier_name FROM users WHERE id = $1`, [req.user.sub]);
+  return { identifier: rows[0]?.game_identifier || null, name: rows[0]?.game_identifier_name || null };
+}
+
+app.get("/api/premium", auth, asyncRoute(async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  const settings = await loadPremiumSettings();
+  if (!premiumVisibleTo(settings, req.user.role)) return res.json({ visible: false });
+  const me = await premiumBuyer(req);
+  const [coins, status] = me.identifier ? await Promise.all([fetchCoins(me.identifier), fetchPremiumStatus(me.identifier)]) : [null, null];
+  res.json({
+    visible: true,
+    preview: !settings.public, // pagina e încă ascunsă jucătorilor (o vede doar staff-ul)
+    burnPerDay: PREMIUM_BURN_PER_DAY,
+    plans: settings.plans.filter(p => p.on),
+    perksStart: PREMIUM_PERKS_START,
+    perksTime: PREMIUM_PERKS_TIME,
+    packs: STARTER_PACKS.filter(p => settings.packs[p.id].on).map(p => ({ ...p, price: settings.packs[p.id].price })),
+    linked: !!me.identifier,
+    name: me.name,
+    coins: coins ? coins.coins : null,
+    online: coins ? coins.online : null,
+    status,
+    ready: { premium: gameRouteReady.premium, starter: gameRouteReady.starter },
+  });
+}));
+
+// Doar starea (pentru insigna din cont și meniul site-ului) — ușoară, fără coins.
+app.get("/api/premium/stare", auth, asyncRoute(async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  const settings = await loadPremiumSettings();
+  if (!premiumVisibleTo(settings, req.user.role)) return res.json({ visible: false });
+  const me = await premiumBuyer(req);
+  const status = me.identifier && gameRouteReady.premium !== false ? await fetchPremiumStatus(me.identifier) : null;
+  res.json({ visible: true, status: status && status.supported ? { active: status.active, until: status.until, days: status.days } : null });
+}));
+
+app.post("/api/premium/cumpara", auth, asyncRoute(async (req, res) => {
+  const settings = await loadPremiumSettings();
+  if (!premiumVisibleTo(settings, req.user.role)) return res.status(403).json({ error: "Premium nu e încă disponibil." });
+  const me = await premiumBuyer(req);
+  if (!me.identifier) return res.status(400).json({ error: "Leagă-ți mai întâi contul de personajul din joc (din VIP Shop)." });
+  const plan = settings.plans.find(p => p.on && p.id === String(req.body?.planId || ""));
+  if (!plan) return res.status(400).json({ error: "Perioada aleasă nu mai e disponibilă." });
+  const r = await vipShopAdminRequest("POST", "/premium/buy", {
+    identifier: me.identifier, playerName: me.name, planId: plan.id, days: plan.days, price: plan.price,
+    requestId: require("crypto").randomUUID(),
+  });
+  if (r.status === 404) gameRouteReady.premium = false;
+  if (!r.ok) return res.status(r.status === 503 ? 503 : 400).json({ error: premiumErrorText(r) });
+  gameRouteReady.premium = true;
+  const status = normalizePremiumStatus(r.data || {});
+  saveGameCache(`premium:${me.identifier}`, status, 0);
+  await logAction(req.user.sub, "premium.buy", "premium", me.identifier, { planId: plan.id, days: plan.days, price: plan.price, until: status.until, name: me.name }, req.ip);
+  res.json({ ok: true, status: { supported: true, online: true, ...status }, coins: Number.isFinite(Number(r.data?.coins)) ? Number(r.data.coins) : null });
+}));
+
+app.post("/api/premium/pachet", auth, asyncRoute(async (req, res) => {
+  const settings = await loadPremiumSettings();
+  if (!premiumVisibleTo(settings, req.user.role)) return res.status(403).json({ error: "Pachetele de start nu sunt încă disponibile." });
+  const me = await premiumBuyer(req);
+  if (!me.identifier) return res.status(400).json({ error: "Leagă-ți mai întâi contul de personajul din joc (din VIP Shop)." });
+  const pack = STARTER_PACKS.find(p => p.id === String(req.body?.packId || "") && settings.packs[p.id].on);
+  if (!pack) return res.status(400).json({ error: "Pachetul nu mai e disponibil." });
+  const price = settings.packs[pack.id].price;
+  const r = await vipShopAdminRequest("POST", "/starter/buy", {
+    identifier: me.identifier, playerName: me.name, packId: pack.id, price,
+    premiumDays: pack.premiumDays, cash: pack.cash, skillPct: pack.skillPct,
+    requestId: require("crypto").randomUUID(),
+  });
+  if (r.status === 404) gameRouteReady.starter = false;
+  if (!r.ok) return res.status(r.status === 503 ? 503 : 400).json({ error: premiumErrorText(r) });
+  gameRouteReady.starter = true;
+  await logAction(req.user.sub, "premium.starter", "premium", me.identifier, { packId: pack.id, price, name: me.name }, req.ip);
+  const status = await fetchPremiumStatus(me.identifier);
+  res.json({ ok: true, status, coins: Number.isFinite(Number(r.data?.coins)) ? Number(r.data.coins) : null });
+}));
+
+app.get("/api/admin/premium", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (_req, res) => {
+  res.set("Cache-Control", "no-store");
+  if (!gameRoutesCheckedAt || Date.now() - new Date(gameRoutesCheckedAt) > 60_000) await probeGameRoutes().catch(() => {});
+  let sales = [];
+  try {
+    const { rows } = await pool.query(
+      `SELECT a.action, a.metadata, a.created_at, u.username
+       FROM audit_logs a LEFT JOIN users u ON u.id = a.actor_id
+       WHERE a.action IN ('premium.buy','premium.starter') ORDER BY a.created_at DESC LIMIT 30`);
+    sales = rows;
+  } catch { /* fără istoric */ }
+  res.json({
+    settings: await loadPremiumSettings(),
+    packs: STARTER_PACKS.map(p => ({ id: p.id, name: p.name, lines: p.lines })),
+    ready: { premium: gameRouteReady.premium, starter: gameRouteReady.starter, checkedAt: gameRoutesCheckedAt },
+    sales,
+  });
+}));
+
+app.put("/api/admin/premium", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
+  const settings = normalizePremiumSettings(req.body || {});
+  await pool.query(
+    `INSERT INTO vip_settings(key, value, updated_at) VALUES ('premium', $1, NOW())
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+    [JSON.stringify(settings)]
+  );
+  await logAction(req.user.sub, "premium.settings", "vip_settings", "premium", settings, req.ip);
+  res.json({ ok: true, settings });
 }));
 
 // Webhook primit direct de la Luxu Admin (panoul lor cloud, tab "Webhooks"),

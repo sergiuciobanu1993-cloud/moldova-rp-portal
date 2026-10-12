@@ -379,7 +379,7 @@ button.win-chip:focus-visible{outline:2px solid var(--orange);outline-offset:2px
   <link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/assets/app/apple-touch-icon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black"><meta name="apple-mobile-web-app-title" content="Moldova RP"><script src="/pwa.js" defer></script><meta name="theme-color" content="#090a0b">
 </head>
 <body>
-<header><a class="brand" href="index.html"><img src="assets/logo.png" alt="">MOLDOVA<span>RP</span></a><nav id="dash-nav"><a href="index.html">Acasă</a><a href="dashboard.html">Dashboard</a><a href="tichete.html">Tichete</a><a href="vip-shop.html" style="color:var(--orange)">VIP Shop</a></nav><button class="menu-toggle" id="dash-menu-toggle" type="button" aria-label="Deschide meniul" aria-expanded="false">☰</button><a class="logout" href="login.html" id="logout-link">Deconectare</a></header>
+<header><a class="brand" href="index.html"><img src="assets/logo.png" alt="">MOLDOVA<span>RP</span></a><nav id="dash-nav"><a href="index.html">Acasă</a><a href="dashboard.html">Dashboard</a><a href="tichete.html">Tichete</a><a href="vip-shop.html" style="color:var(--orange)">VIP Shop</a><a href="premium.html" id="premium-nav-link" hidden>Premium</a></nav><button class="menu-toggle" id="dash-menu-toggle" type="button" aria-label="Deschide meniul" aria-expanded="false">☰</button><a class="logout" href="login.html" id="logout-link">Deconectare</a></header>
 <main>
 <section class="welcome"><div><p>MAGAZIN COINS</p><h1>VIP Shop</h1><small>Cheltuiește coins-urile deja cumpărate pe o recompensă cu șansă — se ridică din joc.</small></div><a class="home-btn" href="index.html">← Pagina principală</a></section>
 
@@ -388,6 +388,13 @@ button.win-chip:focus-visible{outline:2px solid var(--orange);outline-offset:2px
   apoi introdu ID-ul tranzacției acolo ca să-ți fie creditate. Pagina asta doar arată soldul și îți lasă să-l cheltui pe o recompensă —
   nu schimbă nimic la cumpărarea coins-urilor în sine.
 </p>
+
+<a href="premium.html" id="premium-promo" class="panel" hidden style="display:flex;align-items:center;gap:16px;margin:0 0 20px;padding:16px 20px;border-color:rgba(255,138,31,.4)">
+  <span style="font-size:24px" aria-hidden="true">⭐</span>
+  <span style="flex:1;min-width:0"><strong style="display:block">Premium și pachete de start</strong><span class="muted" style="font-size:12.5px">Bonusuri în joc pe toată durata abonamentului, plus bonusuri noi pe măsură ce aduni zile.</span></span>
+  <span style="color:var(--orange);font-weight:800;white-space:nowrap">Vezi →</span>
+</a>
+<style>#premium-promo[hidden]{display:none!important}</style>
 
 <section class="wins-band" id="wins-band" aria-labelledby="wins-head" hidden>
   <p class="wins-head" id="wins-head"><span class="live-dot" aria-hidden="true"></span>Ultimele câștiguri</p>
@@ -2026,6 +2033,12 @@ async function loadAll() {
 
 (async () => {
   if (!requireAuth()) return;
+  // (12.10.2026) Linkul spre Premium — doar când pagina e deschisă (sau pentru staff).
+  apiFetch('/api/premium/stare').then(r => r.ok ? r.json() : null).then(pr => {
+    if (!pr || !pr.visible) return;
+    document.getElementById('premium-nav-link').hidden = false;
+    document.getElementById('premium-promo').hidden = false;
+  }).catch(() => {});
   await loadAll();
 })();
 </script>

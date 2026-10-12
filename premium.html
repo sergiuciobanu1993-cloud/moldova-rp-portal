@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Premium — Moldova RP</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="dashboard.css">
+<style>
+:root{--gold:#f2c230;--bronz:#c98a5a;--platina:#cfd8e3}
+.home-btn{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);padding:10px 15px;border-radius:8px;color:var(--text);font-weight:800;font-size:12.5px;white-space:nowrap;transition:.15s ease}
+.home-btn:hover{border-color:var(--orange);color:var(--orange)}
+.pr-note{margin:18px 0 0;padding:12px 14px;border-radius:10px;font-size:12.5px;line-height:1.55;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--muted)}
+.pr-note b{color:var(--text)}
+.pr-note.warn{border-color:rgba(255,138,31,.45);background:rgba(255,138,31,.07)}
+.pr-note a{color:var(--orange);text-decoration:underline;text-underline-offset:2px}
+
+/* Starea abonamentului */
+.pr-state{display:grid;grid-template-columns:1.1fr 1fr;gap:0;margin-top:26px;padding:0;overflow:hidden}
+.pr-state>div{padding:24px 26px}
+.pr-state .st-left{border-right:1px solid var(--line);position:relative}
+.pr-state .st-left::before{content:"";position:absolute;inset:0;background:radial-gradient(420px 220px at 0% 0%,rgba(255,138,31,.13),transparent 70%);pointer-events:none}
+.st-eyebrow{font-size:10px;letter-spacing:.16em;font-weight:900;color:var(--muted);text-transform:uppercase}
+.st-big{font-size:30px;font-weight:950;letter-spacing:-.02em;margin:8px 0 4px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.st-big .star{color:var(--orange)}
+.st-sub{color:var(--muted);font-size:13px}
+.st-sub b{color:var(--text)}
+.st-facts{display:flex;gap:26px;margin-top:18px;flex-wrap:wrap}
+.st-facts div small{display:block;color:var(--muted);font-size:10px;letter-spacing:.08em;font-weight:800;text-transform:uppercase}
+.st-facts div strong{display:block;font-size:24px;margin-top:4px;font-variant-numeric:tabular-nums}
+.st-next small{display:block;color:var(--muted);font-size:10px;letter-spacing:.08em;font-weight:800;text-transform:uppercase}
+.st-next .nx-title{font-size:16px;font-weight:850;margin:8px 0 2px;text-wrap:balance}
+.st-next .nx-when{color:var(--muted);font-size:12.5px}
+.bar{height:8px;border-radius:999px;background:rgba(255,255,255,.07);overflow:hidden;margin:14px 0 8px}
+.bar i{display:block;height:100%;background:linear-gradient(90deg,#ff6917,var(--orange));border-radius:inherit;transition:width .5s ease}
+.bar-legend{display:flex;justify-content:space-between;color:var(--muted);font-size:11px;font-variant-numeric:tabular-nums}
+.st-account{margin-top:16px;font-size:12px;color:var(--muted)}
+.st-account a{color:var(--orange)}
+
+/* Perioade */
+.sec-head{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;margin:40px 0 14px;flex-wrap:wrap}
+.sec-head h2{margin:0;font-size:22px;letter-spacing:-.01em}
+.sec-head p{margin:4px 0 0;color:var(--muted);font-size:12.5px;max-width:640px}
+.plans{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.plan{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:6px}
+.plan.best{border-color:rgba(255,138,31,.5)}
+.plan .tag{position:absolute;top:-10px;right:14px;background:var(--orange);color:#0b0b0b;font-size:9.5px;font-weight:950;letter-spacing:.08em;padding:4px 8px;border-radius:6px}
+.plan .days{font-size:13px;font-weight:850;color:var(--muted);letter-spacing:.04em;text-transform:uppercase}
+.plan .price{font-size:30px;font-weight:950;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.plan .price small{font-size:13px;color:var(--muted);font-weight:800;margin-left:4px}
+.plan .per{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
+.plan button{margin-top:12px;width:100%}
+.btn-primary[disabled],.btn-ghost[disabled]{opacity:.45;cursor:not-allowed}
+
+/* Bonusuri din prima zi */
+.perks{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.perk{display:flex;gap:14px;align-items:flex-start;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+.perk .ic{flex:none;width:40px;height:40px;border-radius:10px;display:grid;place-items:center;font-size:19px;background:rgba(255,138,31,.1);border:1px solid rgba(255,138,31,.25)}
+.perk strong{display:block;font-size:14px}
+.perk span{display:block;color:var(--muted);font-size:12.5px;margin-top:3px;line-height:1.5}
+.cat{display:inline-block;font-size:9.5px;font-weight:900;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:3px}
+
+/* Drumul bonusurilor (deblocări după zile) */
+.road{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px 0}
+.stop{position:relative;display:grid;grid-template-columns:96px 1fr;gap:0;align-items:stretch}
+.stop .d{position:relative;display:flex;align-items:flex-start;justify-content:flex-end;padding:18px 26px 18px 0;font-weight:950;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.stop .d::after{content:"";position:absolute;right:-6px;top:20px;width:12px;height:12px;border-radius:50%;background:var(--bg);border:2px solid #3a3e42;z-index:1}
+.stop::before{content:"";position:absolute;left:96px;top:0;bottom:0;width:2px;background:#2b2f33}
+.stop:first-child::before{top:26px}
+.stop:last-child::before{bottom:calc(100% - 26px)}
+.stop.got::before{background:var(--orange)}
+.stop.got .d{color:var(--orange)}
+.stop.got .d::after{background:var(--orange);border-color:var(--orange);box-shadow:0 0 0 4px rgba(255,138,31,.18)}
+.stop.half::before{background:linear-gradient(180deg,var(--orange) var(--fill,0%),#2b2f33 var(--fill,0%))}
+.stop .items{display:flex;flex-direction:column;gap:8px;padding:12px 20px 12px 28px}
+.it{display:flex;gap:12px;align-items:center;padding:10px 12px;border-radius:10px;border:1px solid transparent}
+.it .ic{flex:none;width:34px;height:34px;border-radius:9px;display:grid;place-items:center;font-size:16px;background:rgba(255,255,255,.04);border:1px solid var(--line)}
+.it .tx{flex:1;min-width:0}
+.it .tx strong{display:block;font-size:13.5px}
+.it .tx span{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+.it .val{flex:none;font-weight:950;font-size:13px;padding:5px 9px;border-radius:7px;border:1px solid var(--line);color:var(--text);font-variant-numeric:tabular-nums}
+.stop.got .it{background:rgba(255,138,31,.05);border-color:rgba(255,138,31,.18)}
+.stop.got .it .val{border-color:rgba(255,138,31,.5);color:var(--orange)}
+.stop:not(.got) .it{opacity:.78}
+.it .lock{flex:none;font-size:11px;color:var(--muted)}
+
+/* Cum funcționează */
+.rules{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.rules article{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px}
+.rules b{display:block;font-size:13.5px;margin-bottom:6px}
+.rules p{margin:0;color:var(--muted);font-size:12.5px;line-height:1.55}
+
+/* Pachete de start */
+.packs{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.pack{--c:var(--bronz);position:relative;background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;display:flex;flex-direction:column}
+.pack.aur{--c:var(--gold)}
+.pack.platina{--c:var(--platina)}
+.pack .top{padding:20px 20px 16px;border-bottom:1px solid var(--line);background:linear-gradient(160deg,color-mix(in srgb,var(--c) 18%,transparent),transparent 65%)}
+.pack .top small{display:block;color:var(--muted);font-size:10px;letter-spacing:.14em;font-weight:900;text-transform:uppercase}
+.pack .top h3{margin:6px 0 0;font-size:24px;color:var(--c);letter-spacing:-.01em}
+.pack ul{list-style:none;margin:0;padding:16px 20px;display:flex;flex-direction:column;gap:9px;flex:1}
+.pack li{display:flex;gap:9px;font-size:13px;line-height:1.45}
+.pack li::before{content:"";flex:none;width:6px;height:6px;border-radius:50%;background:var(--c);margin-top:7px}
+.pack .foot{padding:0 20px 20px;display:flex;flex-direction:column;gap:10px}
+.pack .price{font-size:24px;font-weight:950;font-variant-numeric:tabular-nums}
+.pack .price small{font-size:12px;color:var(--muted);font-weight:800;margin-left:4px}
+.pack .done{font-size:12px;color:var(--green);font-weight:800}
+
+/* Fereastra de confirmare */
+.cf-back{position:fixed;inset:0;background:rgba(0,0,0,.65);display:grid;place-items:center;z-index:60;padding:16px}
+.cf-back[hidden]{display:none}
+.cf-box{width:min(440px,100%);background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px}
+.cf-box h3{margin:0 0 8px;font-size:18px}
+.cf-box p{margin:0 0 16px;color:var(--muted);font-size:13px;line-height:1.55}
+.cf-box p b{color:var(--text)}
+.cf-actions{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
+.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 16px;font-size:13px;z-index:70;max-width:calc(100% - 32px);box-shadow:0 10px 30px rgba(0,0,0,.5)}
+.toast.ok{border-color:rgba(66,223,138,.5)}
+.toast.err{border-color:rgba(255,138,31,.6)}
+.toast[hidden]{display:none}
+.skel{height:120px;border-radius:12px;background:linear-gradient(90deg,rgba(255,255,255,.03),rgba(255,255,255,.06),rgba(255,255,255,.03));background-size:200% 100%;animation:sk 1.4s linear infinite}
+@keyframes sk{to{background-position:-200% 0}}
+@media (prefers-reduced-motion:reduce){.skel{animation:none}.bar i{transition:none}}
+.btn-primary:focus-visible,.btn-ghost:focus-visible,a:focus-visible{outline:2px solid var(--orange);outline-offset:2px}
+
+@media (max-width:860px){
+  .pr-state{grid-template-columns:1fr}
+  .pr-state .st-left{border-right:0;border-bottom:1px solid var(--line)}
+  .plans,.packs,.rules{grid-template-columns:1fr}
+  .perks{grid-template-columns:1fr}
+}
+@media (max-width:560px){
+  main{padding:32px 16px}
+  .welcome{flex-wrap:wrap;gap:14px}
+  .welcome h1{font-size:32px}
+  .pr-state>div{padding:20px 18px}
+  .stop{grid-template-columns:1fr}
+  .stop::before{left:19px}
+  .stop:first-child::before{top:20px}
+  .stop:last-child::before{bottom:calc(100% - 20px)}
+  .stop .d{justify-content:flex-start;padding:14px 0 0 38px;font-size:12px}
+  .stop .d::after{left:14px;right:auto;top:15px}
+  .stop .items{padding:8px 12px 12px 38px;gap:6px}
+  .it{padding:9px 10px;gap:10px}
+  .it .ic{width:30px;height:30px;font-size:14px}
+}
+</style>
+  <link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/assets/app/apple-touch-icon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black"><meta name="apple-mobile-web-app-title" content="Moldova RP"><script src="/pwa.js" defer></script><meta name="theme-color" content="#090a0b">
+</head>
+<body>
+<header><a class="brand" href="index.html"><img src="assets/logo.png" alt="">MOLDOVA<span>RP</span></a><nav id="dash-nav"><a href="index.html">Acasă</a><a href="dashboard.html">Dashboard</a><a href="tichete.html">Tichete</a><a href="vip-shop.html">VIP Shop</a><a href="premium.html" style="color:var(--orange)">Premium</a></nav><button class="menu-toggle" id="dash-menu-toggle" type="button" aria-label="Deschide meniul" aria-expanded="false">☰</button><a class="logout" href="login.html" id="logout-link">Deconectare</a></header>
+<main>
+<section class="welcome"><div><p>ABONAMENT · SE PLĂTEȘTE CU COINS</p><h1>Premium</h1><small>Bonusuri în joc cât timp ai abonament. Cu cât îl ții mai mult, cu atât deblochezi mai multe.</small></div><a class="home-btn" href="vip-shop.html">← VIP Shop</a></section>
+
+<div id="notes"></div>
+
+<section class="panel pr-state" id="state" aria-live="polite">
+  <div class="st-left"><div class="skel" style="height:110px"></div></div>
+  <div class="st-next"><div class="skel" style="height:110px"></div></div>
+</section>
+
+<div class="sec-head"><div><h2>Alege perioada</h2><p>Zilele se adaugă la abonamentul tău. Dacă ai deja Premium, perioada nouă începe după ce se termină cea actuală.</p></div><span class="pill info" id="coins-pill">🪙 — coins</span></div>
+<div class="plans" id="plans"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>
+
+<div class="sec-head"><div><h2>Din prima zi</h2><p>Le primești imediat ce activezi Premium și le ai cât timp abonamentul e activ.</p></div></div>
+<div class="perks" id="perks-start"></div>
+
+<div class="sec-head"><div><h2>Se deblochează pe drum</h2><p id="road-intro">Fiecare zi de Premium se adună. Când ajungi la pragul unui bonus, îl primești automat.</p></div></div>
+<div class="road" id="road"></div>
+
+<div class="sec-head"><div><h2>Cum funcționează</h2></div></div>
+<div class="rules">
+  <article><b>Zilele se adună</b><p>Toate abonamentele tale se pun la un loc: 7 zile acum și 30 luna viitoare înseamnă 37 de zile adunate. Bonusurile de pe drum depind de zilele adunate.</p></article>
+  <article><b>După ce expiră</b><p id="rule-burn">Bonusurile se opresc. Zilele adunate scad încet, cu una pe zi, până reactivezi. Le reiei de unde ai rămas.</p></article>
+  <article><b>Pe tot contul</b><p>Premium e pe contul tău de joc, deci merge pe ambele personaje. Bonusurile se aplică singure în joc, nu trebuie să ridici nimic.</p></article>
+</div>
+
+<div class="sec-head"><div><h2>Pachete de start</h2><p>Pentru început: permise, skill-uri urcate, bani și câteva zile de Premium. Poți lua <b style="color:var(--text)">un singur pachet pe personaj</b>; banii îi ridici din joc cu <code>/recompense</code>.</p></div></div>
+<div class="packs" id="packs"><div class="skel" style="height:300px"></div><div class="skel" style="height:300px"></div><div class="skel" style="height:300px"></div></div>
+</main>
+
+<div class="cf-back" id="cf" hidden role="dialog" aria-modal="true" aria-labelledby="cf-title">
+  <div class="cf-box"><h3 id="cf-title"></h3><p id="cf-text"></p>
+    <div class="cf-actions"><button type="button" class="btn-ghost" id="cf-no">Renunț</button><button type="button" class="btn-primary" id="cf-yes">Confirm</button></div>
+  </div>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script src="auth-client.js"></script>
+<script>
+const esc = s => (s ?? '').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+const fmtDay = ms => ms ? new Date(ms).toLocaleString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+let D = null, busy = false;
+
+(function menu() {
+  const t = document.getElementById('dash-menu-toggle'), n = document.getElementById('dash-nav');
+  t.addEventListener('click', () => { const o = n.classList.toggle('open'); t.setAttribute('aria-expanded', o ? 'true' : 'false'); });
+})();
+wireLogout('#logout-link');
+
+function toast(msg, kind) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.className = 'toast ' + (kind || ''); el.hidden = false;
+  clearTimeout(toast.t); toast.t = setTimeout(() => { el.hidden = true; }, 5200);
+}
+function confirmBox(title, html, yesText) {
+  return new Promise(resolve => {
+    const box = document.getElementById('cf');
+    document.getElementById('cf-title').textContent = title;
+    document.getElementById('cf-text').innerHTML = html;
+    const yes = document.getElementById('cf-yes'), no = document.getElementById('cf-no');
+    yes.textContent = yesText || 'Confirm';
+    const done = v => { box.hidden = true; yes.onclick = no.onclick = null; document.onkeydown = null; resolve(v); };
+    yes.onclick = () => done(true); no.onclick = () => done(false);
+    document.onkeydown = e => { if (e.key === 'Escape') done(false); };
+    box.hidden = false; yes.focus();
+  });
+}
+
+// Toate pragurile (zi → bonusuri), în ordine.
+function milestones(perks) {
+  const map = new Map();
+  for (const p of perks) for (const t of p.tiers || []) {
+    if (!map.has(t.days)) map.set(t.days, []);
+    map.get(t.days).push({ ...p, value: t.value });
+  }
+  return [...map.entries()].sort((a, b) => a[0] - b[0]);
+}
+
+// Se poate cumpăra acum? Dacă nu, de ce.
+function blocker(kind) {
+  if (!D.linked) return 'Leagă-ți contul de personaj';
+  if (D.online === false) return 'Serverul de joc e oprit';
+  const st = D.status;
+  if ((kind === 'premium' && D.ready.premium === false) || (kind === 'starter' && D.ready.starter === false) || (st && st.supported === false)) return 'Disponibil în curând';
+  return null;
+}
+
+function renderNotes() {
+  const out = [];
+  if (D.preview) out.push(`<p class="pr-note warn"><b>Previzualizare pentru staff.</b> Jucătorii nu văd încă pagina. O deschizi pentru toți din <a href="admin-vip-shop.html#premium">Editorul VIP Shop → Premium</a>, după ce colegul termină partea din joc.</p>`);
+  const notReady = D.ready.premium === false || (D.status && D.status.supported === false);
+  if (notReady) out.push(`<p class="pr-note"><b>Cumpărarea pornește în curând.</b> Serverul de joc încă se pregătește pentru Premium. Butoanele se activează singure când e gata.</p>`);
+  if (D.online === false && D.linked) out.push(`<p class="pr-note">Serverul de joc e oprit acum. Vezi ultimele date salvate; poți cumpăra după ce pornește. Pagina reîncearcă singură.</p>`);
+  document.getElementById('notes').innerHTML = out.join('');
+}
+
+function renderState() {
+  const st = D.status;
+  const days = st ? st.days || 0 : 0;
+  const left = document.querySelector('#state .st-left');
+  const right = document.querySelector('#state .st-next');
+  let big, sub;
+  if (!D.linked) {
+    big = 'Cont nelegat';
+    sub = 'Ca să cumperi Premium, leagă-ți întâi contul de personajul din joc: scrie <b>/leagacont</b> pe server și pune codul în <a href="vip-shop.html" style="color:var(--orange)">VIP Shop</a>.';
+  } else if (st && st.active) {
+    const ms = st.until - Date.now();
+    const d = Math.max(0, Math.floor(ms / 86400000)), h = Math.max(0, Math.floor((ms % 86400000) / 3600000));
+    big = '<span class="star">★</span> Premium activ';
+    sub = `Până pe <b>${fmtDay(st.until)}</b> · mai ai <b>${d ? plural(d, 'zi', 'zile') + ' și ' : ''}${plural(h, 'oră', 'ore')}</b>`;
+  } else if (st && st.until) {
+    big = 'Premium expirat';
+    sub = `S-a terminat pe <b>${fmtDay(st.until)}</b>. Zilele adunate scad cu ${D.burnPerDay || 1} pe zi până reactivezi.`;
+  } else {
+    big = 'Nu ai Premium';
+    sub = 'Alege o perioadă mai jos. Bonusurile din prima zi pornesc imediat.';
+  }
+  left.innerHTML = `<div class="st-eyebrow">Starea ta${D.name ? ' · ' + esc(D.name) : ''}</div>
+    <div class="st-big">${big}</div><div class="st-sub">${sub}</div>
+    ${D.linked ? `<div class="st-facts"><div><small>Zile adunate</small><strong>${days}</strong></div><div><small>Bonusuri deblocate</small><strong>${unlockedCount(days)} / ${D.perksTime.length}</strong></div></div>` : ''}
+    ${st && st.online === false && st.savedAt ? `<div class="st-account">Date salvate pe ${fmtDay(st.savedAt)}.</div>` : ''}`;
+
+  const ms = milestones(D.perksTime);
+  const next = ms.find(([d]) => d > days);
+  const prev = [...ms].reverse().find(([d]) => d <= days);
+  const from = prev ? prev[0] : 0;
+  if (next) {
+    const pct = Math.max(2, Math.min(100, ((days - from) / (next[0] - from)) * 100));
+    right.innerHTML = `<small>Următorul bonus</small>
+      <div class="nx-title">${next[1].map(p => `${p.icon} ${esc(p.title)}${p.value ? ` (${esc(p.value)})` : ''}`).join('<br>')}</div>
+      <div class="nx-when">la ${plural(next[0], 'zi', 'zile')} de Premium · mai ai ${plural(next[0] - days, 'zi', 'zile')}</div>
+      <div class="bar" role="progressbar" aria-valuemin="${from}" aria-valuemax="${next[0]}" aria-valuenow="${days}"><i style="width:${pct}%"></i></div>
+      <div class="bar-legend"><span>${from} zile</span><span>${next[0]} zile</span></div>`;
+  } else {
+    right.innerHTML = `<small>Toate bonusurile</small><div class="nx-title">Ai deblocat tot drumul. ★</div><div class="nx-when">Păstrează abonamentul activ ca să le ții.</div>`;
+  }
+}
+function unlockedCount(days) {
+  return D.perksTime.filter(p => (p.tiers || []).some(t => t.days <= days)).length;
+}
+
+function renderPlans() {
+  const el = document.getElementById('plans');
+  const block = blocker('premium');
+  const per = D.plans.map(p => p.price / p.days);
+  const bestPer = Math.min(...per), worstPer = Math.max(...per);
+  const active = D.status && D.status.active;
+  el.innerHTML = D.plans.map(p => {
+    const perDay = p.price / p.days;
+    const save = worstPer > perDay ? Math.round((1 - perDay / worstPer) * 100) : 0;
+    const best = D.plans.length > 1 && perDay === bestPer;
+    const poor = D.linked && D.coins != null && D.coins < p.price;
+    return `<article class="plan${best ? ' best' : ''}">
+      ${best ? '<span class="tag">CEL MAI BUN PREȚ</span>' : ''}
+      <span class="days">${plural(p.days, 'zi', 'zile')}</span>
+      <span class="price">${p.price}<small>coins</small></span>
+      <span class="per">${perDay.toFixed(2).replace('.', ',')} coins pe zi${save ? ` · −${save}%` : ''}</span>
+      <button type="button" class="btn-primary" data-plan="${esc(p.id)}" ${block || poor ? 'disabled' : ''}>${block ? esc(block) : poor ? 'Coins insuficienți' : active ? 'Prelungește' : 'Activează'}</button>
+    </article>`;
+  }).join('') || '<p class="muted">Nicio perioadă disponibilă acum.</p>';
+  el.querySelectorAll('[data-plan]').forEach(b => b.addEventListener('click', () => buyPlan(b.dataset.plan)));
+  document.getElementById('coins-pill').textContent = D.linked && D.coins != null ? `🪙 ${D.coins} coins` : '🪙 — coins';
+}
+
+function renderPerks() {
+  document.getElementById('perks-start').innerHTML = D.perksStart.map(p => `
+    <div class="perk"><span class="ic" aria-hidden="true">${p.icon}</span><div><span class="cat">${esc(p.cat)}</span><strong>${esc(p.title)}</strong><span>${esc(p.text)}</span></div></div>`).join('');
+  const days = D.status ? D.status.days || 0 : 0;
+  const ms = milestones(D.perksTime);
+  document.getElementById('road').innerHTML = ms.map(([d, list], i) => {
+    const got = days >= d;
+    const nextD = ms[i + 1] ? ms[i + 1][0] : null;
+    const half = got && nextD && days < nextD;
+    const fill = half ? Math.round(((days - d) / (nextD - d)) * 100) : 0;
+    return `<div class="stop${got ? ' got' : ''}${half ? ' half' : ''}"${half ? ` style="--fill:${fill}%"` : ''}>
+      <div class="d">${plural(d, 'zi', 'zile')}</div>
+      <div class="items">${list.map(p => `
+        <div class="it"><span class="ic" aria-hidden="true">${p.icon}</span>
+          <div class="tx"><strong>${esc(p.title)}</strong><span>${esc(p.text)}</span></div>
+          ${p.value ? `<span class="val">${esc(p.value)}</span>` : ''}
+          ${got ? '' : `<span class="lock" aria-label="blocat">🔒</span>`}
+        </div>`).join('')}</div>
+    </div>`;
+  }).join('');
+  document.getElementById('rule-burn').textContent = `Bonusurile se opresc. Zilele adunate scad încet, cu ${D.burnPerDay === 1 ? 'una' : D.burnPerDay} pe zi, până reactivezi. Le reiei de unde ai rămas.`;
+}
+
+function renderPacks() {
+  const el = document.getElementById('packs');
+  const block = blocker('starter');
+  const had = D.status && D.status.starter;
+  el.innerHTML = D.packs.map(p => {
+    const mine = had && had.packId === p.id;
+    const poor = D.linked && D.coins != null && D.coins < p.price;
+    const label = mine ? '' : had ? 'Ai luat deja un pachet' : block ? block : poor ? 'Coins insuficienți' : 'Cumpără pachetul';
+    return `<article class="pack ${esc(p.tone)}">
+      <div class="top"><small>Pachet de start</small><h3>${esc(p.name)}</h3></div>
+      <ul>${p.lines.map(l => `<li>${esc(l)}</li>`).join('')}</ul>
+      <div class="foot"><span class="price">${p.price}<small>coins</small></span>
+        ${mine ? `<span class="done">✓ L-ai luat${had.at ? ' pe ' + fmtDay(had.at) : ''}</span>` : `<button type="button" class="btn-ghost" data-pack="${esc(p.id)}" ${had || block || poor ? 'disabled' : ''}>${esc(label)}</button>`}
+      </div>
+    </article>`;
+  }).join('') || '<p class="muted">Niciun pachet disponibil acum.</p>';
+  el.querySelectorAll('[data-pack]').forEach(b => b.addEventListener('click', () => buyPack(b.dataset.pack)));
+}
+
+async function post(path, body) {
+  const res = await apiFetch(path, { method: 'POST', body: JSON.stringify(body) });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(j.error || 'Nu a mers. Încearcă din nou.');
+  return j;
+}
+async function buyPlan(id) {
+  if (busy) return;
+  const p = D.plans.find(x => x.id === id); if (!p) return;
+  const active = D.status && D.status.active;
+  const ok = await confirmBox(active ? 'Prelungești Premium?' : 'Activezi Premium?',
+    `<b>${plural(p.days, 'zi', 'zile')}</b> de Premium pentru <b>${p.price} coins</b>.${active ? ' Se adaugă după ce se termină abonamentul actual.' : ' Bonusurile pornesc imediat în joc.'}<br>Rămâi cu ${D.coins - p.price} coins.`, `Plătesc ${p.price} coins`);
+  if (!ok) return;
+  busy = true;
+  try {
+    const r = await post('/api/premium/cumpara', { planId: id });
+    toast(`Gata! Premium activ până pe ${fmtDay(r.status && r.status.until)}.`, 'ok');
+  } catch (e) { toast(e.message, 'err'); }
+  busy = false;
+  load();
+}
+async function buyPack(id) {
+  if (busy) return;
+  const p = D.packs.find(x => x.id === id); if (!p) return;
+  const ok = await confirmBox(`Pachetul ${p.name}?`,
+    `Plătești <b>${p.price} coins</b>. Poți lua <b>un singur pachet pe personaj</b>, deci după asta nu mai poți cumpăra altul pe ${esc(D.name || 'acest personaj')}.<br>Banii îi ridici din joc cu <b>/recompense</b>.`, `Plătesc ${p.price} coins`);
+  if (!ok) return;
+  busy = true;
+  try {
+    await post('/api/premium/pachet', { packId: id });
+    toast(`Gata! Ai pachetul ${p.name}. Intră în joc și scrie /recompense.`, 'ok');
+  } catch (e) { toast(e.message, 'err'); }
+  busy = false;
+  load();
+}
+
+let retry = 0;
+async function load() {
+  try {
+    const res = await apiFetch('/api/premium');
+    if (!res.ok) throw new Error();
+    const d = await res.json();
+    if (!d.visible) {
+      document.querySelector('main').innerHTML = `<section class="welcome"><div><p>ÎN CURÂND</p><h1>Premium</h1><small>Abonamentul Premium și pachetele de start apar aici în curând.</small></div><a class="home-btn" href="vip-shop.html">← VIP Shop</a></section>`;
+      return;
+    }
+    D = d;
+    renderNotes(); renderState(); renderPlans(); renderPerks(); renderPacks();
+    clearTimeout(retry);
+    if (d.linked && d.online === false) retry = setTimeout(load, 20000);
+  } catch {
+    document.getElementById('notes').innerHTML = '<p class="pr-note warn">Nu am putut încărca pagina. Încearcă din nou peste un minut.</p>';
+  }
+}
+if (requireAuth()) load();
+</script>
+</body></html>

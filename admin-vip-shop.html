@@ -88,6 +88,16 @@
   .lx-scope .lx-job:has(input:checked){border-color:rgba(66,223,138,.45);background:rgba(66,223,138,.08)}
   .lx-add{display:flex;gap:8px;margin-top:12px;max-width:420px}
   .lx-add input{flex:1}
+  /* Premium și pachete de start (12.10.2026) */
+  .pm-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:10px 0 0}
+  .pm-card{border:1px solid var(--line);border-radius:12px;padding:14px;background:var(--bg);display:flex;flex-direction:column;gap:10px}
+  .pm-card h3{margin:0;font-size:14px}
+  .pm-card .pm-row{display:flex;gap:10px}
+  .pm-card .pm-row .field{flex:1;margin:0}
+  .pm-card ul{margin:0;padding-left:16px;color:var(--muted);font-size:11.5px}
+  .pm-sales{margin-top:14px;font-size:12px;color:var(--muted)}
+  .pm-sales li{margin:3px 0}
+  @media(max-width:900px){.pm-grid{grid-template-columns:1fr}}
 </style>
   <link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/assets/app/apple-touch-icon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black"><meta name="apple-mobile-web-app-title" content="Moldova RP"><script src="/pwa.js" defer></script><meta name="theme-color" content="#090a0b">
 </head>
@@ -124,6 +134,19 @@
     <div class="lx-add"><input type="text" id="lx-new-job" placeholder="ex: sheriff" maxlength="40"><button type="button" class="btn-ghost" id="lx-add-btn">+ Adaugă job</button></div>
   </div>
   <div class="formactions"><button type="button" class="btn-primary" id="lx-save">Salvează</button><span class="order-saved" id="lx-saved" hidden></span></div>
+</details>
+
+<details class="formbox lx-box" id="premium">
+  <summary><h2>⭐ Premium și pachete de start</h2><span class="lx-state" id="pm-state">Se încarcă…</span></summary>
+  <p class="vip-intro" style="margin:0 0 16px">Abonamentul <a href="premium.html">Premium</a> și pachetele de start se plătesc cu coins. Aici alegi prețurile, ce perioade se vând și dacă pagina e deschisă jucătorilor. Bonusurile din joc le aplică serverul de joc — cât timp ruta lui lipsește, butoanele de cumpărare rămân oprite.</p>
+  <div class="field checkbox" style="margin:0 0 6px"><input type="checkbox" id="pm-public"><label for="pm-public">Pagina Premium e deschisă jucătorilor (debifat = o vede doar staff-ul)</label></div>
+  <p class="lx-routes" id="pm-routes"></p>
+  <h3 style="margin:18px 0 0;font-size:13px">Perioade de abonament</h3>
+  <div class="pm-grid" id="pm-plans"></div>
+  <h3 style="margin:18px 0 0;font-size:13px">Pachete de start <span class="muted" style="font-weight:400">(conținutul e fix, îl aplică serverul de joc)</span></h3>
+  <div class="pm-grid" id="pm-packs"></div>
+  <div class="formactions"><button type="button" class="btn-primary" id="pm-save">Salvează</button><a class="btn-ghost" href="premium.html" target="_blank" rel="noopener">Vezi pagina</a><span class="order-saved" id="pm-saved" hidden></span></div>
+  <div class="pm-sales" id="pm-sales"></div>
 </details>
 
 <div class="title" style="padding:0 0 16px"><h2>Cutii</h2><button id="new-case-btn">+ Cutie nouă</button></div>
@@ -871,5 +894,67 @@ document.getElementById('lx-save').addEventListener('click', async () => {
     saved.hidden = false; saved.style.color = '#ff8a8a'; saved.textContent = err.message;
   }
 });
+
+// ---- Premium și pachete de start (12.10.2026) ----
+(function premiumAdmin() {
+  const pmEsc = x => (x ?? '').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const PLAN_NAMES = { p7: 'Scurt', p30: 'Lunar', p90: 'Lung' };
+  let pm = null;
+  const routeChip = (label, v) => v === true ? `<span class="ok">✓ ${label}: activ în joc</span>` : v === false ? `<span class="no">✗ ${label}: lipsește în joc</span>` : `<span>? ${label}: necunoscut (server oprit)</span>`;
+  function render() {
+    const s = pm.settings;
+    document.getElementById('pm-public').checked = !!s.public;
+    document.getElementById('pm-state').textContent = s.public ? 'Deschisă jucătorilor' : 'Doar staff (previzualizare)';
+    document.getElementById('pm-routes').innerHTML = routeChip('Abonament', pm.ready.premium) + routeChip('Pachete de start', pm.ready.starter);
+    document.getElementById('pm-plans').innerHTML = s.plans.map(p => `
+      <div class="pm-card" data-plan="${pmEsc(p.id)}"><h3>${PLAN_NAMES[p.id] || p.id}</h3>
+        <div class="pm-row"><div class="field"><label>Zile</label><input type="number" min="1" max="365" data-k="days" value="${p.days}"></div>
+        <div class="field"><label>Preț (coins)</label><input type="number" min="1" max="100000" data-k="price" value="${p.price}"></div></div>
+        <div class="field checkbox" style="margin:0"><input type="checkbox" data-k="on" id="pm-on-${pmEsc(p.id)}" ${p.on ? 'checked' : ''}><label for="pm-on-${pmEsc(p.id)}">Se vinde</label></div>
+      </div>`).join('');
+    document.getElementById('pm-packs').innerHTML = pm.packs.map(p => {
+      const v = s.packs[p.id] || { price: 0, on: false };
+      return `<div class="pm-card" data-pack="${pmEsc(p.id)}"><h3>${pmEsc(p.name)}</h3>
+        <ul>${p.lines.map(l => `<li>${pmEsc(l)}</li>`).join('')}</ul>
+        <div class="field" style="margin:0"><label>Preț (coins)</label><input type="number" min="1" max="100000" data-k="price" value="${v.price}"></div>
+        <div class="field checkbox" style="margin:0"><input type="checkbox" data-k="on" id="pm-pk-${pmEsc(p.id)}" ${v.on ? 'checked' : ''}><label for="pm-pk-${pmEsc(p.id)}">Se vinde</label></div>
+      </div>`;
+    }).join('');
+    const sales = pm.sales || [];
+    document.getElementById('pm-sales').innerHTML = sales.length
+      ? `<b style="color:var(--text)">Ultimele cumpărări</b><ul>${sales.map(x => {
+          const m = x.metadata || {};
+          const what = x.action === 'premium.buy' ? `Premium ${m.days} zile` : `pachetul ${pmEsc(m.packId)}`;
+          return `<li>${new Date(x.created_at).toLocaleString('ro-RO')} — <b style="color:var(--text)">${pmEsc(m.name || x.username || '—')}</b>: ${what}, ${Number(m.price) || 0} coins</li>`;
+        }).join('')}</ul>`
+      : 'Nicio cumpărare încă.';
+  }
+  async function load() {
+    try {
+      const res = await apiFetch('/api/admin/premium');
+      if (!res.ok) throw new Error();
+      pm = await res.json();
+      render();
+      if (location.hash === '#premium') document.getElementById('premium').open = true;
+    } catch { document.getElementById('pm-state').textContent = 'Nu am putut încărca setările.'; }
+  }
+  document.getElementById('pm-save').addEventListener('click', async () => {
+    const saved = document.getElementById('pm-saved');
+    const num = (el, k) => Number(el.querySelector(`[data-k="${k}"]`).value);
+    const plans = [...document.querySelectorAll('#pm-plans [data-plan]')].map(el => ({ id: el.dataset.plan, days: num(el, 'days'), price: num(el, 'price'), on: el.querySelector('[data-k="on"]').checked }));
+    const packs = {};
+    document.querySelectorAll('#pm-packs [data-pack]').forEach(el => { packs[el.dataset.pack] = { price: num(el, 'price'), on: el.querySelector('[data-k="on"]').checked }; });
+    if ([...plans.map(p => p.price), ...plans.map(p => p.days), ...Object.values(packs).map(p => p.price)].some(n => !(n >= 1))) { saved.hidden = false; saved.style.color = '#ff8a8a'; saved.textContent = 'Zilele și prețurile trebuie să fie cel puțin 1.'; return; }
+    try {
+      const res = await apiFetch('/api/admin/premium', { method: 'PUT', body: JSON.stringify({ public: document.getElementById('pm-public').checked, plans, packs }) });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || 'Nu am putut salva.');
+      pm.settings = d.settings; render();
+      saved.hidden = false; saved.style.color = 'var(--green)'; saved.textContent = '✓ Salvat';
+      setTimeout(() => { saved.hidden = true; }, 2500);
+    } catch (err) { saved.hidden = false; saved.style.color = '#ff8a8a'; saved.textContent = err.message; }
+  });
+  load();
+})();
 </script>
 </body></html>

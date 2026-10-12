@@ -259,6 +259,17 @@ window.openPlayerProfile = (function () {
     </div>`;
   }
 
+  // (12.10.2026) Premium (abonament) și pachetul de start — de pe serverul de joc.
+  const STARTER_NAMES = { bronz: 'Bronz', aur: 'Aur', platina: 'Platină' };
+  function premiumHtml(pr) {
+    if (!pr) return '';
+    const state = pr.active
+      ? `<span class="pill on">⭐ PREMIUM ACTIV</span> <span class="muted">până pe ${fmtDate(pr.until)}</span>`
+      : pr.until ? `<span class="pill warn">PREMIUM EXPIRAT</span> <span class="muted">pe ${fmtDate(pr.until)}</span>` : `<span class="muted">fără Premium</span>`;
+    const starter = pr.starter ? ` · pachet de start: <strong>${escapeHtml(STARTER_NAMES[pr.starter.packId] || pr.starter.packId)}</strong>${pr.starter.at ? ` <span class="muted">(${fmtDate(pr.starter.at)})</span>` : ''}` : '';
+    return `<p style="margin:-6px 0 18px"><b style="font-size:11px;color:var(--muted);letter-spacing:.08em">PREMIUM</b><br>${state} · <strong>${Number(pr.days) || 0}</strong> zile adunate${starter}${pr.online === false ? ' <span class="muted">(ultimele date salvate)</span>' : ''}</p>`;
+  }
+
   function renderProfile(p) {
     const body = document.getElementById('profile-body');
     document.getElementById('profile-title').textContent = `Profil — ${p.name}`;
@@ -307,6 +318,7 @@ window.openPlayerProfile = (function () {
             ? `<span class="pill info">GĂSIT DUPĂ DISCORD</span> <span class="muted">— n-a folosit /leagacont, dar personajele cu același Discord sunt: ${p.discordCharacters.map(c => `<b>${escapeHtml(c.rpName || c.identifier)}</b>${c.staticId ? ` #${escapeHtml(c.staticId)}` : ''}${c.online ? ' (online)' : ''}`).join(', ')}. Mai sus sunt datele ${p.discordCharacters.length > 1 ? 'primului' : 'lui'}.</span>`
             : `<span class="pill warn">NELEGAT DE JOC</span> <span class="muted">— n-a folosit încă /leagacont</span>`}
       </p>${loginHtml(p.login)}` : `<p class="muted" style="margin:0 0 18px">Jucătorul nu are (încă) cont pe site.</p>`;
+    const premium = premiumHtml(p.premium);
 
     const punishments = p.punishments.length ? `<table><thead><tr><th>TIP</th><th>MOTIV</th><th>DE CINE</th><th>CÂND</th></tr></thead><tbody>${
       p.punishments.map(pu => `<tr><td><span class="pill warn">${escapeHtml(pu.type)}</span></td><td>${escapeHtml(pu.reason)}</td><td>${escapeHtml(pu.issued_by || '—')}</td><td>${fmtDate(pu.created_at)}</td></tr>`).join('')
@@ -351,7 +363,7 @@ window.openPlayerProfile = (function () {
     body.innerHTML = `
       ${live}
       ${charactersHtml}
-      ${account}
+      ${account}${premium}
       <h2 style="font-size:14px;margin:22px 0 10px">⚠ Sancțiuni</h2>${punishments}
       ${moderationHtml(p.moderation)}
       ${propertyHtml(p)}

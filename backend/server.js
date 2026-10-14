@@ -1808,7 +1808,8 @@ const lowerName = n => String(n || "").trim().toLowerCase();
 const CHAR_ID_RE = /^char\d+:[0-9a-f]{20,}$/i;
 // „gloveGS030349" / „trunkGS030349" (id-ul inventarului ox_inventory) → placa + locul
 const plateOf = v => String(v || "?").trim().replace(/^(trunk|glovebox|glove)[\s:_-]*/i, "").trim().toUpperCase() || "?";
-const stashSpot = v => (/^trunk/i.test(String(v || "")) ? "portbagajul" : /^glove/i.test(String(v || "")) ? "torpedoul" : "torpedoul/portbagajul");
+const stashSpot = (v, comp) => (/^(portbagaj|trunk)/i.test(String(comp || "")) ? "portbagajul" : /^(torpedou|glove)/i.test(String(comp || "")) ? "torpedoul"
+  : /^trunk/i.test(String(v || "")) ? "portbagajul" : /^glove/i.test(String(v || "")) ? "torpedoul" : "torpedoul/portbagajul");
 
 // ===========================================================================
 // Când serverul de joc e oprit (10.10.2026) — cerut explicit: „chiar și când
@@ -2160,13 +2161,14 @@ async function identityLookup({ identifiers = [], names = [], statics = [] } = {
 // Logurile VX pomenesc celălalt jucător prin identificator + ID static:
 // transfer/schimb/factura → d.cu, fond → d.contraparte (dacă nu e chiar el) și
 // d.actor, amenda → autorStatic (cine a dat-o), banda_fond → static.
+const VX_LAG_MS = 15000;
 const VX_MONEY_CATEGORIES = new Set(["transfer", "schimb", "amenda", "factura", "fond", "banda_fond"]);
 function vxPeerRefs(l) {
   const d = l.details || {};
   if (!VX_MONEY_CATEGORIES.has(l.category)) return { peer: null, actor: null };
   const peerId = d.cu || (d.contraparte && d.contraparte !== l.identifier ? d.contraparte : null);
   const peerStatic = d.cu ? d.cuStatic : (peerId ? d.contraparteStatic : null);
-  const actorId = d.actor && d.actor !== l.identifier ? d.actor : null;
+  const actorId = d.actor && d.actor !== l.identifier ? d.actor : (l.category === "banda_fond" && d.identifier ? d.identifier : null);
   const actorStatic = actorId ? d.actorStatic : (l.category === "amenda" ? d.autorStatic : l.category === "banda_fond" ? d.static : null);
   return {
     peer: peerId || peerStatic != null ? { id: peerId || null, sid: peerStatic != null ? String(peerStatic) : null } : null,
@@ -2304,7 +2306,8 @@ function explainMoneyRows(logs, nameOf = () => null) {
         let found = null;
         for (const e of others) {
           if (!VX_MONEY_CATEGORIES.has(e.category) || e.identifier !== row.identifier) continue;
-          if (t(e) > at + 2000 || t(e) < at - 20000) continue;
+          // vx_traseu / vx_banking scriu uneori cu câteva secunde DUPĂ citirea soldului
+          if (t(e) > at + VX_LAG_MS || t(e) < at - 20000) continue;
           const ev = vxMoneyEvents(e).find(x => (x.flex || x.account === "bank") && x.amount === dB0 && dB0
             || (x.flex || x.account === "cash") && x.amount === dC0 && dC0);
           if (ev) { found = { e, ev }; break; }
@@ -2332,7 +2335,7 @@ function explainMoneyRows(logs, nameOf = () => null) {
         || near.find(e => e.category === "item_transfer" && cash(e) && lowerName(e.details?.to) === lowerName(row.player));
       if (hit) {
         const hd = hit.details || {};
-        text = hit.category === "money_vehicle_withdraw" ? `scoși din ${stashSpot(hd.vehicle)} vehiculului ${plateOf(hd.vehicle)}`
+        text = hit.category === "money_vehicle_withdraw" ? `scoși din ${stashSpot(hd.vehicle, hd.compartiment)} vehiculului ${plateOf(hd.vehicle)}`
           : hit.category === "item_pickup" ? "ridicați de pe jos"
           : hit.category === "item_obtained" ? (hd.adminGrant ? `dați de admin ${hd.adminGrant.staff || ""}`.trim() : "dați de un script (job, vânzare, jaf…)")
           : `primiți de la ${hit.player}`;
@@ -2344,7 +2347,7 @@ function explainMoneyRows(logs, nameOf = () => null) {
         || own.find(e => e.category === "item_buy" && Number(e.details?.totalPrice) === -dC);
       if (hit) {
         const hd = hit.details || {};
-        text = hit.category === "money_vehicle_deposit" ? `ascunși în ${stashSpot(hd.vehicle)} vehiculului ${plateOf(hd.vehicle)}`
+        text = hit.category === "money_vehicle_deposit" ? `ascunși în ${stashSpot(hd.vehicle, hd.compartiment)} vehiculului ${plateOf(hd.vehicle)}`
           : hit.category === "item_transfer" ? (hd.lootedFromCorpse ? `luați de pe cadavru de ${hd.to || "?"}` : `dați lui ${hd.to || "?"}`)
           : hit.category === "item_drop" ? "aruncați pe jos"
           : `cumpărătură: ${hd.count ? hd.count + "x " : ""}${hd.item || ""}${hd.shop ? ` (${hd.shop})` : ""}`;
@@ -2641,10 +2644,10 @@ async function buildMoneyTrail(resolved, { after, before }) {
         if (isMoneyish(d.item) && count) events.push({ at: l.at, account: acctOf(d.item), amount: count, cat: "pickup", text: "i-a ridicat de pe jos", confidence: "sigur", log: l });
         break;
       case "money_vehicle_deposit":
-        if (count) events.push({ at: l.at, account: "cash", amount: -count, cat: "stash_in", text: `i-a ascuns în ${stashSpot(d.vehicle)} vehiculului {where}`, where: plateOf(d.vehicle), confidence: "sigur", log: l });
+        if (count) events.push({ at: l.at, account: "cash", amount: -count, cat: "stash_in", text: `i-a ascuns în ${stashSpot(d.vehicle, d.compartiment)} vehiculului {where}`, where: plateOf(d.vehicle), confidence: "sigur", log: l });
         break;
       case "money_vehicle_withdraw":
-        if (count) events.push({ at: l.at, account: "cash", amount: count, cat: "stash_out", text: `i-a scos din ${stashSpot(d.vehicle)} vehiculului {where}`, where: plateOf(d.vehicle), confidence: "sigur", log: l });
+        if (count) events.push({ at: l.at, account: "cash", amount: count, cat: "stash_out", text: `i-a scos din ${stashSpot(d.vehicle, d.compartiment)} vehiculului {where}`, where: plateOf(d.vehicle), confidence: "sigur", log: l });
         break;
       case "item_obtained":
         if (isMoneyish(d.item) && count) events.push({ at: l.at, account: acctOf(d.item), amount: count, cat: "script", text: "i-au apărut în inventar (dați de un script)", confidence: "sigur", log: l });
@@ -2682,7 +2685,7 @@ async function buildMoneyTrail(resolved, { after, before }) {
         // un schimb din meniul G care s-a scris și ca transfer de item (bani) → o singură dată
         if (l.category === "schimb" && giveEvents.some(e => e.amount === x.amount && Math.abs(ms(e.at) - ms(l.at)) <= 5000)) continue;
         events.push({
-          at: l.at, account: x.account, amount: x.amount, cat: x.cat, text: x.text, flex: !!x.flex,
+          at: l.at, account: x.account, amount: x.amount, cat: x.cat, text: x.text, flex: !!x.flex, vx: true,
           counterpart: pw ? (pw.player || vxName(pw)) : null, counterpartWho: pw, confidence: "sigur", log: l,
         });
       }
@@ -2828,7 +2831,7 @@ async function buildMoneyTrail(resolved, { after, before }) {
     const t = ms(row.at);
     const dC = num(d.cashDelta), dB = num(d.bankDelta);
     // evenimentele din cele ~20 s dinaintea citirii (jocul citește soldul la 15 s)
-    const expl = events.filter((e, i) => !used.has(i) && (e.account === "cash" || e.account === "bank") && (e.site ? Math.abs(ms(e.at) - t) <= 120000 : ms(e.at) <= t + 2000 && ms(e.at) >= t - 20000))
+    const expl = events.filter((e, i) => !used.has(i) && (e.account === "cash" || e.account === "bank") && (e.site ? Math.abs(ms(e.at) - t) <= 120000 : ms(e.at) <= t + (e.vx ? VX_LAG_MS : 2000) && ms(e.at) >= t - 20000))
       .map(e => ({ e, i: events.indexOf(e) }));
     const entry = {
       at: row.at, kind: "balance", character: charOf(row.identifier), deltaCash: dC, deltaBank: dB,
@@ -2848,6 +2851,12 @@ async function buildMoneyTrail(resolved, { after, before }) {
       if (e.flex) {
         const fits = r => r && Math.sign(r) === Math.sign(e.amount) && Math.abs(r) >= Math.abs(e.amount);
         e.account = fits(restBank) ? "bank" : fits(restCash) ? "cash" : e.account;
+      }
+      // un log VX se leagă doar de o schimbare de sold în același sens și cel puțin la fel de mare
+      // (fereastra lui e mai largă, deci altfel ar putea fi „furat” de citirea dinainte)
+      if (e.vx) {
+        const rest = e.account === "bank" ? restBank : restCash;
+        if (!rest || Math.sign(rest) !== Math.sign(e.amount) || Math.abs(rest) < Math.abs(e.amount)) continue;
       }
       // o cumpărătură doar „probabil" a fost plătită cu cash — o legăm doar dacă încape
       if (e.soft && !(restCash < 0 && Math.abs(restCash) >= Math.abs(e.amount))) continue;

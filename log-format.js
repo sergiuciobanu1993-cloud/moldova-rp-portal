@@ -84,7 +84,14 @@
   function isMoneyItemName(name) { return MONEY_ITEM_NAMES.has(String(name || '').trim().toLowerCase()); }
   function isBlackMoneyItem(name) { return /^(black_?money|dirty_?money|bani_?murdari|marked_?bills|blackmoney)$/i.test(String(name || '').trim()); }
   function plateOf(v) { return String(v || '?').trim().replace(/^(trunk|glovebox|glove)[\s:_-]*/i, '').trim().toUpperCase() || '?'; }
-  function stashSpot(v) { return /^trunk/i.test(String(v || '')) ? 'portbagajul' : /^glove/i.test(String(v || '')) ? 'torpedoul' : 'torpedoul/portbagajul'; }
+  // (pasul A, 14.10) jocul trimite doar placa + compartiment: 'portbagaj' / 'torpedou';
+  // rândurile vechi au prefixul în placă (trunkABC123 / gloveABC123)
+  function stashSpot(v, comp) {
+    const c = String(comp || '').toLowerCase();
+    if (/^portbagaj|^trunk/.test(c)) return 'portbagajul';
+    if (/^torpedou|^glove/.test(c)) return 'torpedoul';
+    return /^trunk/i.test(String(v || '')) ? 'portbagajul' : /^glove/i.test(String(v || '')) ? 'torpedoul' : 'torpedoul/portbagajul';
+  }
   function isWeaponItem(name) { return /^weapon_|(^|[\s_])weapon([\s_]|$)/i.test(String(name || '').trim()); }
 
   // ---- Cine e jucătorul ------------------------------------------------------
@@ -263,6 +270,9 @@
     if (res === 'vx_facturi' || d.tipNota === 'factura') return { text: d.comentariu || 'factură plătită' };
     if (res === 'r_boss') return { text: d.cale === 'remove' ? 'retragere din meniul de șef' : 'depunere din meniul de șef' };
     if (res === 'vx_garaje') return { text: 'taxă la parcul auto' };
+    // (de pe 16.10) „jg-mechanic: reparatie / factura service / piese…”
+    const mech = /^jg-mechanic:\s*(.+)$/i.exec(motiv);
+    if (mech) return /^necunoscut/i.test(mech[1]) ? { text: 'mecanic — motiv necunoscut', unknown: true } : { text: `mecanic — ${mech[1]}` };
     if (d.tipNota === 'alta_sursa' || motiv === 'alta_sursa') return { text: d.comentariu || 'altă sursă din joc', note: 'bani noi din joc, nu de la un jucător' };
     if (!motiv || motiv === 'unknown') return { text: `motiv nescris de joc${res ? ` (resursa ${res})` : ''}`, unknown: true };
     return { text: motiv + (d.comentariu && !motiv.includes(d.comentariu) ? ` — ${d.comentariu}` : '') };
@@ -373,11 +383,11 @@
       // vine din id-ul inventarului ox_inventory, best-effort).
       case 'money_vehicle_deposit': {
         const sum = (typeof d.count === 'number') ? fmtSum(d.count) : 'bani';
-        return `a ascuns <strong>${sum}</strong> în ${stashSpot(d.vehicle)} vehiculului <strong>${escapeHtml(plateOf(d.vehicle))}</strong>`;
+        return `a ascuns <strong>${sum}</strong> în ${stashSpot(d.vehicle, d.compartiment)} vehiculului <strong>${escapeHtml(plateOf(d.vehicle))}</strong>`;
       }
       case 'money_vehicle_withdraw': {
         const sum = (typeof d.count === 'number') ? fmtSum(d.count) : 'bani';
-        return `a scos <strong>${sum}</strong> din ${stashSpot(d.vehicle)} vehiculului <strong>${escapeHtml(plateOf(d.vehicle))}</strong>`;
+        return `a scos <strong>${sum}</strong> din ${stashSpot(d.vehicle, d.compartiment)} vehiculului <strong>${escapeHtml(plateOf(d.vehicle))}</strong>`;
       }
       case 'vehicle_acquired': {
         const label = d.vehicle || 'un vehicul';
@@ -459,10 +469,14 @@
         const sign = delta < 0 ? '−' : '+';
         const op = { kit: 'kit', depunere: 'depunere', retragere: 'retragere', plata: 'plată' }[d.op] || d.op || d.tip || 'mișcare';
         const src = d.sursa || d.actorResursa || d.motiv;
-        const by = d.static ? ` · de ${personHtml(log.actorWho, d.static)}` : '';
+        const ACTOR = { curator: 'dat de curator', consola: 'din consolă (staff)', sistem: 'automat' };
+        const by = d.static || d.identifier ? ` · de ${personHtml(log.actorWho, d.static)}` : (ACTOR[d.actorTip] ? ` <span class="muted">· ${ACTOR[d.actorTip]}</span>` : '');
+        // plata automată pentru teritorii: zone + săptămâna
+        const zones = Array.isArray(d.zone) ? d.zone : (d.zone != null ? [d.zone] : []);
+        const zoneTxt = zones.length ? ` <span class="muted">· teritorii: ${zones.length > 1 || typeof zones[0] !== 'number' ? escapeHtml(zones.map(z => typeof z === 'object' ? (z.label || z.name || z.id) : z).join(', ')) : zones[0] + ' cartiere'}${d.saptamana ? ` · săptămâna ${escapeHtml(String(d.saptamana))}` : ''}</span>` : (d.saptamana ? ` <span class="muted">· săptămâna ${escapeHtml(String(d.saptamana))}</span>` : '');
         const sold = typeof d.sold_dupa === 'number' ? ` <span class="muted">· sold: ${fmtSum(d.sold_inainte)} → ${fmtSum(d.sold_dupa)}</span>` : '';
         const state = d.stare && d.stare !== 'facut' ? ` <span class="muted">(stare: ${escapeHtml(String(d.stare))})</span>` : '';
-        return `fondul bandei <strong>${escapeHtml(d.banda || ('#' + (d.org ?? '?')))}</strong>: <strong>${sign}${fmtSum(delta)}</strong> ${dirty ? '<strong>bani murdari</strong>' : 'bani curați'} — ${escapeHtml(String(op))}${src ? ` <span class="muted">(sursa: ${escapeHtml(String(src))})</span>` : ''}${by}${state}${sold}`;
+        return `fondul bandei <strong>${escapeHtml(d.banda || ('#' + (d.org ?? '?')))}</strong>: <strong>${sign}${fmtSum(delta)}</strong> ${dirty ? '<strong>bani murdari</strong>' : 'bani curați'} — ${escapeHtml(String(op))}${src ? ` <span class="muted">(sursa: ${escapeHtml(String(src))})</span>` : ''}${zoneTxt}${by}${state}${sold}`;
       }
       case 'admin': {
         const parts = [];
@@ -552,7 +566,7 @@
         if (out) {
           if (big(d.suma ?? d.delta) >= MONEY_BIG) sizeFlag(d.suma ?? d.delta, 'Scos din fond');
           else if (big(d.suma ?? d.delta) >= 50000) add('warn', 'Bani scoși din fondul facțiunii');
-        } else if ((!d.motiv || d.motiv === 'unknown') && big(d.suma ?? d.delta) >= 50000) {
+        } else if ((!d.motiv || d.motiv === 'unknown' || /^jg-mechanic:\s*necunoscut/i.test(String(d.motiv))) && big(d.suma ?? d.delta) >= 50000) {
           add(big(d.suma ?? d.delta) >= MONEY_BIG ? 'crit' : 'warn', 'Intrare în fond fără motiv scris');
         } else if (d.legatura === 'nota' && d.tipNota === 'alta_sursa') {
           sizeFlag(d.suma ?? d.delta, 'Bani noi în fond');

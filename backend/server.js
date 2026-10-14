@@ -2832,7 +2832,14 @@ async function buildMoneyTrail(resolved, { after, before }) {
     const dC = num(d.cashDelta), dB = num(d.bankDelta);
     // evenimentele din cele ~20 s dinaintea citirii (jocul citește soldul la 15 s)
     const expl = events.filter((e, i) => !used.has(i) && (e.account === "cash" || e.account === "bank") && (e.site ? Math.abs(ms(e.at) - t) <= 120000 : ms(e.at) <= t + (e.vx ? VX_LAG_MS : 2000) && ms(e.at) >= t - 20000))
-      .map(e => ({ e, i: events.indexOf(e) }));
+      .map(e => ({ e, i: events.indexOf(e) }))
+      // întâi ce s-a întâmplat ÎNAINTE de citire, apoi suma exactă, apoi cel mai apropiat în timp —
+      // altfel un transfer de după (fereastra VX e mai lungă) poate fi „furat” de citirea dinainte
+      .sort((a, b) => {
+        const after = x => (ms(x.e.at) > t + 1000 ? 1 : 0);
+        const exact = x => (Math.abs(x.e.amount) === Math.abs(x.e.account === "cash" ? dC : dB) ? 0 : 1);
+        return after(a) - after(b) || exact(a) - exact(b) || Math.abs(ms(a.e.at) - t) - Math.abs(ms(b.e.at) - t);
+      });
     const entry = {
       at: row.at, kind: "balance", character: charOf(row.identifier), deltaCash: dC, deltaBank: dB,
       balanceAfter: (typeof d.cash === "number" || typeof d.bank === "number") ? { cash: d.cash ?? null, bank: d.bank ?? null } : null,

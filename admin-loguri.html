@@ -78,6 +78,8 @@
       <select id="f-category" class="filter-select">
         <option value="">Toate categoriile</option>
         <option value="money">Bani (cash / bancă)</option>
+        <option value="transfer">Transferuri bancare între jucători</option>
+        <option value="schimb">Schimb între jucători (meniul G)</option>
         <option value="item_transfer">Transfer iteme / bani între jucători</option>
         <option value="money_vehicle_deposit">Bani ascunși în vehicule</option>
         <option value="money_vehicle_withdraw">Bani scoși din vehicule</option>
@@ -87,6 +89,10 @@
         <option value="item_buy">Cumpărături</option>
         <option value="item_craft">Crafting</option>
         <option value="vehicle_acquired">Vehicul nou</option>
+        <option value="amenda">Amenzi</option>
+        <option value="factura">Facturi</option>
+        <option value="fond">Fonduri de facțiune (poliție, EMS, firme…)</option>
+        <option value="banda_fond">Fonduri de bandă</option>
         <option value="death">Morți / Kill-uri</option>
         <option value="chat">Chat</option>
         <option value="command">Comenzi</option>
@@ -360,7 +366,8 @@ function renderTrail(t) {
       <b>Cum se citește:</b> jocul verifică soldul fiecărui jucător la 15 secunde; fiecare schimbare e legată de ce s-a întâmplat chiar înainte (bani dați, ridicați, scoși din vehicul…).
       <span class="lf-sure">sigur</span> = scris direct de joc, <span class="lf-maybe">probabil</span> = dedus din momentul în care s-a întâmplat, <span class="lf-unknown">necunoscut</span> = jocul nu ne-a spus de unde/unde.
       ${t.truncated ? '<br><b>Interval mare:</b> am citit doar cele mai noi 500 de înregistrări pe categorie — alege un interval mai scurt pentru tot detaliul.' : ''}
-      <br><b>Ce nu vede încă jocul:</b> bani puși în dulapuri/stash-uri de case, de facțiune sau de gașcă, conturile facțiunilor, banii murdari puși în vehicule și sursa exactă a banilor dați de scripturi (job, jaf, cazino) — le-am cerut echipei serverului.
+      <br><b>Văzute din 14.10:</b> transferurile bancare, schimburile din meniul G, amenzile, facturile și banii puși/scoși din fondurile facțiunilor — toate <span class="lf-sure">sigur</span>, scrise direct de joc.
+      <br><b>Ce nu vede încă jocul:</b> bani puși în dulapuri/stash-uri de case sau portbagaje (în afară de bani), banii murdari din citirile de sold și sursa exactă a banilor dați de scripturi (job, jaf, cazino) — le-am cerut echipei serverului.
     </p>`;
 }
 

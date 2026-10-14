@@ -1,4 +1,4 @@
-// Formatarea logurilor, comună (08.10.2026): pagina Loguri, Kill Logs,
+// Formatarea logurilor, comună (08.10.2026; 14.10.2026: transfer, schimb, amendă, factură, fonduri): pagina Loguri, Kill Logs,
 // profilul jucătorului și serverul (backend/server.js o încarcă și el, pentru
 // regulile de „suspect" și pentru Traseul banilor) — ca o frază, o regulă sau
 // un prag să fie scrise o singură dată, nu în patru locuri care apoi diferă.
@@ -12,6 +12,8 @@
     item_buy: 'Cumpărare', item_craft: 'Crafting', item_transfer: 'Transfer item', item_obtained: 'Item obținut', item_drop: 'Aruncat pe jos',
     item_pickup: 'Ridicat de jos',
     vehicle_acquired: 'Vehicul nou',
+    transfer: 'Transfer bancar', schimb: 'Schimb (meniul G)', amenda: 'Amendă', factura: 'Factură',
+    fond: 'Fond facțiune', banda_fond: 'Fond bandă',
     admin: 'Acțiune staff',
     discord: 'Discord',
   };
@@ -21,6 +23,7 @@
     item_buy: 'info', item_craft: 'info', item_transfer: 'info', item_obtained: 'info', item_drop: 'warn',
     item_pickup: 'info',
     vehicle_acquired: 'info',
+    transfer: 'warn', schimb: 'warn', amenda: 'info', factura: 'info', fond: 'info', banda_fond: 'warn',
     admin: 'warn',
     discord: 'info',
   };
@@ -109,7 +112,8 @@
   function otherHtml(name, who) {
     if (!name) return '<strong>necunoscut</strong>';
     if (who && who.rpName) {
-      return `${playerButton(name, who.identifier, who.rpName, `<strong>${escapeHtml(who.rpName)}</strong>`)}${staticTag(who.staticId)} <span class="muted lf-cfx">(${escapeHtml(name)})</span>`;
+      const cfx = String(name).trim().toLowerCase() === String(who.rpName).trim().toLowerCase() || /^#\d+$/.test(String(name)) ? '' : ` <span class="muted lf-cfx">(${escapeHtml(name)})</span>`;
+      return `${playerButton(name, who.identifier, who.rpName, `<strong>${escapeHtml(who.rpName)}</strong>`)}${staticTag(who.staticId)}${cfx}`;
     }
     return playerButton(name, null, null, `<strong>${escapeHtml(name)}</strong>`);
   }
@@ -207,6 +211,63 @@
     return escapeHtml(text);
   }
 
+
+  // ---- Logurile noi de bani (14.10.2026): bancă, schimb, amenzi, facturi, fonduri
+  // Celălalt jucător vine ca identificator (d.cu / d.contraparte / d.actor) + ID
+  // static; serverul pune numele lui în log.peerWho / log.actorWho.
+  function personHtml(who, sid, fallback) {
+    const s = sid != null && sid !== '' ? String(sid) : (who && who.staticId) || null;
+    if (who && (who.rpName || who.player)) {
+      const label = `<strong>${escapeHtml(who.rpName || who.player)}</strong>`;
+      return playerButton(who.player || who.rpName, who.identifier, who.rpName, label) + staticTag(who.staticId || s);
+    }
+    if (s) return playerButton('#' + s, who && who.identifier, null, `<span class="lf-sid" title="ID static (din joc) — nume necunoscut încă">#${escapeHtml(s)}</span>`);
+    return `<strong>${escapeHtml(fallback || 'necunoscut')}</strong>`;
+  }
+  const FACTION_LABEL = {
+    police: 'Poliție', sheriff: 'Sheriff', ambulance: 'EMS', loscustoms: 'Los Santos Customs', mechanic: 'Mecanici',
+    cruisin: 'Cruisin', taxi: 'Taxi', gov: 'Guvern', government: 'Guvern', fbi: 'FBI', army: 'Armată', doj: 'Justiție',
+  };
+  function factionLabel(job) {
+    const k = String(job || '').replace(/^society_/i, '').trim();
+    if (!k) return 'necunoscută';
+    return FACTION_LABEL[k.toLowerCase()] || k.charAt(0).toUpperCase() + k.slice(1);
+  }
+  const CHANNEL_LABEL = { telefon: 'din telefon', cont: 'de la bancă / ATM', banca: 'de la bancă', atm: 'de la ATM' };
+  const FINE_PATH = { telefon: 'din telefon', parc: 'la parcul auto', auto: 'automat', card: 'cu cardul', sentinta: 'din sentință', comanda: 'prin comandă', banca: 'la bancă' };
+  const PAY_MODE = { banca: 'din bancă', cash: 'cash', money: 'cash', mana: 'cash, în mână' };
+  function refTag(ref) { return ref ? ` <span class="muted">· ref. <code>${escapeHtml(String(ref))}</code></span>` : ''; }
+  function itemsText(list) {
+    if (!Array.isArray(list) || !list.length) return '';
+    return list.slice(0, 12).map(x => {
+      if (x == null) return '';
+      if (typeof x !== 'object') return escapeHtml(String(x));
+      const name = x.label || x.name || x.item || '?';
+      const count = Number(x.count ?? x.amount ?? x.qty);
+      return escapeHtml((Number.isFinite(count) && count ? count + 'x ' : '') + name);
+    }).filter(Boolean).join(', ') + (list.length > 12 ? ` și încă ${list.length - 12}` : '');
+  }
+  function swapSide(money, items) {
+    const bits = [];
+    if (Number(money) > 0) bits.push(`<strong>${fmtSum(money)}</strong>`);
+    const it = itemsText(items);
+    if (it) bits.push(`<strong>${it}</strong>`);
+    return bits.join(' + ');
+  }
+  // De ce s-au mișcat banii unui fond (motivul scris de vx_traseu)
+  function fundReason(d) {
+    const motiv = String(d.motiv || '');
+    const res = String(d.resursa || '');
+    const ref = (/([A-Z0-9]{6,})$/.exec(motiv) || [])[1];
+    if (res === 'vx_dosar' || /^vx_dosar/.test(motiv)) return { text: /sentin/i.test(motiv) ? 'sentință plătită' : 'amendă plătită', ref };
+    if (res === 'vx_facturi' || d.tipNota === 'factura') return { text: d.comentariu || 'factură plătită' };
+    if (res === 'r_boss') return { text: d.cale === 'remove' ? 'retragere din meniul de șef' : 'depunere din meniul de șef' };
+    if (res === 'vx_garaje') return { text: 'taxă la parcul auto' };
+    if (d.tipNota === 'alta_sursa' || motiv === 'alta_sursa') return { text: d.comentariu || 'altă sursă din joc', note: 'bani noi din joc, nu de la un jucător' };
+    if (!motiv || motiv === 'unknown') return { text: `motiv nescris de joc${res ? ` (resursa ${res})` : ''}`, unknown: true };
+    return { text: motiv + (d.comentariu && !motiv.includes(d.comentariu) ? ` — ${d.comentariu}` : '') };
+  }
+
   // Fiecare categorie de log are un format diferit de "details" — o frază pe
   // înțeles. Jobul jucătorului se adaugă la final, la fel pentru orice categorie.
   function formatDetails(log) {
@@ -260,6 +321,8 @@
           ? (d.confirmedSource ? ` <span class="lf-sure">confirmat de bancă</span>` : ` <span class="lf-maybe">probabil</span>`)
           : d.confirmedSource
           ? ` · ${lbl}: <strong>${sourceHtml(d.confirmedSource, log.peerWho)}</strong> <span class="lf-sure">sigur</span>`
+          : log.explainedSure && log.explainedBy
+          ? ` · ${lbl}: <strong>${escapeHtml(log.explainedBy)}</strong> <span class="lf-sure">sigur</span>`
           : (d.possibleSource
             ? ` · ${lbl}: ${sourceHtml(d.possibleSource, log.peerWho)} <span class="lf-maybe">posibil</span>`
             : (log.explainedBy
@@ -324,6 +387,83 @@
         }
         return `are un vehicul nou: <strong>${escapeHtml(label)}</strong>${plate} <span class="muted">· nu știm sigur dacă l-a cumpărat, primit sau transferat</span>`;
       }
+      case 'transfer': {
+        const peer = personHtml(log.peerWho, d.cuStatic);
+        const how = d.canal ? ` <span class="muted">(${escapeHtml(CHANNEL_LABEL[d.canal] || String(d.canal))})</span>` : '';
+        const fee = Number(d.comision) > 0 ? ` <span class="muted">· comision ${fmtSum(d.comision)}</span>` : '';
+        const later = d.livrat && d.livrat !== 'acum' ? ` <span class="muted">· livrat: ${escapeHtml(String(d.livrat))}</span>` : '';
+        return d.rol === 'primit'
+          ? `a primit <strong>${fmtSum(d.suma)}</strong> prin bancă de la ${peer}${how}${fee}${later}`
+          : `a trimis <strong>${fmtSum(d.suma)}</strong> prin bancă lui ${peer}${how}${fee}${later}`;
+      }
+      case 'schimb': {
+        const peer = personHtml(log.peerWho, d.cuStatic);
+        const gave = swapSide(d.baniDati, d.dat);
+        const got = swapSide(d.baniPrimiti, d.primit);
+        const via = d.canal === 'meniu_g' ? ' <span class="muted">(meniul G)</span>' : (d.canal ? ` <span class="muted">(${escapeHtml(String(d.canal))})</span>` : '');
+        if (gave && !got) return `i-a dat lui ${peer} ${gave} <span class="muted">fără nimic în schimb</span>${via}`;
+        if (got && !gave) return `a primit de la ${peer} ${got} <span class="muted">fără să dea nimic</span>${via}`;
+        if (!gave && !got) return `schimb gol cu ${peer}${via}`;
+        return `schimb cu ${peer}: a dat ${gave} · a primit ${got}${via}`;
+      }
+      case 'amenda': {
+        const paid = d.stare === 'platita';
+        const who = factionLabel(d.factiune);
+        const path = FINE_PATH[d.cale] ? ` ${FINE_PATH[d.cale]}` : (d.cale ? ` (${escapeHtml(String(d.cale))})` : '');
+        const p = d.plata || {};
+        const split = Number(p.money) > 0 && Number(p.bank) > 0 ? ` <span class="muted">(${fmtSum(p.money)} cash + ${fmtSum(p.bank)} din bancă)</span>`
+          : Number(p.money) > 0 ? ' <span class="muted">(cash)</span>' : (d.mod === 'banca' || Number(p.bank) > 0 ? ' <span class="muted">(din bancă)</span>' : '');
+        const sent = d.sentinta ? ` <span class="muted">· sentința #${escapeHtml(String(d.sentinta))}</span>` : '';
+        const by = d.autorStatic ? ` · dată de ${personHtml(log.actorWho, d.autorStatic)}` : '';
+        const isSent = d.cale === 'sentinta' || d.sentinta;
+        if (paid && isSent) return `a plătit sentința de <strong>${fmtSum(d.suma)}</strong> către <strong>${escapeHtml(who)}</strong>${split}${by}${sent}${refTag(d.ref)}`;
+        return paid
+          ? `a plătit${path} amenda de <strong>${fmtSum(d.suma)}</strong> către <strong>${escapeHtml(who)}</strong>${split}${by}${sent}${refTag(d.ref)}`
+          : `a primit o amendă de <strong>${fmtSum(d.suma)}</strong> de la <strong>${escapeHtml(who)}</strong> <span class="muted">(${escapeHtml(String(d.stare || 'neplătită'))})</span>${by}${sent}${refTag(d.ref)}`;
+      }
+      case 'factura': {
+        const peer = personHtml(log.peerWho, d.cuStatic);
+        const firm = `<strong>${escapeHtml(d.firma || factionLabel(d.job))}</strong>`;
+        const mode = PAY_MODE[d.mod] ? ` <span class="muted">(${PAY_MODE[d.mod]})</span>` : '';
+        const parts = [];
+        if (Number(d.inFond) > 0) parts.push(`${fmtSum(d.inFond)} în fondul firmei`);
+        if (Number(d.laLucrator) > 0) parts.push(`${fmtSum(d.laLucrator)} la lucrător${PAY_MODE[d.lucratorPlata] ? ` (${PAY_MODE[d.lucratorPlata]})` : ''}`);
+        const split = parts.length ? ` <span class="muted">· ${parts.join(', ')}</span>` : '';
+        return d.rol === 'incasator'
+          ? `a încasat factura de <strong>${fmtSum(d.suma)}</strong> pentru ${firm} de la ${peer}${mode}${split}${refTag(d.ref)}`
+          : `a plătit factura de <strong>${fmtSum(d.suma)}</strong> la ${firm}, emisă de ${peer}${mode}${split}${refTag(d.ref)}`;
+      }
+      case 'fond': {
+        const fund = `fondul <strong>${escapeHtml(factionLabel(d.cont))}</strong>`;
+        const r = fundReason(d);
+        const out = d.cale === 'remove' || Number(d.delta) < 0;
+        const sum = `<strong>${fmtSum(d.suma ?? d.delta)}</strong>`;
+        const self = !d.contraparte || d.contraparte === log.identifier;
+        const why = ` — ${escapeHtml(r.text)}${r.ref ? refTag(r.ref) : ''}${r.unknown ? ' <span class="lf-unknown">necunoscut</span>' : ''}${r.note ? ` <span class="muted">(${escapeHtml(r.note)})</span>` : ''}`;
+        let head, actor = '';
+        if (d.legatura === 'nota') {
+          head = `${out ? 'au ieșit' : 'au intrat'} ${sum} ${out ? 'din' : 'în'} ${fund}`;
+          if (d.actor && d.actor !== log.identifier) actor = ` · făcut de ${personHtml(log.actorWho, d.actorStatic)}`;
+          else if (d.actor) head = `${out ? 'a scos' : 'a adus'} ${sum} ${out ? 'din' : 'în'} ${fund}`;
+        } else if (self) {
+          head = out ? `a scos ${sum} din ${fund}` : `a plătit ${sum} în ${fund}`;
+        } else {
+          head = `${out ? `${sum} din ${fund} către` : `${sum} în ${fund} de la`} ${personHtml(log.peerWho, d.contraparteStatic)}`;
+        }
+        const sold = typeof d.sold === 'number' ? ` <span class="muted">· sold fond: ${fmtSum(d.sold)}</span>` : '';
+        return head + why + actor + sold;
+      }
+      case 'banda_fond': {
+        const dirty = d.murdari === true || /dirty|black/i.test(String(d.fond || ''));
+        const delta = Number(d.delta ?? d.suma) || 0;
+        const sign = delta < 0 ? '−' : '+';
+        const op = { kit: 'kit', depunere: 'depunere', retragere: 'retragere', plata: 'plată' }[d.op] || d.op || d.tip || 'mișcare';
+        const src = d.sursa || d.actorResursa || d.motiv;
+        const by = d.static ? ` · de ${personHtml(log.actorWho, d.static)}` : '';
+        const sold = typeof d.sold_dupa === 'number' ? ` <span class="muted">· sold: ${fmtSum(d.sold_inainte)} → ${fmtSum(d.sold_dupa)}</span>` : '';
+        const state = d.stare && d.stare !== 'facut' ? ` <span class="muted">(stare: ${escapeHtml(String(d.stare))})</span>` : '';
+        return `fondul bandei <strong>${escapeHtml(d.banda || ('#' + (d.org ?? '?')))}</strong>: <strong>${sign}${fmtSum(delta)}</strong> ${dirty ? '<strong>bani murdari</strong>' : 'bani curați'} — ${escapeHtml(String(op))}${src ? ` <span class="muted">(sursa: ${escapeHtml(String(src))})</span>` : ''}${by}${state}${sold}`;
+      }
       case 'admin': {
         const parts = [];
         const nice = humanizeAdminAction(d.action);
@@ -370,7 +510,7 @@
         const inflow = (Number(d.cashDelta) || 0) > 0 || (Number(d.bankDelta) || 0) > 0;
         const internal = Number(d.cashDelta) !== 0 && Number(d.cashDelta) === -Number(d.bankDelta);
         if (!internal) sizeFlag(m, 'Sumă');
-        if (inflow && /^salariu/i.test(String(d.possibleSource || '')) && m >= 100000) add(m >= MONEY_HUGE ? 'crit' : 'warn', '„Salariu” prea mare — de verificat');
+        if (inflow && !log.explainedSure && /^salariu/i.test(String(d.possibleSource || '')) && m >= 100000) add(m >= MONEY_HUGE ? 'crit' : 'warn', '„Salariu” prea mare — de verificat');
         if (inflow && !internal && !d.confirmedSource && !d.possibleSource && !log.explainedBy && m >= 50000) add(m >= MONEY_BIG ? 'crit' : 'warn', 'Bani primiți fără sursă cunoscută');
         break;
       }
@@ -394,6 +534,37 @@
         if (log.notOwnStash) add('crit', 'A luat bani ascunși de altcineva');
         else if (big(d.count) >= MONEY_BIG) add('warn', 'Sumă mare scoasă din vehicul');
         break;
+      case 'transfer':
+        sizeFlag(d.suma, d.rol === 'primit' ? 'Primit prin bancă' : 'Trimis prin bancă');
+        break;
+      case 'schimb': {
+        const m = Math.max(big(d.baniDati), big(d.baniPrimiti));
+        sizeFlag(m, 'Schimb de bani');
+        const oneSided = (big(d.baniDati) > 0 && !big(d.baniPrimiti) && !(d.primit || []).length) || (big(d.baniPrimiti) > 0 && !big(d.baniDati) && !(d.dat || []).length);
+        if (oneSided && m >= 50000 && m < MONEY_BIG) add('warn', big(d.baniDati) > 0 ? 'Bani dați fără nimic în schimb' : 'Bani primiți fără să dea nimic');
+        break;
+      }
+      case 'factura':
+        sizeFlag(d.suma, 'Factură');
+        break;
+      case 'fond': {
+        const out = d.cale === 'remove' || Number(d.delta) < 0;
+        if (out) {
+          if (big(d.suma ?? d.delta) >= MONEY_BIG) sizeFlag(d.suma ?? d.delta, 'Scos din fond');
+          else if (big(d.suma ?? d.delta) >= 50000) add('warn', 'Bani scoși din fondul facțiunii');
+        } else if ((!d.motiv || d.motiv === 'unknown') && big(d.suma ?? d.delta) >= 50000) {
+          add(big(d.suma ?? d.delta) >= MONEY_BIG ? 'crit' : 'warn', 'Intrare în fond fără motiv scris');
+        } else if (d.legatura === 'nota' && d.tipNota === 'alta_sursa') {
+          sizeFlag(d.suma ?? d.delta, 'Bani noi în fond');
+        }
+        break;
+      }
+      case 'banda_fond': {
+        const dirty = d.murdari === true || /dirty|black/i.test(String(d.fond || ''));
+        if (dirty && big(d.delta ?? d.suma) >= 50000) add(big(d.delta ?? d.suma) >= MONEY_BIG ? 'crit' : 'warn', 'Bani murdari în fondul bandei');
+        else if (big(d.delta ?? d.suma) >= MONEY_HUGE) add('warn', `Fond bandă: mișcare peste ${fmtSum(MONEY_HUGE)}`);
+        break;
+      }
       case 'vehicle_acquired':
         if (d.adminGrant) add('warn', 'Vehicul dat de admin');
         break;
@@ -439,7 +610,7 @@
     CATEGORY_LABEL, CATEGORY_PILL, MONEY_BIG, MONEY_HUGE,
     humanizeAdminAction, escapeHtml, truncate, fmtDate, fmtMoney, fmtSum,
     isMoneyItemName, isBlackMoneyItem, isWeaponItem,
-    playerButton, staticTag, shortId, whoHtml, otherHtml, formatDiscordContent, describeItemMetadata,
+    playerButton, staticTag, shortId, whoHtml, otherHtml, personHtml, factionLabel, fundReason, formatDiscordContent, describeItemMetadata,
     formatDetails, flagsFor, flagsHtml, injectStyles,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

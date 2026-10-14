@@ -196,8 +196,19 @@ function summarizeActivity(a) {
     item_obtained: 'Item obținut', item_buy: 'Cumpărătură', item_transfer: 'Transfer item',
     item_craft: 'Crafting', item_drop: 'Item aruncat', vehicle_acquired: 'Vehicul nou',
     admin: 'Acțiune de staff asupra ta', money: 'Bani',
+    transfer: 'Transfer bancar', schimb: 'Schimb cu alt jucător', amenda: 'Amendă', factura: 'Factură', fond: 'Fondul facțiunii',
   };
   const d = a.details || {};
+  // (14.10.2026) logurile VX: suma, cu semnul din perspectiva ta
+  if (['transfer', 'schimb', 'amenda', 'factura', 'fond'].includes(a.category)) {
+    const n = v => Math.abs(Math.round(Number(v) || 0)).toLocaleString('ro-RO') + '$';
+    const extra = a.category === 'transfer' ? `${d.rol === 'primit' ? 'primit +' : 'trimis −'}${n(d.suma)}${d.cuStatic ? ` (#${d.cuStatic})` : ''}`
+      : a.category === 'schimb' ? [Number(d.baniDati) > 0 ? `dat −${n(d.baniDati)}` : '', Number(d.baniPrimiti) > 0 ? `primit +${n(d.baniPrimiti)}` : ''].filter(Boolean).join(' · ') || 'schimb de iteme'
+      : a.category === 'amenda' ? `${d.stare === 'platita' ? 'plătită' : 'primită'} −${n(d.suma)}${d.ref ? ` · ${d.ref}` : ''}`
+      : a.category === 'factura' ? `${d.rol === 'incasator' ? 'încasată' : 'plătită'} ${n(d.suma)}${d.firma ? ` · ${d.firma}` : ''}`
+      : `${d.cale === 'remove' ? 'scos −' : 'pus +'}${n(d.suma ?? d.delta)}`;
+    return { label: labels[a.category], extra };
+  }
   const amount = d.delta ?? d.amount ?? d.change ?? null;
   const moneyText = (amount != null && Number.isFinite(Number(amount)))
     ? `${Number(amount) > 0 ? '+' : ''}$${Number(amount).toLocaleString('ro-RO')}${d.account ? ` (${d.account === 'bank' ? 'bancă' : d.account === 'black_money' ? 'bani murdari' : d.account === 'money' ? 'cash' : d.account})` : ''}`

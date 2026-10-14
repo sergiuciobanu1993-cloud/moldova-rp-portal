@@ -1084,7 +1084,10 @@ app.get("/api/admin/live/jobs", auth, requireRole(...ADMIN_ROLES), asyncRoute(as
 // Filtrele (player/category/limit) sunt pasate mai departe. Gated la fel ca
 // Sancțiunile (moderator+) — e un instrument de investigație pentru staff,
 // nu date publice.
-const GAME_LOG_CATEGORIES = ["chat", "command", "connect", "disconnect", "death", "money", "money_vehicle_deposit", "money_vehicle_withdraw", "item_buy", "item_craft", "item_transfer", "item_obtained", "item_drop", "item_pickup", "vehicle_acquired"];
+const GAME_LOG_CATEGORIES = ["chat", "command", "connect", "disconnect", "death", "money", "money_vehicle_deposit", "money_vehicle_withdraw", "item_buy", "item_craft", "item_transfer", "item_obtained", "item_drop", "item_pickup", "vehicle_acquired",
+  // (14.10.2026) scrise de resursele VX: transferuri bancare, schimb din meniul G,
+  // amenzi, facturi, fondurile facțiunilor (vx_traseu) și fondurile bandelor
+  "transfer", "schimb", "amenda", "factura", "fond", "banda_fond"];
 // "discord" (23.09.2026) — a treia sursă, vezi botul de citit canale Discord
 // mai jos (pollDiscordLogs) și fetchDiscordLogsPage.
 const LOG_CATEGORIES = [...GAME_LOG_CATEGORIES, "admin", "discord"];
@@ -2091,22 +2094,31 @@ function noteLogIdentities(logs) {
 // Cine e fiecare identificator / nume de FiveM: jucătorii online, memoria de
 // mai sus și (pentru cei fără ID static încă) baza jocului, pe câțiva odată.
 const identityLookupCache = new Map();
-async function identityLookup({ identifiers = [], names = [] } = {}) {
+async function identityLookup({ identifiers = [], names = [], statics = [] } = {}) {
   const ids = [...new Set(identifiers.filter(x => CHAR_ID_RE.test(String(x || ""))))].slice(0, 400);
   const lnames = [...new Set(names.map(lowerName).filter(Boolean))].slice(0, 400);
+  const sids = [...new Set(statics.map(x => String(x ?? "").replace(/\D/g, "")).filter(Boolean))].slice(0, 200);
   const byId = new Map();
   const byName = new Map();
+  const byStatic = new Map();
   const put = (map, key, w) => {
     const cur = map.get(key);
     if (!cur) map.set(key, { ...w });
-    else { if (!cur.rpName && w.rpName) cur.rpName = w.rpName; if (!cur.staticId && w.staticId) cur.staticId = w.staticId; }
+    else { if (!cur.rpName && w.rpName) cur.rpName = w.rpName; if (!cur.staticId && w.staticId) cur.staticId = w.staticId; if (!cur.player && w.player) cur.player = w.player; }
   };
   const detail = await getPlayersDetail().catch(() => ({ players: [] }));
   for (const p of detail.players || []) {
     if (!p.license) continue;
-    const w = { identifier: p.license, rpName: p.serverName || null, staticId: staticIdOf(p), online: true };
+    const w = { identifier: p.license, rpName: p.serverName || null, staticId: staticIdOf(p), player: p.name || null, online: true };
     put(byId, p.license, w);
     if (p.name) put(byName, lowerName(p.name), w);
+    if (w.staticId && sids.includes(String(w.staticId))) put(byStatic, String(w.staticId), w);
+  }
+  if (sids.some(sid => !byStatic.has(sid))) {
+    const { rows } = await pool.query(
+      `SELECT DISTINCT ON (static_id) identifier, rp_name, static_id, last_cfx_name FROM game_identities
+       WHERE static_id = ANY($1::text[]) ORDER BY static_id, updated_at DESC`, [sids.filter(sid => !byStatic.has(sid))]).catch(() => ({ rows: [] }));
+    for (const r of rows) put(byStatic, String(r.static_id), { identifier: r.identifier, rpName: r.rp_name, staticId: r.static_id, player: r.last_cfx_name || null });
   }
   if (ids.length || lnames.length) {
     const { rows } = await pool.query(
@@ -2114,9 +2126,9 @@ async function identityLookup({ identifiers = [], names = [] } = {}) {
        WHERE identifier = ANY($1::text[]) OR cfx_names && $2::text[]
        ORDER BY updated_at DESC LIMIT 800`, [ids, lnames]).catch(() => ({ rows: [] }));
     // întâi cine are numele ca nume ACTUAL, apoi cel mai recent văzut cu el
-    for (const r of rows) if (r.last_cfx_name && lnames.includes(lowerName(r.last_cfx_name))) put(byName, lowerName(r.last_cfx_name), { identifier: r.identifier, rpName: r.rp_name, staticId: r.static_id });
+    for (const r of rows) if (r.last_cfx_name && lnames.includes(lowerName(r.last_cfx_name))) put(byName, lowerName(r.last_cfx_name), { identifier: r.identifier, rpName: r.rp_name, staticId: r.static_id, player: r.last_cfx_name });
     for (const r of rows) {
-      const w = { identifier: r.identifier, rpName: r.rp_name, staticId: r.static_id };
+      const w = { identifier: r.identifier, rpName: r.rp_name, staticId: r.static_id, player: r.last_cfx_name || null };
       put(byId, r.identifier, w);
       for (const n of r.cfx_names || []) if (lnames.includes(n) && !byName.has(n)) byName.set(n, { ...w });
     }
@@ -2142,8 +2154,84 @@ async function identityLookup({ identifiers = [], names = [] } = {}) {
     if (learned.length) rememberIdentities(learned).catch(() => {});
     if (identityLookupCache.size > 5000) identityLookupCache.clear();
   }
-  return { byId, byName };
+  return { byId, byName, byStatic };
 }
+
+// Logurile VX pomenesc celălalt jucător prin identificator + ID static:
+// transfer/schimb/factura → d.cu, fond → d.contraparte (dacă nu e chiar el) și
+// d.actor, amenda → autorStatic (cine a dat-o), banda_fond → static.
+const VX_MONEY_CATEGORIES = new Set(["transfer", "schimb", "amenda", "factura", "fond", "banda_fond"]);
+function vxPeerRefs(l) {
+  const d = l.details || {};
+  if (!VX_MONEY_CATEGORIES.has(l.category)) return { peer: null, actor: null };
+  const peerId = d.cu || (d.contraparte && d.contraparte !== l.identifier ? d.contraparte : null);
+  const peerStatic = d.cu ? d.cuStatic : (peerId ? d.contraparteStatic : null);
+  const actorId = d.actor && d.actor !== l.identifier ? d.actor : null;
+  const actorStatic = actorId ? d.actorStatic : (l.category === "amenda" ? d.autorStatic : l.category === "banda_fond" ? d.static : null);
+  return {
+    peer: peerId || peerStatic != null ? { id: peerId || null, sid: peerStatic != null ? String(peerStatic) : null } : null,
+    actor: actorId || actorStatic != null ? { id: actorId || null, sid: actorStatic != null ? String(actorStatic) : null } : null,
+  };
+}
+function vxWho(idx, ref) {
+  if (!ref) return null;
+  const w = (ref.id && idx.byId.get(ref.id)) || (ref.sid && idx.byStatic?.get(ref.sid)) || null;
+  if (!w && !ref.id) return ref.sid ? { identifier: null, rpName: null, staticId: ref.sid, player: null } : null;
+  return { identifier: w?.identifier || ref.id || null, rpName: w?.rpName || null, staticId: w?.staticId || ref.sid || null, player: w?.player || null };
+}
+
+// Banii jucătorului mișcați de un log VX: [{ account, amount (+ intră / − iese),
+// cat, text ({cp} = celălalt jucător), flex (contul nu e scris: cash sau bancă) }].
+// Fondul de facțiune pereche cu o amendă/factură e deja în rândul amenda/factura.
+function vxMoneyEvents(l) {
+  const d = l.details || {};
+  const n = v => (Number.isFinite(Number(v)) ? Number(v) : 0);
+  const fl = LogFormat ? LogFormat.factionLabel : (x => String(x || "").replace(/^society_/, ""));
+  const ref = d.ref ? ` ${d.ref}` : "";
+  const out = [];
+  switch (l.category) {
+    case "transfer":
+      if (!n(d.suma)) break;
+      if (d.rol === "primit") out.push({ account: "bank", amount: n(d.suma), cat: "transfer_in", text: "i-a primit prin bancă de la {cp}" });
+      else out.push({ account: "bank", amount: -(n(d.suma) + n(d.comision)), cat: "transfer_out", text: `i-a trimis prin bancă lui {cp}${n(d.comision) ? ` (cu ${n(d.comision)}$ comision)` : ""}` });
+      break;
+    case "schimb":
+      if (n(d.baniDati) > 0) out.push({ account: "cash", amount: -n(d.baniDati), cat: "transfer_out", text: "i-a dat lui {cp} (schimb din meniul G)" });
+      if (n(d.baniPrimiti) > 0) out.push({ account: "cash", amount: n(d.baniPrimiti), cat: "transfer_in", text: "i-a primit de la {cp} (schimb din meniul G)" });
+      break;
+    case "amenda": {
+      if (d.stare !== "platita") break;
+      const what = `${d.sentinta || d.cale === "sentinta" ? "sentința" : "amenda"}${ref} (${fl(d.factiune)})`;
+      const p = d.plata || {};
+      if (n(p.bank) > 0) out.push({ account: "bank", amount: -n(p.bank), cat: "fine", text: `a plătit ${what}` });
+      if (n(p.money) > 0) out.push({ account: "cash", amount: -n(p.money), cat: "fine", text: `a plătit cash ${what}` });
+      if (!n(p.bank) && !n(p.money) && n(d.suma)) out.push({ account: d.mod === "banca" ? "bank" : "cash", amount: -n(d.suma), cat: "fine", text: `a plătit ${what}` });
+      break;
+    }
+    case "factura": {
+      const firm = d.firma || fl(d.job);
+      if (d.rol === "platitor" && n(d.suma)) out.push({ account: d.mod === "banca" ? "bank" : "cash", amount: -n(d.suma), cat: "invoice_out", text: `a plătit factura${ref} la ${firm}, emisă de {cp}` });
+      if (d.rol === "incasator" && n(d.laLucrator) > 0) out.push({ account: d.lucratorPlata === "mana" ? "cash" : "bank", amount: n(d.laLucrator), cat: "invoice_in", text: `partea lui din factura${ref} (${firm}), plătită de {cp}` });
+      break;
+    }
+    case "fond": {
+      if (d.legatura !== "pereche" || (d.contraparte && d.contraparte !== l.identifier)) break;
+      if (d.resursa === "vx_dosar" || d.resursa === "vx_facturi") break;
+      const sum = Math.abs(n(d.suma) || n(d.delta));
+      if (!sum) break;
+      const why = LogFormat ? LogFormat.fundReason(d).text : (d.motiv || "");
+      const removed = d.cale === "remove" || n(d.delta) < 0;
+      out.push(removed
+        ? { account: "bank", amount: sum, cat: "fund_out", text: `scoși din fondul ${fl(d.cont)} — ${why}`, flex: true }
+        : { account: "bank", amount: -sum, cat: "fund_in", text: `puși în fondul ${fl(d.cont)} — ${why}`, flex: true });
+      break;
+    }
+    default:
+      break;
+  }
+  return out;
+}
+function vxName(w) { return w ? (w.rpName || w.player || (w.staticId ? `#${w.staticId}` : null)) : null; }
 
 // „transfer de la X (prin bancă)" → X
 function peerNameOf(d) {
@@ -2157,9 +2245,12 @@ async function enrichLogs(logs) {
   if (!logs || !logs.length) return logs || [];
   const ids = [];
   const names = [];
+  const statics = [];
   for (const l of logs) {
     const d = l.details || {};
     if (l.identifier) ids.push(l.identifier); else if (l.player) names.push(l.player);
+    const vx = vxPeerRefs(l);
+    for (const r of [vx.peer, vx.actor]) if (r) { if (r.id) ids.push(r.id); if (r.sid) statics.push(r.sid); }
     if (d.to) names.push(d.to);
     if (d.killer) names.push(d.killer);
     const peer = peerNameOf(d);
@@ -2167,10 +2258,10 @@ async function enrichLogs(logs) {
     if (l.pickedBy?.player) names.push(l.pickedBy.player);
     if (l.droppedBy?.player) names.push(l.droppedBy.player);
   }
-  let idx = { byId: new Map(), byName: new Map() };
-  try { idx = await identityLookup({ identifiers: ids, names }); } catch (err) { console.warn("identityLookup:", err.message); }
+  let idx = { byId: new Map(), byName: new Map(), byStatic: new Map() };
+  try { idx = await identityLookup({ identifiers: ids, names, statics }); } catch (err) { console.warn("identityLookup:", err.message); }
   const byName = n => (n ? idx.byName.get(lowerName(n)) || null : null);
-  explainMoneyRows(logs);
+  explainMoneyRows(logs, ref => vxName(vxWho(idx, ref)));
   for (const l of logs) {
     const d = l.details || {};
     const w = (l.identifier && idx.byId.get(l.identifier)) || (l.category !== "admin" && l.category !== "discord" ? byName(l.player) : null);
@@ -2179,6 +2270,14 @@ async function enrichLogs(logs) {
     if (d.killer) l.killerWho = byName(d.killer);
     const peer = peerNameOf(d);
     if (peer) l.peerWho = byName(peer);
+    if (VX_MONEY_CATEGORIES.has(l.category)) {
+      const vx = vxPeerRefs(l);
+      if (vx.peer) l.peerWho = vxWho(idx, vx.peer);
+      if (vx.actor) l.actorWho = vxWho(idx, vx.actor);
+      // rândul vine cu ID-ul static scris de joc — îl folosim dacă nu-l știam
+      if (d.static != null && l.category !== "banda_fond" && l.who && !l.who.staticId) l.who.staticId = String(d.static);
+      if (d.static != null && l.category !== "banda_fond" && !l.who && l.identifier) l.who = { rpName: l.rpName || null, staticId: String(d.static), identifier: l.identifier };
+    }
     if (l.pickedBy) l.pickedBy.who = byName(l.pickedBy.player);
     if (l.droppedBy) l.droppedBy.who = byName(l.droppedBy.player);
     l.flags = logFlags(l);
@@ -2189,13 +2288,36 @@ async function enrichLogs(logs) {
 // O creștere de bani fără sursă scrisă de joc, dar cu o explicație chiar
 // înainte, în aceleași loguri (a scos bani din vehicul, a ridicat de jos, i-a
 // dat cineva) → o legăm, ca să nu apară fals „fără sursă".
-function explainMoneyRows(logs) {
+function explainMoneyRows(logs, nameOf = () => null) {
   const t = l => new Date(l.at).getTime();
   const others = logs.filter(l => l.category !== "money");
   for (const row of logs) {
     if (row.category !== "money") continue;
     const d = row.details || {};
-    if (d.confirmedSource || d.possibleSource) continue;
+    if (d.confirmedSource) continue;
+    // (14.10.2026) transfer bancar / schimb / amendă / factură / fond: scrise de joc
+    // pe același personaj, cu exact suma asta, chiar înainte → sursa e sigură
+    {
+      const at = t(row);
+      const dC0 = Number(d.cashDelta) || 0, dB0 = Number(d.bankDelta) || 0;
+      if ((dC0 || dB0) && dC0 !== -dB0) {
+        let found = null;
+        for (const e of others) {
+          if (!VX_MONEY_CATEGORIES.has(e.category) || e.identifier !== row.identifier) continue;
+          if (t(e) > at + 2000 || t(e) < at - 20000) continue;
+          const ev = vxMoneyEvents(e).find(x => (x.flex || x.account === "bank") && x.amount === dB0 && dB0
+            || (x.flex || x.account === "cash") && x.amount === dC0 && dC0);
+          if (ev) { found = { e, ev }; break; }
+        }
+        if (found) {
+          const cp = nameOf(vxPeerRefs(found.e).peer) || "alt jucător";
+          row.explainedBy = found.ev.text.replace("{cp}", cp);
+          row.explainedSure = true;
+          continue;
+        }
+      }
+    }
+    if (d.possibleSource) continue;
     const dC = Number(d.cashDelta) || 0;
     if (!dC || dC === -(Number(d.bankDelta) || 0)) continue;
     const at = t(row);
@@ -2437,6 +2559,8 @@ const TRAIL_IN = {
   loot_in: "Luați de pe cadavre",
   salary: "Salariu (posibil)",
   bank_op: "Operațiuni la bancă (confirmate)",
+  fund_out: "Scoși din fondul facțiunii",
+  invoice_in: "Partea lui din facturi",
   admin: "Dați de admin",
   vip: "VIP Shop",
   discord: "Văzuți în logurile Discord (bancă, facturi…)",
@@ -2450,6 +2574,9 @@ const TRAIL_OUT = {
   stash_in: "Ascunși în vehicule",
   buy: "Cumpărături",
   looted_out: "Luați de pe cadavrul lui",
+  fine: "Amenzi plătite",
+  invoice_out: "Facturi plătite",
+  fund_in: "Puși în fondul facțiunii",
   bank_op: "Operațiuni la bancă (confirmate)",
   discord: "Văzuți în logurile Discord (bancă, facturi…)",
   other_possible: "Alte destinații posibile",
@@ -2472,7 +2599,7 @@ function rewardAmount(e) {
 async function buildMoneyTrail(resolved, { after, before }) {
   // Puține cereri, câte 3 odată (mai multe categorii într-o cerere) — vezi mapLimit.
   const G = 500;
-  const ownGroups = ["money,money_vehicle_deposit,money_vehicle_withdraw,item_transfer,item_drop,item_pickup", "item_obtained,item_buy"];
+  const ownGroups = ["money,money_vehicle_deposit,money_vehicle_withdraw,item_transfer,item_drop,item_pickup", "item_obtained,item_buy", "transfer,schimb,amenda,factura,fond"];
   const ownBatches = [];
   for (const c of ownGroups) ownBatches.push(await fetchLogsForResolved(resolved, { category: c, after, before, limit: 500, maxPages: 4 }));
   const globals = await mapLimit(["item_transfer", "money_vehicle_deposit,money_vehicle_withdraw", "item_drop,item_pickup"], 3,
@@ -2539,6 +2666,27 @@ async function buildMoneyTrail(resolved, { after, before }) {
       text: d.lootedFromCorpse ? "i-a luat de pe cadavrul lui {cp}" : "i-a primit de la {cp}",
       counterpart: t.player, confidence: "sigur", log: t, incoming: true,
     });
+  }
+  // (14.10.2026) Bani mutați de resursele VX: bancă, schimb, amenzi, facturi, fonduri
+  {
+    const vxOwn = own.filter(l => VX_MONEY_CATEGORIES.has(l.category));
+    const refs = vxOwn.map(l => vxPeerRefs(l).peer).filter(Boolean);
+    const vidx = refs.length
+      ? await identityLookup({ identifiers: refs.map(r => r.id).filter(Boolean), statics: refs.map(r => r.sid).filter(Boolean) }).catch(() => ({ byId: new Map(), byName: new Map(), byStatic: new Map() }))
+      : { byId: new Map(), byName: new Map(), byStatic: new Map() };
+    const giveEvents = events.filter(e => e.cat === "transfer_out" || e.cat === "transfer_in");
+    for (const l of vxOwn) {
+      const peerRef = vxPeerRefs(l).peer;
+      const pw = vxWho(vidx, peerRef);
+      for (const x of vxMoneyEvents(l)) {
+        // un schimb din meniul G care s-a scris și ca transfer de item (bani) → o singură dată
+        if (l.category === "schimb" && giveEvents.some(e => e.amount === x.amount && Math.abs(ms(e.at) - ms(l.at)) <= 5000)) continue;
+        events.push({
+          at: l.at, account: x.account, amount: x.amount, cat: x.cat, text: x.text, flex: !!x.flex,
+          counterpart: pw ? (pw.player || vxName(pw)) : null, counterpartWho: pw, confidence: "sigur", log: l,
+        });
+      }
+    }
   }
   // Admin: item de bani dat din panou
   for (const e of events) if (e.cat === "script" && e.log.details?.adminGrant) { e.cat = "admin"; e.text = `i-a primit de la admin ${e.log.details.adminGrant.staff || ""}`.trim(); }
@@ -2671,7 +2819,7 @@ async function buildMoneyTrail(resolved, { after, before }) {
   };
   const evOut = e => ({
     at: e.at, account: e.account, amount: e.amount, cat: e.cat, text: e.text, confidence: e.confidence,
-    counterpart: e.counterpart ? { name: e.counterpart } : null, where: e.where || null, site: !!e.site,
+    counterpart: e.counterpart ? { name: e.counterpart, ...(e.counterpartWho ? { who: { identifier: e.counterpartWho.identifier, rpName: e.counterpartWho.rpName, staticId: e.counterpartWho.staticId } } : {}) } : null, where: e.where || null, site: !!e.site,
     flags: e.log ? logFlags(e.log) : [],
   });
 
@@ -2696,6 +2844,11 @@ async function buildMoneyTrail(resolved, { after, before }) {
     }
     let restCash = dC, restBank = dB;
     for (const { e, i } of expl) {
+      // fond de facțiune: jocul nu spune dacă banii au venit din cash sau din bancă
+      if (e.flex) {
+        const fits = r => r && Math.sign(r) === Math.sign(e.amount) && Math.abs(r) >= Math.abs(e.amount);
+        e.account = fits(restBank) ? "bank" : fits(restCash) ? "cash" : e.account;
+      }
       // o cumpărătură doar „probabil" a fost plătită cu cash — o legăm doar dacă încape
       if (e.soft && !(restCash < 0 && Math.abs(restCash) >= Math.abs(e.amount))) continue;
       if (e.account === "cash" && !restCash) continue;
@@ -2768,7 +2921,7 @@ async function buildMoneyTrail(resolved, { after, before }) {
   for (const entry of entries) for (const p of entry.parts || []) {
     if (!p.counterpart?.name) continue;
     const k = lowerName(p.counterpart.name);
-    const x = partners.get(k) || { name: p.counterpart.name, received: 0, gave: 0, count: 0 };
+    const x = partners.get(k) || { name: p.counterpart.name, received: 0, gave: 0, count: 0, ...(p.counterpart.who ? { who: p.counterpart.who } : {}) };
     if (p.amount > 0) x.received += p.amount; else x.gave += -p.amount;
     x.count += 1;
     partners.set(k, x);
@@ -2782,8 +2935,8 @@ async function buildMoneyTrail(resolved, { after, before }) {
     const w = (identifier && idx.byId.get(identifier)) || idx.byName.get(lowerName(name)) || null;
     return w ? { identifier: w.identifier || identifier || null, rpName: w.rpName || null, staticId: w.staticId || null } : null;
   };
-  for (const entry of entries) for (const p of entry.parts || []) if (p.counterpart?.name) p.counterpart.who = whoOf(p.counterpart.name);
-  for (const p of partners.values()) p.who = whoOf(p.name);
+  for (const entry of entries) for (const p of entry.parts || []) if (p.counterpart?.name) p.counterpart.who = p.counterpart.who || whoOf(p.counterpart.name);
+  for (const p of partners.values()) p.who = p.who || whoOf(p.name);
   for (const s of stashes) for (const p of s.people) p.who = whoOf(p.name, p.identifier);
 
   entries.sort((a, b) => ms(b.at) - ms(a.at));

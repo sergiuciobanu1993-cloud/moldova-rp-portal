@@ -81,6 +81,7 @@
         <option value="transfer">Transferuri bancare între jucători</option>
         <option value="schimb">Schimb între jucători (meniul G)</option>
         <option value="item_transfer">Transfer iteme / bani între jucători</option>
+        <option value="item_primit">Iteme primite de la alți jucători</option>
         <option value="money_vehicle_deposit">Bani ascunși în vehicule</option>
         <option value="money_vehicle_withdraw">Bani scoși din vehicule</option>
         <option value="item_drop">Aruncat pe jos</option>
@@ -325,9 +326,9 @@ function renderTrail(t) {
     const flags = e.flags || [];
     const sev = flags.some(f => f.level === 'crit') || (e.parts || []).some(p => (p.flags || []).some(f => f.level === 'crit')) ? 'lf-row-crit' : (flags.length ? 'lf-row-warn' : '');
     const change = e.kind === 'balance'
-      ? [e.deltaCash ? amt(e.deltaCash, 'cash') : '', e.deltaBank ? amt(e.deltaBank, 'bank') : ''].filter(Boolean).join('<br>')
+      ? [e.deltaCash ? amt(e.deltaCash, 'cash') : '', e.deltaBank ? amt(e.deltaBank, 'bank') : '', e.deltaBlack ? amt(e.deltaBlack, 'black') : ''].filter(Boolean).join('<br>')
       : '<span class="muted">—</span>';
-    const after = e.balanceAfter ? `<br><span class="muted" style="font-size:11px">după: ${e.balanceAfter.cash != null ? fmtSum(e.balanceAfter.cash) + ' cash' : ''}${e.balanceAfter.bank != null ? ' · ' + fmtSum(e.balanceAfter.bank) + ' bancă' : ''}</span>` : '';
+    const after = e.balanceAfter ? `<br><span class="muted" style="font-size:11px">după: ${e.balanceAfter.cash != null ? fmtSum(e.balanceAfter.cash) + ' cash' : ''}${e.balanceAfter.bank != null ? ' · ' + fmtSum(e.balanceAfter.bank) + ' bancă' : ''}${e.balanceAfter.black ? ' · ' + fmtSum(e.balanceAfter.black) + ' murdari' : ''}</span>` : '';
     return `<tr class="${sev}">
       <td style="white-space:nowrap">${fmtDate(e.at)}</td>
       <td>${e.character ? `<strong>${escapeHtml(e.character.rpName || '?')}</strong>${staticTag(e.character.staticId)}` : '<span class="muted">—</span>'}</td>
@@ -366,8 +367,8 @@ function renderTrail(t) {
       <b>Cum se citește:</b> jocul verifică soldul fiecărui jucător la 15 secunde; fiecare schimbare e legată de ce s-a întâmplat chiar înainte (bani dați, ridicați, scoși din vehicul…).
       <span class="lf-sure">sigur</span> = scris direct de joc, <span class="lf-maybe">probabil</span> = dedus din momentul în care s-a întâmplat, <span class="lf-unknown">necunoscut</span> = jocul nu ne-a spus de unde/unde.
       ${t.truncated ? '<br><b>Interval mare:</b> am citit doar cele mai noi 500 de înregistrări pe categorie — alege un interval mai scurt pentru tot detaliul.' : ''}
-      <br><b>Văzute din 14.10:</b> transferurile bancare, schimburile din meniul G, amenzile, facturile și banii puși/scoși din fondurile facțiunilor — toate <span class="lf-sure">sigur</span>, scrise direct de joc.
-      <br><b>Ce nu vede încă jocul:</b> bani puși în dulapuri/stash-uri de case sau portbagaje (în afară de bani), banii murdari din citirile de sold și sursa exactă a banilor dați de scripturi (job, jaf, cazino) — le-am cerut echipei serverului.
+      <br><b>Din 15.10</b> jocul scrie fiecare operație cu motivul ei (salariu, amendă, cazinou, magazin, job…) și banii murdari. <span class="lf-maybe">doar resursa</span> = știm scriptul care a dat/luat banii, dar nu și motivul.
+      <br><b>Ce nu vede încă jocul:</b> iteme puse în dulapuri/stash-uri de case, de bandă sau de facțiune (vin odată cu depozitele) și motivul la unele scripturi (benzinărie, magazine, vânătoare…) — le-am cerut echipei serverului.
     </p>`;
 }
 

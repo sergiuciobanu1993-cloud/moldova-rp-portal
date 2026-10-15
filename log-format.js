@@ -10,7 +10,7 @@
     chat: 'Chat', command: 'Comandă', connect: 'Conectare', disconnect: 'Deconectare', death: 'Moarte / Kill', money: 'Bani',
     money_vehicle_deposit: 'Bani ascunși în vehicul', money_vehicle_withdraw: 'Bani scoși din vehicul',
     item_buy: 'Cumpărare', item_craft: 'Crafting', item_transfer: 'Transfer item', item_obtained: 'Item obținut', item_drop: 'Aruncat pe jos',
-    item_pickup: 'Ridicat de jos',
+    item_pickup: 'Ridicat de jos', item_primit: 'Item primit',
     vehicle_acquired: 'Vehicul nou',
     transfer: 'Transfer bancar', schimb: 'Schimb (meniul G)', amenda: 'Amendă', factura: 'Factură',
     fond: 'Fond facțiune', banda_fond: 'Fond bandă',
@@ -21,7 +21,7 @@
     chat: 'info', command: 'info', connect: 'on', disconnect: 'off', death: 'warn', money: 'warn',
     money_vehicle_deposit: 'warn', money_vehicle_withdraw: 'warn',
     item_buy: 'info', item_craft: 'info', item_transfer: 'info', item_obtained: 'info', item_drop: 'warn',
-    item_pickup: 'info',
+    item_pickup: 'info', item_primit: 'info',
     vehicle_acquired: 'info',
     transfer: 'warn', schimb: 'warn', amenda: 'info', factura: 'info', fond: 'info', banda_fond: 'warn',
     admin: 'warn',
@@ -82,7 +82,7 @@
   // Banii murdari sunt și ei, de regulă, un item ("black_money").
   const MONEY_ITEM_NAMES = new Set(['money', 'cash', 'bani']);
   function isMoneyItemName(name) { return MONEY_ITEM_NAMES.has(String(name || '').trim().toLowerCase()); }
-  function isBlackMoneyItem(name) { return /^(black_?money|dirty_?money|bani_?murdari|marked_?bills|blackmoney)$/i.test(String(name || '').trim()); }
+  function isBlackMoneyItem(name) { return /^(black[_ ]?money|dirty[_ ]?money|bani[_ ]?murdari|marked[_ ]?bills|blackmoney)$/i.test(String(name || '').trim()); }
   function plateOf(v) { return String(v || '?').trim().replace(/^(trunk|glovebox|glove)[\s:_-]*/i, '').trim().toUpperCase() || '?'; }
   // (pasul A, 14.10) jocul trimite doar placa + compartiment: 'portbagaj' / 'torpedou';
   // rândurile vechi au prefixul în placă (trunkABC123 / gloveABC123)
@@ -219,6 +219,58 @@
   }
 
 
+
+  // ---- Banii scriși de vx_traseu (din 15.10, pasul 3): un rând pe operație ----
+  // d.sursa === 'vx_traseu', cu cont (bank/money/black_money), cale (add/remove/
+  // set/sync), resursa + motiv. „sync” = bani ca item mutați (dat/primit/vehicul),
+  // aceiași bani care apar și ca item_transfer / money_vehicle_*.
+  const RES_LABEL = {
+    lc_fuel: 'benzinărie', lc_stores: 'magazin', 'wais-hunting': 'vânătoare', '17mov_Lumberjack': 'tăietor de lemne',
+    bp_taxijob: 'taxi', '0r-ambulancejob': 'job EMS', '0r-fishingv2': 'pescuit', 'jg-dealerships': 'dealer auto',
+    'jg-mechanic': 'mecanic', '0r-heistpack': 'jaf (heist)', '0r-trucker': 'tirist', pickle_casinos: 'cazinou',
+    vx_magazin_haine: 'magazin de haine', vx_garaje: 'garaj', vx_banking: 'bancă', vx_radial: 'meniul G',
+    vx_iarba: 'iarbă', 'frkn-rentacar': 'închiriere mașini', vx_battlepass: 'Battle Pass', vx_banda: 'Banda mea',
+    vx_furt: 'furt la comandă', vx_primarie: 'primărie', luxu_admin: 'panoul de admin (Luxu)', vx_dosar: 'dosarul poliției',
+    vx_facturi: 'facturi', vx_capt: 'capturi',
+  };
+  // în ce grupă intră banii (Traseul banilor)
+  const RES_KIND = {
+    'wais-hunting': 'job', '17mov_Lumberjack': 'job', bp_taxijob: 'job', '0r-ambulancejob': 'job', '0r-fishingv2': 'job',
+    '0r-trucker': 'job', vx_battlepass: 'job', lc_fuel: 'buy', lc_stores: 'buy', 'jg-dealerships': 'buy', 'jg-mechanic': 'buy',
+    vx_magazin_haine: 'buy', vx_garaje: 'buy', 'frkn-rentacar': 'buy', vx_iarba: 'buy', pickle_casinos: 'casino',
+    '0r-heistpack': 'heist', vx_furt: 'heist', luxu_admin: 'admin',
+  };
+  function resLabel(r) { return RES_LABEL[r] || r; }
+  function isTraseuMoney(d) { return !!d && d.sursa === 'vx_traseu'; }
+  // { text ({cp} = celălalt jucător), kind, sure, resOnly?, unknown?, peer? }
+  function moneyReason(d) {
+    const motiv = String(d.motiv || '').trim();
+    const res = String(d.resursa || '').trim();
+    const delta = Number(d.delta ?? (Number(d.cashDelta) || 0) + (Number(d.bankDelta) || 0) + (Number(d.blackDelta) || 0)) || 0;
+    const out = d.cale === 'remove' || delta < 0;
+    if (d.cale === 'sync' && !res) {
+      if (d.cauza === 'vehicul') return { text: out ? `puși în vehiculul ${d.loc || '?'}` : `luați din vehiculul ${d.loc || '?'}`, kind: out ? 'stash_in' : 'stash_out', sure: true, where: d.loc || null };
+      if (d.cauza === 'dat') return { text: 'dați lui {cp}', kind: 'transfer_out', sure: true, peer: true };
+      if (d.cauza === 'primit') return { text: 'primiți de la {cp}', kind: 'transfer_in', sure: true, peer: true };
+    }
+    if (res === 'luxu_admin' || d.cale === 'set') return { text: d.cale === 'set' ? 'sold setat din panoul de admin' : 'schimbați din panoul de admin', kind: 'admin', sure: true };
+    if (/^salariu/i.test(motiv)) return { text: 'salariu', kind: 'salary', sure: true };
+    if (res === 'vx_dosar' || /^vx_dosar/.test(motiv)) {
+      const ref = (/([A-Z0-9]{6,})$/.exec(motiv) || [])[1];
+      return { text: `${/sentin/i.test(motiv) ? 'sentință plătită' : 'amendă plătită'}${ref ? ` (${ref})` : ''}`, kind: 'fine', sure: true };
+    }
+    if (res === 'vx_banking' && /depunere|retragere/i.test(motiv)) return { text: /depunere/i.test(motiv) ? 'depunere la bancă (cash → bancă)' : 'retragere de la bancă (bancă → cash)', kind: 'move', sure: true };
+    if (res === 'vx_radial') return { text: out ? 'dați lui {cp} (meniul G)' : 'primiți de la {cp} (meniul G)', kind: out ? 'transfer_out' : 'transfer_in', sure: true, peer: true };
+    if (!motiv || motiv === 'unknown' || /necunoscut/i.test(motiv)) {
+      if (res) return { text: `${resLabel(res)} — motiv nescris de joc`, kind: RES_KIND[res] || 'other', sure: false, resOnly: true };
+      return { text: 'sursă necunoscută', kind: 'unknown', sure: false, unknown: true };
+    }
+    const m = /^([\w.-]+):\s*(.+)$/.exec(motiv);
+    const text = m && m[1] === res ? `${resLabel(res)}: ${m[2]}`
+      : (res && !motiv.toLowerCase().includes(resLabel(res).toLowerCase()) && !motiv.toLowerCase().includes(res.toLowerCase()) ? `${motiv} (${resLabel(res)})` : motiv);
+    return { text, kind: RES_KIND[res] || (/cazinou/i.test(motiv) ? 'casino' : 'other'), sure: true, peer: !!d.cu };
+  }
+
   // ---- Logurile noi de bani (14.10.2026): bancă, schimb, amenzi, facturi, fonduri
   // Celălalt jucător vine ca identificator (d.cu / d.contraparte / d.actor) + ID
   // static; serverul pune numele lui în log.peerWho / log.actorWho.
@@ -301,7 +353,7 @@
           parts.push(`a fost ucis de <strong>admin ${escapeHtml(d.adminKill.staff || 'necunoscut')}</strong>`);
           parts.push('<span class="muted">(comandă din panoul de admin)</span>');
         } else if (d.killer) {
-          parts.push(`a fost ucis de ${otherHtml(d.killer, log.killerWho)}`);
+          parts.push(`a fost ucis de ${otherHtml(d.killer, log.killerWho)}${d.ucigasConfirmat === true ? ' <span class="lf-sure">confirmat de server</span>' : ''}`);
         } else {
           parts.push('a murit');
         }
@@ -309,6 +361,34 @@
         return parts.join(' ');
       }
       case 'money': {
+        if (isTraseuMoney(d)) {
+          const parts = [];
+          if (Number(d.cashDelta)) parts.push(`${d.cashDelta > 0 ? 'a primit' : 'a pierdut'} <strong>${fmtSum(d.cashDelta)}</strong> cash`);
+          if (Number(d.bankDelta)) parts.push(`${d.bankDelta > 0 ? 'a primit' : 'a pierdut'} <strong>${fmtSum(d.bankDelta)}</strong> în bancă`);
+          if (Number(d.blackDelta)) parts.push(`${d.blackDelta > 0 ? 'a primit' : 'a pierdut'} <strong>${fmtSum(d.blackDelta)} bani murdari</strong>`);
+          if (!parts.length && Number(d.delta)) parts.push(`${d.delta > 0 ? 'a primit' : 'a pierdut'} <strong>${fmtSum(d.delta)}</strong>${d.cont === 'black_money' ? ' bani murdari' : d.cont === 'bank' ? ' în bancă' : ' cash'}`);
+          const r = moneyReason(d);
+          const inflow = (Number(d.delta) || 0) > 0 || (Number(d.cashDelta) || 0) + (Number(d.bankDelta) || 0) + (Number(d.blackDelta) || 0) > 0;
+          const lbl = r.kind === 'move' ? 'ce a fost' : inflow ? 'de unde' : 'unde s-au dus';
+          let src;
+          if (log.explainedSure && log.explainedBy && !r.sure) src = `<strong>${escapeHtml(log.explainedBy)}</strong> <span class="lf-sure">sigur</span>`;
+          else if (r.unknown) src = '<span class="lf-unknown">necunoscut</span>';
+          else {
+            const txt = escapeHtml(r.text).replace('{cp}', personHtml(log.peerWho, d.cuStatic, 'alt jucător'));
+            src = `<strong>${txt}</strong> ${r.sure ? '<span class="lf-sure">sigur</span>' : '<span class="lf-maybe">doar resursa</span>'}`;
+          }
+          const note = d.cale === 'sync' ? ' <span class="muted">(bani ca item în inventar)</span>' : '';
+          const left = [];
+          if (typeof d.cash === 'number') left.push(`${d.cash.toLocaleString('ro-RO')}$ cash`);
+          if (typeof d.bank === 'number') left.push(`${d.bank.toLocaleString('ro-RO')}$ în bancă`);
+          if (Number(d.black)) left.push(`${Number(d.black).toLocaleString('ro-RO')}$ murdari`);
+          const total = left.length ? `<span class="muted"> · a rămas cu ${left.join(', ')}</span>` : '';
+          const idBits = [];
+          if (log.identifier) idBits.push(`licență: <code title="${escapeHtml(log.identifier)}">${escapeHtml(shortId(log.identifier))}</code>`);
+          if (d.discord) idBits.push(`Discord: <code>${escapeHtml(d.discord)}</code>`);
+          const idInfo = idBits.length ? `<br><span class="muted" style="font-size:11px">${idBits.join(' · ')}</span>` : '';
+          return `${parts.join(' și ') || 'schimbare de bani'} · ${lbl}: ${src}${note}${total}${idInfo}`;
+        }
         const parts = [];
         if (typeof d.cashDelta === 'number' && d.cashDelta !== 0) parts.push(`${d.cashDelta > 0 ? 'a primit' : 'a pierdut'} <strong>${fmtSum(d.cashDelta)}</strong> cash`);
         if (typeof d.bankDelta === 'number' && d.bankDelta !== 0) parts.push(`${d.bankDelta > 0 ? 'a primit' : 'a pierdut'} <strong>${fmtSum(d.bankDelta)}</strong> în bancă`);
@@ -363,6 +443,9 @@
         }
         return `i-a dat ${itemText(d.item, d.count)} lui ${otherHtml(d.to, log.toWho)}${moneyNote(d.item)}`;
       }
+      // (15.10) aceeași mutare, scrisă pe cel care primește
+      case 'item_primit':
+        return `a primit ${itemText(d.item, d.count)} de la ${otherHtml(d.from, log.fromWho)}${moneyNote(d.item)}`;
       case 'item_obtained': {
         if (d.adminGrant) {
           return `a primit ${itemText(d.item, d.count)} de la <strong>admin ${escapeHtml(d.adminGrant.staff || 'necunoscut')}</strong>`;
@@ -382,11 +465,11 @@
       // Bani puși/luați din torpedoul sau portbagajul unui vehicul (placuta
       // vine din id-ul inventarului ox_inventory, best-effort).
       case 'money_vehicle_deposit': {
-        const sum = (typeof d.count === 'number') ? fmtSum(d.count) : 'bani';
+        const sum = (typeof d.count === 'number') ? fmtSum(d.count) + (d.murdari === true ? ' bani murdari' : '') : 'bani';
         return `a ascuns <strong>${sum}</strong> în ${stashSpot(d.vehicle, d.compartiment)} vehiculului <strong>${escapeHtml(plateOf(d.vehicle))}</strong>`;
       }
       case 'money_vehicle_withdraw': {
-        const sum = (typeof d.count === 'number') ? fmtSum(d.count) : 'bani';
+        const sum = (typeof d.count === 'number') ? fmtSum(d.count) + (d.murdari === true ? ' bani murdari' : '') : 'bani';
         return `a scos <strong>${sum}</strong> din ${stashSpot(d.vehicle, d.compartiment)} vehiculului <strong>${escapeHtml(plateOf(d.vehicle))}</strong>`;
       }
       case 'vehicle_acquired': {
@@ -520,6 +603,18 @@
     };
     switch (log && log.category) {
       case 'money': {
+        if (isTraseuMoney(d)) {
+          const r = moneyReason(d);
+          const m = Math.max(big(d.cashDelta), big(d.bankDelta), big(d.blackDelta), big(d.delta));
+          const inflow = (Number(d.delta) || 0) > 0 || (Number(d.cashDelta) || 0) + (Number(d.bankDelta) || 0) + (Number(d.blackDelta) || 0) > 0;
+          if (r.kind !== 'move') sizeFlag(m, 'Sumă');
+          if (r.kind === 'admin') add(m >= MONEY_BIG ? 'crit' : 'warn', d.cale === 'set' ? 'Sold setat de admin' : 'Bani schimbați de admin');
+          if (inflow && r.unknown && !log.explainedSure && m >= 50000) add(m >= MONEY_BIG ? 'crit' : 'warn', 'Bani primiți fără sursă cunoscută');
+          if (inflow && r.resOnly && m >= MONEY_BIG) add('warn', 'Sumă mare fără motiv scris');
+          if (inflow && r.kind === 'salary' && m >= 100000) add(m >= MONEY_HUGE ? 'crit' : 'warn', '„Salariu” prea mare — de verificat');
+          if (inflow && Number(d.blackDelta) >= 50000) add(Number(d.blackDelta) >= MONEY_BIG ? 'crit' : 'warn', 'Bani murdari primiți');
+          break;
+        }
         const m = Math.max(big(d.cashDelta), big(d.bankDelta));
         const inflow = (Number(d.cashDelta) || 0) > 0 || (Number(d.bankDelta) || 0) > 0;
         const internal = Number(d.cashDelta) !== 0 && Number(d.cashDelta) === -Number(d.bankDelta);
@@ -528,9 +623,12 @@
         if (inflow && !internal && !d.confirmedSource && !d.possibleSource && !log.explainedBy && m >= 50000) add(m >= MONEY_BIG ? 'crit' : 'warn', 'Bani primiți fără sursă cunoscută');
         break;
       }
+      case 'item_primit':
+        if (isWeaponItem(d.itemName || d.item)) add('warn', 'Armă primită de la alt jucător');
+        break;
       case 'item_transfer':
         if (isMoneyItemName(d.item) || isBlackMoneyItem(d.item)) sizeFlag(d.count, isBlackMoneyItem(d.item) ? 'Transfer de bani murdari' : 'Transfer de bani');
-        if (isWeaponItem(d.item)) add('warn', 'Armă dată altui jucător');
+        if (isWeaponItem(d.itemName || d.item)) add('warn', 'Armă dată altui jucător');
         if (d.lootedFromCorpse && (isMoneyItemName(d.item) || isBlackMoneyItem(d.item))) add('warn', 'Bani luați de pe cadavru');
         break;
       case 'item_obtained':
@@ -624,7 +722,7 @@
     CATEGORY_LABEL, CATEGORY_PILL, MONEY_BIG, MONEY_HUGE,
     humanizeAdminAction, escapeHtml, truncate, fmtDate, fmtMoney, fmtSum,
     isMoneyItemName, isBlackMoneyItem, isWeaponItem,
-    playerButton, staticTag, shortId, whoHtml, otherHtml, personHtml, factionLabel, fundReason, formatDiscordContent, describeItemMetadata,
+    playerButton, staticTag, shortId, whoHtml, otherHtml, personHtml, factionLabel, fundReason, moneyReason, isTraseuMoney, resLabel, formatDiscordContent, describeItemMetadata,
     formatDetails, flagsFor, flagsHtml, injectStyles,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

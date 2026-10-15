@@ -193,7 +193,7 @@ function summarizeActivity(a) {
     chat: 'Mesaj în chat', command: 'Comandă folosită', connect: 'Conectare pe server',
     disconnect: 'Deconectare', death: 'Moarte', money_cash: 'Bani cash', money_bank: 'Bani bancă',
     money_vehicle_deposit: 'Bani puși în torpedou/portbagaj', money_vehicle_withdraw: 'Bani scoși din torpedou/portbagaj',
-    item_obtained: 'Item obținut', item_buy: 'Cumpărătură', item_transfer: 'Transfer item',
+    item_obtained: 'Item obținut', item_buy: 'Cumpărătură', item_transfer: 'Transfer item', item_primit: 'Item primit', item_pickup: 'Item ridicat',
     item_craft: 'Crafting', item_drop: 'Item aruncat', vehicle_acquired: 'Vehicul nou',
     admin: 'Acțiune de staff asupra ta', money: 'Bani',
     transfer: 'Transfer bancar', schimb: 'Schimb cu alt jucător', amenda: 'Amendă', factura: 'Factură', fond: 'Fondul facțiunii',
@@ -211,7 +211,7 @@ function summarizeActivity(a) {
   }
   const amount = d.delta ?? d.amount ?? d.change ?? null;
   const moneyText = (amount != null && Number.isFinite(Number(amount)))
-    ? `${Number(amount) > 0 ? '+' : ''}$${Number(amount).toLocaleString('ro-RO')}${d.account ? ` (${d.account === 'bank' ? 'bancă' : d.account === 'black_money' ? 'bani murdari' : d.account === 'money' ? 'cash' : d.account})` : ''}`
+    ? `${Number(amount) > 0 ? '+' : ''}$${Number(amount).toLocaleString('ro-RO')}${(d.account || d.cont) ? ` (${(d.account || d.cont) === 'bank' ? 'bancă' : (d.account || d.cont) === 'black_money' ? 'bani murdari' : (d.account || d.cont) === 'money' ? 'cash' : (d.account || d.cont)})` : ''}`
     : null;
   const extra = d.message || d.reason || d.item || d.action || d.vehicle || moneyText || null;
   return { label: labels[a.category] || a.category, extra: extra ? String(extra).slice(0, 120) : null };

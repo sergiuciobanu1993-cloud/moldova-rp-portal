@@ -231,8 +231,10 @@
     vx_magazin_haine: 'magazin de haine', vx_garaje: 'garaj', vx_banking: 'bancă', vx_radial: 'meniul G',
     vx_iarba: 'iarbă', 'frkn-rentacar': 'închiriere mașini', vx_battlepass: 'Battle Pass', vx_banda: 'Banda mea',
     vx_furt: 'furt la comandă', vx_primarie: 'primărie', luxu_admin: 'panoul de admin (Luxu)', vx_dosar: 'dosarul poliției',
-    vx_facturi: 'facturi', vx_capt: 'capturi',
+    vx_facturi: 'facturi', vx_capt: 'capturi', '17mov_VehicleDirtSystem': 'spălătorie auto',
   };
+  // motive scrise ca „slug” → text
+  const MOTIV_TEXT = { 'magazin-haine': 'magazin de haine', 'Cazinou': 'cazinou', 'Battle Pass': 'Battle Pass' };
   // în ce grupă intră banii (Traseul banilor)
   const RES_KIND = {
     'wais-hunting': 'job', '17mov_Lumberjack': 'job', bp_taxijob: 'job', '0r-ambulancejob': 'job', '0r-fishingv2': 'job',
@@ -265,6 +267,7 @@
       if (res) return { text: `${resLabel(res)} — motiv nescris de joc`, kind: RES_KIND[res] || 'other', sure: false, resOnly: true };
       return { text: 'sursă necunoscută', kind: 'unknown', sure: false, unknown: true };
     }
+    if (MOTIV_TEXT[motiv]) return { text: MOTIV_TEXT[motiv], kind: RES_KIND[res] || (/cazinou/i.test(motiv) ? 'casino' : 'other'), sure: true, peer: !!d.cu };
     const m = /^([\w.-]+):\s*(.+)$/.exec(motiv);
     const text = m && m[1] === res ? `${resLabel(res)}: ${m[2]}`
       : (res && !motiv.toLowerCase().includes(resLabel(res).toLowerCase()) && !motiv.toLowerCase().includes(res.toLowerCase()) ? `${motiv} (${resLabel(res)})` : motiv);
@@ -374,7 +377,9 @@
           if (log.explainedSure && log.explainedBy && !r.sure) src = `<strong>${escapeHtml(log.explainedBy)}</strong> <span class="lf-sure">sigur</span>`;
           else if (r.unknown) src = '<span class="lf-unknown">necunoscut</span>';
           else {
-            const txt = escapeHtml(r.text).replace('{cp}', personHtml(log.peerWho, d.cuStatic, 'alt jucător'));
+            const txt = log.peerWho || d.cuStatic
+              ? escapeHtml(r.text).replace('{cp}', personHtml(log.peerWho, d.cuStatic, 'alt jucător'))
+              : escapeHtml(r.text).replace('lui {cp}', 'altui jucător').replace('{cp}', 'alt jucător');
             src = `<strong>${txt}</strong> ${r.sure ? '<span class="lf-sure">sigur</span>' : '<span class="lf-maybe">doar resursa</span>'}`;
           }
           const note = d.cale === 'sync' ? ' <span class="muted">(bani ca item în inventar)</span>' : '';

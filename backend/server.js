@@ -2265,6 +2265,15 @@ async function enrichLogs(logs) {
     if (l.pickedBy?.player) names.push(l.pickedBy.player);
     if (l.droppedBy?.player) names.push(l.droppedBy.player);
   }
+  // (15.10) banii din meniul G (vx_radial) nu au „cu” — îl luăm din rândul „schimb” din aceeași clipă
+  for (const l of logs) {
+    const d = l.details || {};
+    if (l.category !== "money" || d.resursa !== "vx_radial" || d.cu) continue;
+    const at = new Date(l.at).getTime(), delta = Number(d.delta) || 0;
+    const s = logs.find(x => x.category === "schimb" && x.identifier === l.identifier && Math.abs(new Date(x.at).getTime() - at) <= 5000
+      && (delta > 0 ? Number(x.details?.baniPrimiti) === delta : Number(x.details?.baniDati) === -delta));
+    if (s && s.details?.cu) l.radialPeer = { id: s.details.cu, sid: s.details.cuStatic != null ? String(s.details.cuStatic) : null };
+  }
   let idx = { byId: new Map(), byName: new Map(), byStatic: new Map() };
   try { idx = await identityLookup({ identifiers: ids, names, statics }); } catch (err) { console.warn("identityLookup:", err.message); }
   const byName = n => (n ? idx.byName.get(lowerName(n)) || null : null);
@@ -2280,6 +2289,7 @@ async function enrichLogs(logs) {
     const peer = peerNameOf(d);
     if (peer) l.peerWho = byName(peer);
     if (l.category === "money" && d.cu) l.peerWho = vxWho(idx, vxPeerRefs(l).peer);
+    if (l.radialPeer) { l.peerWho = vxWho(idx, l.radialPeer); delete l.radialPeer; }
     if (VX_MONEY_CATEGORIES.has(l.category)) {
       const vx = vxPeerRefs(l);
       if (vx.peer) l.peerWho = vxWho(idx, vx.peer);

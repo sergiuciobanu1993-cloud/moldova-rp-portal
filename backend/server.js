@@ -1084,7 +1084,7 @@ app.get("/api/admin/live/jobs", auth, requireRole(...ADMIN_ROLES), asyncRoute(as
 // Filtrele (player/category/limit) sunt pasate mai departe. Gated la fel ca
 // Sancțiunile (moderator+) — e un instrument de investigație pentru staff,
 // nu date publice.
-const GAME_LOG_CATEGORIES = ["chat", "command", "connect", "disconnect", "death", "money", "money_vehicle_deposit", "money_vehicle_withdraw", "item_buy", "item_craft", "item_transfer", "item_obtained", "item_drop", "item_pickup", "vehicle_acquired", "item_primit",
+const GAME_LOG_CATEGORIES = ["chat", "command", "connect", "disconnect", "death", "money", "money_vehicle_deposit", "money_vehicle_withdraw", "item_buy", "item_craft", "item_transfer", "item_obtained", "item_drop", "item_pickup", "vehicle_acquired", "item_primit", "depozit",
   // (14.10.2026) scrise de resursele VX: transferuri bancare, schimb din meniul G,
   // amenzi, facturi, fondurile facțiunilor (vx_traseu) și fondurile bandelor
   "transfer", "schimb", "amenda", "factura", "fond", "banda_fond"];
@@ -2245,6 +2245,7 @@ function peerNameOf(d) {
 
 // Pune pe fiecare log: who (cine e), toWho/killerWho/peerWho (ceilalți jucători
 // pomeniți) și flags (de ce e suspect, dacă e).
+const bandNameCache = new Map();
 async function enrichLogs(logs) {
   if (!logs || !logs.length) return logs || [];
   const ids = [];
@@ -2260,6 +2261,7 @@ async function enrichLogs(logs) {
     if (d.from) names.push(d.from);
     // (15.10) identificatorii exacți, când jocul îi trimite
     for (const k of ["toIdentifier", "fromIdentifier", "killerIdentifier"]) if (d[k]) ids.push(d[k]);
+    if (l.category === "depozit" && d.proprietar && d.proprietar !== l.identifier) ids.push(d.proprietar);
     const peer = peerNameOf(d);
     if (peer) names.push(peer);
     if (l.pickedBy?.player) names.push(l.pickedBy.player);
@@ -2274,6 +2276,11 @@ async function enrichLogs(logs) {
       && (delta > 0 ? Number(x.details?.baniPrimiti) === delta : Number(x.details?.baniDati) === -delta));
     if (s && s.details?.cu) l.radialPeer = { id: s.details.cu, sid: s.details.cuStatic != null ? String(s.details.cuStatic) : null };
   }
+  // numele bandelor după id-ul organizației (din rândurile banda_fond văzute)
+  const bandNames = new Map();
+  for (const l of logs) if (l.category === "banda_fond" && l.details?.org != null && l.details?.banda) bandNames.set(String(l.details.org), l.details.banda);
+  for (const [k, v] of bandNameCache) if (!bandNames.has(k)) bandNames.set(k, v);
+  for (const [k, v] of bandNames) bandNameCache.set(k, v);
   let idx = { byId: new Map(), byName: new Map(), byStatic: new Map() };
   try { idx = await identityLookup({ identifiers: ids, names, statics }); } catch (err) { console.warn("identityLookup:", err.message); }
   const byName = n => (n ? idx.byName.get(lowerName(n)) || null : null);
@@ -2286,6 +2293,8 @@ async function enrichLogs(logs) {
     if (d.to || d.toIdentifier) l.toWho = byIdOr(d.toIdentifier, d.to);
     if (d.killer || d.killerIdentifier) l.killerWho = byIdOr(d.killerIdentifier, d.killer);
     if (d.from || d.fromIdentifier) l.fromWho = byIdOr(d.fromIdentifier, d.from);
+    if (l.category === "depozit" && d.proprietar && d.proprietar !== l.identifier) l.ownerWho = vxWho(idx, { id: d.proprietar, sid: null });
+    if (l.category === "depozit" && d.tip === "banda" && bandNames.has(String(d.cheie))) l.bandName = bandNames.get(String(d.cheie));
     const peer = peerNameOf(d);
     if (peer) l.peerWho = byName(peer);
     if (l.category === "money" && d.cu) l.peerWho = vxWho(idx, vxPeerRefs(l).peer);

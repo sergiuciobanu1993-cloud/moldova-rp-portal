@@ -10,7 +10,7 @@
     chat: 'Chat', command: 'Comandă', connect: 'Conectare', disconnect: 'Deconectare', death: 'Moarte / Kill', money: 'Bani',
     money_vehicle_deposit: 'Bani ascunși în vehicul', money_vehicle_withdraw: 'Bani scoși din vehicul',
     item_buy: 'Cumpărare', item_craft: 'Crafting', item_transfer: 'Transfer item', item_obtained: 'Item obținut', item_drop: 'Aruncat pe jos',
-    item_pickup: 'Ridicat de jos', item_primit: 'Item primit',
+    item_pickup: 'Ridicat de jos', item_primit: 'Item primit', depozit: 'Depozit',
     vehicle_acquired: 'Vehicul nou',
     transfer: 'Transfer bancar', schimb: 'Schimb (meniul G)', amenda: 'Amendă', factura: 'Factură',
     fond: 'Fond facțiune', banda_fond: 'Fond bandă',
@@ -21,7 +21,7 @@
     chat: 'info', command: 'info', connect: 'on', disconnect: 'off', death: 'warn', money: 'warn',
     money_vehicle_deposit: 'warn', money_vehicle_withdraw: 'warn',
     item_buy: 'info', item_craft: 'info', item_transfer: 'info', item_obtained: 'info', item_drop: 'warn',
-    item_pickup: 'info', item_primit: 'info',
+    item_pickup: 'info', item_primit: 'info', depozit: 'info',
     vehicle_acquired: 'info',
     transfer: 'warn', schimb: 'warn', amenda: 'info', factura: 'info', fond: 'info', banda_fond: 'warn',
     admin: 'warn',
@@ -448,6 +448,28 @@
         }
         return `i-a dat ${itemText(d.item, d.count)} lui ${otherHtml(d.to, log.toWho)}${moneyNote(d.item)}`;
       }
+      // (16.10) iteme puse / luate din depozite: vehicul (torpedou/portbagaj), facțiune, bandă, casă
+      case 'depozit': {
+        const took = d.sens === 'luat';
+        const what = d.bani ? `<strong>${fmtSum(d.count)}${isBlackMoneyItem(d.item) || /murdar/i.test(String(d.eticheta || '')) ? ' bani murdari' : ''}</strong>`
+          : `<strong>${escapeHtml((d.count ? d.count + 'x ' : '') + (d.eticheta || d.item || 'un item'))}</strong>`;
+        let where;
+        if (d.tip === 'vehicul') {
+          const spot = /portbagaj|trunk/i.test(String(d.depozit || '')) ? 'portbagajul' : /torpedou|glove/i.test(String(d.depozit || '')) ? 'torpedoul' : 'vehiculul';
+          const owner = d.proprietar && d.proprietar !== log.identifier ? ` <span class="muted">(mașina lui</span> ${personHtml(log.ownerWho, null, 'alt jucător')}<span class="muted">)</span>` : (d.proprietar ? ' <span class="muted">(mașina lui)</span>' : '');
+          where = `${spot === 'vehiculul' ? 'vehiculul' : `${spot} vehiculului`} <strong>${escapeHtml(String(d.cheie || '?'))}</strong>${owner}`;
+        } else if (d.tip === 'factiune') {
+          where = `depozitul facțiunii <strong>${escapeHtml(factionLabel(d.cheie))}</strong> <span class="muted">(${escapeHtml(String(d.depozit || ''))})</span>`;
+        } else if (d.tip === 'banda') {
+          where = `depozitul bandei <strong>${escapeHtml(log.bandName || ('#' + (d.cheie ?? '?')))}</strong>`;
+        } else if (d.tip === 'casa') {
+          where = `casa <strong>${escapeHtml(String(d.cheie || d.depozit || '?'))}</strong>`;
+        } else {
+          where = `depozitul <strong>${escapeHtml(String(d.depozit || d.cheie || '?'))}</strong>`;
+        }
+        const serii = Array.isArray(d.serii) && d.serii.length ? ` <span class="muted">· serie: ${d.serii.slice(0, 3).map(x => `<code>${escapeHtml(String(x))}</code>`).join(', ')}${d.serii.length > 3 ? '…' : ''}</span>` : '';
+        return `${took ? 'a luat' : 'a pus'} ${what} ${took ? 'din' : 'în'} ${where}${serii}`;
+      }
       // (15.10) aceeași mutare, scrisă pe cel care primește
       case 'item_primit':
         return `a primit ${itemText(d.item, d.count)} de la ${otherHtml(d.from, log.fromWho)}${moneyNote(d.item)}`;
@@ -630,6 +652,11 @@
       }
       case 'item_primit':
         if (isWeaponItem(d.itemName || d.item)) add('warn', 'Armă primită de la alt jucător');
+        break;
+      case 'depozit':
+        if (d.sens === 'luat' && d.tip === 'vehicul' && d.proprietar && d.proprietar !== log.identifier) add('warn', 'A luat din mașina altcuiva');
+        if (d.bani && big(d.count) >= 50000) add(big(d.count) >= MONEY_BIG ? 'crit' : 'warn', d.sens === 'luat' ? 'Bani luați din depozit' : 'Bani puși în depozit');
+        if (d.sens === 'luat' && isWeaponItem(d.item) && d.tip !== 'factiune') add('warn', 'Armă luată din depozit');
         break;
       case 'item_transfer':
         if (isMoneyItemName(d.item) || isBlackMoneyItem(d.item)) sizeFlag(d.count, isBlackMoneyItem(d.item) ? 'Transfer de bani murdari' : 'Transfer de bani');

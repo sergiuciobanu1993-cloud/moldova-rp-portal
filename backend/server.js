@@ -2246,6 +2246,7 @@ function peerNameOf(d) {
 // Pune pe fiecare log: who (cine e), toWho/killerWho/peerWho (ceilalți jucători
 // pomeniți) și flags (de ce e suspect, dacă e).
 const bandNameCache = new Map();
+let bandNameFetchedAt = 0;
 async function enrichLogs(logs) {
   if (!logs || !logs.length) return logs || [];
   const ids = [];
@@ -2280,6 +2281,15 @@ async function enrichLogs(logs) {
   const bandNames = new Map();
   for (const l of logs) if (l.category === "banda_fond" && l.details?.org != null && l.details?.banda) bandNames.set(String(l.details.org), l.details.banda);
   for (const [k, v] of bandNameCache) if (!bandNames.has(k)) bandNames.set(k, v);
+  // (17.10) depozit de bandă fără nume știut → citim o dată (la 30 min) ultimele rânduri banda_fond
+  const needBand = logs.some(l => l.category === "depozit" && l.details?.tip === "banda" && !bandNames.has(String(l.details?.cheie)));
+  if (needBand && Date.now() - bandNameFetchedAt > 30 * 60 * 1000) {
+    bandNameFetchedAt = Date.now();
+    try {
+      const r = await fetchGameLogsRetry({ category: "banda_fond", pageSize: 300 });
+      for (const x of r.logs || []) if (x.details?.org != null && x.details?.banda && !bandNames.has(String(x.details.org))) bandNames.set(String(x.details.org), x.details.banda);
+    } catch { /* fără nume — rămâne #id */ }
+  }
   for (const [k, v] of bandNames) bandNameCache.set(k, v);
   let idx = { byId: new Map(), byName: new Map(), byStatic: new Map() };
   try { idx = await identityLookup({ identifiers: ids, names, statics }); } catch (err) { console.warn("identityLookup:", err.message); }

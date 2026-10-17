@@ -462,10 +462,15 @@
           where = `depozitul facțiunii <strong>${escapeHtml(factionLabel(d.cheie))}</strong> <span class="muted">(${escapeHtml(String(d.depozit || ''))})</span>`;
         } else if (d.tip === 'banda') {
           where = `depozitul bandei <strong>${escapeHtml(log.bandName || ('#' + (d.cheie ?? '?')))}</strong>`;
+        } else if (d.tip === 'politie') {
+          const m = /^(politie|sheriff|fib|army|armata)_depozit_(.+)$/i.exec(String(d.depozit || d.cheie || ''));
+          const fac = m ? ({ politie: 'Poliției', sheriff: 'Șerifilor', fib: 'FIB', army: 'Armatei', armata: 'Armatei' }[m[1].toLowerCase()]) : 'Poliției';
+          const kind = m ? ({ pastrare: 'de păstrare', tura: 'de tură', probe: 'de probe' }[m[2].toLowerCase()] || m[2].replace(/_/g, ' ')) : '';
+          where = `depozitul ${escapeHtml(kind)} al ${escapeHtml(fac)}`.replace('  ', ' ');
         } else if (d.tip === 'casa') {
           where = `casa <strong>${escapeHtml(String(d.cheie || d.depozit || '?'))}</strong>`;
         } else {
-          where = `depozitul <strong>${escapeHtml(String(d.depozit || d.cheie || '?'))}</strong>`;
+          where = `depozitul <strong>${escapeHtml(String(d.depozit || d.cheie || '?').replace(/_/g, ' '))}</strong>`;
         }
         const serii = Array.isArray(d.serii) && d.serii.length ? ` <span class="muted">· serie: ${d.serii.slice(0, 3).map(x => `<code>${escapeHtml(String(x))}</code>`).join(', ')}${d.serii.length > 3 ? '…' : ''}</span>` : '';
         return `${took ? 'a luat' : 'a pus'} ${what} ${took ? 'din' : 'în'} ${where}${serii}`;

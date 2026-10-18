@@ -4560,10 +4560,11 @@ const PREMIUM_BURN_PER_DAY = 1; // după expirare, zilele adunate scad cu 1 pe z
 const STARTER_PACKS = [
   { id: "bronz", name: "Bronz", tone: "bronz", premiumDays: 7, cash: 20000, skillPct: 20,
     lines: ["Permis auto (categoria B)", "Forță, tragere și rezistență urcate la 20%", "Premium 7 zile", "20.000$ în bancă"] },
-  { id: "aur", name: "Aur", tone: "aur", premiumDays: 30, cash: 45000, skillPct: 45,
-    lines: ["Permis auto (B) + permis camion (C)", "Forță, tragere și rezistență urcate la 45%", "Premium 30 de zile", "45.000$ în bancă"] },
-  { id: "platina", name: "Platină", tone: "platina", premiumDays: 90, cash: 100000, skillPct: 80,
-    lines: ["Toate permisele de conducere", "Asigurare + înmatriculare pentru o mașină", "Forță, tragere și rezistență urcate la 80%", "Premium 90 de zile", "100.000$ în bancă"] },
+  // (17.10.2026) Aur: + permis de port armă; Platină: + permis de port armă + licență de afaceri
+  { id: "aur", name: "Aur", tone: "aur", premiumDays: 30, cash: 45000, skillPct: 45, weaponLicense: true,
+    lines: ["Permis auto (B) + permis camion (C)", "Permis de port armă", "Forță, tragere și rezistență urcate la 45%", "Premium 30 de zile", "45.000$ în bancă"] },
+  { id: "platina", name: "Platină", tone: "platina", premiumDays: 90, cash: 100000, skillPct: 80, weaponLicense: true, businessLicense: true,
+    lines: ["Toate permisele de conducere", "Permis de port armă", "Licență de afaceri", "Asigurare + înmatriculare pentru o mașină", "Forță, tragere și rezistență urcate la 80%", "Premium 90 de zile", "100.000$ în bancă"] },
 ];
 const PREMIUM_DEFAULT = {
   public: false, // până nu e gata partea din joc, pagina o vede doar staff-ul
@@ -4710,6 +4711,7 @@ app.post("/api/premium/pachet", auth, asyncRoute(async (req, res) => {
   const r = await vipShopAdminRequest("POST", "/starter/buy", {
     identifier: me.identifier, playerName: me.name, packId: pack.id, price,
     premiumDays: pack.premiumDays, cash: pack.cash, skillPct: pack.skillPct,
+    weaponLicense: !!pack.weaponLicense, businessLicense: !!pack.businessLicense,
     requestId: require("crypto").randomUUID(),
   });
   if (r.status === 404) gameRouteReady.starter = false;

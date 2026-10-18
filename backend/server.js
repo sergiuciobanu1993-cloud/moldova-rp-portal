@@ -4558,18 +4558,51 @@ const PREMIUM_PERKS_TIME = [
   { id: "skilluri", icon: "🎯", cat: "Personaj", title: "Toate skill-urile cresc mai repede", text: "Forță, tragere, rezistență, condus: progres mai rapid peste tot.", tiers: [{ days: 90, value: "+10%" }, { days: 180, value: "+20%" }] },
 ];
 const PREMIUM_BURN_PER_DAY = 1; // după expirare, zilele adunate scad cu 1 pe zi
-// (18.10.2026) Fără bani în pachete (licența Cfx): serverul de joc le vrea cu
-// cash 0. Permisul de port armă (Aur, Platină) și licența de afaceri (Platină)
-// cerute de Sergiu pe 17.10 nu sunt încă hotărâte în joc — până atunci serverul
-// nu le dă, deci nici pagina nu le arată și nici nu le cerem.
+// (18.10.2026) Banii din pachete (20.000 / 45.000 / 100.000 $) rămân — Sergiu
+// îi vrea păstrați. Deocamdată serverul de joc are banii opriți (licența Cfx:
+// catalog.moneyEnabled = false, cash 0) și refuză orice pachet cu alți bani,
+// așa că pe pagină suma apare „oprit deocamdată" și trimitem cash-ul din
+// catalogul lor. Când colegul pornește banii (moneyEnabled + cash > 0 în
+// catalog), rândul apare singur normal, cu suma din joc. Permisul de port armă
+// / licența de afaceri cerute pe 17.10 nu sunt încă hotărâte în joc — până
+// atunci nu le arătăm și nu le cerem.
 const STARTER_PACKS = [
-  { id: "bronz", name: "Bronz", tone: "bronz", premiumDays: 7, cash: 0, skillPct: 20,
+  { id: "bronz", name: "Bronz", tone: "bronz", premiumDays: 7, cashAmount: 20000, skillPct: 20,
     lines: ["Permis auto (categoria B)", "Forță, tragere și rezistență urcate la 20%", "Premium 7 zile"] },
-  { id: "aur", name: "Aur", tone: "aur", premiumDays: 30, cash: 0, skillPct: 45,
+  { id: "aur", name: "Aur", tone: "aur", premiumDays: 30, cashAmount: 45000, skillPct: 45,
     lines: ["Permis auto (B) + permis camion (C)", "Forță, tragere și rezistență urcate la 45%", "Premium 30 de zile"] },
-  { id: "platina", name: "Platină", tone: "platina", premiumDays: 90, cash: 0, skillPct: 80,
+  { id: "platina", name: "Platină", tone: "platina", premiumDays: 90, cashAmount: 100000, skillPct: 80,
     lines: ["Toate permisele de conducere", "Asigurare + înmatriculare pentru o mașină", "Forță, tragere și rezistență urcate la 80%", "Premium 90 de zile"] },
 ];
+// Catalogul din joc (GET /premium/catalog), ținut 5 minute în memorie.
+const premiumCatalogCache = { at: 0, data: null };
+async function getPremiumCatalog(force) {
+  if (!force && premiumCatalogCache.data && Date.now() - premiumCatalogCache.at < 5 * 60_000) return premiumCatalogCache.data;
+  if (gameIsDown()) return premiumCatalogCache.data;
+  const c = await vipShopAdminRequest("GET", "/premium/catalog");
+  if (c.ok && c.data && typeof c.data === "object" && JSON.stringify(c.data).length < 20000) {
+    premiumCatalogCache.data = c.data; premiumCatalogCache.at = Date.now();
+    return c.data;
+  }
+  return c.status === 404 ? { error: "lipsește" } : premiumCatalogCache.data || { error: String(c.error || "eroare").slice(0, 40) };
+}
+const catalogPack = (cat, id) => (cat && Array.isArray(cat.packs) ? cat.packs.find(x => x && String(x.packId ?? x.id) === id) : null) || null;
+// Banii care chiar se dau acum pentru pachet (0 cât timp sunt opriți în joc).
+function starterCashNow(cat, pack) {
+  const g = catalogPack(cat, pack.id);
+  const c = Math.floor(Number(g?.cash) || 0);
+  return cat && cat.moneyEnabled === true && c > 0 ? c : 0;
+}
+function starterPackView(cat, pack) {
+  const cash = starterCashNow(cat, pack);
+  const fmt = n => `${n.toLocaleString("de-DE")}$ în bancă`;
+  return {
+    ...pack,
+    cash,
+    lines: cash > 0 ? [...pack.lines, fmt(cash)] : pack.lines,
+    offLines: cash > 0 ? [] : [fmt(pack.cashAmount)],
+  };
+}
 const STARTER_MAX_HOURS = 10; // regula serverului de joc: doar personajele cu cel mult 10 ore jucate
 const PREMIUM_DEFAULT = {
   public: false, // până nu e gata partea din joc, pagina o vede doar staff-ul
@@ -4663,7 +4696,7 @@ app.get("/api/premium", auth, asyncRoute(async (req, res) => {
   const settings = await loadPremiumSettings();
   if (!premiumVisibleTo(settings, req.user.role)) return res.json({ visible: false });
   const me = await premiumBuyer(req);
-  const [coins, status] = me.identifier ? await Promise.all([fetchCoins(me.identifier), fetchPremiumStatus(me.identifier)]) : [null, null];
+  const [coins, status, catalog] = await Promise.all(me.identifier ? [fetchCoins(me.identifier), fetchPremiumStatus(me.identifier), getPremiumCatalog()] : [null, null, getPremiumCatalog()]);
   res.json({
     visible: true,
     preview: !settings.public, // pagina e încă ascunsă jucătorilor (o vede doar staff-ul)
@@ -4671,7 +4704,7 @@ app.get("/api/premium", auth, asyncRoute(async (req, res) => {
     plans: settings.plans.filter(p => p.on),
     perksStart: PREMIUM_PERKS_START,
     perksTime: PREMIUM_PERKS_TIME,
-    packs: STARTER_PACKS.filter(p => settings.packs[p.id].on).map(p => ({ ...p, price: settings.packs[p.id].price })),
+    packs: STARTER_PACKS.filter(p => settings.packs[p.id].on).map(p => ({ ...starterPackView(catalog, p), price: settings.packs[p.id].price })),
     starterMaxHours: STARTER_MAX_HOURS,
     linked: !!me.identifier,
     name: me.name,
@@ -4720,15 +4753,16 @@ app.post("/api/premium/pachet", auth, asyncRoute(async (req, res) => {
   const pack = STARTER_PACKS.find(p => p.id === String(req.body?.packId || "") && settings.packs[p.id].on);
   if (!pack) return res.status(400).json({ error: "Pachetul nu mai e disponibil." });
   const price = settings.packs[pack.id].price;
+  const cash = starterCashNow(await getPremiumCatalog(), pack);
   const r = await vipShopAdminRequest("POST", "/starter/buy", {
     identifier: me.identifier, playerName: me.name, packId: pack.id, price,
-    premiumDays: pack.premiumDays, cash: pack.cash, skillPct: pack.skillPct,
+    premiumDays: pack.premiumDays, cash, skillPct: pack.skillPct,
     requestId: require("crypto").randomUUID(),
   });
   if (r.status === 404) gameRouteReady.starter = false;
   if (!r.ok) return res.status(r.status === 503 ? 503 : 400).json({ error: premiumErrorText(r) });
   gameRouteReady.starter = true;
-  await logAction(req.user.sub, "premium.starter", "premium", me.identifier, { packId: pack.id, price, name: me.name }, req.ip);
+  await logAction(req.user.sub, "premium.starter", "premium", me.identifier, { packId: pack.id, price, cash, name: me.name }, req.ip);
   const status = await fetchPremiumStatus(me.identifier);
   res.json({ ok: true, status, coins: Number.isFinite(Number(r.data?.coins)) ? Number(r.data.coins) : null });
 }));
@@ -4747,15 +4781,10 @@ app.get("/api/admin/premium", auth, requireRole(...FOUNDER_ROLES), asyncRoute(as
   // (18.10.2026) Ce are editorul din joc (GET /premium/catalog), ca să vedem în
   // Editorul VIP Shop dacă prețurile și zilele noastre se potrivesc cu ale lor
   // (prețul trimis: între jumătate și prețul din joc; zilele: exact aceleași).
-  let catalog = null;
-  if (!gameIsDown()) {
-    const c = await vipShopAdminRequest("GET", "/premium/catalog");
-    if (c.ok && c.data && typeof c.data === "object" && JSON.stringify(c.data).length < 20000) catalog = c.data;
-    else catalog = { error: c.status === 404 ? "lipsește" : String(c.error || "eroare").slice(0, 40) };
-  }
+  const catalog = await getPremiumCatalog(true);
   res.json({
     settings: await loadPremiumSettings(),
-    packs: STARTER_PACKS.map(p => ({ id: p.id, name: p.name, lines: p.lines, premiumDays: p.premiumDays, cash: p.cash, skillPct: p.skillPct })),
+    packs: STARTER_PACKS.map(p => { const v = starterPackView(catalog, p); return { id: p.id, name: p.name, lines: v.lines, offLines: v.offLines, premiumDays: p.premiumDays, cash: v.cash, skillPct: p.skillPct }; }),
     catalog,
     ready: { premium: gameRouteReady.premium, starter: gameRouteReady.starter, checkedAt: gameRoutesCheckedAt },
     sales,

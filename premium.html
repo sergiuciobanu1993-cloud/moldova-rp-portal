@@ -83,6 +83,9 @@
 .perk.off strong,.it.off .tx strong{text-decoration:line-through;text-decoration-thickness:1px}
 .stop.got .it.off{background:transparent;border-color:transparent}
 .stop.got .it.off .val{border-color:var(--line);color:var(--muted)}
+.pack li.off{align-items:center;color:var(--muted)}
+.pack li.off>span:first-child{flex:1;text-decoration:line-through;text-decoration-thickness:1px}
+.pack li.off::before{background:var(--muted)}
 
 /* Cum funcționează */
 .rules{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
@@ -177,7 +180,7 @@
   <article><b>Pe tot contul</b><p>Premium e pe contul tău de joc, deci merge pe ambele personaje. Bonusurile se aplică singure în joc, nu trebuie să ridici nimic.</p></article>
 </div>
 
-<div class="sec-head"><div><h2>Pachete de start</h2><p>Pentru început: permise, skill-uri urcate și câteva zile de Premium. Poți lua <b style="color:var(--text)">un singur pachet pe personaj</b>, doar dacă personajul are <b style="color:var(--text)" id="pk-hours">cel mult 10 ore</b> jucate.</p></div></div>
+<div class="sec-head"><div><h2>Pachete de start</h2><p>Pentru început: permise, skill-uri urcate, câteva zile de Premium și bani (banii sunt opriți deocamdată, nu se dau la cumpărare). Poți lua <b style="color:var(--text)">un singur pachet pe personaj</b>, doar dacă personajul are <b style="color:var(--text)" id="pk-hours">cel mult 10 ore</b> jucate.</p></div></div>
 <div class="packs" id="packs"><div class="skel" style="height:300px"></div><div class="skel" style="height:300px"></div><div class="skel" style="height:300px"></div></div>
 </main>
 
@@ -353,7 +356,7 @@ function renderPacks() {
     const label = mine ? '' : had ? 'Ai luat deja un pachet' : block ? block : poor ? 'Coins insuficienți' : 'Cumpără pachetul';
     return `<article class="pack ${esc(p.tone)}">
       <div class="top"><small>Pachet de start</small><h3>${esc(p.name)}</h3></div>
-      <ul>${p.lines.map(l => `<li>${esc(l)}</li>`).join('')}</ul>
+      <ul>${p.lines.map(l => `<li>${esc(l)}</li>`).join('')}${(p.offLines || []).map(l => `<li class="off"><span>${esc(l)}</span><span class="off-tag">Oprit deocamdată</span></li>`).join('')}</ul>
       <div class="foot"><span class="price">${p.price}<small>coins</small></span>
         ${mine ? `<span class="done">✓ L-ai luat${had.at ? ' pe ' + fmtDay(had.at) : ''}</span>` : `<button type="button" class="btn-ghost" data-pack="${esc(p.id)}" ${had || block || poor ? 'disabled' : ''}>${esc(label)}</button>`}
       </div>

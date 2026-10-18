@@ -180,7 +180,7 @@
   <article><b>Pe tot contul</b><p>Premium e pe contul tău de joc, deci merge pe ambele personaje. Bonusurile se aplică singure în joc, nu trebuie să ridici nimic.</p></article>
 </div>
 
-<div class="sec-head"><div><h2>Pachete de start</h2><p>Pentru început: permise, skill-uri urcate, câteva zile de Premium și bani (banii sunt opriți deocamdată, nu se dau la cumpărare). Poți lua <b style="color:var(--text)">un singur pachet pe personaj</b>, doar dacă personajul are <b style="color:var(--text)" id="pk-hours">cel mult 10 ore</b> jucate.</p></div></div>
+<div class="sec-head"><div><h2>Pachete de start</h2><p>Pentru început: permise, skill-uri urcate, câteva zile de Premium și bani (banii sunt opriți deocamdată, nu se dau la cumpărare). Poți lua <b style="color:var(--text)">un singur pachet pe personaj</b>.</p></div></div>
 <div class="packs" id="packs"><div class="skel" style="height:300px"></div><div class="skel" style="height:300px"></div><div class="skel" style="height:300px"></div></div>
 </main>
 
@@ -349,7 +349,6 @@ function renderPacks() {
   const el = document.getElementById('packs');
   const block = blocker('starter');
   const had = D.status && D.status.starter;
-  if (D.starterMaxHours) document.getElementById('pk-hours').textContent = `cel mult ${D.starterMaxHours} ore`;
   el.innerHTML = D.packs.map(p => {
     const mine = had && had.packId === p.id;
     const poor = D.linked && D.coins != null && D.coins < p.price;
@@ -390,7 +389,7 @@ async function buyPack(id) {
   if (busy) return;
   const p = D.packs.find(x => x.id === id); if (!p) return;
   const ok = await confirmBox(`Pachetul ${p.name}?`,
-    `Plătești <b>${p.price} coins</b>. Poți lua <b>un singur pachet pe personaj</b>, deci după asta nu mai poți cumpăra altul pe ${esc(D.name || 'acest personaj')}.<br>Merge doar dacă personajul are cel mult ${D.starterMaxHours || 10} ore jucate; altfel serverul refuză și nu ți se iau coins.`, `Plătesc ${p.price} coins`);
+    `Plătești <b>${p.price} coins</b>. Poți lua <b>un singur pachet pe personaj</b>, deci după asta nu mai poți cumpăra altul pe ${esc(D.name || 'acest personaj')}.`, `Plătesc ${p.price} coins`);
   if (!ok) return;
   busy = true;
   try {

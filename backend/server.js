@@ -4603,7 +4603,7 @@ function starterPackView(cat, pack) {
     offLines: cash > 0 ? [] : [fmt(pack.cashAmount)],
   };
 }
-const STARTER_MAX_HOURS = 10; // regula serverului de joc: doar personajele cu cel mult 10 ore jucate
+// (18.10.2026) Sergiu: pachetele NU au limită de ore jucate — doar unul pe personaj.
 const PREMIUM_DEFAULT = {
   public: false, // până nu e gata partea din joc, pagina o vede doar staff-ul
   plans: [
@@ -4681,8 +4681,8 @@ const PREMIUM_ERRORS = {
 function premiumErrorText(r) {
   if (r.status === 404) return "Cumpărarea se activează în curând — serverul de joc încă se pregătește.";
   if (PREMIUM_ERRORS[r.error]) return PREMIUM_ERRORS[r.error];
-  // codul exact pentru „prea multe ore" nu ni l-au dat; îl prindem după nume
-  if (/ore|hour|timp_jucat|playtime/i.test(String(r.error || ""))) return `Pachetele de start sunt doar pentru personajele cu cel mult ${STARTER_MAX_HOURS} ore jucate. Nu ți s-au luat coins.`;
+  // dacă serverul de joc mai refuză după orele jucate (limita s-a cerut scoasă)
+  if (/ore|hour|timp_jucat|playtime/i.test(String(r.error || ""))) return "Serverul de joc a refuzat pachetul din cauza orelor jucate pe personaj. Nu ți s-au luat coins; anunță staff-ul.";
   if (r.status >= 500) return `Serverul de joc a dat o eroare (cod: ${String(r.error || "necunoscut").slice(0, 40)}). Dacă ți s-au scăzut coins fără să primești nimic, deschide un tichet.`;
   return `Serverul de joc a refuzat cumpărarea (cod: ${String(r.error || "necunoscut").slice(0, 40)}).`;
 }
@@ -4705,7 +4705,6 @@ app.get("/api/premium", auth, asyncRoute(async (req, res) => {
     perksStart: PREMIUM_PERKS_START,
     perksTime: PREMIUM_PERKS_TIME,
     packs: STARTER_PACKS.filter(p => settings.packs[p.id].on).map(p => ({ ...starterPackView(catalog, p), price: settings.packs[p.id].price })),
-    starterMaxHours: STARTER_MAX_HOURS,
     linked: !!me.identifier,
     name: me.name,
     coins: coins ? coins.coins : null,

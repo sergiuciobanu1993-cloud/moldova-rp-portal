@@ -77,6 +77,12 @@
 .stop.got .it .val{border-color:rgba(255,138,31,.5);color:var(--orange)}
 .stop:not(.got) .it{opacity:.78}
 .it .lock{flex:none;font-size:11px;color:var(--muted)}
+/* (18.10.2026) bonusuri cu bani oprite deocamdată (licența Cfx) */
+.off-tag{flex:none;display:inline-block;font-size:9.5px;font-weight:900;letter-spacing:.1em;text-transform:uppercase;padding:4px 7px;border-radius:6px;border:1px solid var(--line);color:var(--muted);background:rgba(255,255,255,.03)}
+.perk.off,.stop .it.off{opacity:.5}
+.perk.off strong,.it.off .tx strong{text-decoration:line-through;text-decoration-thickness:1px}
+.stop.got .it.off{background:transparent;border-color:transparent}
+.stop.got .it.off .val{border-color:var(--line);color:var(--muted)}
 
 /* Cum funcționează */
 .rules{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
@@ -159,6 +165,8 @@
 <div class="sec-head"><div><h2>Din prima zi</h2><p>Le primești imediat ce activezi Premium și le ai cât timp abonamentul e activ.</p></div></div>
 <div class="perks" id="perks-start"></div>
 
+<p class="pr-note" id="off-note" hidden><b>Bonusurile cu bani sunt oprite deocamdată.</b> Le vezi tăiate pe pagină; nu se aplică în joc și nu se numără la bonusurile deblocate.</p>
+
 <div class="sec-head"><div><h2>Se deblochează pe drum</h2><p id="road-intro">Fiecare zi de Premium se adună. Când ajungi la pragul unui bonus, îl primești automat.</p></div></div>
 <div class="road" id="road"></div>
 
@@ -169,7 +177,7 @@
   <article><b>Pe tot contul</b><p>Premium e pe contul tău de joc, deci merge pe ambele personaje. Bonusurile se aplică singure în joc, nu trebuie să ridici nimic.</p></article>
 </div>
 
-<div class="sec-head"><div><h2>Pachete de start</h2><p>Pentru început: permise, skill-uri urcate, bani și câteva zile de Premium. Poți lua <b style="color:var(--text)">un singur pachet pe personaj</b>; banii îi ridici din joc cu <code>/recompense</code>.</p></div></div>
+<div class="sec-head"><div><h2>Pachete de start</h2><p>Pentru început: permise, skill-uri urcate și câteva zile de Premium. Poți lua <b style="color:var(--text)">un singur pachet pe personaj</b>, doar dacă personajul are <b style="color:var(--text)" id="pk-hours">cel mult 10 ore</b> jucate.</p></div></div>
 <div class="packs" id="packs"><div class="skel" style="height:300px"></div><div class="skel" style="height:300px"></div><div class="skel" style="height:300px"></div></div>
 </main>
 
@@ -221,6 +229,8 @@ function milestones(perks) {
   }
   return [...map.entries()].sort((a, b) => a[0] - b[0]);
 }
+// Doar bonusurile care chiar merg (fără cele oprite) — pentru „Următorul bonus".
+const livePerks = perks => perks.filter(p => !p.off);
 
 // Se poate cumpăra acum? Dacă nu, de ce.
 function blocker(kind) {
@@ -263,10 +273,10 @@ function renderState() {
   }
   left.innerHTML = `<div class="st-eyebrow">Starea ta${D.name ? ' · ' + esc(D.name) : ''}</div>
     <div class="st-big">${big}</div><div class="st-sub">${sub}</div>
-    ${D.linked ? `<div class="st-facts"><div><small>Zile adunate</small><strong>${days}</strong></div><div><small>Bonusuri deblocate</small><strong>${unlockedCount(days)} / ${D.perksTime.length}</strong></div></div>` : ''}
+    ${D.linked ? `<div class="st-facts"><div><small>Zile adunate</small><strong>${days}</strong></div><div><small>Bonusuri deblocate</small><strong>${unlockedCount(days)} / ${livePerks(D.perksTime).length}</strong></div></div>` : ''}
     ${st && st.online === false && st.savedAt ? `<div class="st-account">Date salvate pe ${fmtDay(st.savedAt)}.</div>` : ''}`;
 
-  const ms = milestones(D.perksTime);
+  const ms = milestones(livePerks(D.perksTime));
   const next = ms.find(([d]) => d > days);
   const prev = [...ms].reverse().find(([d]) => d <= days);
   const from = prev ? prev[0] : 0;
@@ -282,7 +292,7 @@ function renderState() {
   }
 }
 function unlockedCount(days) {
-  return D.perksTime.filter(p => (p.tiers || []).some(t => t.days <= days)).length;
+  return livePerks(D.perksTime).filter(p => (p.tiers || []).some(t => t.days <= days)).length;
 }
 
 function renderPlans() {
@@ -310,7 +320,8 @@ function renderPlans() {
 
 function renderPerks() {
   document.getElementById('perks-start').innerHTML = D.perksStart.map(p => `
-    <div class="perk"><span class="ic" aria-hidden="true">${p.icon}</span><div><span class="cat">${esc(p.cat)}</span><strong>${esc(p.title)}</strong><span>${esc(p.text)}</span></div></div>`).join('');
+    <div class="perk${p.off ? ' off' : ''}"><span class="ic" aria-hidden="true">${p.icon}</span><div style="flex:1"><span class="cat">${esc(p.cat)}</span><strong>${esc(p.title)}</strong><span>${esc(p.text)}</span></div>${p.off ? '<span class="off-tag">Oprit</span>' : ''}</div>`).join('');
+  document.getElementById('off-note').hidden = ![...D.perksStart, ...D.perksTime].some(p => p.off);
   const days = D.status ? D.status.days || 0 : 0;
   const ms = milestones(D.perksTime);
   document.getElementById('road').innerHTML = ms.map(([d, list], i) => {
@@ -321,10 +332,10 @@ function renderPerks() {
     return `<div class="stop${got ? ' got' : ''}${half ? ' half' : ''}"${half ? ` style="--fill:${fill}%"` : ''}>
       <div class="d">${plural(d, 'zi', 'zile')}</div>
       <div class="items">${list.map(p => `
-        <div class="it"><span class="ic" aria-hidden="true">${p.icon}</span>
+        <div class="it${p.off ? ' off' : ''}"><span class="ic" aria-hidden="true">${p.icon}</span>
           <div class="tx"><strong>${esc(p.title)}</strong><span>${esc(p.text)}</span></div>
           ${p.value ? `<span class="val">${esc(p.value)}</span>` : ''}
-          ${got ? '' : `<span class="lock" aria-label="blocat">🔒</span>`}
+          ${p.off ? '<span class="off-tag">Oprit</span>' : got ? '' : `<span class="lock" aria-label="blocat">🔒</span>`}
         </div>`).join('')}</div>
     </div>`;
   }).join('');
@@ -335,6 +346,7 @@ function renderPacks() {
   const el = document.getElementById('packs');
   const block = blocker('starter');
   const had = D.status && D.status.starter;
+  if (D.starterMaxHours) document.getElementById('pk-hours').textContent = `cel mult ${D.starterMaxHours} ore`;
   el.innerHTML = D.packs.map(p => {
     const mine = had && had.packId === p.id;
     const poor = D.linked && D.coins != null && D.coins < p.price;
@@ -375,12 +387,12 @@ async function buyPack(id) {
   if (busy) return;
   const p = D.packs.find(x => x.id === id); if (!p) return;
   const ok = await confirmBox(`Pachetul ${p.name}?`,
-    `Plătești <b>${p.price} coins</b>. Poți lua <b>un singur pachet pe personaj</b>, deci după asta nu mai poți cumpăra altul pe ${esc(D.name || 'acest personaj')}.<br>Banii îi ridici din joc cu <b>/recompense</b>.`, `Plătesc ${p.price} coins`);
+    `Plătești <b>${p.price} coins</b>. Poți lua <b>un singur pachet pe personaj</b>, deci după asta nu mai poți cumpăra altul pe ${esc(D.name || 'acest personaj')}.<br>Merge doar dacă personajul are cel mult ${D.starterMaxHours || 10} ore jucate; altfel serverul refuză și nu ți se iau coins.`, `Plătesc ${p.price} coins`);
   if (!ok) return;
   busy = true;
   try {
     await post('/api/premium/pachet', { packId: id });
-    toast(`Gata! Ai pachetul ${p.name}. Intră în joc și scrie /recompense.`, 'ok');
+    toast(`Gata! Ai pachetul ${p.name} pe ${D.name || 'personajul tău'}.`, 'ok');
   } catch (e) { toast(e.message, 'err'); }
   busy = false;
   load();

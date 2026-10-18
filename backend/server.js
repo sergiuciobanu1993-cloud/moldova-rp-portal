@@ -4535,9 +4535,13 @@ app.delete("/api/admin/vip-shop/cutii/:id/recompense/:rewardId", auth, requireRo
 // Premium e pe CONT (ambele personaje, după licență); pachetul de start e unul
 // singur pe personaj.
 // ============================================================================
+// (18.10.2026, de la colegul de pe joc) Banii sunt opriți din cauza licenței
+// Cfx: bonusurile cu bani rămân pe pagină marcate „oprit" (off: true) și nu se
+// numără la bonusurile deblocate. Scoase de tot: „ieși din spital cu viața
+// plină" (30), „alegi spitalul" (180) și „efectele de la mâncare +25%" (100).
 const PREMIUM_PERKS_START = [
-  { id: "joburi20", icon: "💼", cat: "Bani", title: "+20% la câștigul din joburile civile", text: "Taxi, pescuit, livrări, mecanic: tot ce câștigi muncind vine cu 20% mai mult." },
-  { id: "salariu", icon: "💵", cat: "Bani", title: "+1.000$ la fiecare salariu", text: "La fiecare salariu de pe server primești în plus 1.000$ în bancă." },
+  { id: "joburi20", icon: "💼", cat: "Bani", off: true, title: "+20% la câștigul din joburile civile", text: "Taxi, pescuit, livrări, mecanic: tot ce câștigi muncind vine cu 20% mai mult." },
+  { id: "salariu", icon: "💵", cat: "Bani", off: true, title: "+1.000$ la fiecare salariu", text: "La fiecare salariu de pe server primești în plus 1.000$ în bancă." },
   { id: "spital", icon: "🏥", cat: "Personaj", title: "Aștepți la jumătate până la spital", text: "Când ești inconștient, poți cere transportul la spital după jumătate din timpul obișnuit." },
   { id: "insigna", icon: "⭐", cat: "Site", title: "Insigna Premium pe site", text: "Apare lângă numele tău în contul de pe moldovarp.md." },
 ];
@@ -4545,27 +4549,28 @@ const PREMIUM_PERKS_START = [
 const PREMIUM_PERKS_TIME = [
   { id: "sala", icon: "🏋️", cat: "Personaj", title: "Sala merge mai repede", text: "Forța și rezistența cresc mai repede la antrenament.", tiers: [{ days: 5, value: "+15%" }, { days: 45, value: "+25%" }] },
   { id: "foame", icon: "🍔", cat: "Personaj", title: "Foamea și setea scad mai încet", text: "Mănânci și bei mai rar.", tiers: [{ days: 10, value: "−20%" }, { days: 60, value: "−35%" }, { days: 150, value: "−50%" }] },
-  { id: "acte", icon: "📄", cat: "Transport", title: "Reducere la asigurare și înmatriculare", text: "Actele mașinii te costă mai puțin.", tiers: [{ days: 15, value: "−20%" }] },
+  { id: "acte", icon: "📄", cat: "Transport", off: true, title: "Reducere la asigurare și înmatriculare", text: "Actele mașinii te costă mai puțin.", tiers: [{ days: 15, value: "−20%" }] },
   { id: "garaj", icon: "🅿️", cat: "Transport", title: "Locuri în plus în garaj", text: "Ții mai multe mașini în garaj.", tiers: [{ days: 20, value: "+2" }, { days: 75, value: "+4" }, { days: 140, value: "+6" }] },
-  { id: "peste", icon: "🎣", cat: "Bani", title: "Peștele se vinde mai scump", text: "Primești mai mult pe peștele vândut.", tiers: [{ days: 25, value: "+15%" }] },
-  { id: "spitalhp", icon: "❤️", cat: "Personaj", title: "Ieși din spital cu viața plină", text: "După spital nu mai pornești cu viața la jumătate.", tiers: [{ days: 30, value: "" }] },
-  { id: "magazin", icon: "🛒", cat: "Bani", title: "Reducere la magazinele 24/7", text: "Mâncare, apă și tot ce cumperi de la 24/7, mai ieftin.", tiers: [{ days: 40, value: "−10%" }] },
+  { id: "peste", icon: "🎣", cat: "Bani", off: true, title: "Peștele se vinde mai scump", text: "Primești mai mult pe peștele vândut.", tiers: [{ days: 25, value: "+15%" }] },
+  { id: "magazin", icon: "🛒", cat: "Bani", off: true, title: "Reducere la magazinele 24/7", text: "Mâncare, apă și tot ce cumperi de la 24/7, mai ieftin.", tiers: [{ days: 40, value: "−10%" }] },
   { id: "inchisoare", icon: "⛓️", cat: "Facțiuni", title: "Pedeapsa la închisoare mai scurtă", text: "Stai mai puțin după gratii.", tiers: [{ days: 50, value: "−10%" }, { days: 120, value: "−20%" }] },
-  { id: "joburi25", icon: "📈", cat: "Bani", title: "Încă +5% la joburile civile", text: "Bonusul de la joburi urcă la +25% în total.", tiers: [{ days: 60, value: "+25%" }] },
+  { id: "joburi25", icon: "📈", cat: "Bani", off: true, title: "Încă +5% la joburile civile", text: "Bonusul de la joburi urcă la +25% în total.", tiers: [{ days: 60, value: "+25%" }] },
   { id: "skilluri", icon: "🎯", cat: "Personaj", title: "Toate skill-urile cresc mai repede", text: "Forță, tragere, rezistență, condus: progres mai rapid peste tot.", tiers: [{ days: 90, value: "+10%" }, { days: 180, value: "+20%" }] },
-  { id: "efecte", icon: "🧃", cat: "Personaj", title: "Efectele bune țin mai mult", text: "Efectele bune de la mâncare și băutură durează mai mult (fără regenerarea vieții).", tiers: [{ days: 100, value: "+25%" }] },
-  { id: "spawn", icon: "📍", cat: "Personaj", title: "Alegi spitalul în care apari", text: "După moarte alegi la ce spital apari.", tiers: [{ days: 180, value: "" }] },
 ];
 const PREMIUM_BURN_PER_DAY = 1; // după expirare, zilele adunate scad cu 1 pe zi
+// (18.10.2026) Fără bani în pachete (licența Cfx): serverul de joc le vrea cu
+// cash 0. Permisul de port armă (Aur, Platină) și licența de afaceri (Platină)
+// cerute de Sergiu pe 17.10 nu sunt încă hotărâte în joc — până atunci serverul
+// nu le dă, deci nici pagina nu le arată și nici nu le cerem.
 const STARTER_PACKS = [
-  { id: "bronz", name: "Bronz", tone: "bronz", premiumDays: 7, cash: 20000, skillPct: 20,
-    lines: ["Permis auto (categoria B)", "Forță, tragere și rezistență urcate la 20%", "Premium 7 zile", "20.000$ în bancă"] },
-  // (17.10.2026) Aur: + permis de port armă; Platină: + permis de port armă + licență de afaceri
-  { id: "aur", name: "Aur", tone: "aur", premiumDays: 30, cash: 45000, skillPct: 45, weaponLicense: true,
-    lines: ["Permis auto (B) + permis camion (C)", "Permis de port armă", "Forță, tragere și rezistență urcate la 45%", "Premium 30 de zile", "45.000$ în bancă"] },
-  { id: "platina", name: "Platină", tone: "platina", premiumDays: 90, cash: 100000, skillPct: 80, weaponLicense: true, businessLicense: true,
-    lines: ["Toate permisele de conducere", "Permis de port armă", "Licență de afaceri", "Asigurare + înmatriculare pentru o mașină", "Forță, tragere și rezistență urcate la 80%", "Premium 90 de zile", "100.000$ în bancă"] },
+  { id: "bronz", name: "Bronz", tone: "bronz", premiumDays: 7, cash: 0, skillPct: 20,
+    lines: ["Permis auto (categoria B)", "Forță, tragere și rezistență urcate la 20%", "Premium 7 zile"] },
+  { id: "aur", name: "Aur", tone: "aur", premiumDays: 30, cash: 0, skillPct: 45,
+    lines: ["Permis auto (B) + permis camion (C)", "Forță, tragere și rezistență urcate la 45%", "Premium 30 de zile"] },
+  { id: "platina", name: "Platină", tone: "platina", premiumDays: 90, cash: 0, skillPct: 80,
+    lines: ["Toate permisele de conducere", "Asigurare + înmatriculare pentru o mașină", "Forță, tragere și rezistență urcate la 80%", "Premium 90 de zile"] },
 ];
+const STARTER_MAX_HOURS = 10; // regula serverului de joc: doar personajele cu cel mult 10 ore jucate
 const PREMIUM_DEFAULT = {
   public: false, // până nu e gata partea din joc, pagina o vede doar staff-ul
   plans: [
@@ -4635,10 +4640,16 @@ const PREMIUM_ERRORS = {
   deja_cumparat: "Ai luat deja un pachet de start pe acest personaj.",
   pachet_necunoscut: "Pachetul nu mai există.",
   server_offline: "Serverul de joc nu răspunde acum. Încearcă după ce pornește.",
+  // (18.10.2026) refuzuri când site-ul și editorul din joc nu se potrivesc — coins nu se iau
+  pret_invalid: "Prețul de pe site nu se potrivește cu cel din joc. Nu ți s-au luat coins; anunță staff-ul.",
+  plan_diferit: "Perioada de pe site nu se potrivește cu cea din joc. Nu ți s-au luat coins; anunță staff-ul.",
+  pachet_diferit: "Pachetul de pe site nu se potrivește cu cel din joc. Nu ți s-au luat coins; anunță staff-ul.",
 };
 function premiumErrorText(r) {
   if (r.status === 404) return "Cumpărarea se activează în curând — serverul de joc încă se pregătește.";
   if (PREMIUM_ERRORS[r.error]) return PREMIUM_ERRORS[r.error];
+  // codul exact pentru „prea multe ore" nu ni l-au dat; îl prindem după nume
+  if (/ore|hour|timp_jucat|playtime/i.test(String(r.error || ""))) return `Pachetele de start sunt doar pentru personajele cu cel mult ${STARTER_MAX_HOURS} ore jucate. Nu ți s-au luat coins.`;
   if (r.status >= 500) return `Serverul de joc a dat o eroare (cod: ${String(r.error || "necunoscut").slice(0, 40)}). Dacă ți s-au scăzut coins fără să primești nimic, deschide un tichet.`;
   return `Serverul de joc a refuzat cumpărarea (cod: ${String(r.error || "necunoscut").slice(0, 40)}).`;
 }
@@ -4661,6 +4672,7 @@ app.get("/api/premium", auth, asyncRoute(async (req, res) => {
     perksStart: PREMIUM_PERKS_START,
     perksTime: PREMIUM_PERKS_TIME,
     packs: STARTER_PACKS.filter(p => settings.packs[p.id].on).map(p => ({ ...p, price: settings.packs[p.id].price })),
+    starterMaxHours: STARTER_MAX_HOURS,
     linked: !!me.identifier,
     name: me.name,
     coins: coins ? coins.coins : null,
@@ -4711,7 +4723,6 @@ app.post("/api/premium/pachet", auth, asyncRoute(async (req, res) => {
   const r = await vipShopAdminRequest("POST", "/starter/buy", {
     identifier: me.identifier, playerName: me.name, packId: pack.id, price,
     premiumDays: pack.premiumDays, cash: pack.cash, skillPct: pack.skillPct,
-    weaponLicense: !!pack.weaponLicense, businessLicense: !!pack.businessLicense,
     requestId: require("crypto").randomUUID(),
   });
   if (r.status === 404) gameRouteReady.starter = false;
@@ -4733,9 +4744,19 @@ app.get("/api/admin/premium", auth, requireRole(...FOUNDER_ROLES), asyncRoute(as
        WHERE a.action IN ('premium.buy','premium.starter') ORDER BY a.created_at DESC LIMIT 30`);
     sales = rows;
   } catch { /* fără istoric */ }
+  // (18.10.2026) Ce are editorul din joc (GET /premium/catalog), ca să vedem în
+  // Editorul VIP Shop dacă prețurile și zilele noastre se potrivesc cu ale lor
+  // (prețul trimis: între jumătate și prețul din joc; zilele: exact aceleași).
+  let catalog = null;
+  if (!gameIsDown()) {
+    const c = await vipShopAdminRequest("GET", "/premium/catalog");
+    if (c.ok && c.data && typeof c.data === "object" && JSON.stringify(c.data).length < 20000) catalog = c.data;
+    else catalog = { error: c.status === 404 ? "lipsește" : String(c.error || "eroare").slice(0, 40) };
+  }
   res.json({
     settings: await loadPremiumSettings(),
-    packs: STARTER_PACKS.map(p => ({ id: p.id, name: p.name, lines: p.lines })),
+    packs: STARTER_PACKS.map(p => ({ id: p.id, name: p.name, lines: p.lines, premiumDays: p.premiumDays, cash: p.cash, skillPct: p.skillPct })),
+    catalog,
     ready: { premium: gameRouteReady.premium, starter: gameRouteReady.starter, checkedAt: gameRoutesCheckedAt },
     sales,
   });

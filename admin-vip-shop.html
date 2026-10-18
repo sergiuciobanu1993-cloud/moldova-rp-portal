@@ -95,6 +95,9 @@
   .pm-card .pm-row{display:flex;gap:10px}
   .pm-card .pm-row .field{flex:1;margin:0}
   .pm-card ul{margin:0;padding-left:16px;color:var(--muted);font-size:11.5px}
+  .pm-game{font-size:11.5px;line-height:1.45;padding:7px 9px;border-radius:8px;border:1px solid var(--line);color:var(--muted)}
+  .pm-game.ok{border-color:rgba(66,223,138,.4);color:#8fe8b6}
+  .pm-game.bad{border-color:rgba(255,120,120,.45);color:#ff9b9b}
   .pm-sales{margin-top:14px;font-size:12px;color:var(--muted)}
   .pm-sales li{margin:3px 0}
   @media(max-width:900px){.pm-grid{grid-template-columns:1fr}}
@@ -145,6 +148,8 @@
   <div class="pm-grid" id="pm-plans"></div>
   <h3 style="margin:18px 0 0;font-size:13px">Pachete de start <span class="muted" style="font-weight:400">(conținutul e fix, îl aplică serverul de joc)</span></h3>
   <div class="pm-grid" id="pm-packs"></div>
+  <p class="vip-intro" id="pm-catalog-note" style="margin:12px 0 0;font-size:12px"></p>
+  <details id="pm-catalog-raw" hidden style="margin-top:6px;font-size:11.5px"><summary class="muted" style="cursor:pointer">Ce trimite serverul de joc (GET /premium/catalog)</summary><pre style="white-space:pre-wrap;overflow-x:auto;max-height:280px;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px;margin:6px 0 0"></pre></details>
   <div class="formactions"><button type="button" class="btn-primary" id="pm-save">Salvează</button><a class="btn-ghost" href="premium.html" target="_blank" rel="noopener">Vezi pagina</a><span class="order-saved" id="pm-saved" hidden></span></div>
   <div class="pm-sales" id="pm-sales"></div>
 </details>
@@ -916,6 +921,32 @@ document.getElementById('lx-save').addEventListener('click', async () => {
   const PLAN_NAMES = { p7: 'Scurt', p30: 'Lunar', p90: 'Lung' };
   let pm = null;
   const routeChip = (label, v) => v === true ? `<span class="ok">✓ ${label}: activ în joc</span>` : v === false ? `<span class="no">✗ ${label}: lipsește în joc</span>` : `<span>? ${label}: necunoscut (server oprit)</span>`;
+  // (18.10.2026) Regula serverului de joc: prețul trimis între jumătate și
+  // prețul din editorul lor, zilele exact aceleași. Catalogul lor îl citim
+  // prietenos cu mai multe forme (listă sau obiect, câmpuri cu nume apropiate).
+  const catNum = (o, keys) => { for (const k of keys) { const n = Number(o && o[k]); if (o && o[k] != null && Number.isFinite(n)) return n; } return null; };
+  function catFind(kind, id) {
+    const c = pm.catalog; if (!c || c.error) return null;
+    const pools = kind === 'plan' ? [c.plans, c.premium, c.abonamente, c.premium && c.premium.plans] : [c.packs, c.starter, c.pachete, c.starterPacks, c.starter && c.starter.packs];
+    for (const pool of pools) {
+      if (!pool || typeof pool !== 'object') continue;
+      if (Array.isArray(pool)) { const x = pool.find(e => e && String(e.id ?? e.planId ?? e.packId) === id); if (x) return x; }
+      else if (pool[id] && typeof pool[id] === 'object') return pool[id];
+    }
+    return null;
+  }
+  function gameCheck(kind, id, price, days) {
+    const g = catFind(kind, id);
+    if (!g) return pm.catalog && !pm.catalog.error ? `<div class="pm-game bad">Nu există în editorul din joc — cumpărarea va fi refuzată.</div>` : '';
+    const gp = catNum(g, ['price', 'pret', 'coins', 'cost']);
+    const gd = catNum(g, kind === 'plan' ? ['days', 'zile'] : ['premiumDays', 'days', 'zile']);
+    const probs = [];
+    if (gp != null && (price > gp || price < Math.ceil(gp / 2))) probs.push(`prețul trebuie între ${Math.ceil(gp / 2)} și ${gp}`);
+    if (gd != null && days != null && gd !== days) probs.push(`zilele trebuie să fie ${gd}`);
+    if (kind === 'pack') { const gc = catNum(g, ['cash', 'bani']); if (gc != null && gc !== 0) probs.push(`în joc are bani (${gc}), noi trimitem 0`); }
+    const what = `În joc: ${gd != null ? gd + ' zile' : '? zile'}, ${gp != null ? gp + ' coins' : '? coins'}`;
+    return `<div class="pm-game ${probs.length ? 'bad' : 'ok'}">${what}${probs.length ? ' — ' + probs.join('; ') : ' — se potrivește ✓'}</div>`;
+  }
   function render() {
     const s = pm.settings;
     document.getElementById('pm-public').checked = !!s.public;
@@ -926,6 +957,7 @@ document.getElementById('lx-save').addEventListener('click', async () => {
         <div class="pm-row"><div class="field"><label>Zile</label><input type="number" min="1" max="365" data-k="days" value="${p.days}"></div>
         <div class="field"><label>Preț (coins)</label><input type="number" min="1" max="100000" data-k="price" value="${p.price}"></div></div>
         <div class="field checkbox" style="margin:0"><input type="checkbox" data-k="on" id="pm-on-${pmEsc(p.id)}" ${p.on ? 'checked' : ''}><label for="pm-on-${pmEsc(p.id)}">Se vinde</label></div>
+        ${gameCheck('plan', p.id, p.price, p.days)}
       </div>`).join('');
     document.getElementById('pm-packs').innerHTML = pm.packs.map(p => {
       const v = s.packs[p.id] || { price: 0, on: false };
@@ -933,8 +965,17 @@ document.getElementById('lx-save').addEventListener('click', async () => {
         <ul>${p.lines.map(l => `<li>${pmEsc(l)}</li>`).join('')}</ul>
         <div class="field" style="margin:0"><label>Preț (coins)</label><input type="number" min="1" max="100000" data-k="price" value="${v.price}"></div>
         <div class="field checkbox" style="margin:0"><input type="checkbox" data-k="on" id="pm-pk-${pmEsc(p.id)}" ${v.on ? 'checked' : ''}><label for="pm-pk-${pmEsc(p.id)}">Se vinde</label></div>
+        ${gameCheck('pack', p.id, v.price, p.premiumDays)}
       </div>`;
     }).join('');
+    const c = pm.catalog;
+    document.getElementById('pm-catalog-note').innerHTML = !c
+      ? 'Serverul de joc e oprit — nu pot compara cu editorul din joc acum.'
+      : c.error ? `Nu am putut citi editorul din joc (GET /premium/catalog: ${pmEsc(c.error)}).`
+      : 'Serverul de joc acceptă doar un preț între jumătate și prețul din editorul lui, iar zilele trebuie să fie exact aceleași. Altfel refuză cumpărarea (fără să ia coins). <b>Orice schimbare de preț sau zile o anunți întâi colegului.</b>';
+    const raw = document.getElementById('pm-catalog-raw');
+    raw.hidden = !c || !!c.error;
+    if (c && !c.error) raw.querySelector('pre').textContent = JSON.stringify(c, null, 2);
     const sales = pm.sales || [];
     document.getElementById('pm-sales').innerHTML = sales.length
       ? `<b style="color:var(--text)">Ultimele cumpărări</b><ul>${sales.map(x => {

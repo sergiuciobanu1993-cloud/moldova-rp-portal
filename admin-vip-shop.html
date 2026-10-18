@@ -964,7 +964,7 @@ document.getElementById('lx-save').addEventListener('click', async () => {
     document.getElementById('pm-packs').innerHTML = pm.packs.map(p => {
       const v = s.packs[p.id] || { price: 0, on: false };
       return `<div class="pm-card" data-pack="${pmEsc(p.id)}"><h3>${pmEsc(p.name)}</h3>
-        <ul>${p.lines.map(l => `<li>${pmEsc(l)}</li>`).join('')}${(p.offLines || []).map(l => `<li style="opacity:.6"><s>${pmEsc(l)}</s> — oprit deocamdată (se trimite 0)</li>`).join('')}</ul>
+        <ul>${p.lines.map(l => `<li>${pmEsc(l)}</li>`).join('')}${(p.soonLines || []).map(l => `<li style="opacity:.6">${pmEsc(l)} — în curând (jocul încă nu-l dă)</li>`).join('')}${(p.offLines || []).map(l => `<li style="opacity:.6"><s>${pmEsc(l)}</s> — oprit deocamdată (se trimite 0)</li>`).join('')}</ul>
         <div class="field" style="margin:0"><label>Preț (coins)</label><input type="number" min="1" max="100000" data-k="price" value="${v.price}"></div>
         <div class="field checkbox" style="margin:0"><input type="checkbox" data-k="on" id="pm-pk-${pmEsc(p.id)}" ${v.on ? 'checked' : ''}><label for="pm-pk-${pmEsc(p.id)}">Se vinde</label></div>
         ${gameCheck('pack', p.id, v.price, p.premiumDays, p.skillPct)}

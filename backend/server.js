@@ -4563,15 +4563,18 @@ const PREMIUM_BURN_PER_DAY = 1; // după expirare, zilele adunate scad cu 1 pe z
 // catalog.moneyEnabled = false, cash 0) și refuză orice pachet cu alți bani,
 // așa că pe pagină suma apare „oprit deocamdată" și trimitem cash-ul din
 // catalogul lor. Când colegul pornește banii (moneyEnabled + cash > 0 în
-// catalog), rândul apare singur normal, cu suma din joc. Permisul de port armă
-// / licența de afaceri cerute pe 17.10 nu sunt încă hotărâte în joc — până
-// atunci nu le arătăm și nu le cerem.
+// catalog), rândul apare singur normal, cu suma din joc.
+// Permisul de port armă (Aur, Platină) și licența de afaceri (Platină), cerute
+// de Sergiu pe 17.10: în joc nu sunt încă hotărâte, așa că pe pagină apar cu
+// „în curând" și nu le cerem. Când apar în catalog.packs[].licenses (ex.
+// "weapon" / "business"), rândul devine normal și trimitem weaponLicense /
+// businessLicense: true la /starter/buy.
 const STARTER_PACKS = [
   { id: "bronz", name: "Bronz", tone: "bronz", premiumDays: 7, cashAmount: 20000, skillPct: 20,
     lines: ["Permis auto (categoria B)", "Forță, tragere și rezistență urcate la 20%", "Premium 7 zile"] },
-  { id: "aur", name: "Aur", tone: "aur", premiumDays: 30, cashAmount: 45000, skillPct: 45,
+  { id: "aur", name: "Aur", tone: "aur", premiumDays: 30, cashAmount: 45000, skillPct: 45, extras: ["weapon"],
     lines: ["Permis auto (B) + permis camion (C)", "Forță, tragere și rezistență urcate la 45%", "Premium 30 de zile"] },
-  { id: "platina", name: "Platină", tone: "platina", premiumDays: 90, cashAmount: 100000, skillPct: 80,
+  { id: "platina", name: "Platină", tone: "platina", premiumDays: 90, cashAmount: 100000, skillPct: 80, extras: ["weapon", "business"],
     lines: ["Toate permisele de conducere", "Asigurare + înmatriculare pentru o mașină", "Forță, tragere și rezistență urcate la 80%", "Premium 90 de zile"] },
 ];
 // Catalogul din joc (GET /premium/catalog), ținut 5 minute în memorie.
@@ -4593,13 +4596,31 @@ function starterCashNow(cat, pack) {
   const c = Math.floor(Number(g?.cash) || 0);
   return cat && cat.moneyEnabled === true && c > 0 ? c : 0;
 }
+const STARTER_EXTRAS = {
+  weapon: { label: "Permis de port armă", flag: "weaponLicense", match: /weapon|arm|ppa|gun|firearm/i },
+  business: { label: "Licență de afaceri", flag: "businessLicense", match: /business|afacer|firm|company/i },
+};
+// Ce permise în plus dă jocul acum pentru pachet (din catalog.packs[].licenses).
+function starterExtrasNow(cat, pack) {
+  const g = catalogPack(cat, pack.id);
+  const lic = Array.isArray(g?.licenses) ? g.licenses.map(String) : [];
+  const out = {};
+  for (const k of pack.extras || []) out[k] = lic.some(l => STARTER_EXTRAS[k].match.test(l)) || g?.[STARTER_EXTRAS[k].flag] === true;
+  return out;
+}
 function starterPackView(cat, pack) {
   const cash = starterCashNow(cat, pack);
+  const ex = starterExtrasNow(cat, pack);
   const fmt = n => `${n.toLocaleString("de-DE")}$ în bancă`;
+  const live = (pack.extras || []).filter(k => ex[k]).map(k => STARTER_EXTRAS[k].label);
+  const soon = (pack.extras || []).filter(k => !ex[k]).map(k => STARTER_EXTRAS[k].label);
+  const lines = [...pack.lines];
+  lines.splice(1, 0, ...live); // lângă permisele de conducere
   return {
     ...pack,
     cash,
-    lines: cash > 0 ? [...pack.lines, fmt(cash)] : pack.lines,
+    lines: cash > 0 ? [...lines, fmt(cash)] : lines,
+    soonLines: soon,
     offLines: cash > 0 ? [] : [fmt(pack.cashAmount)],
   };
 }
@@ -4752,10 +4773,14 @@ app.post("/api/premium/pachet", auth, asyncRoute(async (req, res) => {
   const pack = STARTER_PACKS.find(p => p.id === String(req.body?.packId || "") && settings.packs[p.id].on);
   if (!pack) return res.status(400).json({ error: "Pachetul nu mai e disponibil." });
   const price = settings.packs[pack.id].price;
-  const cash = starterCashNow(await getPremiumCatalog(), pack);
+  const cat = await getPremiumCatalog();
+  const cash = starterCashNow(cat, pack);
+  const ex = starterExtrasNow(cat, pack);
+  const extraFlags = {};
+  for (const k of pack.extras || []) if (ex[k]) extraFlags[STARTER_EXTRAS[k].flag] = true; // doar ce dă jocul acum
   const r = await vipShopAdminRequest("POST", "/starter/buy", {
     identifier: me.identifier, playerName: me.name, packId: pack.id, price,
-    premiumDays: pack.premiumDays, cash, skillPct: pack.skillPct,
+    premiumDays: pack.premiumDays, cash, skillPct: pack.skillPct, ...extraFlags,
     requestId: require("crypto").randomUUID(),
   });
   if (r.status === 404) gameRouteReady.starter = false;
@@ -4783,7 +4808,7 @@ app.get("/api/admin/premium", auth, requireRole(...FOUNDER_ROLES), asyncRoute(as
   const catalog = await getPremiumCatalog(true);
   res.json({
     settings: await loadPremiumSettings(),
-    packs: STARTER_PACKS.map(p => { const v = starterPackView(catalog, p); return { id: p.id, name: p.name, lines: v.lines, offLines: v.offLines, premiumDays: p.premiumDays, cash: v.cash, skillPct: p.skillPct }; }),
+    packs: STARTER_PACKS.map(p => { const v = starterPackView(catalog, p); return { id: p.id, name: p.name, lines: v.lines, soonLines: v.soonLines, offLines: v.offLines, premiumDays: p.premiumDays, cash: v.cash, skillPct: p.skillPct }; }),
     catalog,
     ready: { premium: gameRouteReady.premium, starter: gameRouteReady.starter, checkedAt: gameRoutesCheckedAt },
     sales,

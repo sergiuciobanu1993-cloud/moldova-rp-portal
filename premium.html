@@ -86,6 +86,7 @@
 .pack li.off{align-items:center;color:var(--muted)}
 .pack li.off>span:first-child{flex:1;text-decoration:line-through;text-decoration-thickness:1px}
 .pack li.off::before{background:var(--muted)}
+.pack li.soon>span:first-child{text-decoration:none}
 
 /* Cum funcționează */
 .rules{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
@@ -355,7 +356,7 @@ function renderPacks() {
     const label = mine ? '' : had ? 'Ai luat deja un pachet' : block ? block : poor ? 'Coins insuficienți' : 'Cumpără pachetul';
     return `<article class="pack ${esc(p.tone)}">
       <div class="top"><small>Pachet de start</small><h3>${esc(p.name)}</h3></div>
-      <ul>${p.lines.map(l => `<li>${esc(l)}</li>`).join('')}${(p.offLines || []).map(l => `<li class="off"><span>${esc(l)}</span><span class="off-tag">Oprit deocamdată</span></li>`).join('')}</ul>
+      <ul>${p.lines.map(l => `<li>${esc(l)}</li>`).join('')}${(p.soonLines || []).map(l => `<li class="off soon"><span>${esc(l)}</span><span class="off-tag">În curând</span></li>`).join('')}${(p.offLines || []).map(l => `<li class="off"><span>${esc(l)}</span><span class="off-tag">Oprit deocamdată</span></li>`).join('')}</ul>
       <div class="foot"><span class="price">${p.price}<small>coins</small></span>
         ${mine ? `<span class="done">✓ L-ai luat${had.at ? ' pe ' + fmtDay(had.at) : ''}</span>` : `<button type="button" class="btn-ghost" data-pack="${esc(p.id)}" ${had || block || poor ? 'disabled' : ''}>${esc(label)}</button>`}
       </div>

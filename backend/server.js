@@ -4535,32 +4535,51 @@ app.delete("/api/admin/vip-shop/cutii/:id/recompense/:rewardId", auth, requireRo
 // Premium e pe CONT (ambele personaje, după licență); pachetul de start e unul
 // singur pe personaj.
 // ============================================================================
-// (18.10.2026, de la colegul de pe joc) Banii sunt opriți din cauza licenței
-// Cfx: bonusurile cu bani (money: true) apar pe pagină „oprit" cât timp jocul
-// are banii opriți (catalog.moneyEnabled !== true) și pornesc singure pe
-// pagină când colegul îi activează. Tot cât sunt oprite nu se
-// numără la bonusurile deblocate. Scoase de tot: „ieși din spital cu viața
-// plină" (30), „alegi spitalul" (180) și „efectele de la mâncare +25%" (100).
+// (19.10.2026) Bonusurile cu bani (joburi, salariu, pește, reducerile la acte
+// și la 24/7) rămân oprite definitiv (licența Cfx/Rockstar §3.1(3): nu se vând
+// bani din joc pe bani reali) — scoase de pe pagină. Sergiu a ales în locul lor
+// locuri în garaj și sala mai rapidă. Ce e nou are `soon: true` (pe bonus sau
+// pe treaptă) și apare „în curând" până când catalogul din joc îl confirmă în
+// catalog.perks (listă de id-uri, ex. "garaj0", sau "garaj@40" pentru o
+// treaptă). Scoase de tot încă din 18.10: viața plină la spital (30), alegi
+// spitalul (180), efectele de la mâncare +25% (100).
 const PREMIUM_PERKS_START = [
-  { id: "joburi20", icon: "💼", cat: "Bani", money: true, title: "+20% la câștigul din joburile civile", text: "Taxi, pescuit, livrări, mecanic: tot ce câștigi muncind vine cu 20% mai mult." },
-  { id: "salariu", icon: "💵", cat: "Bani", money: true, title: "+1.000$ la fiecare salariu", text: "La fiecare salariu de pe server primești în plus 1.000$ în bancă." },
+  { id: "garaj0", icon: "🅿️", cat: "Transport", soon: true, title: "+1 loc în garaj", text: "Din prima zi de Premium ții o mașină în plus în garaj." },
+  { id: "sala0", icon: "🏋️", cat: "Personaj", soon: true, title: "Sala merge cu 10% mai repede", text: "Forța și rezistența cresc mai repede la antrenament, din prima zi." },
   { id: "spital", icon: "🏥", cat: "Personaj", title: "Aștepți la jumătate până la spital", text: "Când ești inconștient, poți cere transportul la spital după jumătate din timpul obișnuit." },
   { id: "insigna", icon: "⭐", cat: "Site", title: "Insigna Premium pe site", text: "Apare lângă numele tău în contul de pe moldovarp.md." },
 ];
 // Se deblochează după zilele de Premium adunate (toate abonamentele la un loc).
 const PREMIUM_PERKS_TIME = [
-  { id: "sala", icon: "🏋️", cat: "Personaj", title: "Sala merge mai repede", text: "Forța și rezistența cresc mai repede la antrenament.", tiers: [{ days: 5, value: "+15%" }, { days: 45, value: "+25%" }] },
+  { id: "sala", icon: "🏋️", cat: "Personaj", title: "Sala merge mai repede", text: "Forța și rezistența cresc mai repede la antrenament.", tiers: [{ days: 5, value: "+15%" }, { days: 25, value: "+20%", soon: true }, { days: 45, value: "+25%" }, { days: 60, value: "+30%", soon: true }] },
   { id: "foame", icon: "🍔", cat: "Personaj", title: "Foamea și setea scad mai încet", text: "Mănânci și bei mai rar.", tiers: [{ days: 10, value: "−20%" }, { days: 60, value: "−35%" }, { days: 150, value: "−50%" }] },
-  { id: "acte", icon: "📄", cat: "Transport", money: true, title: "Reducere la asigurare și înmatriculare", text: "Actele mașinii te costă mai puțin.", tiers: [{ days: 15, value: "−20%" }] },
-  { id: "garaj", icon: "🅿️", cat: "Transport", title: "Locuri în plus în garaj", text: "Ții mai multe mașini în garaj.", tiers: [{ days: 20, value: "+2" }, { days: 75, value: "+4" }, { days: 140, value: "+6" }] },
-  { id: "peste", icon: "🎣", cat: "Bani", money: true, title: "Peștele se vinde mai scump", text: "Primești mai mult pe peștele vândut.", tiers: [{ days: 25, value: "+15%" }] },
-  { id: "magazin", icon: "🛒", cat: "Bani", money: true, title: "Reducere la magazinele 24/7", text: "Mâncare, apă și tot ce cumperi de la 24/7, mai ieftin.", tiers: [{ days: 40, value: "−10%" }] },
+  // garaj: treapta de 20 de zile s-a mutat la 15 (în locul reducerii la acte); 40 e nouă (în locul reducerii la 24/7)
+  { id: "garaj", icon: "🅿️", cat: "Transport", title: "Locuri în plus în garaj", text: "Ții mai multe mașini în garaj.", tiers: [{ days: 15, value: "+2", soon: true }, { days: 40, value: "+3", soon: true }, { days: 75, value: "+4" }, { days: 140, value: "+6" }] },
+  // (19.10.2026) Sergiu le vrea păstrate (zice că nu sunt bani direct). Colegul
+  // le-a trecut la bonusurile cu bani, deci rămân „în curând" până le confirmă
+  // el în catalog.perks ("peste", "magazin").
+  { id: "peste", icon: "🎣", cat: "Personaj", soon: true, title: "Peștele se vinde mai scump", text: "Primești mai mult pe peștele vândut.", tiers: [{ days: 25, value: "+15%" }] },
+  { id: "magazin", icon: "🛒", cat: "Personaj", soon: true, title: "Reducere la magazinele 24/7", text: "Mâncare, apă și tot ce cumperi de la 24/7, mai ieftin.", tiers: [{ days: 40, value: "−10%" }] },
+  // (19.10.2026) la fel: Sergiu le vrea păstrate; „în curând" până la
+  // confirmarea colegului în catalog.perks ("acte", "joburi25").
+  { id: "acte", icon: "📄", cat: "Transport", soon: true, title: "Reducere la asigurare și înmatriculare", text: "Actele mașinii te costă mai puțin.", tiers: [{ days: 15, value: "−20%" }] },
+  { id: "joburi25", icon: "📈", cat: "Personaj", soon: true, title: "Câștig mai mare la joburile civile", text: "Taxi, pescuit, livrări, mecanic: câștigi mai mult muncind.", tiers: [{ days: 60, value: "+25%" }] },
   { id: "inchisoare", icon: "⛓️", cat: "Facțiuni", title: "Pedeapsa la închisoare mai scurtă", text: "Stai mai puțin după gratii.", tiers: [{ days: 50, value: "−10%" }, { days: 120, value: "−20%" }] },
-  { id: "joburi25", icon: "📈", cat: "Bani", money: true, title: "Încă +5% la joburile civile", text: "Bonusul de la joburi urcă la +25% în total.", tiers: [{ days: 60, value: "+25%" }] },
   { id: "skilluri", icon: "🎯", cat: "Personaj", title: "Toate skill-urile cresc mai repede", text: "Forță, tragere, rezistență, condus: progres mai rapid peste tot.", tiers: [{ days: 90, value: "+10%" }, { days: 180, value: "+20%" }] },
 ];
-// Bonusurile cu bani sunt „oprit" până când jocul pornește banii.
-const perksView = (list, cat) => list.map(p => ({ ...p, off: !!p.money && !(cat && cat.moneyEnabled === true) }));
+// Ce a confirmat jocul din bonusurile noi (catalog.perks: id-uri sau {id}).
+function perksConfirmed(cat) {
+  const list = cat && Array.isArray(cat.perks) ? cat.perks : [];
+  return new Set(list.map(x => String(x && typeof x === "object" ? x.id : x)));
+}
+const perksView = (list, cat) => {
+  const ok = perksConfirmed(cat);
+  return list.map(p => ({
+    ...p,
+    soon: !!p.soon && !ok.has(p.id),
+    tiers: p.tiers ? p.tiers.map(t => ({ ...t, soon: !!t.soon && !ok.has(`${p.id}@${t.days}`) && !ok.has(p.id + "_all") })) : undefined,
+  }));
+};
 const PREMIUM_BURN_PER_DAY = 1; // după expirare, zilele adunate scad cu 1 pe zi
 // (18.10.2026) Banii din pachete (20.000 / 45.000 / 100.000 $) rămân — Sergiu
 // îi vrea păstrați. Deocamdată serverul de joc are banii opriți (licența Cfx:
@@ -4574,11 +4593,11 @@ const PREMIUM_BURN_PER_DAY = 1; // după expirare, zilele adunate scad cu 1 pe z
 // "weapon" / "business"), rândul devine normal și trimitem weaponLicense /
 // businessLicense: true la /starter/buy.
 const STARTER_PACKS = [
-  { id: "bronz", name: "Bronz", tone: "bronz", premiumDays: 7, cashAmount: 20000, skillPct: 20,
+  { id: "bronz", name: "Bronz", tone: "bronz", premiumDays: 7, cashAmount: 20000, skillPct: 20, garageSlots: 1, extras: ["skills2", "garage"],
     lines: ["Permis auto (categoria B)", "Forță, tragere și rezistență urcate la 20%", "Premium 7 zile"] },
-  { id: "aur", name: "Aur", tone: "aur", premiumDays: 30, cashAmount: 45000, skillPct: 45, extras: ["weapon"],
+  { id: "aur", name: "Aur", tone: "aur", premiumDays: 30, cashAmount: 45000, skillPct: 45, garageSlots: 2, extras: ["weapon", "skills2", "garage"],
     lines: ["Permis auto (B) + permis camion (C)", "Forță, tragere și rezistență urcate la 45%", "Premium 30 de zile"] },
-  { id: "platina", name: "Platină", tone: "platina", premiumDays: 90, cashAmount: 100000, skillPct: 80, extras: ["weapon", "business"],
+  { id: "platina", name: "Platină", tone: "platina", premiumDays: 90, cashAmount: 100000, skillPct: 80, garageSlots: 3, extras: ["weapon", "business", "skills2", "skillTree", "garage"],
     lines: ["Toate permisele de conducere", "Asigurare + înmatriculare pentru o mașină", "Forță, tragere și rezistență urcate la 80%", "Premium 90 de zile"] },
 ];
 // Catalogul din joc (GET /premium/catalog), ținut 5 minute în memorie.
@@ -4600,32 +4619,53 @@ function starterCashNow(cat, pack) {
   const c = Math.floor(Number(g?.cash) || 0);
   return cat && cat.moneyEnabled === true && c > 0 ? c : 0;
 }
+// (19.10.2026) skills2: Sergiu vrea ca pachetele să urce și plămânii și
+// condusul, la același procent ca forța/tragerea/rezistența. Apare „în curând"
+// până când catalogul din joc are în packs[].skills ceva cu plămâni (lung) și
+// condus (driv) — sau skillsExtra: true. Pentru asta nu trimitem nimic în plus:
+// jocul urcă singur skill-urile din lista lui la skillPct.
 const STARTER_EXTRAS = {
-  weapon: { label: "Permis de port armă", flag: "weaponLicense", match: /weapon|arm|ppa|gun|firearm/i },
-  business: { label: "Licență de afaceri", flag: "businessLicense", match: /business|afacer|firm|company/i },
+  weapon: { label: () => "Permis de port armă", flag: "weaponLicense", match: /weapon|arm|ppa|gun|firearm/i },
+  business: { label: () => "Licență de afaceri", flag: "businessLicense", match: /business|afacer|firm|company/i },
+  // (19.10.2026) Platină: arborele de abilități (tableta „Arborele de abilități":
+  // Luptă + Atletism) la maxim. „În curând" până când catalogul are la pachet
+  // skillTreeMax: true; atunci îl trimitem și la /starter/buy.
+  skillTree: { label: () => "Arborele de abilități la maxim (Luptă + Atletism)", flag: "skillTreeMax", test: g => g?.skillTreeMax === true || g?.skillTree === "max" },
+  // (19.10.2026) în locul banilor: locuri în plus în garaj, pe personaj (1/2/3).
+  // „În curând" până când catalogul are la pachet garageSlots > 0; atunci
+  // trimitem garageSlots cu numărul din catalog.
+  garage: { label: p => `+${p.garageSlots} ${p.garageSlots === 1 ? "loc" : "locuri"} în garaj, pe personaj`, flag: "garageSlots", value: (p, g) => Math.floor(Number(g?.garageSlots) || p.garageSlots), test: g => Number(g?.garageSlots) > 0 },
+  skills2: { label: p => `Plămâni și condus urcate la ${p.skillPct}%`, flag: "skillsExtra", send: false, test: g => {
+    const sk = Array.isArray(g?.skills) ? g.skills.map(String) : [];
+    return sk.some(x => /lung|plam|pl\u0103m|swim/i.test(x)) && sk.some(x => /driv|condus|car/i.test(x));
+  } },
 };
-// Ce permise în plus dă jocul acum pentru pachet (din catalog.packs[].licenses).
+// Ce primește acum pachetul în plus, după catalogul din joc.
 function starterExtrasNow(cat, pack) {
   const g = catalogPack(cat, pack.id);
   const lic = Array.isArray(g?.licenses) ? g.licenses.map(String) : [];
   const out = {};
-  for (const k of pack.extras || []) out[k] = lic.some(l => STARTER_EXTRAS[k].match.test(l)) || g?.[STARTER_EXTRAS[k].flag] === true;
+  for (const k of pack.extras || []) {
+    const e = STARTER_EXTRAS[k];
+    out[k] = (e.test ? e.test(g) : lic.some(l => e.match.test(l))) || g?.[e.flag] === true;
+  }
   return out;
 }
 function starterPackView(cat, pack) {
   const cash = starterCashNow(cat, pack);
   const ex = starterExtrasNow(cat, pack);
-  const fmt = n => `${n.toLocaleString("de-DE")}$ în bancă`;
-  const live = (pack.extras || []).filter(k => ex[k]).map(k => STARTER_EXTRAS[k].label);
-  const soon = (pack.extras || []).filter(k => !ex[k]).map(k => STARTER_EXTRAS[k].label);
+  const fmt = n => `${n.toLocaleString("de-DE")}$ în bancă`; // rămâne doar dacă jocul ar porni vreodată banii
+  const live = (pack.extras || []).filter(k => ex[k]);
+  const soon = (pack.extras || []).filter(k => !ex[k]).map(k => STARTER_EXTRAS[k].label(pack));
   const lines = [...pack.lines];
-  lines.splice(1, 0, ...live); // lângă permisele de conducere
+  lines.splice(1, 0, ...live.filter(k => k !== "skills2").map(k => STARTER_EXTRAS[k].label(pack))); // lângă permisele de conducere
+  if (live.includes("skills2")) { const i = lines.findIndex(l => /urcate la/.test(l)); lines.splice(i >= 0 ? i + 1 : lines.length, 0, STARTER_EXTRAS.skills2.label(pack)); }
   return {
     ...pack,
     cash,
     lines: cash > 0 ? [...lines, fmt(cash)] : lines,
     soonLines: soon,
-    offLines: cash > 0 ? [] : [fmt(pack.cashAmount)],
+    offLines: [], // (19.10.2026) banii din pachete nu se mai afișează — înlocuiți cu locuri în garaj
   };
 }
 // (18.10.2026) Sergiu: pachetele NU au limită de ore jucate — doar unul pe personaj.
@@ -4781,7 +4821,7 @@ app.post("/api/premium/pachet", auth, asyncRoute(async (req, res) => {
   const cash = starterCashNow(cat, pack);
   const ex = starterExtrasNow(cat, pack);
   const extraFlags = {};
-  for (const k of pack.extras || []) if (ex[k]) extraFlags[STARTER_EXTRAS[k].flag] = true; // doar ce dă jocul acum
+  for (const k of pack.extras || []) if (ex[k] && STARTER_EXTRAS[k].send !== false) extraFlags[STARTER_EXTRAS[k].flag] = STARTER_EXTRAS[k].value ? STARTER_EXTRAS[k].value(pack, catalogPack(cat, pack.id)) : true; // doar ce dă jocul acum
   const r = await vipShopAdminRequest("POST", "/starter/buy", {
     identifier: me.identifier, playerName: me.name, packId: pack.id, price,
     premiumDays: pack.premiumDays, cash, skillPct: pack.skillPct, ...extraFlags,

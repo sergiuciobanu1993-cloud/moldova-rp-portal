@@ -80,6 +80,9 @@
 /* (18.10.2026) bonusuri cu bani oprite deocamdată (licența Cfx) */
 .off-tag{flex:none;display:inline-block;font-size:9.5px;font-weight:900;letter-spacing:.1em;text-transform:uppercase;padding:4px 7px;border-radius:6px;border:1px solid var(--line);color:var(--muted);background:rgba(255,255,255,.03)}
 .perk.off,.stop .it.off{opacity:.5}
+.perk.soon,.stop .it.soon{opacity:.62}
+.soon-tag{color:var(--orange);border-color:rgba(255,138,31,.35)}
+.stop.got .it.soon{background:transparent;border-color:transparent}
 .perk.off strong,.it.off .tx strong{text-decoration:line-through;text-decoration-thickness:1px}
 .stop.got .it.off{background:transparent;border-color:transparent}
 .stop.got .it.off .val{border-color:var(--line);color:var(--muted)}
@@ -169,6 +172,7 @@
 <div class="sec-head"><div><h2>Din prima zi</h2><p>Le primești imediat ce activezi Premium și le ai cât timp abonamentul e activ.</p></div></div>
 <div class="perks" id="perks-start"></div>
 
+<p class="pr-note" id="soon-note" hidden><b>Unele bonusuri sunt „în curând”.</b> Le pregătim în joc; până atunci nu se aplică și nu se numără la bonusurile deblocate.</p>
 <p class="pr-note" id="off-note" hidden><b>Bonusurile cu bani sunt oprite deocamdată.</b> Le vezi tăiate pe pagină; nu se aplică în joc și nu se numără la bonusurile deblocate.</p>
 
 <div class="sec-head"><div><h2>Se deblochează pe drum</h2><p id="road-intro">Fiecare zi de Premium se adună. Când ajungi la pragul unui bonus, îl primești automat.</p></div></div>
@@ -181,7 +185,7 @@
   <article><b>Pe tot contul</b><p>Premium e pe contul tău de joc, deci merge pe ambele personaje. Bonusurile se aplică singure în joc, nu trebuie să ridici nimic.</p></article>
 </div>
 
-<div class="sec-head"><div><h2>Pachete de start</h2><p>Pentru început: permise, skill-uri urcate, câteva zile de Premium și bani (banii sunt opriți deocamdată, nu se dau la cumpărare). Poți lua <b style="color:var(--text)">un singur pachet pe personaj</b>.</p></div></div>
+<div class="sec-head"><div><h2>Pachete de start</h2><p>Pentru început: permise, skill-uri urcate, locuri în garaj și câteva zile de Premium. Poți lua <b style="color:var(--text)">un singur pachet pe personaj</b>.</p></div></div>
 <div class="packs" id="packs"><div class="skel" style="height:300px"></div><div class="skel" style="height:300px"></div><div class="skel" style="height:300px"></div></div>
 </main>
 
@@ -229,12 +233,14 @@ function milestones(perks) {
   const map = new Map();
   for (const p of perks) for (const t of p.tiers || []) {
     if (!map.has(t.days)) map.set(t.days, []);
-    map.get(t.days).push({ ...p, value: t.value });
+    map.get(t.days).push({ ...p, value: t.value, soon: !!(p.soon || t.soon) });
   }
   return [...map.entries()].sort((a, b) => a[0] - b[0]);
 }
 // Doar bonusurile care chiar merg (fără cele oprite) — pentru „Următorul bonus".
-const livePerks = perks => perks.filter(p => !p.off);
+// (19.10.2026) + fără treptele „în curând" (încă nu merg în joc).
+const livePerks = perks => perks.filter(p => !p.off && !p.soon).map(p => ({ ...p, tiers: (p.tiers || []).filter(t => !t.soon) })).filter(p => !p.tiers || p.tiers.length);
+const soonTag = '<span class="off-tag soon-tag">În curând</span>';
 
 // Se poate cumpăra acum? Dacă nu, de ce.
 function blocker(kind) {
@@ -324,8 +330,9 @@ function renderPlans() {
 
 function renderPerks() {
   document.getElementById('perks-start').innerHTML = D.perksStart.map(p => `
-    <div class="perk${p.off ? ' off' : ''}"><span class="ic" aria-hidden="true">${p.icon}</span><div style="flex:1"><span class="cat">${esc(p.cat)}</span><strong>${esc(p.title)}</strong><span>${esc(p.text)}</span></div>${p.off ? '<span class="off-tag">Oprit</span>' : ''}</div>`).join('');
+    <div class="perk${p.off ? ' off' : ''}${p.soon ? ' soon' : ''}"><span class="ic" aria-hidden="true">${p.icon}</span><div style="flex:1"><span class="cat">${esc(p.cat)}</span><strong>${esc(p.title)}</strong><span>${esc(p.text)}</span></div>${p.off ? '<span class="off-tag">Oprit</span>' : p.soon ? soonTag : ''}</div>`).join('');
   document.getElementById('off-note').hidden = ![...D.perksStart, ...D.perksTime].some(p => p.off);
+  document.getElementById('soon-note').hidden = ![...D.perksStart, ...D.perksTime].some(p => p.soon || (p.tiers || []).some(t => t.soon));
   const days = D.status ? D.status.days || 0 : 0;
   const ms = milestones(D.perksTime);
   document.getElementById('road').innerHTML = ms.map(([d, list], i) => {
@@ -336,10 +343,10 @@ function renderPerks() {
     return `<div class="stop${got ? ' got' : ''}${half ? ' half' : ''}"${half ? ` style="--fill:${fill}%"` : ''}>
       <div class="d">${plural(d, 'zi', 'zile')}</div>
       <div class="items">${list.map(p => `
-        <div class="it${p.off ? ' off' : ''}"><span class="ic" aria-hidden="true">${p.icon}</span>
+        <div class="it${p.off ? ' off' : ''}${p.soon ? ' soon' : ''}"><span class="ic" aria-hidden="true">${p.icon}</span>
           <div class="tx"><strong>${esc(p.title)}</strong><span>${esc(p.text)}</span></div>
           ${p.value ? `<span class="val">${esc(p.value)}</span>` : ''}
-          ${p.off ? '<span class="off-tag">Oprit</span>' : got ? '' : `<span class="lock" aria-label="blocat">🔒</span>`}
+          ${p.off ? '<span class="off-tag">Oprit</span>' : p.soon ? soonTag : got ? '' : `<span class="lock" aria-label="blocat">🔒</span>`}
         </div>`).join('')}</div>
     </div>`;
   }).join('');

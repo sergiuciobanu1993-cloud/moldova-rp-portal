@@ -4536,12 +4536,14 @@ app.delete("/api/admin/vip-shop/cutii/:id/recompense/:rewardId", auth, requireRo
 // singur pe personaj.
 // ============================================================================
 // (18.10.2026, de la colegul de pe joc) Banii sunt opriți din cauza licenței
-// Cfx: bonusurile cu bani rămân pe pagină marcate „oprit" (off: true) și nu se
+// Cfx: bonusurile cu bani (money: true) apar pe pagină „oprit" cât timp jocul
+// are banii opriți (catalog.moneyEnabled !== true) și pornesc singure pe
+// pagină când colegul îi activează. Tot cât sunt oprite nu se
 // numără la bonusurile deblocate. Scoase de tot: „ieși din spital cu viața
 // plină" (30), „alegi spitalul" (180) și „efectele de la mâncare +25%" (100).
 const PREMIUM_PERKS_START = [
-  { id: "joburi20", icon: "💼", cat: "Bani", off: true, title: "+20% la câștigul din joburile civile", text: "Taxi, pescuit, livrări, mecanic: tot ce câștigi muncind vine cu 20% mai mult." },
-  { id: "salariu", icon: "💵", cat: "Bani", off: true, title: "+1.000$ la fiecare salariu", text: "La fiecare salariu de pe server primești în plus 1.000$ în bancă." },
+  { id: "joburi20", icon: "💼", cat: "Bani", money: true, title: "+20% la câștigul din joburile civile", text: "Taxi, pescuit, livrări, mecanic: tot ce câștigi muncind vine cu 20% mai mult." },
+  { id: "salariu", icon: "💵", cat: "Bani", money: true, title: "+1.000$ la fiecare salariu", text: "La fiecare salariu de pe server primești în plus 1.000$ în bancă." },
   { id: "spital", icon: "🏥", cat: "Personaj", title: "Aștepți la jumătate până la spital", text: "Când ești inconștient, poți cere transportul la spital după jumătate din timpul obișnuit." },
   { id: "insigna", icon: "⭐", cat: "Site", title: "Insigna Premium pe site", text: "Apare lângă numele tău în contul de pe moldovarp.md." },
 ];
@@ -4549,14 +4551,16 @@ const PREMIUM_PERKS_START = [
 const PREMIUM_PERKS_TIME = [
   { id: "sala", icon: "🏋️", cat: "Personaj", title: "Sala merge mai repede", text: "Forța și rezistența cresc mai repede la antrenament.", tiers: [{ days: 5, value: "+15%" }, { days: 45, value: "+25%" }] },
   { id: "foame", icon: "🍔", cat: "Personaj", title: "Foamea și setea scad mai încet", text: "Mănânci și bei mai rar.", tiers: [{ days: 10, value: "−20%" }, { days: 60, value: "−35%" }, { days: 150, value: "−50%" }] },
-  { id: "acte", icon: "📄", cat: "Transport", off: true, title: "Reducere la asigurare și înmatriculare", text: "Actele mașinii te costă mai puțin.", tiers: [{ days: 15, value: "−20%" }] },
+  { id: "acte", icon: "📄", cat: "Transport", money: true, title: "Reducere la asigurare și înmatriculare", text: "Actele mașinii te costă mai puțin.", tiers: [{ days: 15, value: "−20%" }] },
   { id: "garaj", icon: "🅿️", cat: "Transport", title: "Locuri în plus în garaj", text: "Ții mai multe mașini în garaj.", tiers: [{ days: 20, value: "+2" }, { days: 75, value: "+4" }, { days: 140, value: "+6" }] },
-  { id: "peste", icon: "🎣", cat: "Bani", off: true, title: "Peștele se vinde mai scump", text: "Primești mai mult pe peștele vândut.", tiers: [{ days: 25, value: "+15%" }] },
-  { id: "magazin", icon: "🛒", cat: "Bani", off: true, title: "Reducere la magazinele 24/7", text: "Mâncare, apă și tot ce cumperi de la 24/7, mai ieftin.", tiers: [{ days: 40, value: "−10%" }] },
+  { id: "peste", icon: "🎣", cat: "Bani", money: true, title: "Peștele se vinde mai scump", text: "Primești mai mult pe peștele vândut.", tiers: [{ days: 25, value: "+15%" }] },
+  { id: "magazin", icon: "🛒", cat: "Bani", money: true, title: "Reducere la magazinele 24/7", text: "Mâncare, apă și tot ce cumperi de la 24/7, mai ieftin.", tiers: [{ days: 40, value: "−10%" }] },
   { id: "inchisoare", icon: "⛓️", cat: "Facțiuni", title: "Pedeapsa la închisoare mai scurtă", text: "Stai mai puțin după gratii.", tiers: [{ days: 50, value: "−10%" }, { days: 120, value: "−20%" }] },
-  { id: "joburi25", icon: "📈", cat: "Bani", off: true, title: "Încă +5% la joburile civile", text: "Bonusul de la joburi urcă la +25% în total.", tiers: [{ days: 60, value: "+25%" }] },
+  { id: "joburi25", icon: "📈", cat: "Bani", money: true, title: "Încă +5% la joburile civile", text: "Bonusul de la joburi urcă la +25% în total.", tiers: [{ days: 60, value: "+25%" }] },
   { id: "skilluri", icon: "🎯", cat: "Personaj", title: "Toate skill-urile cresc mai repede", text: "Forță, tragere, rezistență, condus: progres mai rapid peste tot.", tiers: [{ days: 90, value: "+10%" }, { days: 180, value: "+20%" }] },
 ];
+// Bonusurile cu bani sunt „oprit" până când jocul pornește banii.
+const perksView = (list, cat) => list.map(p => ({ ...p, off: !!p.money && !(cat && cat.moneyEnabled === true) }));
 const PREMIUM_BURN_PER_DAY = 1; // după expirare, zilele adunate scad cu 1 pe zi
 // (18.10.2026) Banii din pachete (20.000 / 45.000 / 100.000 $) rămân — Sergiu
 // îi vrea păstrați. Deocamdată serverul de joc are banii opriți (licența Cfx:
@@ -4723,8 +4727,8 @@ app.get("/api/premium", auth, asyncRoute(async (req, res) => {
     preview: !settings.public, // pagina e încă ascunsă jucătorilor (o vede doar staff-ul)
     burnPerDay: PREMIUM_BURN_PER_DAY,
     plans: settings.plans.filter(p => p.on),
-    perksStart: PREMIUM_PERKS_START,
-    perksTime: PREMIUM_PERKS_TIME,
+    perksStart: perksView(PREMIUM_PERKS_START, catalog),
+    perksTime: perksView(PREMIUM_PERKS_TIME, catalog),
     packs: STARTER_PACKS.filter(p => settings.packs[p.id].on).map(p => ({ ...starterPackView(catalog, p), price: settings.packs[p.id].price })),
     linked: !!me.identifier,
     name: me.name,

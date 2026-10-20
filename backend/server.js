@@ -398,6 +398,24 @@ async function notifyStaffNewTicket(ticket, authorName) {
   });
 }
 
+// (20.10.2026) Cerere nouă pentru mașina de 50 de ore → canalul de staff de pe
+// Discord (cu tag la admini, ca la tichete) + clopoțelul din cont pentru
+// admini (ei o pot da / respinge din Editorul VIP Shop).
+async function notifyStaffNewbieClaim({ who, staticId, minutes, label, model }) {
+  const link = "admin-vip-shop.html#jucator-nou";
+  const hrs = `${Math.floor((minutes || 0) / 60)}h ${String((minutes || 0) % 60).padStart(2, "0")}m`;
+  const title = "🚗 Cerere nouă: mașina pentru 50 de ore";
+  const message = `**${who}**${staticId ? ` #${staticId}` : ""} a cerut **${label || model}** (${model}) · ${hrs} jucate. Pune-o în garajul lui din joc, apoi bifează „Am dat-o”.`;
+  await postStaffChannel({ title, message, link, color: 0x42df8a, mentionAdmins: true });
+  try {
+    const { rows } = await pool.query(
+      `SELECT u.id FROM users u JOIN roles r ON r.id = u.role_id WHERE r.name = ANY($1::text[]) AND u.is_active`, [ADMIN_ROLES]);
+    await Promise.all(rows.map(r => notifyUser(r.id, { type: "newbie_car_claim", title, message: message.replace(/\*\*/g, ""), link })));
+  } catch (err) {
+    console.warn("Notificare admini (mașina de 50 ore) eșuată:", err.message);
+  }
+}
+
 async function reportedUserIdOf(ticket) {
   if (ticket.category !== "reclamatie" || !ticket.reported_player_id) return null;
   const { rows } = await pool.query(`SELECT user_id FROM players WHERE id = $1`, [ticket.reported_player_id]);
@@ -4992,6 +5010,12 @@ app.post("/api/jucator-nou/cere", auth, asyncRoute(async (req, res) => {
     throw err;
   }
   await logAction(req.user.sub, "newbie_car.claim", "newbie_car", identifier, { model: cfg.model, minutes: st.minutes }, req.ip);
+  // (20.10.2026) anunțăm staff-ul — înainte cererea apărea doar în Editorul VIP Shop
+  notifyStaffNewbieClaim({
+    who: identity?.rpName || rows[0].game_identifier_name || "un jucător",
+    staticId: identity?.staticId || null,
+    minutes: st.minutes, label: cfg.label, model: cfg.model,
+  }).catch(err => console.warn("Notificare staff (mașina de 50 ore) eșuată:", err.message));
   res.json({ ok: true, ...(await newbieStatusFor(identifier, cfg)) });
 }));
 

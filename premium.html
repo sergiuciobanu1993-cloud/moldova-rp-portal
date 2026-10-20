@@ -90,6 +90,7 @@
 .pack li.off>span:first-child{flex:1;text-decoration:line-through;text-decoration-thickness:1px}
 .pack li.off::before{background:var(--muted)}
 .pack li.soon>span:first-child{text-decoration:none}
+.pack .pk-note{margin:0 20px 14px;padding:9px 11px;border-radius:9px;border:1px solid var(--line);color:var(--muted);font-size:11.5px;line-height:1.5}
 
 /* Cum funcționează */
 .rules{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
@@ -364,6 +365,7 @@ function renderPacks() {
     return `<article class="pack ${esc(p.tone)}">
       <div class="top"><small>Pachet de start</small><h3>${esc(p.name)}</h3></div>
       <ul>${p.lines.map(l => `<li>${esc(l)}</li>`).join('')}${(p.soonLines || []).map(l => `<li class="off soon"><span>${esc(l)}</span><span class="off-tag">În curând</span></li>`).join('')}${(p.offLines || []).map(l => `<li class="off"><span>${esc(l)}</span><span class="off-tag">Oprit deocamdată</span></li>`).join('')}</ul>
+      ${p.note ? `<p class="pk-note">${esc(p.note)}</p>` : ''}
       <div class="foot"><span class="price">${p.price}<small>coins</small></span>
         ${mine ? `<span class="done">✓ L-ai luat${had.at ? ' pe ' + fmtDay(had.at) : ''}</span>` : `<button type="button" class="btn-ghost" data-pack="${esc(p.id)}" ${had || block || poor ? 'disabled' : ''}>${esc(label)}</button>`}
       </div>
@@ -397,7 +399,7 @@ async function buyPack(id) {
   if (busy) return;
   const p = D.packs.find(x => x.id === id); if (!p) return;
   const ok = await confirmBox(`Pachetul ${p.name}?`,
-    `Plătești <b>${p.price} coins</b>. Poți lua <b>un singur pachet pe personaj</b>, deci după asta nu mai poți cumpăra altul pe ${esc(D.name || 'acest personaj')}.`, `Plătesc ${p.price} coins`);
+    `Plătești <b>${p.price} coins</b>. Poți lua <b>un singur pachet pe personaj</b>, deci după asta nu mai poți cumpăra altul pe ${esc(D.name || 'acest personaj')}.${p.note ? '<br>' + esc(p.note) : ''}`, `Plătesc ${p.price} coins`);
   if (!ok) return;
   busy = true;
   try {

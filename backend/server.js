@@ -4577,7 +4577,7 @@ const PREMIUM_PERKS_TIME = [
   // le-a trecut la bonusurile cu bani, deci rămân „în curând" până le confirmă
   // el în catalog.perks ("peste", "magazin").
   { id: "peste", icon: "🎣", cat: "Personaj", soon: true, title: "Peștele se vinde mai scump", text: "Primești mai mult pe peștele vândut.", tiers: [{ days: 25, value: "+15%" }] },
-  { id: "magazin", icon: "🛒", cat: "Personaj", soon: true, title: "Reducere la magazinele 24/7", text: "Mâncare, apă și tot ce cumperi de la 24/7, mai ieftin.", tiers: [{ days: 40, value: "−10%" }] },
+  { id: "magazin", icon: "🛒", cat: "Personaj", soon: true, title: "Bani înapoi la magazinele 24/7", text: "Primești înapoi 10% din fiecare cumpărătură de la 24/7, cel mult 3.000 $ pe zi.", tiers: [{ days: 40, value: "10%" }] },
   // (19.10.2026) la fel: Sergiu le vrea păstrate; „în curând" până la
   // confirmarea colegului în catalog.perks ("acte", "joburi25").
   { id: "acte", icon: "📄", cat: "Transport", soon: true, title: "Reducere la asigurare și înmatriculare", text: "Actele mașinii te costă mai puțin.", tiers: [{ days: 15, value: "−20%" }] },
@@ -4613,9 +4613,9 @@ const PREMIUM_BURN_PER_DAY = 1; // după expirare, zilele adunate scad cu 1 pe z
 const STARTER_PACKS = [
   { id: "bronz", name: "Bronz", tone: "bronz", premiumDays: 7, cashAmount: 20000, skillPct: 20, garageSlots: 1, extras: ["skills2", "garage"],
     lines: ["Permis auto (categoria B)", "Forță, tragere și rezistență urcate la 20%", "Premium 7 zile"] },
-  { id: "aur", name: "Aur", tone: "aur", premiumDays: 30, cashAmount: 45000, skillPct: 45, garageSlots: 2, extras: ["weapon", "skills2", "garage"],
+  { id: "aur", name: "Aur", tone: "aur", premiumDays: 30, cashAmount: 45000, skillPct: 45, garageSlots: 2, extras: ["weapon", "skills2", "garage"], clean: true,
     lines: ["Permis auto (B) + permis camion (C)", "Forță, tragere și rezistență urcate la 45%", "Premium 30 de zile"] },
-  { id: "platina", name: "Platină", tone: "platina", premiumDays: 90, cashAmount: 100000, skillPct: 80, garageSlots: 3, extras: ["weapon", "business", "skills2", "skillTree", "garage"],
+  { id: "platina", name: "Platină", tone: "platina", premiumDays: 90, cashAmount: 100000, skillPct: 80, garageSlots: 3, extras: ["weapon", "business", "skills2", "skillTree", "garage"], clean: true,
     lines: ["Toate permisele de conducere", "Asigurare + înmatriculare pentru o mașină", "Forță, tragere și rezistență urcate la 80%", "Premium 90 de zile"] },
 ];
 // Catalogul din joc (GET /premium/catalog), ținut 5 minute în memorie.
@@ -4644,11 +4644,11 @@ function starterCashNow(cat, pack) {
 // jocul urcă singur skill-urile din lista lui la skillPct.
 const STARTER_EXTRAS = {
   weapon: { label: () => "Permis de port armă", flag: "weaponLicense", match: /weapon|arm|ppa|gun|firearm/i },
-  business: { label: () => "Licență de afaceri", flag: "businessLicense", match: /business|afacer|firm|company/i },
+  business: { label: () => "Licență de afaceri pe 30 de zile (o reînnoiești la Guvern)", flag: "businessLicense", match: /business|afacer|firm|company/i },
   // (19.10.2026) Platină: arborele de abilități (tableta „Arborele de abilități":
   // Luptă + Atletism) la maxim. „În curând" până când catalogul are la pachet
   // skillTreeMax: true; atunci îl trimitem și la /starter/buy.
-  skillTree: { label: () => "Arborele de abilități la maxim (Luptă + Atletism)", flag: "skillTreeMax", test: g => g?.skillTreeMax === true || g?.skillTree === "max" },
+  skillTree: { label: () => "Atletism la maxim în arborele de abilități", flag: "skillTreeMax", test: g => g?.skillTreeMax === true || g?.skillTree === "max" },
   // (19.10.2026) în locul banilor: locuri în plus în garaj, pe personaj (1/2/3).
   // „În curând" până când catalogul are la pachet garageSlots > 0; atunci
   // trimitem garageSlots cu numărul din catalog.
@@ -4686,6 +4686,10 @@ function starterPackView(cat, pack) {
     offLines: [], // (19.10.2026) banii din pachete nu se mai afișează — înlocuiți cu locuri în garaj
   };
 }
+// (21.10.2026, regula din joc) Aur și Platină (clean: true) nu le poate lua un
+// personaj urmărit de Poliție, cu cazier activ sau căruia Poliția i-a luat
+// permisul de armă — acela poate lua doar Bronz.
+const STARTER_CLEAN_NOTE = "Nu îl poate lua un personaj urmărit de Poliție, cu cazier activ sau căruia Poliția i-a luat permisul de armă. Acela poate lua doar Bronz.";
 // (18.10.2026) Sergiu: pachetele NU au limită de ore jucate — doar unul pe personaj.
 const PREMIUM_DEFAULT = {
   public: false, // până nu e gata partea din joc, pagina o vede doar staff-ul
@@ -4765,6 +4769,7 @@ function premiumErrorText(r) {
   if (r.status === 404) return "Cumpărarea se activează în curând — serverul de joc încă se pregătește.";
   if (PREMIUM_ERRORS[r.error]) return PREMIUM_ERRORS[r.error];
   // dacă serverul de joc mai refuză după orele jucate (limita s-a cerut scoasă)
+  if (/urmar|wanted|cazier|record|politi|police|permis|license|interzis|blocat|clean/i.test(String(r.error || ""))) return "Pachetele Aur și Platină nu se pot lua cât personajul e urmărit de Poliție, are cazier activ sau i s-a luat permisul de armă. Poți lua Bronz. Nu ți s-au luat coins.";
   if (/ore|hour|timp_jucat|playtime/i.test(String(r.error || ""))) return "Serverul de joc a refuzat pachetul din cauza orelor jucate pe personaj. Nu ți s-au luat coins; anunță staff-ul.";
   if (r.status >= 500) return `Serverul de joc a dat o eroare (cod: ${String(r.error || "necunoscut").slice(0, 40)}). Dacă ți s-au scăzut coins fără să primești nimic, deschide un tichet.`;
   return `Serverul de joc a refuzat cumpărarea (cod: ${String(r.error || "necunoscut").slice(0, 40)}).`;
@@ -4787,7 +4792,7 @@ app.get("/api/premium", auth, asyncRoute(async (req, res) => {
     plans: settings.plans.filter(p => p.on),
     perksStart: perksView(PREMIUM_PERKS_START, catalog),
     perksTime: perksView(PREMIUM_PERKS_TIME, catalog),
-    packs: STARTER_PACKS.filter(p => settings.packs[p.id].on).map(p => ({ ...starterPackView(catalog, p), price: settings.packs[p.id].price })),
+    packs: STARTER_PACKS.filter(p => settings.packs[p.id].on).map(p => ({ ...starterPackView(catalog, p), price: settings.packs[p.id].price, note: p.clean ? STARTER_CLEAN_NOTE : null })),
     linked: !!me.identifier,
     name: me.name,
     coins: coins ? coins.coins : null,

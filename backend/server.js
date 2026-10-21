@@ -4768,9 +4768,23 @@ const PREMIUM_ERRORS = {
 function premiumErrorText(r) {
   if (r.status === 404) return "Cumpărarea se activează în curând — serverul de joc încă se pregătește.";
   if (PREMIUM_ERRORS[r.error]) return PREMIUM_ERRORS[r.error];
-  // dacă serverul de joc mai refuză după orele jucate (limita s-a cerut scoasă)
-  if (/urmar|wanted|cazier|record|politi|police|permis|license|interzis|blocat|clean/i.test(String(r.error || ""))) return "Pachetele Aur și Platină nu se pot lua cât personajul e urmărit de Poliție, are cazier activ sau i s-a luat permisul de armă. Poți lua Bronz. Nu ți s-au luat coins.";
-  if (/ore|hour|timp_jucat|playtime/i.test(String(r.error || ""))) return "Serverul de joc a refuzat pachetul din cauza orelor jucate pe personaj. Nu ți s-au luat coins; anunță staff-ul.";
+  // (21.10.2026) codurile exacte de la colegul de pe joc (HTTP 409, coins nu se iau)
+  const d = r.data || {};
+  if (r.error === "pachet_indisponibil") {
+    if (d.reason === "urmarit") return "Personajul tău e urmărit de Poliție, așa că acum poți lua doar pachetul Bronz. Nu ți s-au luat coins.";
+    if (d.reason === "cazier") return "Personajul tău are cazier activ, așa că acum poți lua doar pachetul Bronz. Nu ți s-au luat coins.";
+    if (d.reason === "dosar_indisponibil") return "Serverul tocmai a repornit. Încearcă din nou peste câteva minute. Nu ți s-au luat coins.";
+    return "Pachetul nu se poate lua acum pe acest personaj. Poți încerca Bronz. Nu ți s-au luat coins.";
+  }
+  if (r.error === "permis_retras") {
+    if (d.forever) return "Poliția ți-a luat permisul de armă, așa că poți lua doar pachetul Bronz. Nu ți s-au luat coins.";
+    const until = Number(d.until);
+    if (Number.isFinite(until) && until > 0) {
+      const when = new Date(until).toLocaleString("ro-RO", { timeZone: "Europe/Chisinau", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+      return `Ți-a fost retras un permis din pachet în ultimele 30 de zile. Poți cumpăra pachetul după ${when}. Nu ți s-au luat coins.`;
+    }
+    return "Ți-a fost retras un permis din pachet, așa că acum nu poți lua acest pachet. Nu ți s-au luat coins.";
+  }
   if (r.status >= 500) return `Serverul de joc a dat o eroare (cod: ${String(r.error || "necunoscut").slice(0, 40)}). Dacă ți s-au scăzut coins fără să primești nimic, deschide un tichet.`;
   return `Serverul de joc a refuzat cumpărarea (cod: ${String(r.error || "necunoscut").slice(0, 40)}).`;
 }

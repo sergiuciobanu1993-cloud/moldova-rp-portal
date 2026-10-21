@@ -4644,11 +4644,12 @@ function starterCashNow(cat, pack) {
 // jocul urcă singur skill-urile din lista lui la skillPct.
 const STARTER_EXTRAS = {
   weapon: { label: () => "Permis de port armă", flag: "weaponLicense", match: /weapon|arm|ppa|gun|firearm/i },
-  business: { label: () => "Licență de afaceri pe 30 de zile (o reînnoiești la Guvern)", flag: "businessLicense", match: /business|afacer|firm|company/i },
+  // (21.10.2026) catalogul are acum și businessLicenseDays (0 = oprit) — îl citim și pe el
+  business: { label: () => "Licență de afaceri pe 30 de zile (o reînnoiești la Guvern)", flag: "businessLicense", match: /business|afacer|firm|company/i, extra: g => Number(g?.businessLicenseDays) > 0 },
   // (19.10.2026) Platină: arborele de abilități (tableta „Arborele de abilități":
   // Luptă + Atletism) la maxim. „În curând" până când catalogul are la pachet
   // skillTreeMax: true; atunci îl trimitem și la /starter/buy.
-  skillTree: { label: () => "Atletism la maxim în arborele de abilități", flag: "skillTreeMax", test: g => g?.skillTreeMax === true || g?.skillTree === "max" },
+  skillTree: { label: () => "Atletism la maxim în arborele de abilități", flag: "skillTreeMax", test: g => g?.skillTreeMax === true || g?.skillTree === "max" || (Array.isArray(g?.skillTreeBranches) && g.skillTreeBranches.some(b => /atlet|athlet|mi[sș]care|movement/i.test(String(b)))) },
   // (19.10.2026) în locul banilor: locuri în plus în garaj, pe personaj (1/2/3).
   // „În curând" până când catalogul are la pachet garageSlots > 0; atunci
   // trimitem garageSlots cu numărul din catalog.
@@ -4665,7 +4666,7 @@ function starterExtrasNow(cat, pack) {
   const out = {};
   for (const k of pack.extras || []) {
     const e = STARTER_EXTRAS[k];
-    out[k] = (e.test ? e.test(g) : lic.some(l => e.match.test(l))) || g?.[e.flag] === true;
+    out[k] = (e.test ? e.test(g) : lic.some(l => e.match.test(l))) || g?.[e.flag] === true || (e.extra ? e.extra(g) : false);
   }
   return out;
 }

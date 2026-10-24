@@ -1051,7 +1051,13 @@ document.getElementById('lx-save').addEventListener('click', async () => {
     }));
   }
   async function load() {
-    try { const r = await apiFetch('/api/admin/jucator-nou'); if (!r.ok) throw new Error(); nb = await r.json(); render(); if (location.hash === '#jucator-nou') document.getElementById('jucator-nou').open = true; }
+    try {
+      const r = await apiFetch('/api/admin/jucator-nou'); if (!r.ok) throw new Error(); nb = await r.json(); render();
+      // (24.10.2026) se deschide singură când sunt mașini de dat sau când vii din notificare
+      const box = document.getElementById('jucator-nou');
+      if (location.hash === '#jucator-nou' || nb.claims.some(c => c.status === 'pending')) box.open = true;
+      if (location.hash === '#jucator-nou') box.scrollIntoView({ block: 'start' });
+    }
     catch { document.getElementById('nb-state').textContent = 'Nu am putut încărca.'; }
   }
   document.getElementById('nb-save').addEventListener('click', async () => {
@@ -1066,6 +1072,8 @@ document.getElementById('lx-save').addEventListener('click', async () => {
       setTimeout(() => { saved.hidden = true; }, 2500);
     } catch (err) { saved.hidden = false; saved.style.color = '#ff8a8a'; saved.textContent = err.message; }
   });
+  // clic pe notificare când ești deja pe pagină: doar #-ul se schimbă, fără reîncărcare
+  window.addEventListener('hashchange', () => { if (location.hash === '#jucator-nou') { const box = document.getElementById('jucator-nou'); box.open = true; box.scrollIntoView({ block: 'start' }); load(); } });
   load();
 })();
 </script>

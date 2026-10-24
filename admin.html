@@ -5,6 +5,12 @@
 <aside class="side"><a class="brand" href="index.html"><img src="assets/logo.png" alt=""><b>MOLDOVA<span>RP</span></b></a><p>ADMINISTRAȚIE</p><a class="sel" href="admin.html">▦ Dashboard</a><a href="admin-utilizatori.html">👤 Utilizatori</a><a href="admin-jucatori.html">♙ Jucători</a><a href="admin-cauta.html">🔎 Caută jucător</a><a href="admin-financiar.html">◆ Facțiuni</a><a href="admin-sanctiuni.html">⚠ Sancțiuni</a><a>▤ Reclamații</a><a>⚖ CK</a><a href="admin-regulamente.html">📚 Regulamente</a><a href="admin-continut.html">📝 Conținut pagini</a><a href="admin-anunturi.html">◉ Anunțuri</a><a href="admin-actualizari.html">🆕 Actualizări</a><a href="admin-tichete.html">🎫 Tichete</a><a href="vip-shop.html">🎁 VIP Shop</a><a href="admin-vip-shop.html">🛠 Editor VIP Shop</a><a href="admin-loguri.html">🗂 Loguri</a><a href="admin-kill-logs.html">🔪 Kill Logs</a><a>⌁ Audit Logs</a><a href="admin-txadmin.html" id="nav-txadmin">🖥 txAdmin</a><a class="back" href="dashboard.html">← Contul meu</a><a class="back" href="index.html">← Site public</a></aside>
 <main><header><div><small>PANEL ADMINISTRATIV</small><h1>Dashboard</h1></div><a class="admin" href="dashboard.html" title="Înapoi la contul meu" style="text-decoration:none"><span id="admin-name">…</span> <i></i></a></header>
 <section class="metrics"><article><small>JUCĂTORI</small><strong id="metric-players">—</strong><em>TOTAL</em></article><article><small>ONLINE</small><strong id="metric-online">—</strong><em>LIVE</em></article><article><small>RECLAMAȚII</small><strong id="metric-complaints">—</strong><em>DESCHISE</em></article><article><small>SANCȚIUNI</small><strong id="metric-punishments">—</strong><em>LUNA CURENTĂ</em></article></section>
+<!-- (24.10.2026) De făcut: mașinile de 50 de ore cerute și încă nedate. -->
+<section class="tablebox" id="todo-box" hidden style="padding:16px 22px;border-color:rgba(255,138,31,.45)">
+  <h2 style="margin:0 0 8px;font-size:16px">🚗 Mașini de dat (oferta de 50 de ore)</h2>
+  <div id="todo-cars" style="font-size:13px;line-height:1.6"></div>
+  <a href="admin-vip-shop.html#jucator-nou" style="display:inline-block;margin-top:10px;font-size:12.5px;font-weight:800;color:var(--orange)">Deschide cererile în Editorul VIP Shop →</a>
+</section>
 <!-- (07.10.2026) Tema de sezon a site-ului: se pornește / oprește de aici, pentru toți vizitatorii. -->
 <section class="tablebox" id="theme-box" style="padding:20px 22px">
   <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:6px">
@@ -246,6 +252,19 @@ themeUi.save.addEventListener('click', async () => {
     document.getElementById('metric-punishments').textContent = stats.punishments;
   } catch {}
   loadAudit();
+  loadCarTodo();
 })();
+async function loadCarTodo() {
+  try {
+    const r = await apiFetch('/api/admin/jucator-nou');
+    if (!r.ok) return;
+    const d = await r.json();
+    const pend = (d.claims || []).filter(c => c.status === 'pending');
+    if (!pend.length) return;
+    const e = x => (x ?? '').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    document.getElementById('todo-cars').innerHTML = pend.map(c => `<div>• <b>${e(c.rp_name || c.username || '—')}</b>${c.static_id ? ' #' + e(c.static_id) : ''} — ${e(c.label || c.model)} <span class="muted">(${e(c.model)}), cerută pe ${new Date(c.created_at).toLocaleString('ro-RO')}</span></div>`).join('');
+    document.getElementById('todo-box').hidden = false;
+  } catch {}
+}
 </script>
 </body></html>

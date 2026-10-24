@@ -1105,7 +1105,7 @@ app.get("/api/admin/live/jobs", auth, requireRole(...ADMIN_ROLES), asyncRoute(as
 const GAME_LOG_CATEGORIES = ["chat", "command", "connect", "disconnect", "death", "money", "money_vehicle_deposit", "money_vehicle_withdraw", "item_buy", "item_craft", "item_transfer", "item_obtained", "item_drop", "item_pickup", "vehicle_acquired", "item_primit", "depozit",
   // (14.10.2026) scrise de resursele VX: transferuri bancare, schimb din meniul G,
   // amenzi, facturi, fondurile facțiunilor (vx_traseu) și fondurile bandelor
-  "transfer", "schimb", "amenda", "factura", "fond", "banda_fond"];
+  "transfer", "schimb", "amenda", "factura", "fond", "banda_fond", "banda_membru"];
 // "discord" (23.09.2026) — a treia sursă, vezi botul de citit canale Discord
 // mai jos (pollDiscordLogs) și fetchDiscordLogsPage.
 const LOG_CATEGORIES = [...GAME_LOG_CATEGORIES, "admin", "discord"];
@@ -2281,6 +2281,8 @@ async function enrichLogs(logs) {
     // (15.10) identificatorii exacți, când jocul îi trimite
     for (const k of ["toIdentifier", "fromIdentifier", "killerIdentifier"]) if (d[k]) ids.push(d[k]);
     if (l.category === "depozit" && d.proprietar && d.proprietar !== l.identifier) ids.push(d.proprietar);
+    // (25.10) intrări / ieșiri din bandă: cine a făcut-o
+    if (l.category === "banda_membru") { if (d.actor) ids.push(d.actor); if (d.actorStatic != null) statics.push(String(d.actorStatic)); }
     const peer = peerNameOf(d);
     if (peer) names.push(peer);
     if (l.pickedBy?.player) names.push(l.pickedBy.player);
@@ -2323,6 +2325,11 @@ async function enrichLogs(logs) {
     if (d.from || d.fromIdentifier) l.fromWho = byIdOr(d.fromIdentifier, d.from);
     if (l.category === "depozit" && d.proprietar && d.proprietar !== l.identifier) l.ownerWho = vxWho(idx, { id: d.proprietar, sid: null });
     if (l.category === "depozit" && d.tip === "banda" && bandNames.has(String(d.cheie))) l.bandName = bandNames.get(String(d.cheie));
+    if (l.category === "banda_membru") {
+      if (d.actor || d.actorStatic != null) l.actorWho = vxWho(idx, { id: d.actor || null, sid: d.actorStatic != null ? String(d.actorStatic) : null });
+      if (!d.banda && d.org != null && bandNames.has(String(d.org))) l.bandName = bandNames.get(String(d.org));
+      if (d.banda && d.org != null) bandNameCache.set(String(d.org), d.banda);
+    }
     const peer = peerNameOf(d);
     if (peer) l.peerWho = byName(peer);
     if (l.category === "money" && d.cu) l.peerWho = vxWho(idx, vxPeerRefs(l).peer);

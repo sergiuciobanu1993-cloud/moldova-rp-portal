@@ -13,7 +13,7 @@
     item_pickup: 'Ridicat de jos', item_primit: 'Item primit', depozit: 'Depozit',
     vehicle_acquired: 'Vehicul nou',
     transfer: 'Transfer bancar', schimb: 'Schimb (meniul G)', amenda: 'Amendă', factura: 'Factură',
-    fond: 'Fond facțiune', banda_fond: 'Fond bandă',
+    fond: 'Fond facțiune', banda_fond: 'Fond bandă', banda_membru: 'Membri bandă / familie',
     admin: 'Acțiune staff',
     discord: 'Discord',
   };
@@ -23,7 +23,7 @@
     item_buy: 'info', item_craft: 'info', item_transfer: 'info', item_obtained: 'info', item_drop: 'warn',
     item_pickup: 'info', item_primit: 'info', depozit: 'info',
     vehicle_acquired: 'info',
-    transfer: 'warn', schimb: 'warn', amenda: 'info', factura: 'info', fond: 'info', banda_fond: 'warn',
+    transfer: 'warn', schimb: 'warn', amenda: 'info', factura: 'info', fond: 'info', banda_fond: 'warn', banda_membru: 'warn',
     admin: 'warn',
     discord: 'info',
   };
@@ -592,6 +592,25 @@
         const sold = typeof d.sold_dupa === 'number' ? ` <span class="muted">· sold: ${fmtSum(d.sold_inainte)} → ${fmtSum(d.sold_dupa)}</span>` : '';
         const state = d.stare && d.stare !== 'facut' ? ` <span class="muted">(stare: ${escapeHtml(String(d.stare))})</span>` : '';
         return `fondul bandei <strong>${escapeHtml(d.banda || ('#' + (d.org ?? '?')))}</strong>: <strong>${sign}${fmtSum(delta)}</strong> ${dirty ? '<strong>bani murdari</strong>' : 'bani curați'} — ${escapeHtml(String(op))}${src ? ` <span class="muted">(sursa: ${escapeHtml(String(src))})</span>` : ''}${zoneTxt}${by}${state}${sold}`;
+      }
+      // (25.10.2026) cine intră / iese / e dat afară dintr-o bandă sau familie,
+      // și schimbările de grad. Rândul e pe membrul în cauză; d.actor = cine a făcut-o.
+      case 'banda_membru': {
+        const ACT = { join: 'intrat', joined: 'intrat', add: 'intrat', invitat: 'intrat', leave: 'iesit', left: 'iesit', kick: 'dat_afara', kicked: 'dat_afara', remove: 'dat_afara', exclus: 'dat_afara', rank: 'grad', promovat: 'grad', retrogradat: 'grad' };
+        const act = ACT[String(d.actiune || d.action || '').toLowerCase()] || String(d.actiune || d.action || '').toLowerCase();
+        const kind = /famil|op-?crime|mafi/i.test(String(d.sistem || d.tipOrg || '')) ? 'familia' : 'banda';
+        const org = `${kind} <strong>${escapeHtml(d.banda || d.familie || log.bandName || ('#' + (d.org ?? '?')))}</strong>`;
+        const g = v => v != null && v !== '' ? `<strong>${escapeHtml(String(v))}</strong>` : null;
+        const self = d.actor && log.identifier && d.actor === log.identifier;
+        const by = (d.actor || d.actorStatic != null || d.actorNume) && !self
+          ? ` · de ${personHtml(log.actorWho || (d.actorNume ? { rpName: d.actorNume } : null), d.actorStatic)}`
+          : (d.actorTip === 'consola' || d.actorTip === 'staff' ? ' <span class="muted">· din consolă (staff)</span>' : '');
+        const why = d.motiv ? ` <span class="muted">· motiv: ${escapeHtml(String(d.motiv))}</span>` : '';
+        if (act === 'intrat') return `a intrat în ${org}${g(d.grad_nou || d.grad) ? ` ca ${g(d.grad_nou || d.grad)}` : ''}${by ? by.replace('· de', '· adăugat de') : ''}${why}`;
+        if (act === 'iesit') return `a ieșit din ${org}${g(d.grad_vechi || d.grad) ? ` <span class="muted">(era</span> ${g(d.grad_vechi || d.grad)}<span class="muted">)</span>` : ''}${why}`;
+        if (act === 'dat_afara') return `<strong>a fost dat afară</strong> din ${org}${g(d.grad_vechi || d.grad) ? ` <span class="muted">(era</span> ${g(d.grad_vechi || d.grad)}<span class="muted">)</span>` : ''}${by}${why}`;
+        if (act === 'grad') return `gradul în ${org}: ${g(d.grad_vechi) || '<span class="muted">?</span>'} → ${g(d.grad_nou || d.grad) || '<span class="muted">?</span>'}${by}${why}`;
+        return `${escapeHtml(act || 'schimbare')} în ${org}${by}${why}`;
       }
       case 'admin': {
         const parts = [];

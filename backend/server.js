@@ -7410,7 +7410,7 @@ app.put("/api/admin/regulations/:id", auth, requireRole(...FOUNDER_ROLES), async
     await logAction(req.user.sub, "regulation.update", "regulation", id, req.body, req.ip);
     if (rows[0].is_published) {
       const prev = before.rows[0];
-      const { added, removed } = prev ? diffLines(prev.content, rows[0].content) : { added: [], removed: [] };
+      const { added, removed } = prev ? diffLines(regulationPlainText(prev.content), regulationPlainText(rows[0].content)) : { added: [], removed: [] };
       notifyDiscordRegulation(rows[0], "modificat", {
         editedBy: req.user.username,
         addedLines: added,
@@ -7565,6 +7565,25 @@ async function notifyDiscordUpdate(announcement) {
 // s-a adăugat/eliminat, nu tot textul din nou. Plafonat: pentru texte foarte
 // lungi (rar cazul unui regulament) sărim diff-ul in loc să riscăm un calcul
 // O(n*m) prea mare — funcția apelantă cade atunci pe un preview simplu.
+// (24.10.2026) Regulamentele lipite din editor vin ca HTML (tabele cu stiluri,
+// <p>, <strong>...). Pe Discord trimiteam diff-ul pe HTML brut și apăreau
+// tag-urile. Acum transformăm întâi în text simplu: un rând pe paragraf /
+// titlu / rând de tabel (celulele cu „ – ” între ele), fără tag-uri.
+function regulationPlainText(content) {
+  const s = String(content || "");
+  if (!/<[a-z][\s\S]*>/i.test(s)) return s; // markdown / text simplu — rămâne așa
+  return s
+    .replace(/<(script|style)[\s\S]*?<\/\1>/gi, "")
+    .replace(/<\/t[dh]>\s*<t[dh][^>]*>/gi, " – ")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|h[1-6]|li|tr|blockquote|figure|table|ul|ol)>/gi, "\n")
+    .replace(/<hr[^>]*>/gi, "\n")
+    .replace(/<li[^>]*>/gi, "• ")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+    .split("\n").map(l => l.replace(/[ \t]+/g, " ").trim()).filter(Boolean).join("\n");
+}
+
 function diffLines(oldText, newText) {
   const a = (oldText || "").split(/\r?\n/);
   const b = (newText || "").split(/\r?\n/);
@@ -7647,7 +7666,7 @@ async function notifyDiscordRegulation(regulation, action, extra = {}) {
     // La adăugare, sau la o modificare fără diff de text (doar categorie/versiune
     // schimbate), arătăm un preview din conținut — altfel embed-ul ar rămâne gol.
     const description = (action === "adăugat" || (!hasDiff && !titleChanged))
-      ? (regulation.content.length > 800 ? regulation.content.slice(0, 800).trim() + "…" : regulation.content)
+      ? (() => { const t = regulationPlainText(regulation.content); return t.length > 800 ? t.slice(0, 800).trim() + "…" : t; })()
       : undefined;
 
     const res = await fetch(DISCORD_ANNOUNCE_WEBHOOK, {

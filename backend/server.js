@@ -422,6 +422,43 @@ async function reportedUserIdOf(ticket) {
   return rows[0]?.user_id || null;
 }
 
+// (25.10.2026) Cine e cine într-un răspuns de tichet: staff, autorul
+// tichetului sau persoana reclamată (ca să se vadă clar pe site).
+const STAFF_ROLE_NAMES = ["moderator", "admin", "co-fondator", "owner"];
+function tagTicketReplies(replies, ticket, reportedUserId) {
+  return replies.map(r => {
+    const kind = STAFF_ROLE_NAMES.includes(r.author_role) ? "staff"
+      : r.author_id && r.author_id === ticket.user_id ? "author"
+      : r.author_id && reportedUserId && r.author_id === reportedUserId ? "reported"
+      : "user";
+    const { author_id, ...rest } = r;
+    return { ...rest, author_kind: kind };
+  });
+}
+// Linkul de dovadă la un răspuns (opțional): doar http(s), cel mult 500 de caractere.
+function replyEvidence(body) {
+  const link = String(body?.evidence_url || "").trim();
+  if (!link) return { link: null };
+  if (link.length > 500 || !/^https?:\/\/\S+$/i.test(link)) return { error: "Linkul dovezii trebuie să înceapă cu http:// sau https://." };
+  return { link };
+}
+// Scrie răspunsul; dacă baza încă nu are coloana evidence_url (migrarea din
+// schema.sql nu a rulat), punem linkul la finalul mesajului, ca să nu se piardă.
+async function insertTicketReply(ticketId, authorId, message, link) {
+  try {
+    const { rows } = await pool.query(
+      "INSERT INTO ticket_replies(ticket_id, author_id, message, evidence_url) VALUES($1,$2,$3,$4) RETURNING *",
+      [ticketId, authorId, message, link]);
+    return rows[0];
+  } catch (err) {
+    if (err.code !== "42703") throw err;
+    const { rows } = await pool.query(
+      "INSERT INTO ticket_replies(ticket_id, author_id, message) VALUES($1,$2,$3) RETURNING *",
+      [ticketId, authorId, link ? `${message}\n\nDovadă: ${link}` : message]);
+    return rows[0];
+  }
+}
+
 // Tichet rezolvat / închis → autorul și (la reclamație) jucătorul reclamat.
 async function notifyTicketDecision(ticket, staffId) {
   const word = ticket.status === "resolved" ? "rezolvat" : "închis";
@@ -448,13 +485,13 @@ async function notifyTicketDecision(ticket, staffId) {
 
 // Răspuns nou într-un tichet → autorul, jucătorul reclamat și staff-ul
 // care l-a preluat (oricine în afară de cel care a scris răspunsul).
-async function notifyTicketReply(ticketId, ticket, replierId, { fromStaff }) {
+async function notifyTicketReply(ticketId, ticket, replierId, { fromStaff, fromReported = false }) {
   const subject = String(ticket.subject || "").slice(0, 120);
   const link = `tichet.html?id=${ticketId}`;
   const targets = new Map();
   if (ticket.user_id && ticket.user_id !== replierId) {
     targets.set(ticket.user_id, {
-      title: fromStaff ? "Staff-ul ți-a răspuns la tichet" : "Răspuns nou la tichetul tău",
+      title: fromStaff ? "Staff-ul ți-a răspuns la tichet" : fromReported ? "Persoana reclamată a răspuns la tichetul tău" : "Răspuns nou la tichetul tău",
       message: `Ai un răspuns nou la tichetul „${subject}”.`,
       link,
     });
@@ -477,7 +514,7 @@ async function notifyTicketReply(ticketId, ticket, replierId, { fromStaff }) {
       await notifyUser(ticket.assigned_to, {
         type: "ticket_reply",
         title: "Răspuns nou într-un tichet preluat de tine",
-        message: `Jucătorul a răspuns în tichetul „${subject}”.`,
+        message: fromReported ? `Persoana reclamată a răspuns în tichetul „${subject}”.` : `Jucătorul a răspuns în tichetul „${subject}”.`,
         link: `admin-tichete.html?id=${ticketId}`,
       });
     }
@@ -485,8 +522,8 @@ async function notifyTicketReply(ticketId, ticket, replierId, { fromStaff }) {
     if (Date.now() - (externalSentAt.get(k) || 0) >= EXTERNAL_COOLDOWN_MS) {
       externalSentAt.set(k, Date.now());
       await postStaffChannel({
-        title: `💬 Răspuns nou de la jucător: ${subject}`,
-        message: "Jucătorul a scris un răspuns nou în tichet.",
+        title: fromReported ? `🛡️ Persoana reclamată a răspuns: ${subject}` : `💬 Răspuns nou de la jucător: ${subject}`,
+        message: fromReported ? "Persoana reclamată a scris explicația ei în tichet (poate și cu dovezi)." : "Jucătorul a scris un răspuns nou în tichet.",
         link: `admin-tichete.html?id=${ticketId}`,
         color: 0x7db2ff,
       });
@@ -6298,8 +6335,9 @@ app.post("/api/tickets", auth, asyncRoute(async (req, res) => {
       await notifyUser(reportedUserId, {
         type: "ticket_reported",
         title: "Ai fost reclamat",
-        message: "A fost depusă o reclamație despre tine. Un membru al staff-ului o va analiza în curând.",
-        link: null,
+        // (25.10.2026) persoana reclamată poate răspunde în tichet cu dovezile ei
+        message: "A fost depusă o reclamație despre tine. Poți răspunde direct în tichet, cu explicația și dovezile tale. Un membru al staff-ului o va analiza în curând.",
+        link: `tichet.html?id=${rows[0].id}`,
         // (01.10.2026) și pe Discord / email — tot fără detalii despre reclamant
         external: true,
         dedupeKey: `reported:${rows[0].id}`,
@@ -6327,14 +6365,21 @@ app.get("/api/tickets/:id", auth, asyncRoute(async (req, res) => {
   );
   if (!rows[0]) return res.status(404).json({ error: "Tichetul nu există." });
   const replies = await pool.query(
-    `SELECT tr.id, tr.message, tr.created_at, u.username author, r.name author_role
+    `SELECT tr.id, tr.message, tr.created_at, tr.author_id, u.username author, r.name author_role,
+            to_jsonb(tr)->>'evidence_url' AS evidence_url
      FROM ticket_replies tr
      JOIN users u ON u.id = tr.author_id
      JOIN roles r ON r.id = u.role_id
      WHERE tr.ticket_id = $1 ORDER BY tr.created_at ASC`,
     [req.params.id]
   );
-  res.json({ ...rows[0], replies: replies.rows });
+  const reportedUserId = await reportedUserIdOf(rows[0]);
+  const isReported = !!reportedUserId && reportedUserId === req.user.sub;
+  const closed = ["resolved", "closed"].includes(rows[0].status);
+  // nu trimitem user_id-urile brute spre browser
+  const { user_id, assigned_to, ...pub } = rows[0];
+  res.json({ ...pub, is_reported: isReported, can_reply: !closed && (rows[0].is_own || isReported),
+    replies: tagTicketReplies(replies.rows, rows[0], reportedUserId) });
 }));
 
 // Editare — doar autorul propriu (staff editează prin /api/admin/tickets/:id
@@ -6381,26 +6426,34 @@ app.delete("/api/tickets/:id", auth, asyncRoute(async (req, res) => {
   res.json({ ok: true });
 }));
 
+// (25.10.2026) Răspund: autorul tichetului și — la o reclamație — persoana
+// reclamată (cu explicația și dovezile ei). Staff-ul răspunde din panoul de admin.
 app.post("/api/tickets/:id/replies", auth, asyncRoute(async (req, res) => {
-  const { message } = req.body;
-  if (!message?.trim()) return res.status(400).json({ error: "Mesajul nu poate fi gol." });
+  const message = String(req.body?.message || "").trim();
+  if (!message) return res.status(400).json({ error: "Mesajul nu poate fi gol." });
+  if (message.length > 4000) return res.status(400).json({ error: "Mesajul e prea lung (cel mult 4000 de caractere)." });
+  const ev = replyEvidence(req.body);
+  if (ev.error) return res.status(400).json({ error: ev.error });
   const ticket = await pool.query(
-    "SELECT status, subject, category, assigned_to, reported_player_id FROM tickets WHERE id=$1 AND user_id=$2 LIMIT 1",
-    [req.params.id, req.user.sub]
+    "SELECT id, user_id, status, subject, category, assigned_to, reported_player_id FROM tickets WHERE id=$1 LIMIT 1",
+    [req.params.id]
   );
-  if (!ticket.rows[0]) return res.status(404).json({ error: "Tichetul nu există sau nu îți aparține — doar autorul și staff-ul pot răspunde." });
-  if (["resolved", "closed"].includes(ticket.rows[0].status))
+  const t = ticket.rows[0];
+  if (!t) return res.status(404).json({ error: "Tichetul nu există." });
+  const reportedUserId = await reportedUserIdOf(t);
+  const isAuthor = t.user_id === req.user.sub;
+  const isReported = !!reportedUserId && reportedUserId === req.user.sub;
+  if (!isAuthor && !isReported)
+    return res.status(403).json({ error: "Aici pot răspunde doar autorul tichetului, persoana reclamată și staff-ul." });
+  if (["resolved", "closed"].includes(t.status))
     return res.status(400).json({ error: "Acest tichet este închis — nu mai poți adăuga răspunsuri." });
-  const { rows } = await pool.query(
-    "INSERT INTO ticket_replies(ticket_id, author_id, message) VALUES($1,$2,$3) RETURNING *",
-    [req.params.id, req.user.sub, message.trim()]
-  );
+  const reply = await insertTicketReply(req.params.id, req.user.sub, message, ev.link);
   await pool.query("UPDATE tickets SET updated_at=NOW() WHERE id=$1", [req.params.id]);
-  // (01.10.2026) Anunțăm staff-ul care a preluat tichetul și, la o
-  // reclamație, pe jucătorul reclamat (are voie să vadă reclamația publică).
-  notifyTicketReply(req.params.id, ticket.rows[0], req.user.sub, { fromStaff: false })
+  await logAction(req.user.sub, "ticket.reply", "ticket", req.params.id, { as: isAuthor ? "author" : "reported", evidence: !!ev.link }, req.ip);
+  // Anunțăm autorul / persoana reclamată (celălalt) și staff-ul.
+  notifyTicketReply(req.params.id, t, req.user.sub, { fromStaff: false, fromReported: isReported && !isAuthor })
     .catch(err => console.error("Notificare răspuns eșuată:", err.message));
-  res.status(201).json(rows[0]);
+  res.status(201).json(reply);
 }));
 
 app.get("/api/admin/stats", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (_req, res) => {
@@ -7841,14 +7894,16 @@ app.get("/api/admin/tickets/:id", auth, requireRole(...MOD_ROLES), asyncRoute(as
   );
   if (!rows[0]) return res.status(404).json({ error: "Tichetul nu există." });
   const replies = await pool.query(
-    `SELECT tr.id, tr.message, tr.created_at, u.username author, r.name author_role
+    `SELECT tr.id, tr.message, tr.created_at, tr.author_id, u.username author, r.name author_role,
+            to_jsonb(tr)->>'evidence_url' AS evidence_url
      FROM ticket_replies tr
      JOIN users u ON u.id = tr.author_id
      JOIN roles r ON r.id = u.role_id
      WHERE tr.ticket_id = $1 ORDER BY tr.created_at ASC`,
     [req.params.id]
   );
-  res.json({ ...rows[0], replies: replies.rows });
+  const reportedUserId = await reportedUserIdOf(rows[0]);
+  res.json({ ...rows[0], replies: tagTicketReplies(replies.rows, rows[0], reportedUserId) });
 }));
 
 // Staff poate schimba status/asignare ȘI corecta conținutul (subiect/
@@ -7904,12 +7959,11 @@ app.delete("/api/admin/tickets/:id", auth, requireRole(...MOD_ROLES), asyncRoute
 app.post("/api/admin/tickets/:id/replies", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
   const { message } = req.body;
   if (!message?.trim()) return res.status(400).json({ error: "Mesajul nu poate fi gol." });
+  const ev = replyEvidence(req.body);
+  if (ev.error) return res.status(400).json({ error: ev.error });
   const ticket = await pool.query("SELECT id, user_id, subject, category, assigned_to, reported_player_id FROM tickets WHERE id=$1", [req.params.id]);
   if (!ticket.rows[0]) return res.status(404).json({ error: "Tichetul nu există." });
-  const { rows } = await pool.query(
-    "INSERT INTO ticket_replies(ticket_id, author_id, message) VALUES($1,$2,$3) RETURNING *",
-    [req.params.id, req.user.sub, message.trim()]
-  );
+  const rows = [await insertTicketReply(req.params.id, req.user.sub, message.trim(), ev.link)];
   await pool.query(
     "UPDATE tickets SET updated_at=NOW(), status = CASE WHEN status='open' THEN 'in_progress' ELSE status END WHERE id=$1",
     [req.params.id]

@@ -1,5 +1,11 @@
 <!doctype html>
 <html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Tichete — Admin Moldova RP</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="admin.css"><link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/assets/app/apple-touch-icon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black"><meta name="apple-mobile-web-app-title" content="Moldova RP"><script src="/pwa.js" defer></script><meta name="theme-color" content="#090a0b">
+
+<style>
+.msg.reported{border-color:rgba(127,168,255,.45);background:rgba(127,168,255,.06)}
+.msg.reported b{color:#9dbcff}
+.msg .msg-ev{display:inline-block;margin-top:8px;color:var(--orange);font-weight:800;font-size:12.5px}
+</style>
 </head>
 <body>
 <aside class="side"><a class="brand" href="index.html"><img src="assets/logo.png" alt=""><b>MOLDOVA<span>RP</span></b></a><p>ADMINISTRAȚIE</p><a href="admin.html">▦ Dashboard</a><a href="admin-utilizatori.html">👤 Utilizatori</a><a href="admin-jucatori.html">♙ Jucători</a><a href="admin-cauta.html">🔎 Caută jucător</a><a href="admin-financiar.html">◆ Facțiuni</a><a href="admin-sanctiuni.html">⚠ Sancțiuni</a><a>▤ Reclamații</a><a>⚖ CK</a><a href="admin-regulamente.html">📚 Regulamente</a><a href="admin-continut.html">📝 Conținut pagini</a><a href="admin-anunturi.html">◉ Anunțuri</a><a href="admin-actualizari.html">🆕 Actualizări</a><a class="sel" href="admin-tichete.html">🎫 Tichete</a><a href="vip-shop.html">🎁 VIP Shop</a><a href="admin-vip-shop.html">🛠 Editor VIP Shop</a><a href="admin-loguri.html">🗂 Loguri</a><a href="admin-kill-logs.html">🔪 Kill Logs</a><a>⌁ Audit Logs</a><a href="admin-txadmin.html" id="nav-txadmin">🖥 txAdmin</a><a class="back" href="dashboard.html">← Contul meu</a><a class="back" href="index.html">← Site public</a></aside>
@@ -152,15 +158,24 @@ async function openTicket(id) {
 
   document.getElementById('detail-replies').innerHTML = t.replies.length
     ? t.replies.map(r => `
-        <div class="msg ${['moderator','admin','co-fondator','owner'].includes(r.author_role) ? 'staff' : ''}">
-          <b>${esc(r.author)}${['moderator','admin','co-fondator','owner'].includes(r.author_role) ? ' (staff)' : ''}</b>
+        <div class="msg ${r.author_kind === 'staff' || ['moderator','admin','co-fondator','owner'].includes(r.author_role) ? 'staff' : r.author_kind === 'reported' ? 'reported' : ''}">
+          <b>${esc(r.author)}${replyTag(r)}</b>
           <span>${esc(r.message)}</span>
+          ${r.evidence_url ? `<a class="msg-ev" href="${esc(r.evidence_url)}" target="_blank" rel="noopener noreferrer">🔗 Dovadă atașată</a>` : ''}
           <small>${fmtDate(r.created_at)}</small>
         </div>`).join('')
     : '<p class="muted">Niciun răspuns încă.</p>';
 
   document.getElementById('detail-box').hidden = false;
   document.getElementById('detail-box').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// (25.10.2026) eticheta autorului unui răspuns: staff / autorul tichetului / persoana reclamată
+function replyTag(r) {
+  if (r.author_kind === 'staff' || ['moderator','admin','co-fondator','owner'].includes(r.author_role)) return ' (staff)';
+  if (r.author_kind === 'author') return ' (autorul tichetului)';
+  if (r.author_kind === 'reported') return ' (persoana reclamată)';
+  return '';
 }
 
 document.getElementById('status-filter').addEventListener('change', loadList);

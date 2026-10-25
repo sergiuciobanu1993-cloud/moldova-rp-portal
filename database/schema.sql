@@ -697,3 +697,7 @@ CREATE TABLE IF NOT EXISTS newbie_car_claims (
   handled_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- (25.10.2026) Răspunsurile la tichete pot avea un link de dovadă (de ex.
+-- persoana reclamată își trimite clipul / poza ca să se apere).
+ALTER TABLE ticket_replies ADD COLUMN IF NOT EXISTS evidence_url TEXT;

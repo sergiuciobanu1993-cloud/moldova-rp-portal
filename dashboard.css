@@ -16,6 +16,21 @@
   .grid,.quickgrid{grid-template-columns:1fr}
 }
 
+/* (27.10.2026) Telefoane înguste: pe dashboard (care are și clopoțelul de
+   notificări) butonul „Deconectare" ieșea ~30px în afara ecranului și pagina
+   se putea trage în lateral. */
+@media(max-width:400px){
+  header{gap:8px;padding:0 12px}
+  .brand{font-size:13px}
+  .brand img{width:26px;margin-right:5px}
+  .logout{margin-left:4px;padding:7px 8px;font-size:11px}
+}
+@media(max-width:340px){
+  .brand{font-size:0}
+  .brand img{margin-right:0}
+  .stats{grid-template-columns:1fr}
+}
+
 /* Tichete — reutilizat de tichete.html / tichet.html, în stilul dashboard-ului. */
 .btn-primary{background:var(--orange);border:0;border-radius:8px;padding:11px 17px;font-weight:900;cursor:pointer;font:inherit;color:#0b0b0b}
 .btn-ghost{background:transparent;border:1px solid var(--line);border-radius:8px;padding:11px 17px;font-weight:800;cursor:pointer;font:inherit;color:var(--text)}

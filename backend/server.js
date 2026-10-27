@@ -5519,16 +5519,53 @@ app.delete("/api/auth/sesiune-panou", (req, res) => {
   res.status(204).end();
 });
 
+// (27.10.2026) Limită de încercări pentru login și codurile de pe email.
+// Până acum se putea încerca la nesfârșit: o parolă (ghicită automat, mii pe
+// minut) sau codul de 6 cifre de la „Am uitat parola" — cu codul ăsta oricine
+// putea lua contul cuiva (inclusiv al unui admin) dacă îi știa emailul.
+// Ținem socoteala în memorie, pe contul / emailul încercat (nu pe IP: în
+// spatele Railway, toți vizitatorii ar avea același IP).
+const AUTH_LIMITS = new Map();
+function authLimitHit(key, max, windowMs) {
+  const now = Date.now();
+  let b = AUTH_LIMITS.get(key);
+  if (!b || now - b.start > windowMs) { b = { start: now, n: 0, windowMs }; AUTH_LIMITS.set(key, b); }
+  return b.n >= max;
+}
+function authLimitAdd(key, windowMs) {
+  const now = Date.now();
+  let b = AUTH_LIMITS.get(key);
+  if (!b || now - b.start > windowMs) { b = { start: now, n: 0, windowMs }; AUTH_LIMITS.set(key, b); }
+  b.n++;
+  return b.n;
+}
+function authLimitClear(key) { AUTH_LIMITS.delete(key); }
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, b] of AUTH_LIMITS) if (now - b.start > b.windowMs) AUTH_LIMITS.delete(k);
+}, 10 * 60 * 1000).unref?.();
+const LOGIN_MAX_FAILS = 8, LOGIN_WINDOW = 15 * 60 * 1000;
+const CODE_MAX_FAILS = 5, CODE_WINDOW = 15 * 60 * 1000;
+const FORGOT_MAX = 3, FORGOT_WINDOW = 60 * 60 * 1000;
+const tooManyAttempts = res => res.status(429).json({ error: "Prea multe încercări greșite. Așteaptă 15 minute și încearcă din nou." });
+
 app.post("/api/auth/login", asyncRoute(async (req, res) => {
   const { login, password } = req.body;
+  const cleanLogin = String(login || "").trim();
+  const limitKey = `login:${cleanLogin.toLowerCase()}`;
+  if (authLimitHit(limitKey, LOGIN_MAX_FAILS, LOGIN_WINDOW)) return tooManyAttempts(res);
   const { rows } = await pool.query(
     `SELECT u.*, r.name AS role_name
      FROM users u JOIN roles r ON r.id=u.role_id
-     WHERE u.username=$1 OR u.email=$1 LIMIT 1`, [login?.trim()]
+     WHERE u.username=$1 OR u.email=LOWER($1) LIMIT 1`, [cleanLogin]
   );
   const user = rows[0];
-  if (!user || !user.is_active || !user.password_hash || !(await bcrypt.compare(password || "", user.password_hash)))
+  if (!user || !user.is_active || !user.password_hash || !(await bcrypt.compare(password || "", user.password_hash))) {
+    const n = authLimitAdd(limitKey, LOGIN_WINDOW);
+    if (user && n === LOGIN_MAX_FAILS) await logAction(user.id, "auth.login_blocat", "user", user.id, { incercari: n }, req.ip).catch(() => {});
     return res.status(401).json({ error: "Date de autentificare incorecte." });
+  }
+  authLimitClear(limitKey);
 
   const token = signUser(user);
   await logAction(user.id, "auth.login", "user", user.id, null, req.ip);
@@ -5593,7 +5630,8 @@ function sendResetCodeEmail(to, code) {
 }
 
 function generateVerifyCode() {
-  return String(Math.floor(100000 + Math.random() * 900000)); // 6 cifre, 100000-999999
+  // 6 cifre, 100000-999999 — generator criptografic (Math.random se poate ghici)
+  return String(require("crypto").randomInt(100000, 1000000));
 }
 
 // Auto-service, în DOI PAȘI — cerut explicit, ca simpla deținere a unui cont
@@ -5654,8 +5692,16 @@ app.post("/api/auth/set-password/confirm", auth, asyncRoute(async (req, res) => 
     return res.status(400).json({ error: "Nu există nicio confirmare în așteptare — cere din nou codul." });
   if (new Date(row.email_verify_expires) < new Date())
     return res.status(400).json({ error: "Codul a expirat. Cere unul nou." });
-  if (String(code || "").trim() !== row.email_verify_code)
+  if (String(code || "").trim() !== row.email_verify_code) {
+    // după 5 coduri greșite, codul se anulează — trebuie cerut unul nou
+    if (authLimitAdd(`setpw:${req.user.sub}`, CODE_WINDOW) >= CODE_MAX_FAILS) {
+      authLimitClear(`setpw:${req.user.sub}`);
+      await pool.query("UPDATE users SET email_verify_code=NULL, email_verify_expires=NULL WHERE id=$1", [req.user.sub]);
+      return res.status(400).json({ error: "Prea multe coduri greșite. Cere un cod nou." });
+    }
     return res.status(400).json({ error: "Cod incorect." });
+  }
+  authLimitClear(`setpw:${req.user.sub}`);
 
   await pool.query(
     `UPDATE users SET email=$1, password_hash=$2,
@@ -5692,6 +5738,8 @@ app.post("/api/auth/forgot-password", asyncRoute(async (req, res) => {
   );
   const user = rows[0];
   if (!user) return res.json(genericOk);
+  // cel mult 3 coduri pe oră pentru același email (fără spam în inboxul cuiva)
+  if (authLimitAdd(`forgot:${cleanEmail}`, FORGOT_WINDOW) > FORGOT_MAX) return res.json(genericOk);
 
   const code = generateVerifyCode();
   await pool.query(
@@ -5723,8 +5771,20 @@ app.post("/api/auth/reset-password/confirm", asyncRoute(async (req, res) => {
     return res.status(400).json({ error: "Cod invalid sau expirat. Cere unul nou." });
   if (new Date(user.reset_password_expires) < new Date())
     return res.status(400).json({ error: "Codul a expirat. Cere unul nou." });
-  if (String(code || "").trim() !== user.reset_password_code)
+  if (String(code || "").trim() !== user.reset_password_code) {
+    // după 5 coduri greșite, codul se anulează — altfel cele 900.000 de
+    // combinații se pot încerca automat în cele 15 minute
+    if (authLimitAdd(`reset:${user.id}`, CODE_WINDOW) >= CODE_MAX_FAILS) {
+      authLimitClear(`reset:${user.id}`);
+      await pool.query("UPDATE users SET reset_password_code=NULL, reset_password_expires=NULL WHERE id=$1", [user.id]);
+      await logAction(user.id, "auth.reset_cod_anulat", "user", user.id, null, req.ip).catch(() => {});
+      return res.status(400).json({ error: "Prea multe coduri greșite. Cere un cod nou." });
+    }
     return res.status(400).json({ error: "Cod incorect." });
+  }
+  authLimitClear(`reset:${user.id}`);
+  authLimitClear(`login:${String(user.username || "").toLowerCase()}`);
+  authLimitClear(`login:${cleanEmail}`);
 
   const hash = await bcrypt.hash(password, 12);
   await pool.query(

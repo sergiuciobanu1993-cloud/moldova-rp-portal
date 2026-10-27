@@ -149,3 +149,28 @@
   // iPhone nu are „beforeinstallprompt" — arătăm cardul cu pașii din Safari
   if (isIOS) window.addEventListener('load', () => setTimeout(showCard, 3500));
 })();
+
+// (27.10.2026, cerut de Sergiu) Fără click dreapta, Ctrl+U (sursa paginii) și
+// scurtăturile pentru Inspect (F12, Ctrl+Shift+I/J/C) pe paginile publice.
+// E doar o barieră pentru curioși — browserul tot are meniul lui și oricine
+// știe poate vedea codul unei pagini publice. Siguranța reală e pe server:
+// paginile de admin le primește doar staff-ul, iar datele vin doar din API,
+// cu verificarea gradului (vezi backend/server.js).
+// În câmpurile de scris (copy/paste) și în panoul de admin nu blocăm nimic.
+(function blockInspectShortcuts() {
+  if (/\/admin[\w-]*\.html$/i.test(location.pathname)) return;
+  const isField = el => !!(el && el.closest && el.closest('input, textarea, select, [contenteditable=""], [contenteditable="true"]'));
+  document.addEventListener('contextmenu', e => {
+    if (!isField(e.target)) e.preventDefault();
+  });
+  document.addEventListener('keydown', e => {
+    const k = String(e.key || '').toLowerCase();
+    const mod = e.ctrlKey || e.metaKey;
+    const blocked =
+      k === 'f12' ||
+      (mod && !e.shiftKey && !e.altKey && k === 'u') ||                       // Ctrl+U / Cmd+U — sursa paginii
+      (mod && e.altKey && k === 'u') ||                                         // Cmd+Option+U (Mac)
+      (mod && (e.shiftKey || e.altKey) && ['i', 'j', 'c'].includes(k));       // Ctrl+Shift+I/J/C, Cmd+Option+I/J/C
+    if (blocked) { e.preventDefault(); e.stopPropagation(); }
+  }, true);
+})();

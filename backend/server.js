@@ -180,6 +180,8 @@ app.use(express.static(path.join(__dirname, ".."), {
     // sw.js și manifestul aplicației trebuie verificate mereu, ca telefoanele
     // să ia imediat versiunea nouă a aplicației (PWA, 30.09.2026).
     if (filePath.endsWith(".html") || filePath.endsWith("sw.js") || filePath.endsWith(".webmanifest")) res.set("Cache-Control", "no-cache");
+    // paginile panoului: niciodată ținute în cache (vezi PANEL_COOKIE mai sus)
+    if (PANEL_FILE.test(path.basename(filePath))) res.set("Cache-Control", "no-store, private");
     if (filePath.endsWith(".webmanifest")) res.type("application/manifest+json");
     if (filePath.endsWith(".apk")) {
       res.type("application/vnd.android.package-archive");

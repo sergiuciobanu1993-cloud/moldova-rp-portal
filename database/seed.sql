@@ -1,11 +1,6 @@
--- Date demo. NU folosi parolele de aici în producție.
--- Parola contului demo: DemoPass123!
-INSERT INTO users(username,email,password_hash,role_id)
-SELECT 'Admin_Demo','admin@moldova-rp.local',
-       '$2a$10$7QJ5Qf1u2QeJxQm9WcJxAOH8L7k9yYJ6s4w4mWqXw4b8gkX3m0mQe',
-       id
-FROM roles WHERE name='admin'
-ON CONFLICT (username) DO NOTHING;
+-- (27.10.2026) Contul demo „Admin_Demo" (grad admin, cu o parolă scrisă chiar
+-- aici) a fost scos: oricine cunoștea parola putea intra în panou ca admin.
+-- scripts/init-db.js îl dezactivează la fiecare deploy, dacă mai există.
 
 -- Cele 3 anunțuri-placeholder inițiale (rândurile 000...001/002/003) au fost
 -- scoase de aici intenționat — erau conținut demonstrativ, iar staff-ul le-a

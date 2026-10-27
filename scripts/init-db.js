@@ -9,11 +9,11 @@ const bcrypt = require("bcryptjs");
 const { Client } = require("pg");
 const { PAGE_BLOCKS } = require("./seed-content");
 
-// The password hash originally shipped in database/seed.sql was a placeholder
-// that never actually matched the documented demo password. Re-hashing it
-// here on every boot keeps the demo login working without hand-editing SQL.
+// (27.10.2026) Contul demo din primele zile (grad admin, parolă publică în
+// seed.sql). Nu mai e creat și nici nu i se mai pune parola la loc la deploy —
+// dimpotrivă: la fiecare deploy e dezactivat, coborât la jucător și rămâne
+// fără parolă, ca nimeni să nu mai poată intra cu el.
 const DEMO_USERNAME = "Admin_Demo";
-const DEMO_PASSWORD = "DemoPass123!";
 
 async function run() {
   const databaseUrl = process.env.DATABASE_URL;
@@ -51,13 +51,14 @@ async function run() {
     }
     console.log(`page_blocks: ${seededBlocks} new row(s) inserted, ${PAGE_BLOCKS.length - seededBlocks} already existed.`);
 
-    console.log(`Fixing up ${DEMO_USERNAME}'s demo password hash...`);
-    const hash = await bcrypt.hash(DEMO_PASSWORD, 12);
+    console.log(`Disabling demo account ${DEMO_USERNAME}...`);
     const { rowCount } = await client.query(
-      "UPDATE users SET password_hash = $1 WHERE username = $2",
-      [hash, DEMO_USERNAME]
+      `UPDATE users SET is_active = false, password_hash = NULL,
+              role_id = (SELECT id FROM roles WHERE name='player')
+       WHERE username = $1`,
+      [DEMO_USERNAME]
     );
-    console.log(rowCount ? "Demo password fixed." : `No user named ${DEMO_USERNAME} found — skipped.`);
+    console.log(rowCount ? "Demo account disabled." : `No user named ${DEMO_USERNAME} found — skipped.`);
 
     // One-off admin bootstrap: set BOOTSTRAP_ADMIN on Railway to a username
     // (matches either the login username or the Discord username) to

@@ -17,6 +17,32 @@ function setAuth(token, user) {
 
 function clearAuth() {
   localStorage.removeItem(AUTH_KEY);
+  // (27.10.2026) șterge și cookie-ul care deschide paginile panoului de admin
+  try { fetch("/api/auth/sesiune-panou", { method: "DELETE", keepalive: true }).catch(() => {}); } catch { /* fără rețea */ }
+}
+
+// (27.10.2026) Paginile panoului (admin*.html) le trimite serverul doar
+// staff-ului care are cookie-ul de panou (vezi PANEL_COOKIE în backend/server.js).
+// Îl cerem după fiecare login; pentru jucători serverul doar șterge orice cookie
+// vechi. Întoarce { staff, home } sau null dacă tokenul nu mai e valid.
+async function syncPanelSession(token) {
+  const t = token || getAuth()?.token;
+  if (!t) return null;
+  try {
+    const res = await fetch("/api/auth/sesiune-panou", { method: "POST", headers: { Authorization: `Bearer ${t}` } });
+    if (res.status === 401) return null;
+    if (!res.ok) return { staff: false, home: "dashboard.html", error: true };
+    return await res.json();
+  } catch {
+    return { staff: false, home: "dashboard.html", error: true };
+  }
+}
+
+// Linkul ?next= primit de la server când cineva deschide o pagină de panou fără
+// cookie. Acceptăm doar o pagină admin*.html de pe acest site.
+function panelNextFromUrl() {
+  const next = new URLSearchParams(location.search).get("next") || "";
+  return /^\/admin[\w-]*\.html(\?[^#]*)?$/i.test(next) ? next : null;
 }
 
 // fetch() wrapper that attaches the JWT and bounces to the login page on 401.

@@ -31,6 +31,31 @@
 <a href="register.html">Nu ai cont? Înregistrează-te</a><a href="index.html">← Înapoi la site</a></div>
 <script src="auth-client.js"></script>
 <script>
+// (27.10.2026) Cineva a deschis o pagină de panou (admin*.html) fără cookie-ul
+// de panou — serverul l-a trimis aici cu ?next=. Dacă e deja logat, cerem
+// cookie-ul și îl ducem înapoi (staff) sau la dashboard (jucător). Paza de
+// buclă: dacă tocmai am încercat și serverul l-a trimis iar aici, ne oprim.
+function goPanelNext() {
+  const next = panelNextFromUrl();
+  if (!next) return null;
+  let tries = [];
+  try { tries = JSON.parse(sessionStorage.getItem('mrp_panou_try') || '[]').filter(t => Date.now() - t < 15000); } catch {}
+  if (tries.length >= 2) return null;
+  try { sessionStorage.setItem('mrp_panou_try', JSON.stringify([...tries, Date.now()])); } catch {}
+  return next;
+}
+(async () => {
+  if (!panelNextFromUrl() || !getAuth()?.token) return;
+  const panel = await syncPanelSession();
+  if (!panel) { clearAuth(); return; }          // token expirat → rămâne pe login
+  if (panel.error) return;
+  if (!panel.staff) return void location.replace('dashboard.html');
+  const next = goPanelNext();
+  if (next) return void location.replace(next);
+  const box = document.getElementById('login-error');
+  box.textContent = 'Browserul tău nu a păstrat sesiunea pentru panoul de admin. Verifică dacă cookie-urile sunt permise pentru moldovarp.md și încearcă din nou.';
+  box.hidden = false;
+})();
 const form = document.getElementById('login-form');
 const errorBox = document.getElementById('login-error');
 const submitBtn = document.getElementById('login-submit');
@@ -51,7 +76,9 @@ form.addEventListener('submit', async (e) => {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Autentificare eșuată.');
     setAuth(data.token, data.user);
-    window.location.href = 'dashboard.html';
+    // (27.10.2026) staff-ul primește aici cookie-ul pentru paginile panoului
+    const panel = await syncPanelSession(data.token);
+    window.location.href = (panel?.staff && goPanelNext()) || 'dashboard.html';
   } catch (err) {
     errorBox.textContent = err.message || 'Nu ne-am putut conecta la server.';
     errorBox.hidden = false;
@@ -148,4 +175,4 @@ forgotConfirmForm.addEventListener('submit', async (e) => {
 });
 </script>
 <script src="site-audio.js"></script>
-</body></html>
+</body></html>

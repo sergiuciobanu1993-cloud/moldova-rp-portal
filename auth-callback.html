@@ -29,6 +29,7 @@
     if (!res.ok) throw new Error();
     const me = await res.json();
     setAuth(token, { id: me.id, username: me.username, role: me.role });
+    await syncPanelSession(token);   // (27.10.2026) login prin Discord = jucător → șterge orice cookie de panou vechi
     window.location.href = "dashboard.html";
   } catch {
     clearAuth();

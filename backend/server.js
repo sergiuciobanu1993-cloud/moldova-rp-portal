@@ -79,6 +79,102 @@ app.get("/api/aplicatie", (_req, res) => {
     res.json({ android: { url: "/aplicatie/moldova-rp.apk", sizeMb: Math.round(st.size / 1048576 * 10) / 10, updatedAt: st.mtime.toISOString() } });
   });
 });
+// (27.10.2026, cerut de Sergiu) Paginile panoului de administrare
+// (admin*.html) NU mai sunt servite oricui: până acum oricine putea deschide
+// moldovarp.md/admin.html și vedea scheletul paginii și codul ei (datele erau
+// oricum refuzate de API). Acum serverul trimite pagina doar unui cont de
+// staff cu gradul potrivit, verificat la fiecare deschidere (token + gradul
+// din baza de date + cont activ). Jucătorii sunt trimiși la dashboard-ul lor,
+// vizitatorii fără cont la login.
+// Browserul nu trimite tokenul din localStorage când deschide o pagină, de
+// aceea staff-ul primește la login și un cookie separat, „mrp_panou"
+// (HttpOnly — nu poate fi citit din JavaScript). Cookie-ul folosește doar la
+// deschiderea paginilor de panou; API-ul cere în continuare tokenul Bearer,
+// deci cookie-ul nu poate fi folosit pentru acțiuni (fără risc de CSRF).
+// Aceleași reguli ca PANEL_ACCESS din auth-client.js (meniul din stânga).
+const PANEL_COOKIE = "mrp_panou";
+const PANEL_PAGE_ACCESS = {
+  "admin-tichete.html": "mods",
+  "admin-loguri.html": "mods",
+  "admin-kill-logs.html": "mods",
+  "admin-cauta.html": "mods",
+  "admin-sanctiuni.html": "mods",
+  "admin-jucatori.html": "admins",
+};
+function panelPageRoles(file) {
+  const k = PANEL_PAGE_ACCESS[file];
+  // MOD_ROLES etc. sunt definite mai jos în fișier; funcția rulează doar la cereri, deci sunt deja gata
+  return k === "mods" ? MOD_ROLES : k === "admins" ? ADMIN_ROLES : FOUNDER_ROLES;
+}
+function panelHomeForRole(role) {
+  if (FOUNDER_ROLES.includes(role)) return "/admin.html";
+  if (MOD_ROLES.includes(role)) return "/admin-tichete.html";
+  return "/dashboard.html";
+}
+function readCookie(req, name) {
+  const raw = String(req.headers.cookie || "");
+  for (const part of raw.split(";")) {
+    const i = part.indexOf("=");
+    if (i < 0) continue;
+    if (part.slice(0, i).trim() === name) {
+      try { return decodeURIComponent(part.slice(i + 1).trim()); } catch { return null; }
+    }
+  }
+  return null;
+}
+function panelCookieOptions(req) {
+  const host = String(req.headers.host || "").toLowerCase().split(":")[0];
+  const local = host === "localhost" || host === "127.0.0.1";
+  return `Path=/; HttpOnly; SameSite=Lax${local ? "" : "; Secure"}`;
+}
+function setPanelCookie(req, res, value, maxAgeSec) {
+  res.append("Set-Cookie", `${PANEL_COOKIE}=${encodeURIComponent(value)}; Max-Age=${Math.max(0, Math.floor(maxAgeSec))}; ${panelCookieOptions(req)}`);
+}
+function clearPanelCookie(req, res) {
+  res.append("Set-Cookie", `${PANEL_COOKIE}=; Max-Age=0; ${panelCookieOptions(req)}`);
+}
+// Gradul real al unei sesiuni de panou: gradul din token, dar doar dacă și
+// contul din baza de date (activ) are încă un grad de staff — un staff scos
+// din echipă pierde accesul la pagini imediat, nu după ce îi expiră tokenul.
+async function panelRoleOf(payload) {
+  if (!payload?.sub || !MOD_ROLES.includes(payload.role)) return null;
+  const { rows } = await pool.query(
+    "SELECT u.is_active, r.name role FROM users u JOIN roles r ON r.id=u.role_id WHERE u.id=$1", [payload.sub]
+  );
+  const row = rows[0];
+  if (!row || !row.is_active || !MOD_ROLES.includes(row.role)) return null;
+  // dacă gradul din baza de date e mai mic decât cel din token, contează cel mai mic
+  return MOD_ROLES.indexOf(row.role) < MOD_ROLES.indexOf(payload.role) ? row.role : payload.role;
+}
+const PANEL_FILE = /^admin[\w-]*\.html$/i;
+app.use((req, res, next) => {
+  let p = req.path;
+  try { p = decodeURIComponent(p); } catch { /* cale invalidă */ }
+  const file = path.posix.basename(path.posix.normalize(p.replace(/\\/g, "/")));
+  if (!PANEL_FILE.test(file)) return next();
+  res.set("Cache-Control", "no-store, private");
+  res.set("X-Robots-Tag", "noindex, nofollow");
+  const back = encodeURIComponent(`/${file.toLowerCase()}${req.originalUrl.includes("?") ? req.originalUrl.slice(req.originalUrl.indexOf("?")) : ""}`);
+  const toLogin = () => res.redirect(302, `/login.html?next=${back}`);
+  const raw = readCookie(req, PANEL_COOKIE);
+  if (!raw) return toLogin();
+  let payload;
+  try {
+    payload = jwt.verify(raw, process.env.JWT_SECRET);
+    if (payload.typ !== "panou") throw new Error("tip greșit");
+  } catch {
+    clearPanelCookie(req, res);
+    return toLogin();
+  }
+  panelRoleOf(payload).then(role => {
+    if (!role) {
+      clearPanelCookie(req, res);
+      return res.redirect(302, "/dashboard.html");
+    }
+    if (!panelPageRoles(file.toLowerCase()).includes(role)) return res.redirect(302, panelHomeForRole(role));
+    next();
+  }).catch(next);
+});
 app.use(express.static(path.join(__dirname, ".."), {
   setHeaders: (res, filePath) => {
     // sw.js și manifestul aplicației trebuie verificate mereu, ca telefoanele
@@ -5396,6 +5492,31 @@ app.post("/api/auth/register", asyncRoute(async (req, res) => {
   }
 }));
 
+// (27.10.2026) Cookie-ul de panou (vezi PANEL_COOKIE mai sus). Pagina de login
+// (și cea de după login-ul cu Discord) îl cere după ce primește tokenul: îl
+// primește doar staff-ul; pentru oricine altcineva, orice cookie vechi e șters.
+app.post("/api/auth/sesiune-panou", auth, asyncRoute(async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  const role = await panelRoleOf(req.user);
+  if (!role) {
+    clearPanelCookie(req, res);
+    return res.json({ staff: false, home: "/dashboard.html" });
+  }
+  const left = (req.user.exp || 0) - Math.floor(Date.now() / 1000);
+  if (left <= 60) {
+    clearPanelCookie(req, res);
+    return res.status(401).json({ error: "Token invalid sau expirat" });
+  }
+  // cookie separat de token (tip „panou"), care expiră odată cu sesiunea
+  const panelToken = jwt.sign({ sub: req.user.sub, role: req.user.role, typ: "panou" }, process.env.JWT_SECRET, { expiresIn: left });
+  setPanelCookie(req, res, panelToken, left);
+  res.json({ staff: true, home: panelHomeForRole(role) });
+}));
+app.delete("/api/auth/sesiune-panou", (req, res) => {
+  clearPanelCookie(req, res);
+  res.status(204).end();
+});
+
 app.post("/api/auth/login", asyncRoute(async (req, res) => {
   const { login, password } = req.body;
   const { rows } = await pool.query(
@@ -7978,5 +8099,15 @@ app.use((err, _req, res, _next) => {
   console.error(err);
   res.status(500).json({ error: "Eroare internă a serverului." });
 });
+
+// (27.10.2026) Contul demo din primele zile („Admin_Demo", grad admin, cu
+// parola scrisă în seed.sql) e închis la fiecare pornire — și dacă deploy-ul
+// nu rulează scripts/init-db.js. Fără parolă și dezactivat = nu se mai poate intra cu el.
+pool.query(
+  `UPDATE users SET is_active = false, password_hash = NULL,
+          role_id = (SELECT id FROM roles WHERE name='player')
+   WHERE username = 'Admin_Demo' AND (is_active OR password_hash IS NOT NULL)`
+).then(r => { if (r.rowCount) console.log("Contul demo Admin_Demo a fost dezactivat."); })
+ .catch(err => console.error("Nu am putut dezactiva contul demo:", err.message));
 
 app.listen(port, () => console.log(`Moldova RP API: http://localhost:${port}`));

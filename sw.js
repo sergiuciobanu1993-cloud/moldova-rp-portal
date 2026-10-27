@@ -6,7 +6,7 @@
 //     cache-ul doar dacă nu e internet.
 //   • Imaginile și fonturile: din cache, reîmprospătate în fundal.
 // La un update al acestui fișier schimbă VERSION, ca să se curețe cache-ul vechi.
-const VERSION = 'mrp-2026-10-08a';
+const VERSION = 'mrp-2026-10-27a';
 const SHELL = `${VERSION}-shell`;
 const RUNTIME = `${VERSION}-runtime`;
 const OFFLINE_URL = '/offline.html';
@@ -42,7 +42,9 @@ self.addEventListener('fetch', event => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;        // YouTube, fonturi externe etc.
-  const live = url.pathname.startsWith('/api/') || url.pathname.startsWith('/auth') || url.searchParams.has('code');
+  // (27.10.2026) + paginile panoului de admin: nu le ținem niciodată în cache pe
+  // telefon (le trimite doar serverul, doar staff-ului — vezi backend/server.js)
+  const live = url.pathname.startsWith('/api/') || url.pathname.startsWith('/auth') || /\/admin[\w-]*\.html$/i.test(url.pathname) || url.searchParams.has('code');
   // (08.10.2026) Cu „navigation preload" pornit, browserul trimite deja cererea
   // unei PAGINI înainte să întrebe service worker-ul. Dacă aici doar ieșeam
   // (return), browserul o trimitea încă o dată — de DOUĂ ori. La login-ul cu

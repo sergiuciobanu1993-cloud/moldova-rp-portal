@@ -1,0 +1,161 @@
+🏴 MOLDOVA ROLEPLAY
+
+REGULAMENT OFICIAL – CAPTURI DE TERITORII (TURF)
+
+Versiunea 2.0 înlocuiește complet versiunea 1.0. Se aplică bandelor și familiilor care participă la capturi. Pentru tot ce nu este scris aici se aplică Regulamentul Roleplay, Regulamentul Organizații Ilegale și Sancțiunile Oficiale.
+
+━━━━━━━━━━━━━━━━━━━━━━
+
+📖 CAPITOLUL 1 – CUM FUNCȚIONEAZĂ CAPTURA
+
+1.1 Decizia finală
+Decizia finală în orice situație legată de capturi și sancțiuni o ia curatorul bandelor, numit de conducerea serverului. Fiecare caz se judecă separat; o sancțiune poate fi dată și în afara acestui regulament, dar întotdeauna corect și imparțial.
+
+1.2 Zilele și orele
+• Bandele: capturi marți, joi și sâmbătă.
+• Familiile: capturi luni, miercuri și vineri.
+• O captură poate fi pornită doar între 21:00 și 23:00.
+• În zilele anunțate de staff (evenimente, sărbători) nu se fac capturi.
+
+1.3 Pornirea capturii
+• Captura o pornește doar liderul sau adjunctul, cu comanda /capt, din joc.
+• Banda care atacă trebuie să aibă cel puțin 3 membri online.
+• Casa (sediul) unei bande nu poate fi atacată.
+• O bandă poate ține cel mult 3 teritorii, cu tot cu casa.
+
+1.4 Anunțul atacului pe Discord
+În cel mult 5 minute după /capt, banda care atacă anunță captura în canalul de capturi de pe Discord, cu: teritoriul atacat, banda atacată și ora de start.
+⚖️ Avertisment pentru lider / Demorgan 30 de minute la repetare.
+
+1.5 Durata și numărul de participanți
+• O captură ține 15 minute.
+• Se numără cel mult 8 participanți pe fiecare parte.
+• Partea care apără poate veni cu mai puțini oameni sau poate să nu vină deloc.
+• Participă doar membrii celor două bande (sau familii) implicate.
+
+1.6 Cine câștigă
+Câștigă partea care, conform sistemului serverului, ține zona mai mult timp, cu mai mulți oameni. Rezultatul afișat de server este cel oficial.
+
+1.7 Zona și pătratul capturii
+• Pătratul capturii este zona în care se activează și se numără captura (200 × 200 m, la nivelul străzii).
+• Zona capturii este pătratul împreună cu terenul imediat din jurul lui.
+• Ești numărat doar pe jos, la nivelul străzii, în interiorul pătratului.
+
+1.8 Eliminarea
+Cine moare sau iese din joc în zona capturii nu mai este numărat până la final, chiar dacă este ridicat de medic, revine de la spital sau intră cu alt personaj. Revenirea în captură după eliminare este interzisă.
+⚖️ Demorgan 30–60 de minute / Warn.
+
+1.9 Clasamentul
+Punctele și clasamentul sezonului se văd în joc cu /teritorii. La finalul fiecărui sezon punctele se resetează.
+
+━━━━━━━━━━━━━━━━━━━━━━
+
+⚔️ CAPITOLUL 2 – OBLIGAȚIILE PĂRȚILOR
+
+2.1 Partea care apără
+Apărătorii stau în pătratul capturii până când văd un grup de adversari în zona capturii (cel puțin 3 oameni din banda atacatoare, văzuți efectiv, nu doar în panoul de pe ecran).
+⚖️ Demorgan 35–90 de minute / Warn.
+
+2.2 Partea care atacă
+Atacatorii au obligația să intre în pătrat și să atace ca să câștige captura până la final. Este interzis să te ascunzi sau să aștepți în afara pătratului până expiră timpul.
+⚖️ Demorgan 35–90 de minute / Warn.
+
+2.3 Fuga din luptă
+După ce a început atacul, partea care apără nu are voie să fugă din schimbul de focuri.
+⚖️ Demorgan 20–60 de minute / Warn.
+
+2.4 Schimbul și vânzarea teritoriilor
+• Schimbul, vânzarea sau cumpărarea unui teritoriu se fac doar cu aprobarea curatorului bandelor sau a conducerii serverului.
+• Banda care a cumpărat un teritoriu poate încheia un pact de neagresiune pentru el.
+• Este interzisă cedarea intenționată a unui teritoriu către altă bandă pe ocolite (de exemplu: pierderea voită a capturii).
+⚖️ Retragerea teritoriului / sancțiune pentru lider.
+
+━━━━━━━━━━━━━━━━━━━━━━
+
+🚫 CAPITOLUL 3 – CE ESTE INTERZIS ÎN TIMPUL CAPTURII
+
+3.1 Ieșirea din zonă
+Este interzis să părăsești zona capturii sau să stai intenționat în afara ei. Tragerea spre cineva aflat în afara zonei este permisă.
+Excepție: ocolirea unui obstacol sau a unei clădiri.
+⚖️ Demorgan 30–45 de minute / Warn.
+
+3.2 Acoperișuri și înălțimi
+Este interzis să urci sau să stai pe acoperișuri, înălțimi, etajele superioare ale parcărilor, trenuri sau în locuri unde nu poți ajunge fără ajutor (mașini, obiecte etc.). Tragerea de pe o înălțime se pedepsește la fel. Doar parterul parcărilor este permis.
+Excepție: dacă ambele bande sunt de acord înainte de captură.
+⚖️ Demorgan 45–60 de minute / Warn.
+
+3.3 Locuri greu accesibile
+Este interzis să ocupi și să ții mult timp poziții greu accesibile sau neobișnuite care îți dau un avantaj. Intrarea scurtă după un colț sau după o clădire ca să te vindeci nu este abatere.
+⚖️ Demorgan 30–90 de minute / Warn / Ban 3–7 zile.
+
+3.4 Interioare, tuneluri și metrou
+Este interzis să intri sau să stai în interioare (clădiri, case, magazine), precum și în tuneluri sau în metrou, și să le folosești ca să treci dintr-o parte în alta.
+⚖️ Demorgan 30–90 de minute / Warn / Ban 3–30 de zile.
+
+3.5 Vindecarea și consumabilele
+Folosirea trusei medicale, a mâncării, a băuturilor sau a drogurilor se face doar după o acoperire, de la începutul până la sfârșitul animației. Dacă te vindeci în bătaia adversarului, este abatere.
+⚖️ Demorgan 35–90 de minute / Warn.
+
+3.6 Lucrurile căzute
+Este interzis să ridici obiectele căzute de la adversari până la finalul capturii.
+⚖️ Demorgan 35–90 de minute / Warn.
+
+3.7 Bug-uri și exploit-uri
+Orice folosire a unui bug sau a unei mecanici stricate a jocului este interzisă.
+⚖️ Demorgan 60–100 de minute / Warn / Ban 3–30 de zile.
+
+3.8 Raiduri înainte de captură
+Cu 30 de minute înainte de o captură este interzis să ataci sau să tragi din mers în banda cu care urmează să te lupți.
+⚖️ Demorgan 30–60 de minute / Warn.
+
+3.9 Vehiculele
+Captura se joacă doar pe jos. Este interzis să folosești vehicule în pătratul capturii pentru a fi numărat, ca acoperire mobilă sau ca să lovești adversarii.
+⚖️ Demorgan 30–60 de minute / Warn.
+
+3.10 Persoanele din afară
+Este interzis să ceri ajutorul altor bande, familii, civili sau facțiuni și să chemi Poliția ca să influențezi captura. Jucătorii care nu participă evită zona.
+⚖️ Pierderea capturii / Demorgan 60 de minute / Warn.
+
+3.11 Abaterile repetate
+Cine încalcă în mod repetat și intenționat regulile capturilor poate primi interdicție de a participa la capturi.
+
+━━━━━━━━━━━━━━━━━━━━━━
+
+📹 CAPITOLUL 4 – ÎNREGISTRAREA VIDEO
+
+4.1 Obligația de a filma
+Fiecare participant filmează captura de la început până la sfârșit și păstrează clipul cel puțin 48 de ore.
+• Înregistrarea se face cu un program care prinde tot ecranul (NVIDIA, AMD, OBS sau altul asemănător).
+• Clipul este întreg, fără tăieturi sau modificări, de cel puțin 480p și cu sunetul original al jocului.
+⚖️ Ban 7–30 de zile / Ban permanent.
+
+4.2 Cererea clipului
+• Staff-ul poate cere clipul oricărui participant în cele 48 de ore de după captură.
+• Un jucător poate cere, prin staff, clipul unui adversar în cel mult 6 ore de la finalul capturii.
+• Clipul se trimite în cel mult 24 de ore, ca link (YouTube, Google Drive, Twitch, Imgur). Dacă nu este trimis la timp, se consideră că jucătorul nu a filmat.
+
+4.3 Programe interzise
+• Refuzul de a arăta clipul, când există suspiciunea de programe interzise (cheats), se sancționează cu Ban 15–30 de zile / Ban permanent.
+• Texturile, modificările sau skin-urile care dau un avantaj se tratează ca programe interzise: Ban 15–30 de zile / Ban permanent.
+
+4.4 Calculator prea slab
+Dacă pe clipuri se văd des blocaje, sacadări sau lovituri care nu se înregistrează din cauza calculatorului, jucătorul poate primi interdicție de a participa la capturi, până rezolvă problema.
+
+━━━━━━━━━━━━━━━━━━━━━━
+
+⚖️ CAPITOLUL 5 – SANCȚIUNI PENTRU BANDĂ ȘI CONTESTAȚII
+
+5.1 Sancțiuni pentru bandă
+Pe lângă sancțiunile individuale, curatorul bandelor poate da: retragerea teritoriului, rejucarea capturii sau avertisment pentru lider. Se pot da mai multe deodată.
+
+5.2 Retragerea teritoriului
+Teritoriul poate fi retras pentru abateri grave: vânzarea, cumpărarea sau împrumutul conturilor, ocolirea unui ban, programe interzise, ajutor din afară.
+
+5.3 Contestații
+Reclamațiile despre o captură se fac printr-un tichet pe site, cu clipul video, în cel mult 24 de ore de la final. Fără clip, reclamația nu se poate verifica.
+
+━━━━━━━━━━━━━━━━━━━━━━
+
+📜 PRINCIPIUL CAPTURILOR
+
+Captura este o luptă corectă pentru teritoriu, nu un loc pentru trucuri. Câștigă banda mai bine organizată, nu cea care găsește o scăpare în reguli.

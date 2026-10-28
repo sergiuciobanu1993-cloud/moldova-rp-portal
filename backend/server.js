@@ -8216,10 +8216,16 @@ async function gangDiscordIds(identifiers) {
     const lic = String(r.identifier).split(":")[1]; if (lic && !byLicense.has(lic)) byLicense.set(lic, d);
   }
   // 3) contul de pe site legat de personaj (autentificat cu Discord)
+  //    (și dacă a legat alt personaj de pe același cont FiveM — aceeași licență)
   const { rows: users } = await pool.query(
-    `SELECT game_identifier, discord_id FROM users WHERE discord_id IS NOT NULL AND is_active AND game_identifier = ANY($1)`, [identifiers]
+    `SELECT game_identifier, discord_id FROM users WHERE discord_id IS NOT NULL AND is_active
+      AND (game_identifier = ANY($1) OR split_part(game_identifier, ':', 2) = ANY($2))`, [identifiers, licenses]
   ).catch(() => ({ rows: [] }));
-  for (const u of users) { const d = clean(u.discord_id); if (d && !out.has(u.game_identifier)) out.set(u.game_identifier, d); }
+  for (const u of users) {
+    const d = clean(u.discord_id); if (!d) continue;
+    if (identifiers.includes(u.game_identifier) && !out.has(u.game_identifier)) out.set(u.game_identifier, d);
+    const lic = String(u.game_identifier).split(":")[1]; if (lic && !byLicense.has(lic)) byLicense.set(lic, d);
+  }
   // același cont FiveM (licență), alt personaj → același om
   for (const id of identifiers) {
     if (out.has(id)) continue;

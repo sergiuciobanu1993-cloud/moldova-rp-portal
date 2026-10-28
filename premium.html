@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Premium — Moldova RP</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="dashboard.css">
 <style>
-:root{--gold:#f2c230;--bronz:#c98a5a;--platina:#cfd8e3}
+:root{--gold:#f2c230;--bronz:#c98a5a;--platina:#cfd8e3;--start:#5fd39a}
 .home-btn{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);padding:10px 15px;border-radius:8px;color:var(--text);font-weight:800;font-size:12.5px;white-space:nowrap;transition:.15s ease}
 .home-btn:hover{border-color:var(--orange);color:var(--orange)}
 .pr-note{margin:18px 0 0;padding:12px 14px;border-radius:10px;font-size:12.5px;line-height:1.55;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--muted)}
@@ -99,10 +99,11 @@
 .rules p{margin:0;color:var(--muted);font-size:12.5px;line-height:1.55}
 
 /* Pachete de start */
-.packs{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.packs{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
 .pack{--c:var(--bronz);position:relative;background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;display:flex;flex-direction:column}
 .pack.aur{--c:var(--gold)}
 .pack.platina{--c:var(--platina)}
+.pack.start{--c:var(--start)}
 .pack .top{padding:20px 20px 16px;border-bottom:1px solid var(--line);background:linear-gradient(160deg,color-mix(in srgb,var(--c) 18%,transparent),transparent 65%)}
 .pack .top small{display:block;color:var(--muted);font-size:10px;letter-spacing:.14em;font-weight:900;text-transform:uppercase}
 .pack .top h3{margin:6px 0 0;font-size:24px;color:var(--c);letter-spacing:-.01em}
@@ -113,6 +114,7 @@
 .pack .price{font-size:24px;font-weight:950;font-variant-numeric:tabular-nums}
 .pack .price small{font-size:12px;color:var(--muted);font-weight:800;margin-left:4px}
 .pack .done{font-size:12px;color:var(--green);font-weight:800}
+.pack .pk-left{font-size:11.5px;color:var(--c);font-weight:800}
 
 /* Fereastra de confirmare */
 .cf-back{position:fixed;inset:0;background:rgba(0,0,0,.65);display:grid;place-items:center;z-index:60;padding:16px}
@@ -357,17 +359,29 @@ function renderPerks() {
 function renderPacks() {
   const el = document.getElementById('packs');
   const block = blocker('starter');
-  const had = D.status && D.status.starter;
+  // Pachetul „Start" (jucători noi) nu intră la „un pachet pe personaj".
+  const had = D.status && D.status.starter && D.status.starter.packId !== 'start' ? D.status.starter : null;
   el.innerHTML = D.packs.map(p => {
-    const mine = had && had.packId === p.id;
     const poor = D.linked && D.coins != null && D.coins < p.price;
-    const label = mine ? '' : had ? 'Ai luat deja un pachet' : block ? block : poor ? 'Coins insuficienți' : 'Cumpără pachetul';
+    let mine, label, off;
+    if (p.newbie) {
+      mine = !!p.bought;
+      label = p.soon ? 'În curând' : !p.eligible ? 'Doar pentru jucătorii noi' : block ? block : poor ? 'Coins insuficienți' : 'Cumpără pachetul';
+      off = p.soon || !p.eligible || block || poor;
+    } else {
+      mine = had && had.packId === p.id;
+      label = mine ? '' : had ? 'Ai luat deja un pachet' : block ? block : poor ? 'Coins insuficienți' : 'Cumpără pachetul';
+      off = had || block || poor;
+    }
+    const doneAt = p.newbie ? p.bought : had && had.at;
+    const left = p.newbie && p.eligible && !p.soon && p.until ? Math.max(1, Math.ceil((p.until - Date.now()) / 86400000)) : 0;
     return `<article class="pack ${esc(p.tone)}">
-      <div class="top"><small>Pachet de start</small><h3>${esc(p.name)}</h3></div>
+      <div class="top"><small>${p.newbie ? 'Pentru jucătorii noi' : 'Pachet de start'}</small><h3>${esc(p.name)}</h3></div>
       <ul>${p.lines.map(l => `<li>${esc(l)}</li>`).join('')}${(p.soonLines || []).map(l => `<li class="off soon"><span>${esc(l)}</span><span class="off-tag">În curând</span></li>`).join('')}${(p.offLines || []).map(l => `<li class="off"><span>${esc(l)}</span><span class="off-tag">Oprit deocamdată</span></li>`).join('')}</ul>
       ${p.note ? `<p class="pk-note">${esc(p.note)}</p>` : ''}
       <div class="foot"><span class="price">${p.price}<small>coins</small></span>
-        ${mine ? `<span class="done">✓ L-ai luat${had.at ? ' pe ' + fmtDay(had.at) : ''}</span>` : `<button type="button" class="btn-ghost" data-pack="${esc(p.id)}" ${had || block || poor ? 'disabled' : ''}>${esc(label)}</button>`}
+        ${mine ? `<span class="done">✓ L-ai luat${doneAt ? ' pe ' + fmtDay(doneAt) : ''}</span>` : `<button type="button" class="btn-ghost" data-pack="${esc(p.id)}" ${off ? 'disabled' : ''}>${esc(label)}</button>`}
+        ${left ? `<span class="pk-left">Mai ai ${plural(left, 'zi', 'zile')} ca să-l iei</span>` : ''}
       </div>
     </article>`;
   }).join('') || '<p class="muted">Niciun pachet disponibil acum.</p>';
@@ -399,7 +413,9 @@ async function buyPack(id) {
   if (busy) return;
   const p = D.packs.find(x => x.id === id); if (!p) return;
   const ok = await confirmBox(`Pachetul ${p.name}?`,
-    `Plătești <b>${p.price} coins</b>. Poți lua <b>un singur pachet pe personaj</b>, deci după asta nu mai poți cumpăra altul pe ${esc(D.name || 'acest personaj')}.${p.note ? '<br>' + esc(p.note) : ''}`, `Plătesc ${p.price} coins`);
+    p.newbie
+      ? `Plătești <b>${p.price} coins</b>. Pachetul Start se ia <b>o singură dată pe cont</b>, pe ${esc(D.name || 'personajul tău')}. După el poți lua oricând și Bronz, Aur sau Platină.`
+      : `Plătești <b>${p.price} coins</b>. Poți lua <b>un singur pachet pe personaj</b>, deci după asta nu mai poți cumpăra altul pe ${esc(D.name || 'acest personaj')}.${p.note ? '<br>' + esc(p.note) : ''}`, `Plătesc ${p.price} coins`);
   if (!ok) return;
   busy = true;
   try {

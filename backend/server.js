@@ -4752,7 +4752,15 @@ const PREMIUM_BURN_PER_DAY = 1; // după expirare, zilele adunate scad cu 1 pe z
 // „în curând" și nu le cerem. Când apar în catalog.packs[].licenses (ex.
 // "weapon" / "business"), rândul devine normal și trimitem weaponLicense /
 // businessLicense: true la /starter/buy.
+// (28.10.2026) Sergiu: pachetul „Start" pentru jucătorii noi — 10 coins,
+// Premium 10 zile + permis B + skill-uri la 10%. Doar în primele 7 zile de la
+// înregistrarea contului pe site, o singură dată pe cont (și pe licență). Nu
+// intră la „un pachet pe personaj": după el se poate lua oricând Bronz/Aur/Platină.
+// Pe pagină apare „în curând" până când catalogul din joc are pachetul "start".
+const STARTER_NEWBIE_DAYS = 7;
 const STARTER_PACKS = [
+  { id: "start", name: "Start", tone: "start", premiumDays: 10, cashAmount: 0, skillPct: 10, garageSlots: 0, extras: ["skills2"], newbie: true,
+    lines: ["Permis auto (categoria B)", "Forță, tragere și rezistență urcate la 10%", "Premium 10 zile"] },
   { id: "bronz", name: "Bronz", tone: "bronz", premiumDays: 7, cashAmount: 20000, skillPct: 20, garageSlots: 1, extras: ["skills2", "garage"],
     lines: ["Permis auto (categoria B)", "Forță, tragere și rezistență urcate la 20%", "Premium 7 zile"] },
   { id: "aur", name: "Aur", tone: "aur", premiumDays: 30, cashAmount: 45000, skillPct: 45, garageSlots: 2, extras: ["weapon", "skills2", "garage"], clean: true,
@@ -4841,7 +4849,7 @@ const PREMIUM_DEFAULT = {
     { id: "p30", days: 30, price: 100, on: true },
     { id: "p90", days: 90, price: 250, on: true },
   ],
-  packs: { bronz: { price: 40, on: true }, aur: { price: 80, on: true }, platina: { price: 150, on: true } },
+  packs: { start: { price: 10, on: true }, bronz: { price: 40, on: true }, aur: { price: 80, on: true }, platina: { price: 150, on: true } },
 };
 function normalizePremiumSettings(v) {
   const src = v && typeof v === "object" ? v : {};
@@ -4931,6 +4939,26 @@ function premiumErrorText(r) {
   if (r.status >= 500) return `Serverul de joc a dat o eroare (cod: ${String(r.error || "necunoscut").slice(0, 40)}). Dacă ți s-au scăzut coins fără să primești nimic, deschide un tichet.`;
   return `Serverul de joc a refuzat cumpărarea (cod: ${String(r.error || "necunoscut").slice(0, 40)}).`;
 }
+// Pachetul „Start": contul de pe site făcut de cel mult 7 zile, niciun alt
+// cont mai vechi legat de aceeași licență și pachetul neluat încă (pe cont
+// sau pe licență).
+const licenceOf = id => (id ? String(id).replace(/^.*:/, "") : null);
+async function starterNewbieInfo(userId, identifier) {
+  const lic = licenceOf(identifier);
+  const [u, old, b] = await Promise.all([
+    pool.query(`SELECT created_at FROM users WHERE id = $1`, [userId]),
+    lic ? pool.query(`SELECT 1 FROM users WHERE id <> $1 AND regexp_replace(COALESCE(game_identifier, ''), '^.*:', '') = $2 AND created_at < NOW() - make_interval(days => $3) LIMIT 1`, [userId, lic, STARTER_NEWBIE_DAYS]) : { rows: [] },
+    pool.query(`SELECT created_at FROM audit_logs WHERE action = 'premium.starter' AND metadata->>'packId' = 'start'
+                AND (actor_id = $1 OR ($2::text IS NOT NULL AND regexp_replace(COALESCE(entity_id, ''), '^.*:', '') = $2))
+                ORDER BY created_at LIMIT 1`, [userId, lic]),
+  ]);
+  const created = u.rows[0]?.created_at ? new Date(u.rows[0].created_at).getTime() : 0;
+  const until = created + STARTER_NEWBIE_DAYS * 86400000;
+  const bought = b.rows[0]?.created_at || null;
+  return { bought, until, eligible: !bought && !old.rows.length && Date.now() < until };
+}
+const STARTER_NEWBIE_NOTE = `Doar pentru jucătorii noi: în primele ${STARTER_NEWBIE_DAYS} zile de la înregistrarea contului pe site, o singură dată pe cont. După el poți lua oricând și Bronz, Aur sau Platină.`;
+
 async function premiumBuyer(req) {
   const { rows } = await pool.query(`SELECT game_identifier, game_identifier_name FROM users WHERE id = $1`, [req.user.sub]);
   return { identifier: rows[0]?.game_identifier || null, name: rows[0]?.game_identifier_name || null };
@@ -4941,7 +4969,7 @@ app.get("/api/premium", auth, asyncRoute(async (req, res) => {
   const settings = await loadPremiumSettings();
   if (!premiumVisibleTo(settings, req.user.role)) return res.json({ visible: false });
   const me = await premiumBuyer(req);
-  const [coins, status, catalog] = await Promise.all(me.identifier ? [fetchCoins(me.identifier), fetchPremiumStatus(me.identifier), getPremiumCatalog()] : [null, null, getPremiumCatalog()]);
+  const [coins, status, catalog, newbie] = await Promise.all(me.identifier ? [fetchCoins(me.identifier), fetchPremiumStatus(me.identifier), getPremiumCatalog(), starterNewbieInfo(req.user.sub, me.identifier)] : [null, null, getPremiumCatalog(), starterNewbieInfo(req.user.sub, null)]);
   res.json({
     visible: true,
     preview: !settings.public, // pagina e încă ascunsă jucătorilor (o vede doar staff-ul)
@@ -4949,7 +4977,11 @@ app.get("/api/premium", auth, asyncRoute(async (req, res) => {
     plans: settings.plans.filter(p => p.on),
     perksStart: perksView(PREMIUM_PERKS_START, catalog),
     perksTime: perksView(PREMIUM_PERKS_TIME, catalog),
-    packs: STARTER_PACKS.filter(p => settings.packs[p.id].on).map(p => ({ ...starterPackView(catalog, p), price: settings.packs[p.id].price, note: p.clean ? STARTER_CLEAN_NOTE : null })),
+    packs: STARTER_PACKS.filter(p => settings.packs[p.id].on).map(p => ({
+      ...starterPackView(catalog, p), price: settings.packs[p.id].price,
+      note: p.clean ? STARTER_CLEAN_NOTE : p.newbie ? STARTER_NEWBIE_NOTE : null,
+      ...(p.newbie ? { newbie: true, eligible: newbie.eligible, bought: newbie.bought, until: newbie.until, soon: !catalogPack(catalog, p.id) } : {}),
+    })),
     linked: !!me.identifier,
     name: me.name,
     coins: coins ? coins.coins : null,
@@ -4998,6 +5030,12 @@ app.post("/api/premium/pachet", auth, asyncRoute(async (req, res) => {
   if (!pack) return res.status(400).json({ error: "Pachetul nu mai e disponibil." });
   const price = settings.packs[pack.id].price;
   const cat = await getPremiumCatalog();
+  if (pack.newbie) {
+    if (!catalogPack(cat, pack.id)) return res.status(400).json({ error: "Pachetul Start se activează în curând." });
+    const nb = await starterNewbieInfo(req.user.sub, me.identifier);
+    if (nb.bought) return res.status(400).json({ error: "Ai luat deja pachetul Start pe acest cont." });
+    if (!nb.eligible) return res.status(400).json({ error: `Pachetul Start e doar pentru jucătorii noi, în primele ${STARTER_NEWBIE_DAYS} zile de la înregistrarea contului.` });
+  }
   const cash = starterCashNow(cat, pack);
   const ex = starterExtrasNow(cat, pack);
   const extraFlags = {};

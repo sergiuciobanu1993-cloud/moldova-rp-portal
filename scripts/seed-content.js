@@ -757,7 +757,7 @@ const PAGE_BLOCKS = [
   <div class="job-card-grid">
     <div class="job-card"><div class="job-card-icon">🗑️</div><h3>Gunoier</h3><p>Colectează gunoiul din oraș pe rute stabilite.</p></div>
     <div class="job-card"><div class="job-card-icon">🛃</div><h3>Vameș</h3><p>Verifică mărfurile și călătorii la aeroport și vamă.</p></div>
-    <div class="job-card"><div class="job-card-icon">🏛️</div><h3>Funcționar Primărie</h3><p>Gestionează acte, taxe și cereri ale cetățenilor.</p></div>
+    <div class="job-card"><div class="job-card-icon">🏛️</div><h3>Funcționar la Guvern</h3><p>Gestionează acte, taxe și cereri ale cetățenilor.</p></div>
   </div>
 </div>
 

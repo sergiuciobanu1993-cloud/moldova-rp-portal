@@ -230,7 +230,7 @@
     'jg-mechanic': 'mecanic', '0r-heistpack': 'jaf (heist)', '0r-trucker': 'tirist', pickle_casinos: 'cazinou',
     vx_magazin_haine: 'magazin de haine', vx_garaje: 'garaj', vx_banking: 'bancă', vx_radial: 'meniul G',
     vx_iarba: 'iarbă', 'frkn-rentacar': 'închiriere mașini', vx_battlepass: 'Battle Pass', vx_banda: 'Banda mea',
-    vx_furt: 'furt la comandă', vx_primarie: 'primărie', luxu_admin: 'panoul de admin (Luxu)', vx_dosar: 'dosarul poliției',
+    vx_furt: 'furt la comandă', vx_primarie: 'Guvern', luxu_admin: 'panoul de admin (Luxu)', vx_dosar: 'dosarul poliției',
     vx_facturi: 'facturi', vx_capt: 'capturi', '17mov_VehicleDirtSystem': 'spălătorie auto',
   };
   // motive scrise ca „slug” → text

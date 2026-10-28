@@ -8235,6 +8235,44 @@ async function gangDiscordIds(identifiers) {
   return out;
 }
 
+// (28.10.2026, cerut de Sergiu) Membrii din bande fără Discord găsit, dar cu
+// cont pe site legat de personaj (sau de alt personaj de pe același cont
+// FiveM): primesc O SINGURĂ DATĂ o notificare pe site + email (Discord nu
+// au), cu pașii prin care primesc rolul. Ținut minte în discord_gang_notified.
+async function notifyGangNoDiscord(chars) {
+  if (!chars.length) return 0;
+  const ids = [...new Set(chars.map(g => g.identifier))];
+  const lics = [...new Set(ids.map(id => String(id).split(":")[1]).filter(Boolean))];
+  await pool.query(`CREATE TABLE IF NOT EXISTS discord_gang_notified (
+    user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, notified_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
+  const { rows } = await pool.query(
+    `SELECT u.id, u.game_identifier FROM users u
+      WHERE u.is_active AND (u.discord_id IS NULL OR u.discord_id = '')
+        AND (u.game_identifier = ANY($1) OR split_part(u.game_identifier, ':', 2) = ANY($2))
+        AND NOT EXISTS (SELECT 1 FROM discord_gang_notified n WHERE n.user_id = u.id)`, [ids, lics]);
+  let sent = 0;
+  for (const u of rows) {
+    const lic = String(u.game_identifier || "").split(":")[1];
+    const g = chars.find(c => c.identifier === u.game_identifier) || chars.find(c => String(c.identifier).split(":")[1] === lic);
+    const ins = await pool.query(`INSERT INTO discord_gang_notified(user_id) VALUES ($1) ON CONFLICT DO NOTHING`, [u.id]);
+    if (!ins.rowCount) continue;
+    await notifyUser(u.id, {
+      type: "gang_discord",
+      title: "Canalul bandei tale de pe Discord",
+      message: `Ești în banda/familia ${g?.label || "ta"} în joc, dar nu-ți găsim contul de Discord, așa că nu poți vedea canalul 📢・noutati-ilegale.\n\n`
+        + "Ca să primești rolul automat, alege una:\n"
+        + "• pornește Discord înainte să intri în joc (FiveM îl preia singur);\n"
+        + "• sau conectează-te pe moldovarp.md cu Discord și leagă-ți personajul din cont.\n\n"
+        + "Trebuie să fii și pe serverul nostru de Discord. Rolul vine în cel mult 10 minute.",
+      link: "dashboard.html",
+      external: true,
+      dedupeKey: `gang_discord:${u.id}`,
+    });
+    sent++;
+  }
+  return sent;
+}
+
 async function syncGangDiscordRoles(trigger = "auto") {
   if (gangRoleSync.running) return gangRoleSync.lastRun;
   gangRoleSync.running = true;
@@ -8257,9 +8295,10 @@ async function syncGangDiscordRoles(trigger = "auto") {
 
     const discordOf = await gangDiscordIds([...new Set(gangs.map(g => g.identifier))]);
     const want = new Map(); // discordId → Set(rol)
+    const noDiscordChars = [];
     for (const g of gangs) {
       const d = discordOf.get(g.identifier);
-      if (!d) { if (run.noDiscord.length < 150) run.noDiscord.push({ rpName: g.rpName || null, org: g.label || null, grade: g.gradeLabel || null }); continue; }
+      if (!d) { noDiscordChars.push(g); if (run.noDiscord.length < 150) run.noDiscord.push({ rpName: g.rpName || null, org: g.label || null, grade: g.gradeLabel || null }); continue; }
       const set = want.get(d) || new Set();
       set.add("membru");
       const grade = String(g.gradeLabel || "");
@@ -8297,9 +8336,10 @@ async function syncGangDiscordRoles(trigger = "auto") {
         await sleepMs(250);
       }
     }
+    run.notified = await notifyGangNoDiscord(noDiscordChars).catch(err => { console.error("Notificare bande fără Discord:", err.message); return 0; });
     run.ok = !run.errors.length;
-    if (run.added || run.removed || run.errors.length) {
-      console.log(`Roluri bande Discord: ${run.added} date, ${run.removed} luate, ${run.members} membri în joc, ${run.withDiscord} cu Discord, ${run.noDiscord.length} fără Discord, ${run.notInGuild} nu sunt pe server.${run.errors.length ? " " + run.errors.join(" ") : ""}`);
+    if (run.added || run.removed || run.notified || run.errors.length) {
+      console.log(`Roluri bande Discord: ${run.added} date, ${run.removed} luate, ${run.members} membri în joc, ${run.withDiscord} cu Discord, ${run.noDiscord.length} fără Discord, ${run.notInGuild} nu sunt pe server, ${run.notified || 0} anunțați pe site/email.${run.errors.length ? " " + run.errors.join(" ") : ""}`);
     }
     return run;
   } catch (err) {

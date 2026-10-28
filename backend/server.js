@@ -297,13 +297,13 @@ function absoluteSiteLink(link) {
   if (!link) return `${SITE_URL}/`;
   return /^https?:\/\//i.test(link) ? link : `${SITE_URL}/${String(link).replace(/^\/+/, "")}`;
 }
-async function discordBotRequest(method, path, body) {
+async function discordBotRequest(method, path, body, extraHeaders) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8000);
   try {
     return await fetch(`${DISCORD_API_BASE}${path}`, {
       method,
-      headers: { Authorization: `Bot ${DISCORD_LOGS_BOT_TOKEN}`, "Content-Type": "application/json" },
+      headers: { Authorization: `Bot ${DISCORD_LOGS_BOT_TOKEN}`, ...(body !== undefined ? { "Content-Type": "application/json" } : {}), ...(extraHeaders || {}) },
       body: body !== undefined ? JSON.stringify(body) : undefined,
       signal: controller.signal,
     });
@@ -8155,6 +8155,169 @@ app.post("/api/admin/tickets/:id/replies", auth, requireRole(...MOD_ROLES), asyn
   notifyTicketReply(req.params.id, ticket.rows[0], req.user.sub, { fromStaff: true })
     .catch(err => console.error("Notificare răspuns eșuată:", err.message));
   res.status(201).json(rows[0]);
+}));
+
+// ============================================================================
+// (28.10.2026, cerut de Sergiu) Rolurile de Discord pentru bande și familii,
+// date AUTOMAT de botul site-ului după banda/familia din joc:
+//   • „Membru Bandă/Familie" — toți membrii (canalul #noutati-ilegale);
+//   • „Lider Bandă"          — liderii (#capturi);
+//   • „Co-Lider Bandă"       — adjuncții / co-liderii / sovetnicii (#capturi).
+// La fiecare 10 minute: lista „gangs" din /assets → Discord-ul fiecărui
+// personaj (din joc: game_players_cache și jucătorii online; altfel contul de
+// pe site legat de personaj) → rolurile se dau celor noi și se iau celor care
+// au ieșit. Botul ia DOAR rolurile pe care le-a dat el (tabela
+// discord_gang_roles) — cele date de mână rămân. Siguranțe: nu face nimic cât
+// serverul de joc e oprit sau lista vine aproape goală și nu ia deodată
+// rolurile la mulți oameni (un răspuns greșit din joc nu golește canalele).
+// Botul are nevoie pe Discord de „Manage Roles", iar rolul lui trebuie să fie
+// DEASUPRA celor trei roluri în lista de roluri.
+// ============================================================================
+const GANG_GUILD_ID = String(process.env.DISCORD_COMMUNITY_GUILD_ID || "1423438217469759490").replace(/\D/g, "");
+const GANG_ROLE_NAMES = { membru: "membrubandafamilie", lider: "liderbanda", colider: "coliderbanda" };
+const GANG_COLIDER_RE = /adjunct|co-?\s*lider|sovetnic|consilier|vice|sub-?\s*lider|mana dreapta|mâna dreaptă|right\s*hand|underboss/i;
+const GANG_SYNC_EVERY_MS = 10 * 60 * 1000;
+const gangRoleNorm = s => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+let gangRoleSync = { running: false, lastRun: null };
+
+async function gangRoleCall(method, path) {
+  for (let i = 0; i < 4; i++) {
+    const r = await discordBotRequest(method, path, undefined, { "X-Audit-Log-Reason": encodeURIComponent("Sincronizare automată bande/familii (moldovarp.md)") });
+    if (r.status !== 429) return r;
+    const j = await r.json().catch(() => ({}));
+    await sleepMs(Math.ceil((Number(j.retry_after) || 1) * 1000) + 250);
+  }
+  return { ok: false, status: 429 };
+}
+
+// Discord-ul fiecărui personaj din bande: identifier → id Discord.
+async function gangDiscordIds(identifiers) {
+  const out = new Map();
+  const licenses = [...new Set(identifiers.map(id => String(id).split(":")[1]).filter(Boolean))];
+  const byLicense = new Map();
+  const clean = v => { const d = String(v || "").replace(/^discord:/i, "").replace(/\D/g, ""); return /^\d{15,22}$/.test(d) ? d : null; };
+  // 1) jucătorii online acum (identificatorii FiveM ai conexiunii — cel mai sigur)
+  try {
+    const detail = await getPlayersDetail();
+    for (const p of detail?.players || []) {
+      const d = clean(p.discord); if (!d || !p.license) continue;
+      out.set(p.license, d);
+      const lic = String(p.license).split(":")[1]; if (lic) byLicense.set(lic, d);
+    }
+  } catch { /* fără jucătorii online */ }
+  // 2) ce a văzut site-ul de la joc (personaje căutate / salvate)
+  const { rows: cached } = await pool.query(
+    `SELECT identifier, discord FROM game_players_cache
+      WHERE discord IS NOT NULL AND discord <> '' AND (identifier = ANY($1) OR split_part(identifier, ':', 2) = ANY($2))
+      ORDER BY updated_at DESC`, [identifiers, licenses]).catch(() => ({ rows: [] }));
+  for (const r of cached) {
+    const d = clean(r.discord); if (!d) continue;
+    if (!out.has(r.identifier)) out.set(r.identifier, d);
+    const lic = String(r.identifier).split(":")[1]; if (lic && !byLicense.has(lic)) byLicense.set(lic, d);
+  }
+  // 3) contul de pe site legat de personaj (autentificat cu Discord)
+  const { rows: users } = await pool.query(
+    `SELECT game_identifier, discord_id FROM users WHERE discord_id IS NOT NULL AND is_active AND game_identifier = ANY($1)`, [identifiers]
+  ).catch(() => ({ rows: [] }));
+  for (const u of users) { const d = clean(u.discord_id); if (d && !out.has(u.game_identifier)) out.set(u.game_identifier, d); }
+  // același cont FiveM (licență), alt personaj → același om
+  for (const id of identifiers) {
+    if (out.has(id)) continue;
+    const lic = String(id).split(":")[1];
+    if (lic && byLicense.has(lic)) out.set(id, byLicense.get(lic));
+  }
+  return out;
+}
+
+async function syncGangDiscordRoles(trigger = "auto") {
+  if (gangRoleSync.running) return gangRoleSync.lastRun;
+  gangRoleSync.running = true;
+  const run = { at: new Date().toISOString(), trigger, ok: false, skipped: null, members: 0, withDiscord: 0, added: 0, removed: 0, notInGuild: 0, errors: [], noDiscord: [] };
+  try {
+    if (!DISCORD_LOGS_BOT_TOKEN) { run.skipped = "Botul site-ului nu e configurat."; return run; }
+    if (gameIsDown()) { run.skipped = "Serverul de joc e oprit — nu schimb nimic."; return run; }
+    const assets = await fetchAssets({});
+    const gangs = (assets.gangs || []).filter(g => g && CHAR_ID_RE.test(String(g.identifier || "")));
+    if (!assets.online || gangs.length < 5) { run.skipped = `Lista bandelor din joc e goală sau incompletă (${gangs.length}) — nu schimb nimic.`; return run; }
+    run.members = gangs.length;
+
+    const rr = await gangRoleCall("GET", `/guilds/${GANG_GUILD_ID}/roles`);
+    if (!rr.ok) { run.skipped = `Nu pot citi rolurile de pe Discord (HTTP ${rr.status}).`; return run; }
+    const allRoles = await rr.json();
+    const roleId = {};
+    for (const [key, norm] of Object.entries(GANG_ROLE_NAMES)) roleId[key] = (allRoles.find(r => gangRoleNorm(r.name) === norm) || {}).id || null;
+    const missing = Object.keys(roleId).filter(k => !roleId[k]);
+    if (missing.length) { run.skipped = `Lipsesc rolurile de pe Discord: ${missing.join(", ")}.`; return run; }
+
+    const discordOf = await gangDiscordIds([...new Set(gangs.map(g => g.identifier))]);
+    const want = new Map(); // discordId → Set(rol)
+    for (const g of gangs) {
+      const d = discordOf.get(g.identifier);
+      if (!d) { if (run.noDiscord.length < 150) run.noDiscord.push({ rpName: g.rpName || null, org: g.label || null, grade: g.gradeLabel || null }); continue; }
+      const set = want.get(d) || new Set();
+      set.add("membru");
+      const grade = String(g.gradeLabel || "");
+      if (g.isLeader || g.isOwner || /^lider/i.test(grade)) set.add("lider");
+      else if (GANG_COLIDER_RE.test(grade)) set.add("colider");
+      want.set(d, set);
+    }
+    run.withDiscord = want.size;
+
+    await pool.query(`CREATE TABLE IF NOT EXISTS discord_gang_roles (
+      discord_id VARCHAR(32) NOT NULL, role_key VARCHAR(16) NOT NULL, added_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (discord_id, role_key))`);
+    const { rows: tracked } = await pool.query(`SELECT discord_id, role_key FROM discord_gang_roles`);
+    const has = new Set(tracked.map(t => `${t.discord_id}|${t.role_key}`));
+    const toAdd = [];
+    for (const [d, set] of want) for (const k of set) if (!has.has(`${d}|${k}`)) toAdd.push([d, k]);
+    const toRemove = tracked.filter(t => !(want.get(t.discord_id) || new Set()).has(t.role_key));
+    // siguranță: nu golim canalele din cauza unui răspuns ciudat din joc
+    const removeBlocked = toRemove.length > 15 && toRemove.length > tracked.length * 0.4;
+    if (removeBlocked) run.errors.push(`Ar trebui luate ${toRemove.length} roluri deodată (din ${tracked.length}) — nu iau niciunul acum, verifică lista din joc.`);
+
+    for (const [d, k] of toAdd) {
+      const r = await gangRoleCall("PUT", `/guilds/${GANG_GUILD_ID}/members/${d}/roles/${roleId[k]}`);
+      if (r.ok) { await pool.query(`INSERT INTO discord_gang_roles(discord_id, role_key) VALUES ($1,$2) ON CONFLICT DO NOTHING`, [d, k]); run.added++; }
+      else if (r.status === 404) run.notInGuild++;
+      else if (r.status === 403) { run.errors.push("Discord refuză (403): botul site-ului nu are „Manage Roles” sau rolul lui e sub rolurile de bandă."); break; }
+      else run.errors.push(`Rol nedat (HTTP ${r.status}).`);
+      await sleepMs(250);
+    }
+    if (!removeBlocked && !run.errors.some(e => e.includes("403"))) {
+      for (const t of toRemove) {
+        const r = await gangRoleCall("DELETE", `/guilds/${GANG_GUILD_ID}/members/${t.discord_id}/roles/${roleId[t.role_key]}`);
+        if (r.ok || r.status === 404) { await pool.query(`DELETE FROM discord_gang_roles WHERE discord_id = $1 AND role_key = $2`, [t.discord_id, t.role_key]); if (r.ok) run.removed++; }
+        else if (r.status === 403) { run.errors.push("Discord refuză (403) la luarea rolurilor."); break; }
+        await sleepMs(250);
+      }
+    }
+    run.ok = !run.errors.length;
+    if (run.added || run.removed || run.errors.length) {
+      console.log(`Roluri bande Discord: ${run.added} date, ${run.removed} luate, ${run.members} membri în joc, ${run.withDiscord} cu Discord, ${run.noDiscord.length} fără Discord, ${run.notInGuild} nu sunt pe server.${run.errors.length ? " " + run.errors.join(" ") : ""}`);
+    }
+    return run;
+  } catch (err) {
+    run.errors.push(err.message);
+    console.error("Roluri bande Discord:", err.message);
+    return run;
+  } finally {
+    gangRoleSync.lastRun = run;
+    gangRoleSync.running = false;
+  }
+}
+setTimeout(() => {
+  syncGangDiscordRoles().catch(() => {});
+  setInterval(() => syncGangDiscordRoles().catch(() => {}), GANG_SYNC_EVERY_MS);
+}, 2 * 60 * 1000);
+
+// Starea ultimei sincronizări (pentru staff) și pornire manuală (fondatori).
+app.get("/api/admin/discord/roluri-bande", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (_req, res) => {
+  res.json({ running: gangRoleSync.running, lastRun: gangRoleSync.lastRun, everyMinutes: GANG_SYNC_EVERY_MS / 60000 });
+}));
+app.post("/api/admin/discord/roluri-bande", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
+  const run = await syncGangDiscordRoles("manual");
+  await logAction(req.user.sub, "discord.gang_roles_sync", "discord", null, { added: run?.added, removed: run?.removed, skipped: run?.skipped || null }, req.ip).catch(() => {});
+  res.json({ lastRun: run });
 }));
 
 app.use((err, _req, res, _next) => {

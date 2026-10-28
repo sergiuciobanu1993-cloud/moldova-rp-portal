@@ -8296,9 +8296,9 @@ const GANG_SYNC_EVERY_MS = 10 * 60 * 1000;
 const gangRoleNorm = s => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
 let gangRoleSync = { running: false, lastRun: null };
 
-async function gangRoleCall(method, path) {
+async function gangRoleCall(method, path, body) {
   for (let i = 0; i < 4; i++) {
-    const r = await discordBotRequest(method, path, undefined, { "X-Audit-Log-Reason": encodeURIComponent("Sincronizare automată bande/familii (moldovarp.md)") });
+    const r = await discordBotRequest(method, path, body, { "X-Audit-Log-Reason": encodeURIComponent("Sincronizare automată bande/familii (moldovarp.md)") });
     if (r.status !== 429) return r;
     const j = await r.json().catch(() => ({}));
     await sleepMs(Math.ceil((Number(j.retry_after) || 1) * 1000) + 250);
@@ -8421,6 +8421,32 @@ async function syncGangDiscordRoles(trigger = "auto") {
     const missing = Object.keys(roleId).filter(k => !roleId[k]);
     if (missing.length) { run.skipped = `Lipsesc rolurile de pe Discord: ${missing.join(", ")}.`; return run; }
 
+    // (28.10.2026, cerut de Sergiu) Roluri pe numele bandei, ca să se poată da
+    // tag la o bandă anume (de ex. la capturi): „Ballas" pentru toți membrii și
+    // „Conducere Ballas" pentru lider + co-lideri. Dacă rolul nu există, botul
+    // îl face singur (culoarea bandei din joc, se poate menționa, fără drepturi).
+    // Un rol cu același nume făcut de mână e folosit așa cum e.
+    // În tabelă: role_key = "r:<id rol Discord>".
+    const gangRole = {}; // nume rol normalizat → id
+    const ensureGangRole = async (name, color) => {
+      const norm = gangRoleNorm(name);
+      if (!norm) return null;
+      if (gangRole[norm] !== undefined) return gangRole[norm];
+      const found = allRoles.find(r => gangRoleNorm(r.name) === norm && !r.managed);
+      if (found) {
+        if (!found.mentionable) await gangRoleCall("PATCH", `/guilds/${GANG_GUILD_ID}/roles/${found.id}`, { mentionable: true }).catch(() => null);
+        return (gangRole[norm] = found.id);
+      }
+      const colorInt = /^#?[0-9a-f]{6}$/i.test(String(color || "")) ? parseInt(String(color).replace("#", ""), 16) : 0;
+      const cr = await gangRoleCall("POST", `/guilds/${GANG_GUILD_ID}/roles`, { name: String(name).slice(0, 100), color: colorInt, mentionable: true, hoist: false, permissions: "0" });
+      if (!cr.ok) { run.errors.push(`Nu am putut crea rolul „${name}” (HTTP ${cr.status}).`); return (gangRole[norm] = null); }
+      const created = await cr.json();
+      allRoles.push(created);
+      run.createdRoles = [...(run.createdRoles || []), created.name];
+      await sleepMs(300);
+      return (gangRole[norm] = created.id);
+    };
+
     const discordOf = await gangDiscordIds([...new Set(gangs.map(g => g.identifier))]);
     const want = new Map(); // discordId → Set(rol)
     const noDiscordChars = [];
@@ -8430,8 +8456,16 @@ async function syncGangDiscordRoles(trigger = "auto") {
       const set = want.get(d) || new Set();
       set.add("membru");
       const grade = String(g.gradeLabel || "");
-      if (g.isLeader || g.isOwner || /^lider/i.test(grade)) set.add("lider");
-      else if (GANG_COLIDER_RE.test(grade)) set.add("colider");
+      const isLead = g.isLeader || g.isOwner || /^lider/i.test(grade);
+      const isCo = !isLead && GANG_COLIDER_RE.test(grade);
+      if (isLead) set.add("lider");
+      else if (isCo) set.add("colider");
+      const org = String(g.label || "").trim();
+      if (org) {
+        const memberRole = await ensureGangRole(org, g.color);
+        if (memberRole) set.add(`r:${memberRole}`);
+        if (isLead || isCo) { const leadRole = await ensureGangRole(`Conducere ${org}`, g.color); if (leadRole) set.add(`r:${leadRole}`); }
+      }
       want.set(d, set);
     }
     run.withDiscord = want.size;
@@ -8439,6 +8473,7 @@ async function syncGangDiscordRoles(trigger = "auto") {
     await pool.query(`CREATE TABLE IF NOT EXISTS discord_gang_roles (
       discord_id VARCHAR(32) NOT NULL, role_key VARCHAR(16) NOT NULL, added_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       PRIMARY KEY (discord_id, role_key))`);
+    await pool.query(`ALTER TABLE discord_gang_roles ALTER COLUMN role_key TYPE VARCHAR(40)`).catch(() => {});
     const { rows: tracked } = await pool.query(`SELECT discord_id, role_key FROM discord_gang_roles`);
     const has = new Set(tracked.map(t => `${t.discord_id}|${t.role_key}`));
     const toAdd = [];
@@ -8448,24 +8483,38 @@ async function syncGangDiscordRoles(trigger = "auto") {
     const removeBlocked = toRemove.length > 15 && toRemove.length > tracked.length * 0.4;
     if (removeBlocked) run.errors.push(`Ar trebui luate ${toRemove.length} roluri deodată (din ${tracked.length}) — nu iau niciunul acum, verifică lista din joc.`);
 
+    const roleOf = k => (String(k).startsWith("r:") ? String(k).slice(2) : roleId[k]);
+    const notInGuild = new Set();
+    const refused = new Set(); // roluri pe care Discord nu le lasă (de ex. un rol făcut de mână, deasupra botului)
+    let fatal = false;
     for (const [d, k] of toAdd) {
-      const r = await gangRoleCall("PUT", `/guilds/${GANG_GUILD_ID}/members/${d}/roles/${roleId[k]}`);
+      if (refused.has(k)) continue;
+      const r = await gangRoleCall("PUT", `/guilds/${GANG_GUILD_ID}/members/${d}/roles/${roleOf(k)}`);
       if (r.ok) { await pool.query(`INSERT INTO discord_gang_roles(discord_id, role_key) VALUES ($1,$2) ON CONFLICT DO NOTHING`, [d, k]); run.added++; }
-      else if (r.status === 404) run.notInGuild++;
-      else if (r.status === 403) { run.errors.push("Discord refuză (403): botul site-ului nu are „Manage Roles” sau rolul lui e sub rolurile de bandă."); break; }
+      else if (r.status === 404) {
+        const j = typeof r.json === "function" ? await r.json().catch(() => ({})) : {};
+        if (j.code === 10011) { refused.add(k); run.errors.push(`Rolul ${roleOf(k)} nu mai există pe Discord.`); }
+        else notInGuild.add(d);
+      }
+      else if (r.status === 403) {
+        if (String(k).startsWith("r:")) { refused.add(k); run.errors.push(`Discord refuză rolul „${(allRoles.find(x => x.id === roleOf(k)) || {}).name || roleOf(k)}” (403): e deasupra rolului botului.`); }
+        else { fatal = true; run.errors.push("Discord refuză (403): botul site-ului nu are „Manage Roles” sau rolul lui e sub rolurile de bandă."); break; }
+      }
       else run.errors.push(`Rol nedat (HTTP ${r.status}).`);
       await sleepMs(250);
     }
-    if (!removeBlocked && !run.errors.some(e => e.includes("403"))) {
+    run.notInGuild = notInGuild.size;
+    if (!removeBlocked && !fatal) {
       for (const t of toRemove) {
-        const r = await gangRoleCall("DELETE", `/guilds/${GANG_GUILD_ID}/members/${t.discord_id}/roles/${roleId[t.role_key]}`);
+        const r = await gangRoleCall("DELETE", `/guilds/${GANG_GUILD_ID}/members/${t.discord_id}/roles/${roleOf(t.role_key)}`);
         if (r.ok || r.status === 404) { await pool.query(`DELETE FROM discord_gang_roles WHERE discord_id = $1 AND role_key = $2`, [t.discord_id, t.role_key]); if (r.ok) run.removed++; }
-        else if (r.status === 403) { run.errors.push("Discord refuză (403) la luarea rolurilor."); break; }
+        else if (r.status === 403) { run.errors.push("Discord refuză (403) la luarea rolurilor."); if (!String(t.role_key).startsWith("r:")) break; }
         await sleepMs(250);
       }
     }
     run.notified = await notifyGangNoDiscord(noDiscordChars).catch(err => { console.error("Notificare bande fără Discord:", err.message); return 0; });
     run.ok = !run.errors.length;
+    if (run.createdRoles) console.log(`Roluri bande Discord: am creat ${run.createdRoles.map(n => `„${n}”`).join(", ")}.`);
     if (run.added || run.removed || run.notified || run.errors.length) {
       console.log(`Roluri bande Discord: ${run.added} date, ${run.removed} luate, ${run.members} membri în joc, ${run.withDiscord} cu Discord, ${run.noDiscord.length} fără Discord, ${run.notInGuild} nu sunt pe server, ${run.notified || 0} anunțați pe site/email.${run.errors.length ? " " + run.errors.join(" ") : ""}`);
     }

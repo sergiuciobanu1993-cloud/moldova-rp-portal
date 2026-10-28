@@ -8342,6 +8342,18 @@ async function gangDiscordIds(identifiers) {
     if (identifiers.includes(u.game_identifier) && !out.has(u.game_identifier)) out.set(u.game_identifier, d);
     const lic = String(u.game_identifier).split(":")[1]; if (lic && !byLicense.has(lic)) byLicense.set(lic, d);
   }
+  // 4) (28.10.2026) cine tot lipsește: întrebăm jocul direct (/players/search?identifier=),
+  //    câte cel mult 40 pe rulare — răspunsul are Discord-ul din baza jocului și
+  //    rămâne salvat în game_players_cache pentru data viitoare.
+  if (!gameIsDown()) {
+    const missing = identifiers.filter(id => !out.has(id) && !byLicense.has(String(id).split(":")[1])).slice(0, 40);
+    for (const id of missing) {
+      const hit = await fetchGamePlayerLookup({ identifier: id }).catch(() => null);
+      const d = clean(hit?.discord);
+      if (d) { out.set(id, d); const lic = String(id).split(":")[1]; if (lic && !byLicense.has(lic)) byLicense.set(lic, d); }
+      if (gameIsDown()) break;
+    }
+  }
   // același cont FiveM (licență), alt personaj → același om
   for (const id of identifiers) {
     if (out.has(id)) continue;

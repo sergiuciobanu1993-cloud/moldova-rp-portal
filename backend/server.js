@@ -5849,6 +5849,23 @@ function readDiscordState(raw) {
 app.get("/api/auth/discord/callback", asyncRoute(async (req, res) => {
   if (!discordConfigured()) return res.status(503).send("Conectarea cu Discord nu este configurată.");
   const { code, error: discordError } = req.query;
+  // (28.10.2026) „Leagă Discord" la un cont existent (email) — vezi /api/cont/discord/leaga
+  const linkNonce = /^link:[0-9a-f]{48}$/.test(String(req.query.state || "")) ? String(req.query.state).slice(5) : null;
+  if (linkNonce) {
+    const host = discordLinkNonces.get(linkNonce)?.host || null;
+    const back = path => (host && host !== String(req.hostname || "").toLowerCase() ? `https://${host}${path}` : path);
+    if (discordError || !code) { discordLinkNonces.delete(linkNonce); return res.redirect(back("/dashboard.html?discord=anulat#discord-cont")); }
+    const lkey = "link|" + String(code).slice(0, 200);
+    const lip = visitorIp(req);
+    let lentry = discordCodeResults.get(lkey);
+    if (!lentry || lentry.ip !== lip) {
+      lentry = { ip: lip, result: discordLinkRedirect(req, String(code).slice(0, 200), linkNonce) };
+      discordCodeResults.set(lkey, lentry);
+      const t = setTimeout(() => { if (discordCodeResults.get(lkey) === lentry) discordCodeResults.delete(lkey); }, 30_000);
+      if (t.unref) t.unref();
+    }
+    return res.redirect(back(await lentry.result));
+  }
   if (discordError || !code) {
     const { host } = readDiscordState(req.query.state);
     return res.redirect(host && host !== String(req.hostname || "").toLowerCase() ? `https://${host}/auth-callback.html?error=discord_denied` : "/auth-callback.html?error=discord_denied");
@@ -5953,6 +5970,105 @@ async function discordLoginRedirect(req, code) {
   } catch (e) {
     console.error("Discord OAuth error:", e);
     return "/auth-callback.html?error=discord_failed";
+  }
+}
+
+// ============================================================================
+// (28.10.2026, cerut de Sergiu) „Leagă Discord" pentru conturile făcute cu
+// email: jucătorul, logat pe site, apasă butonul din Dashboard, confirmă pe
+// Discord și Discord-ul se pune pe CONTUL LUI EXISTENT (nu se mai face cont
+// nou). După asta poate intra și cu „Conectare cu Discord" în același cont,
+// primește mesajele private ale botului și rolurile de bandă pe Discord.
+// Dacă acel Discord e deja pe alt cont:
+//   • cont gol (doar Discord: fără email, parolă, personaj legat, tichete,
+//     grad doar jucător) → Discord-ul trece pe contul cu email, iar contul gol
+//     se dezactivează (nu se șterge nimic);
+//   • cont cu date → refuzăm și îi spunem să deschidă un tichet.
+// „state" e un cod aleator de unică folosință, ținut 10 minute în memorie
+// (nu un token de logare — nu apare nimic folosibil în adresa de la Discord).
+// ============================================================================
+const discordLinkNonces = new Map(); // cod → { userId, host, exp }
+app.post("/api/cont/discord/leaga", auth, asyncRoute(async (req, res) => {
+  if (!discordConfigured()) return res.status(503).json({ error: "Conectarea cu Discord nu este configurată pe server." });
+  const { rows } = await pool.query(`SELECT discord_id FROM users WHERE id = $1 AND is_active`, [req.user.sub]);
+  if (!rows[0]) return res.status(404).json({ error: "Cont inexistent." });
+  if (rows[0].discord_id) return res.status(400).json({ error: "Contul tău are deja Discord legat." });
+  const now = Date.now();
+  for (const [k, v] of discordLinkNonces) if (v.exp < now || v.userId === req.user.sub) discordLinkNonces.delete(k);
+  const nonce = require("crypto").randomBytes(24).toString("hex");
+  const host = SITE_HOSTS.has(String(req.hostname || "").toLowerCase()) ? String(req.hostname).toLowerCase() : null;
+  discordLinkNonces.set(nonce, { userId: req.user.sub, host, exp: now + 10 * 60 * 1000 });
+  const params = new URLSearchParams({
+    client_id: process.env.DISCORD_CLIENT_ID,
+    redirect_uri: process.env.DISCORD_REDIRECT_URI,
+    response_type: "code",
+    scope: "identify",
+    state: `link:${nonce}`,
+  });
+  res.json({ url: `https://discord.com/api/oauth2/authorize?${params.toString()}` });
+}));
+
+async function discordLinkRedirect(req, code, nonce) {
+  const done = status => `/dashboard.html?discord=${status}#discord-cont`;
+  const ent = discordLinkNonces.get(nonce);
+  discordLinkNonces.delete(nonce);
+  if (!ent || ent.exp < Date.now()) return done("expirat");
+  try {
+    const tokenRes = await fetch("https://discord.com/api/oauth2/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: process.env.DISCORD_CLIENT_ID,
+        client_secret: process.env.DISCORD_CLIENT_SECRET,
+        grant_type: "authorization_code",
+        code,
+        redirect_uri: process.env.DISCORD_REDIRECT_URI
+      })
+    });
+    if (!tokenRes.ok) throw new Error(`Discord token exchange failed: ${tokenRes.status}`);
+    const { access_token } = await tokenRes.json();
+    const profileRes = await fetch("https://discord.com/api/users/@me", { headers: { Authorization: `Bearer ${access_token}` } });
+    if (!profileRes.ok) throw new Error(`Discord profile fetch failed: ${profileRes.status}`);
+    const profile = await profileRes.json();
+    const discordId = String(profile.id || "");
+    if (!/^\d{15,22}$/.test(discordId)) throw new Error("profil Discord fără id");
+
+    const { rows: meRows } = await pool.query(`SELECT id, discord_id FROM users WHERE id = $1 AND is_active`, [ent.userId]);
+    const me = meRows[0];
+    if (!me) return done("eroare");
+    if (me.discord_id === discordId) return done("legat");
+    if (me.discord_id) return done("deja");
+
+    const { rows: otherRows } = await pool.query(
+      `SELECT u.id, u.email, (u.password_hash IS NOT NULL) has_password, u.game_identifier, r.name role_name,
+              (SELECT COUNT(*)::int FROM tickets t WHERE t.user_id = u.id) tickets
+         FROM users u JOIN roles r ON r.id = u.role_id WHERE u.discord_id = $1`, [discordId]);
+    const other = otherRows[0] || null;
+    const otherEmpty = other && !other.email && !other.has_password && !other.game_identifier && !other.tickets && other.role_name === "player";
+    if (other && !otherEmpty) {
+      await logAction(me.id, "account.link_discord_refused", "user", me.id, { discordId, otherUserId: other.id }, req.ip).catch(() => {});
+      return done("folosit");
+    }
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      if (other) await client.query(`UPDATE users SET discord_id = NULL, is_active = false, updated_at = NOW() WHERE id = $1`, [other.id]);
+      await client.query(
+        `UPDATE users SET discord_id = $1, discord_username = $2, discord_avatar = $3, updated_at = NOW() WHERE id = $4`,
+        [discordId, profile.username || null, profile.avatar || null, me.id]);
+      await client.query("COMMIT");
+    } catch (e) {
+      await client.query("ROLLBACK").catch(() => {});
+      if (e.code === "23505") return done("folosit");
+      throw e;
+    } finally {
+      client.release();
+    }
+    await logAction(me.id, "account.link_discord", "user", me.id, { discordId, discordUsername: profile.username || null, emptyAccountClosed: other ? other.id : null }, req.ip).catch(() => {});
+    return done("legat");
+  } catch (e) {
+    console.error("Legare Discord eșuată:", e.message);
+    return done("eroare");
   }
 }
 
@@ -8262,7 +8378,7 @@ async function notifyGangNoDiscord(chars) {
       message: `Ești în banda/familia ${g?.label || "ta"} în joc, dar nu-ți găsim contul de Discord, așa că nu poți vedea canalul 📢・noutati-ilegale.\n\n`
         + "Ca să primești rolul automat, alege una:\n"
         + "• pornește Discord înainte să intri în joc (FiveM îl preia singur);\n"
-        + "• sau conectează-te pe moldovarp.md cu Discord și leagă-ți personajul din cont.\n\n"
+        + "• sau intră pe moldovarp.md în contul tău și apasă „Leagă Discord-ul la acest cont” (contul tău rămâne același).\n\n"
         + "Trebuie să fii și pe serverul nostru de Discord. Rolul vine în cel mult 10 minute.",
       link: "dashboard.html",
       external: true,

@@ -72,6 +72,12 @@
     </div>
   </div>
 </section>
+<section class="panel" id="discord-cont" style="margin-top:20px" hidden>
+  <div class="head"><h2>Contul de Discord</h2><span id="discord-cont-status" class="muted"></span></div>
+  <p id="discord-cont-text" class="muted" style="margin:0 0 12px"></p>
+  <button type="button" id="discord-cont-btn" hidden>🔗 Leagă Discord-ul la acest cont</button>
+  <p id="discord-cont-msg" class="muted" style="margin:10px 0 0" hidden></p>
+</section>
 <section class="panel" id="notify-panel" style="margin-top:20px" hidden>
   <div class="head"><h2>🔔 Notificări pe Discord și email</h2><span id="notify-status" class="muted"></span></div>
   <p class="muted" style="margin:0 0 14px">Când primești o reclamație, un răspuns la tichet sau o decizie a staff-ului, îți scriem întâi pe Discord (mesaj privat de la botul Moldova RP). Dacă nu se poate, îți trimitem un email.</p>
@@ -350,7 +356,61 @@ function renderGameLink(me) {
   loadVipHistory();
   renderNotifySettings(me);
   loadDiscordCharacters(me);
+  renderDiscordAccount(me);
 }
+
+// (28.10.2026) „Leagă Discord" pentru conturile făcute cu email: Discord-ul se
+// pune pe ACEST cont (nu se face cont nou). Serverul trimite înapoi aici cu
+// ?discord=legat|anulat|expirat|deja|folosit|eroare.
+const DISCORD_LINK_MSG = {
+  legat: ['✓ Discord-ul a fost legat de contul tău. De acum poți intra și cu „Conectare cu Discord”, în același cont.', '#3ddc84'],
+  anulat: ['Ai anulat pe Discord. Poți încerca din nou oricând.', ''],
+  expirat: ['Legătura a expirat (10 minute). Apasă din nou butonul.', '#ffb35c'],
+  deja: ['Contul tău are deja alt Discord legat.', '#ffb35c'],
+  folosit: ['Acest Discord e deja folosit de alt cont de pe site, care are date pe el. Deschide un tichet și le unim noi.', '#ff8a8a'],
+  eroare: ['Nu am putut lega Discord-ul. Încearcă din nou puțin mai târziu.', '#ff8a8a'],
+};
+const discordLinkResult = (() => {
+  try {
+    const u = new URL(location.href);
+    const v = u.searchParams.get('discord');
+    if (!v) return null;
+    u.searchParams.delete('discord');
+    history.replaceState(null, '', u.pathname + (u.search || '') + u.hash);
+    return DISCORD_LINK_MSG[v] ? v : null;
+  } catch { return null; }
+})();
+function renderDiscordAccount(me) {
+  const linked = !!me.discord_id;
+  document.getElementById('discord-cont-status').textContent = linked ? 'legat' : 'nelegat';
+  document.getElementById('discord-cont-text').textContent = linked
+    ? `Discord legat: ${me.discord_username || 'contul tău'}. Poți intra pe site și cu „Conectare cu Discord”: ajungi în același cont.`
+    : 'Leagă-ți Discord-ul de acest cont ca să intri pe site și cu Discord (în același cont), să primești mesajele botului și rolurile de bandă/familie pe Discord. Contul, personajul și istoricul tău rămân neschimbate.';
+  document.getElementById('discord-cont-btn').hidden = linked;
+  if (discordLinkResult) {
+    const msg = document.getElementById('discord-cont-msg');
+    const [text, color] = DISCORD_LINK_MSG[discordLinkResult];
+    msg.textContent = text; msg.style.color = color; msg.hidden = false;
+  }
+  const panel = document.getElementById('discord-cont');
+  const wasHidden = panel.hidden;
+  panel.hidden = false;
+  if (wasHidden && discordLinkResult) panel.scrollIntoView({ block: 'center' });
+}
+document.getElementById('discord-cont-btn').addEventListener('click', async () => {
+  const btn = document.getElementById('discord-cont-btn');
+  const msg = document.getElementById('discord-cont-msg');
+  btn.disabled = true;
+  try {
+    const r = await apiFetch('/api/cont/discord/leaga', { method: 'POST' });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d.url) throw new Error(d.error || 'Nu am putut porni legarea.');
+    location.href = d.url;
+  } catch (err) {
+    msg.textContent = err.message; msg.style.color = '#ff8a8a'; msg.hidden = false;
+    btn.disabled = false;
+  }
+});
 
 // (01.10.2026) Legare fără cod, prin Discord — doar pentru conturi
 // nelegate care s-au logat cu Discord.
@@ -399,7 +459,7 @@ function renderNotifySettings(me) {
   document.getElementById('notify-discord-hint').textContent = !n.discordReady
     ? 'Momentan indisponibil pe server.'
     : n.hasDiscord ? `Mesaj privat către ${me.discord_username || 'contul tău de Discord'}. Trebuie să fii pe serverul de Discord Moldova RP.`
-    : 'Nu ai Discord legat — intră o dată pe site cu „Login cu Discord”.';
+    : 'Nu ai Discord legat — folosește butonul „Leagă Discord-ul la acest cont” de mai sus.';
   document.getElementById('notify-email-hint').textContent = !n.emailReady
     ? 'Momentan indisponibil pe server.'
     : n.hasEmail ? `La ${me.email}` : 'Contul tău nu are email.';

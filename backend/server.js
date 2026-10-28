@@ -8294,7 +8294,7 @@ const GANG_ROLE_NAMES = { membru: "membrubandafamilie", lider: "liderbanda", col
 const GANG_COLIDER_RE = /adjunct|co-?\s*lider|sovetnic|consilier|vice|sub-?\s*lider|mana dreapta|mâna dreaptă|right\s*hand|underboss/i;
 const GANG_SYNC_EVERY_MS = 10 * 60 * 1000;
 const gangRoleNorm = s => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
-let gangRoleSync = { running: false, lastRun: null };
+let gangRoleSync = { running: false, lastRun: null, lastFullAt: 0 };
 
 async function gangRoleCall(method, path, body) {
   for (let i = 0; i < 4; i++) {
@@ -8476,8 +8476,15 @@ async function syncGangDiscordRoles(trigger = "auto") {
     await pool.query(`ALTER TABLE discord_gang_roles ALTER COLUMN role_key TYPE VARCHAR(40)`).catch(() => {});
     const { rows: tracked } = await pool.query(`SELECT discord_id, role_key FROM discord_gang_roles`);
     const has = new Set(tracked.map(t => `${t.discord_id}|${t.role_key}`));
+    // (28.10.2026) O dată pe oră (și la pornirea manuală) le dăm din nou TOATE
+    // rolurile cuvenite, nu doar pe cele noi: dacă cineva i-a scos de mână unui
+    // membru un rol de bandă (din greșeală), botul i-l pune la loc. Discord nu
+    // schimbă nimic dacă omul are deja rolul.
+    const full = trigger === "manual" || Date.now() - gangRoleSync.lastFullAt > 60 * 60 * 1000;
+    if (full) gangRoleSync.lastFullAt = Date.now();
+    run.full = full;
     const toAdd = [];
-    for (const [d, set] of want) for (const k of set) if (!has.has(`${d}|${k}`)) toAdd.push([d, k]);
+    for (const [d, set] of want) for (const k of set) if (full || !has.has(`${d}|${k}`)) toAdd.push([d, k]);
     const toRemove = tracked.filter(t => !(want.get(t.discord_id) || new Set()).has(t.role_key));
     // siguranță: nu golim canalele din cauza unui răspuns ciudat din joc
     const removeBlocked = toRemove.length > 15 && toRemove.length > tracked.length * 0.4;
@@ -8490,7 +8497,7 @@ async function syncGangDiscordRoles(trigger = "auto") {
     for (const [d, k] of toAdd) {
       if (refused.has(k)) continue;
       const r = await gangRoleCall("PUT", `/guilds/${GANG_GUILD_ID}/members/${d}/roles/${roleOf(k)}`);
-      if (r.ok) { await pool.query(`INSERT INTO discord_gang_roles(discord_id, role_key) VALUES ($1,$2) ON CONFLICT DO NOTHING`, [d, k]); run.added++; }
+      if (r.ok) { if (!has.has(`${d}|${k}`)) { await pool.query(`INSERT INTO discord_gang_roles(discord_id, role_key) VALUES ($1,$2) ON CONFLICT DO NOTHING`, [d, k]); run.added++; } }
       else if (r.status === 404) {
         const j = typeof r.json === "function" ? await r.json().catch(() => ({})) : {};
         if (j.code === 10011) { refused.add(k); run.errors.push(`Rolul ${roleOf(k)} nu mai există pe Discord.`); }

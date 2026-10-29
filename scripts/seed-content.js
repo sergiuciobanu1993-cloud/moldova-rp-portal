@@ -564,6 +564,312 @@ const GUIDES = {
       }
     ]
   },
+  // (29.10.2026) Ghiduri noi, cerute de Sergiu: Șerif, FIB, Guvern, Weazel News
+  // și Justiție. Rezumă regulamentele publicate (Regulamente pe site); legile
+  // (Cod Penal, Cod de Procedură, Cod Rutier) stau în ghidul Poliției.
+  serif: {
+    icon: "⭐", title: "Biroul Șerifului", tagline: "Ține ordinea în afara orașului: Sandy Shores, Paleto Bay, Grapeseed, Harmony și tot comitatul.",
+    sections: [
+      {
+        h: "Ce face Biroul Șerifului",
+        list: [
+          "Biroul Șerifului (BȘ) e structura de ordine publică pentru tot ce e în afara orașului Los Santos. Are grade, unități și jurisdicție proprii.",
+          "Colaborează cu Poliția, Armata, FIB și Serviciul Vamal, dar nu e subordonat niciuneia.",
+          "Aplică aceleași legi ca Poliția: Codul Penal, Codul de Procedură și Codul Rutier sunt în ghidul Poliției.",
+          "Regulamentul complet: Regulamentul General al Sheriff-ului și Regulamentul General – Structuri de Stat (pe site, la Regulamente)."
+        ]
+      },
+      {
+        h: "Cum intri în Biroul Șerifului",
+        list: [
+          "Ai act de identitate și cazierul curat.",
+          "Nu faci parte din altă facțiune (Poliție, Armată sau o organizație ilegală).",
+          "Cunoști regulamentul serverului și regulamentul BȘ.",
+          "Treci Academia de Cadeți și depui jurământul. Cine refuză jurământul nu e primit.",
+          "Cererea se face pe Discord, cu butonul de mai jos."
+        ]
+      },
+      {
+        h: "Gradele",
+        list: [
+          "Cadet — în instruire. Nu patrulează singur și nu poartă armă fără instructor.",
+          "Adjunct, Adjunct Senior — patrulare, controale de rutină, intervenții de bază.",
+          "Caporal, Sergent, Sergent Șef — conduc echipajele și intervențiile medii.",
+          "Locotenent, Căpitan — organizează turele, unitățile și intervențiile mari.",
+          "Undersheriff — al doilea la comandă, îl înlocuiește pe Sheriff.",
+          "Sheriff — conduce tot departamentul."
+        ]
+      },
+      {
+        h: "Unitățile",
+        list: [
+          "Academia de Cadeți — pregătește și testează cadeții.",
+          "Divizia de Patrulare — patrule, apeluri de urgență, controale de rutină.",
+          "Divizia Rutieră (Highway Patrol) — trafic și accidente pe drumurile din afara orașului, urmăriri.",
+          "Unitatea Canină (K9) — droguri și persoane ascunse. Câinii îi folosesc doar mânuitorii certificați.",
+          "Divizia de Investigații (detectivi) — cazuri complexe: furturi mari, dispariții, fapte repetate.",
+          "SRT (Unitatea Tactică Specială) — baricadați, ostatici, atacuri armate. Se intră doar prin selecție internă."
+        ]
+      },
+      {
+        h: "Zona de lucru și colaborarea",
+        list: [
+          "BȘ răspunde de Sandy Shores, Paleto Bay, Grapeseed, Harmony și restul zonei rurale.",
+          "În oraș, jurisdicția e a Poliției. BȘ intră în oraș doar urmărind un suspect venit din zona lui sau la cererea Poliției.",
+          "Baza militară și punctele vamale țin de Armată. BȘ ajută doar la cerere.",
+          "La limita dintre zone intervine cine ajunge primul. Primul ajutor nu se refuză niciodată pe motiv de jurisdicție.",
+          "Cazurile grave (crimă organizată, trafic mare de arme sau droguri, corupție) se predau FIB, cu tot cu probe și raport."
+        ]
+      },
+      {
+        h: "Patrularea și controlul",
+        list: [
+          "Patrulele sunt de cel puțin 2 adjuncți. Cadeții patrulează doar cu un instructor.",
+          "Începutul și sfârșitul turei se anunță la dispecerat sau la superiorul de tură.",
+          "Patrularea, reținerile și apelurile se fac doar cu mașinile structurii.",
+          "Formula la control: „Bună ziua, Biroul Șerifului. Control de rutină. Vă rog actele de identitate și ale vehiculului.”",
+          "La o persoană înarmată sau la risc mare se cer imediat întăriri.",
+          "Urmărirea se anunță prin stație și se oprește dacă pune grav în pericol civilii. Lovirea intenționată a mașinii urmărite e interzisă, în afară de pericol iminent pentru viața cuiva."
+        ]
+      },
+      {
+        h: "Uzul forței și arma",
+        list: [
+          "Forța crește treptat: somație → imobilizare sau taser → armă de foc.",
+          "Se trage direct doar când e pusă în pericol viața cuiva, la atac armat, când cineva ochește spre adjunct sau folosește mașina ca armă.",
+          "Nu se trage în cine e neînarmat și nu e un pericol, chiar dacă fuge.",
+          "Arma din dotare nu se dă nimănui. În afara serviciului o poartă doar ofițerii (Locotenent și mai sus).",
+          "Insigna se poartă la vedere toată tura. Fiecare folosire a armei se raportează imediat."
+        ]
+      }
+    ],
+    apply: "Aplică pentru Biroul Șerifului prin Discord"
+  },
+  fib: {
+    icon: "🕵️", title: "FIB", tagline: "Biroul federal: crimă organizată, trafic mare, corupție, răpiri și atacuri asupra statului.",
+    sections: [
+      {
+        h: "Ce face FIB",
+        list: [
+          "FIB (Federal Investigation Bureau) are jurisdicție pe tot teritoriul și e deasupra Poliției și Biroului Șerifului pe cazurile federale.",
+          "Nu face patrulare și controale de rutină. Intră în cazurile grave sau când e în joc integritatea celorlalte structuri.",
+          "Răspunde direct în fața conducerii serverului.",
+          "Regulamentul complet: Regulamentul FIB și Regulamentul General – Structuri de Stat (pe site, la Regulamente). Legile sunt în ghidul Poliției."
+        ]
+      },
+      {
+        h: "Cazurile FIB",
+        list: [
+          "Crima organizată și organizațiile ilegale mari.",
+          "Traficul de arme sau de droguri în cantitate mare.",
+          "Corupția și abuzul în Poliție, la Șerif, în Armată și în rândul funcționarilor.",
+          "Răpirile, șantajul și cazurile care pun în pericol siguranța publică.",
+          "Atacurile asupra statului (terorism, lovitură de stat — Codul Penal, Capitolul 9).",
+          "Un Locotenent FIB sau mai sus poate prelua oricând un astfel de caz de la Poliție sau Șerif. Ei sunt obligați să dea FIB toate probele cerute."
+        ]
+      },
+      {
+        h: "Afacerile Interne",
+        list: [
+          "Doar FIB anchetează corupția, abuzul sau forța nejustificată la Poliție și la Șerif.",
+          "Sesizările despre abuzuri se trimit Diviziei de Afaceri Interne, direct sau prin conducerea structurii.",
+          "Concluziile se trimit conducerii structurii, cu recomandarea de sancțiune.",
+          "Agenții FIB nu pot fi anchetați de Poliție sau de Șerif. Ei sunt verificați doar de conducerea FIB."
+        ]
+      },
+      {
+        h: "Cum intri în FIB",
+        list: [
+          "Ai act de identitate, cazierul curat și nu ești în altă facțiune.",
+          "De regulă intri prin transfer din Poliție sau de la Șerif, la recomandarea unui superior, ori prin selecție directă a conducerii FIB.",
+          "Treci instruirea și evaluarea internă și depui jurământul."
+        ]
+      },
+      {
+        h: "Gradele și diviziile",
+        list: [
+          "Grade: Agent Stagiar, Agent, Agent Senior, Agent Special, Supervizor de Echipă, Locotenent, Căpitan, Director Adjunct, Director.",
+          "Agentul Stagiar lucrează doar sub supraveghere. Agentul Special poate conduce singur anchete complexe.",
+          "Divizii: Crimă Organizată, Corupție și Afaceri Interne, Investigații Speciale (răpiri, șantaj, negociere), Divizia Tactică (HRT — ostatici, baricadați), Analiză și Documentare."
+        ]
+      },
+      {
+        h: "Reguli de lucru",
+        list: [
+          "Ținuta e de regulă civilă (costum). Insigna federală se ține asupra ta și se arată la orice control.",
+          "Agenții pot purta arma din dotare și în afara serviciului.",
+          "Anchetele sunt confidențiale. Divulgarea lor duce la excluderea din FIB.",
+          "Poliția, Șeriful și Armata nu pot percheziționa agenții FIB și nu pot interveni în operațiunile lor, decât la cererea FIB.",
+          "Abaterile de corupție ale agenților FIB se pedepsesc cel mai aspru."
+        ]
+      }
+    ],
+    apply: "Aplică pentru FIB prin Discord"
+  },
+  guvern: {
+    icon: "🏛️", title: "Guvern", tagline: "Conducerea statului: legi, autorizații, taxe, evenimente și audiențe pentru cetățeni.",
+    sections: [
+      {
+        h: "Ce face Guvernul",
+        list: [
+          "Guvernul e cel mai înalt organ al puterii executive. Toate structurile de stat respectă deciziile lui, în limita regulamentelor.",
+          "Aprobă legile și schimbările din legislație. Staff-ul poate respinge o lege care încalcă logica RP.",
+          "Emite autorizații (comerciale, pentru evenimente, pentru activități publice), administrează taxele și serviciile publice și organizează evenimente.",
+          "În clădirea Guvernului au loc toate procesele.",
+          "Regulamentul complet: Regulamentul Oficial — Guvern și Regulamentul General – Structuri de Stat (Capitolul 11)."
+        ]
+      },
+      {
+        h: "Conducerea",
+        list: [
+          "Guvernatorul conduce Guvernul, coordonează funcționarii, emite dispoziții și reprezintă Guvernul. Mandatul lui e de 45 de zile.",
+          "Viceguvernatorul îl ajută pe Guvernator și preia atribuții delegate. Guvernatorul are un singur adjunct.",
+          "Funcția nu dă dreptul să încalci regulile. Guvernatorul nu poate dispune nimic împotriva regulamentelor serverului."
+        ]
+      },
+      {
+        h: "Ce poate cere un cetățean",
+        list: [
+          "Sesizări, petiții, cereri, autorizații, informații și audiențe la Guvernator, Viceguvernator sau un reprezentant.",
+          "Toți cetățenii sunt tratați la fel, indiferent de avere, facțiune sau relații.",
+          "Taxa de înregistrare a unei afaceri nu poate trece de 250.000$.",
+          "Licența de avocat nu se vinde mai scump decât prețul din joc."
+        ]
+      },
+      {
+        h: "Ce e interzis funcționarilor",
+        list: [
+          "Mita, favoritismul și folosirea funcției în interes personal.",
+          "Autorizații date pe relații sau în schimbul unor foloase.",
+          "Folosirea mașinilor, clădirilor sau banilor Guvernului în scop personal.",
+          "Falsificarea, ștergerea sau modificarea documentelor oficiale.",
+          "Fraudarea alegerilor, cumpărarea de voturi și folosirea resurselor Guvernului în campanie."
+        ]
+      },
+      {
+        h: "Lovitura de stat și revolta",
+        list: [
+          "Guvernul poate fi răsturnat printr-o lovitură de stat doar pe baza unui dosar scris și a unei situații RP în joc, cu cel puțin două structuri de forță și cu aprobarea conducerii serverului.",
+          "Poate fi răsturnat și printr-o revoltă civilă, cu cereri clare și realizabile și cu mulți cetățeni. Decizia finală e a conducerii serverului.",
+          "Cererile absurde pot duce la reținerea participanților. Lovitura de stat neaprobată e infracțiune (Codul Penal, Art. 905)."
+        ]
+      }
+    ],
+    apply: "Aplică pentru Guvern prin Discord"
+  },
+  weazel: {
+    icon: "📰", title: "Weazel News", tagline: "Agenția de știri a statului: anunțuri, reportaje și interviuri.",
+    sections: [
+      {
+        h: "Ce face Weazel News",
+        list: [
+          "Verifică, corectează și publică anunțurile cetățenilor prin sistemul jocului.",
+          "Face reportaje, interviuri și transmisiuni de la evenimente.",
+          "Jurnalistul e neutru: relatează ce vede, fără să țină cu vreo facțiune sau bandă.",
+          "Angajații nu iau parte la schimburi de focuri și nu poartă arme de foc în tură (excepție: autoapărarea).",
+          "Regulamentul complet: Regulamentul Oficial – Weazel News (pe site, la Regulamente)."
+        ]
+      },
+      {
+        h: "Anunțurile",
+        list: [
+          "Se dau doar prin sistemul jocului, nu ocolindu-l.",
+          "Sunt pentru toți jucătorii, nu mesaje personale („Ion, sună-mă”).",
+          "Nu au voie să conțină jigniri, informații OOC sau reclamă la alte servere.",
+          "Nu se publică știri false despre facțiuni sau jucători și nu se folosesc informații aflate OOC."
+        ]
+      },
+      {
+        h: "Reportajele",
+        list: [
+          "Se filmează de la distanță sigură, fără să încurci Poliția, SMURD sau desfășurarea scenei.",
+          "Nu se dau în direct pozițiile Poliției sau ale atacatorilor.",
+          "Drona se folosește doar pentru reportaje, nu pentru urmărirea oamenilor sau pentru avantaje în conflicte."
+        ]
+      },
+      {
+        h: "Sediul și reținerea",
+        list: [
+          "Sediul Weazel News e zonă verde.",
+          "Angajații pot reține pe cineva doar la sediu, cel mult 15 minute, spunându-i motivul, și îl predau Poliției.",
+          "Nu pot reține angajați ai statului aflați la datorie.",
+          "Cine încurcă jurnaliștii să-și facă munca legal primește amendă de 20.000$ (Codul Penal, Art. 145)."
+        ]
+      }
+    ],
+    apply: "Aplică pentru Weazel News prin Discord"
+  },
+  justitie: {
+    icon: "⚖️", title: "Justiție", tagline: "Avocatura, Procuratura și Instanța: apărarea, acuzarea și judecata.",
+    sections: [
+      {
+        h: "Cine ce face",
+        list: [
+          "Poliția și Șeriful constată și rețin, FIB anchetează cazurile federale.",
+          "Avocatul apără: verifică procedura, contestă acuzațiile și cere reducerea pedepsei.",
+          "Procurorul susține acuzarea, poate ancheta oriunde și verifică reținerile angajaților statului.",
+          "Judecătorul decide, independent, după probele ambelor părți. Părțile sunt egale în fața instanței.",
+          "Regulamente: Avocatură, Structuri de Stat (Capitolul 15). Procedura completă e în ghidul Poliției, la „Cod de Procedură”."
+        ]
+      },
+      {
+        h: "Dreptul la avocat",
+        list: [
+          "Orice persoană reținută pentru o infracțiune are dreptul la avocat (privat sau al statului), din momentul reținerii. La contravenții nu se aplică.",
+          "Dacă cere avocat, interogatoriul se oprește până vine. Dacă niciun avocat nu răspunde, procedura continuă fără el.",
+          "Cine a refuzat avocatul la început nu-l mai poate cere după.",
+          "Agentul îi explică avocatului motivul reținerii și îi arată probele.",
+          "Avocatul nu poate opri fizic o arestare, nu ascunde probe și nu amenință polițiștii."
+        ]
+      },
+      {
+        h: "Contestarea și reducerile",
+        list: [
+          "Avocatul poate contesta lipsa motivului, drepturile necitite, percheziția fără temei, forța disproporționată sau acuzațiile nefondate, cu filmare, probe sau martori.",
+          "Abatere minoră a agentului: reducere de până la 25% din pedeapsă.",
+          "Abatere gravă: reducere de până la 50%.",
+          "Abuz major sau mai multe încălcări dovedite: reducere de până la 75%.",
+          "Arest fără temei sau fără probe, dovedit clar: eliberare imediată, confirmată de un judecător RP sau de staff.",
+          "Avocatul nu se poate declara singur „judecător” și nu anulează singur o procedură."
+        ]
+      },
+      {
+        h: "Plângerea și termenele",
+        list: [
+          "Plângerea se depune la Procuratură sau la Instanță, cu data, ora, locul, descrierea faptei, paguba și dovezile.",
+          "Instanța începe să o preia în cel mult 48 de ore. Un refuz se motivează în scris.",
+          "Ancheta începe în cel mult 48 de ore, cererile din dosar se rezolvă în 48 de ore, iar hotărârea se dă motivat în 48 de ore.",
+          "Hotărârea se execută în cel mult 72 de ore. Dacă e contestată, termenul se oprește până la soluționare.",
+          "Plângerea împotriva unui anchetator sau procuror se rezolvă în 1 zi la Procuratură sau în 2 zile la Instanță."
+        ]
+      },
+      {
+        h: "Procesul, pas cu pas",
+        list: [
+          "1. Prezentarea cazului.",
+          "2. Prezentarea acuzațiilor de către procuror.",
+          "3. Prezentarea probelor.",
+          "4. Poziția apărării.",
+          "5. Audierea martorilor, dacă e nevoie.",
+          "6. Argumentele finale.",
+          "7. Deliberarea judecătorului.",
+          "8. Pronunțarea hotărârii: menținerea pedepsei, reducerea ei, anularea unei măsuri, eliberarea sau retrimiterea pentru probe."
+        ]
+      },
+      {
+        h: "Judecătorii și imparțialitatea",
+        list: [
+          "Toate procesele au loc în clădirea Guvernului.",
+          "Președintele instanței are cel mult 3 judecători în subordine. Deciziile lui se pot contesta printr-un proces IC, judecat de staff.",
+          "Pentru o decizie greșită, judecătorul primește un punct de penalizare. La 5 puncte e scos din funcție, iar pentru abateri grave direct.",
+          "Când nu există instanță permanentă, judecător RP poate fi Guvernatorul sau un membru al conducerii IGP care nu a participat la acțiune.",
+          "Nu judecă și nu acuză cine e parte în caz, a participat la acțiune sau are un conflict personal cu o parte. Oricare parte poate cere înlocuirea lui.",
+          "Prin hotărâre a instanței, liderul unei structuri de stat poate fi demis pentru încălcări grave ale legii, cu aprobarea staff-ului."
+        ]
+      }
+    ],
+    apply: "Aplică pentru Avocatură sau Justiție prin Discord"
+  },
   pilot: {
     icon: "✈️", tag: "LEGISLAȚIE RUTIERĂ", title: "Licență PPL — Pilot", tagline: "Licență pentru avioane și pilotaj.",
     sections: [
@@ -782,7 +1088,12 @@ const PAGE_BLOCKS = [
     content: list([
       { icon: "👮", title: "Poliție", text: "Menține ordinea, aplică legea și protejează cetățenii.", url: "ghid-factiune.html?slug=politie" },
       { icon: "🚑", title: "SMURD", text: "Intervine rapid în situații de urgență și salvează vieți.", url: "ghid-factiune.html?slug=smurd" },
-      { icon: "🪖", title: "Armată", text: "Asigură securitatea și participă la misiuni speciale.", url: "ghid-factiune.html?slug=armata" }
+      { icon: "🪖", title: "Armată", text: "Asigură securitatea și participă la misiuni speciale.", url: "ghid-factiune.html?slug=armata" },
+      { icon: "⭐", title: "Biroul Șerifului", text: "Ține ordinea în afara orașului: Sandy Shores, Paleto Bay, Grapeseed, Harmony.", url: "ghid-factiune.html?slug=serif" },
+      { icon: "🕵️", title: "FIB", text: "Crimă organizată, trafic mare, corupție și atacuri asupra statului.", url: "ghid-factiune.html?slug=fib" },
+      { icon: "🏛️", title: "Guvern", text: "Legi, autorizații, taxe, evenimente și audiențe pentru cetățeni.", url: "ghid-factiune.html?slug=guvern" },
+      { icon: "📰", title: "Weazel News", text: "Anunțuri, reportaje și interviuri.", url: "ghid-factiune.html?slug=weazel" },
+      { icon: "⚖️", title: "Justiție", text: "Avocatura, Procuratura și Instanța: apărarea, acuzarea și judecata.", url: "ghid-factiune.html?slug=justitie" }
     ])
   },
 

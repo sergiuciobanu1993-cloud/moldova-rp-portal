@@ -8603,4 +8603,23 @@ pool.query(
 ).then(r => { if (r.rowCount) console.log("Contul demo Admin_Demo a fost dezactivat."); })
  .catch(err => console.error("Nu am putut dezactiva contul demo:", err.message));
 
+// (29.10.2026) Ghidurile noi de facțiune (Șerif, FIB, Guvern, Weazel News,
+// Justiție) — scripts/init-db.js nu rulează la deploy, așa că la pornire
+// adăugăm doar blocurile de ghid care LIPSESC din page_blocks (ON CONFLICT
+// DO NOTHING: ce a fost deja editat din admin nu se atinge niciodată).
+try {
+  const { PAGE_BLOCKS } = require("../scripts/seed-content");
+  (async () => {
+    let added = 0;
+    for (const b of PAGE_BLOCKS.filter(x => x.page === "ghid-factiune")) {
+      const { rowCount } = await pool.query(
+        `INSERT INTO page_blocks(page, block_key, label, type, content, sort_order)
+         VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT (page, block_key) DO NOTHING`,
+        [b.page, b.block_key, b.label, b.type, b.content, b.sort_order]);
+      added += rowCount;
+    }
+    if (added) console.log(`Ghid facțiuni: ${added} blocuri noi adăugate.`);
+  })().catch(err => console.error("Nu am putut adăuga ghidurile noi:", err.message));
+} catch (err) { console.error("seed-content indisponibil:", err.message); }
+
 app.listen(port, () => console.log(`Moldova RP API: http://localhost:${port}`));

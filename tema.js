@@ -22,7 +22,7 @@
 // (rămâne cât ții fila deschisă); ?tema=nu o oprește.
 (() => {
   if (window.MRP_TEMA) return;
-  const VER = '20261030a'; // aceeași ca în pwa.js — schimbă-le împreună când modifici tema
+  const VER = '20261031a'; // aceeași ca în pwa.js — schimbă-le împreună când modifici tema
   const root = document.documentElement;
   const ls = {
     get(k) { try { return localStorage.getItem(k); } catch { return null; } },
@@ -296,6 +296,40 @@
           });
         }
         return 2.6;
+      },
+      // „Ho-ho-ho!": trei „ho" pe voce groasă (formante de „o"), tot mai jos
+      hohoho(c, out, t) {
+        const f1 = filt(c, 'bandpass', 480, 4), f2 = filt(c, 'bandpass', 820, 5), mix = gain(c, 1);
+        f1.connect(mix); f2.connect(mix); mix.connect(filt(c, 'lowpass', 2200)).connect(out);
+        [[0, 132], [0.36, 124], [0.72, 112]].forEach(([at, f]) => {
+          const o = osc(c, 'sawtooth', f), g = gain(c, 0);
+          o.frequency.setValueAtTime(f * 1.08, t + at);
+          o.frequency.exponentialRampToValueAtTime(f * 0.9, t + at + 0.26);
+          env(g, t + at, 0.03, 0.55, 0.12, 0.14);
+          o.connect(g); g.connect(f1); g.connect(f2);
+          o.start(t + at); o.stop(t + at + 0.32);
+          const n = noiseSrc(c, 'white', t + at, 0.05), ng = gain(c, 0);
+          env(ng, t + at, 0.004, 0.05, 0, 0.05);
+          n.connect(filt(c, 'bandpass', 1400, 1)).connect(ng).connect(out);
+        });
+        return 1.05;
+      },
+      // bulgăre de zăpadă care lovește: o bufnitură moale + scrâșnet de zăpadă
+      splat(c, out, t) {
+        tone(c, out, t, 'sine', 140, 60, 0.18, 0.35, 0.003);
+        const n = noiseSrc(c, 'white', t, 0.35), g = gain(c, 0);
+        env(g, t, 0.004, 0.22, 0.02, 0.3);
+        n.connect(filt(c, 'lowpass', 1800)).connect(g).connect(out);
+        return 0.4;
+      },
+      // aruncarea: un „fâș" scurt prin aer
+      whoosh(c, out, t) {
+        const n = noiseSrc(c, 'white', t, 0.4), bp = filt(c, 'bandpass', 600, 2), g = gain(c, 0);
+        bp.frequency.setValueAtTime(500, t);
+        bp.frequency.exponentialRampToValueAtTime(2200, t + 0.35);
+        env(g, t, 0.12, 0.18, 0, 0.22);
+        n.connect(bp).connect(g).connect(out);
+        return 0.4;
       },
       // un clinchet mic, la apăsare
       twinkle(c, out, t) {
@@ -610,6 +644,9 @@
 
   // ------------------------------------------------------------------
   // (30.10.2026) Sărbătorile de iarnă: ninsoare, beculețe pe antet, sat cu
+  // (31.10.2026: + Moșul strigă „Ho-ho-ho!” și scapă cadouri, oameni de zăpadă
+  // care fac cu mâna și aruncă bulgări, bulgări care se lipesc de ecran)
+  //
   // brazi în spate, o sanie care trece din când în când, stele căzătoare,
   // fulgi la apăsare și sunete (clopoței, cutie muzicală). Butonul cu fulg
   // (stânga-jos) are aceleași trei trepte ca dovleacul de Halloween.
@@ -628,6 +665,18 @@
     + '<path d="M128 30h44c6 0 10 4 10 10v2h-52z"/><path d="M124 47h66c5 0 8-3 9-7h3c-1 6-6 10-12 10h-66z"/>'
     + '<circle cx="150" cy="21" r="6"/><path d="M144 30c0-6 3-9 6-9s6 3 6 9zM146 16l8-6 6 4-4 2z"/><path d="M160 28c0-9 6-14 13-14 6 0 10 4 10 10 0 3-1 5-2 6z"/>'
     + '</g></svg>';
+  // omul de zăpadă: trei bulgări, nas de morcov, fular, joben, mâini de crenguțe (una face cu mâna)
+  const SNOWMAN_SVG = '<svg viewBox="0 0 120 150" aria-hidden="true">'
+    + '<ellipse cx="60" cy="118" rx="38" ry="32" fill="#f4f9ff"/><ellipse cx="60" cy="70" rx="28" ry="25" fill="#f8fbff"/><circle cx="60" cy="34" r="20" fill="#fbfdff"/>'
+    + '<path d="M44 125q16 8 32 0" fill="none" stroke="#d5e4f3" stroke-width="3" stroke-linecap="round"/>'
+    + '<g fill="#1d2633"><circle cx="53" cy="29" r="2.600"/><circle cx="67" cy="29" r="2.600"/><circle cx="60" cy="64" r="2.600"/><circle cx="60" cy="76" r="2.600"/><circle cx="60" cy="110" r="2.800"/>'
+    + '<circle cx="51" cy="42" r="1.300"/><circle cx="55" cy="44.500" r="1.300"/><circle cx="60" cy="45.500" r="1.300"/><circle cx="65" cy="44.500" r="1.300"/><circle cx="69" cy="42" r="1.300"/></g>'
+    + '<path d="M60 34l17 3-17 3z" fill="#ff8a2a"/>'
+    + '<path d="M38 52q22 8 44 0l1 7q-23 8-46 0z" fill="#e8414f"/><path d="M70 56l6 20-7 1-4-18z" fill="#c9303d"/>'
+    + '<rect x="42" y="4" width="36" height="7" rx="2" fill="#1d2633"/><rect x="47" y="-14" width="26" height="20" rx="2" fill="#1d2633"/><rect x="47" y="0" width="26" height="4" fill="#e8414f"/>'
+    + '<path d="M34 70L8 58M14 61l-6-8M14 61l-9 1" fill="none" stroke="#6b4020" stroke-width="3" stroke-linecap="round"/>'
+    + '<g class="wn-arm"><path d="M86 70l26-16M106 58l8-6M106 58l3 8" fill="none" stroke="#6b4020" stroke-width="3" stroke-linecap="round"/></g>'
+    + '</svg>';
   const WN_MODES_TEXT = {
     all: ['Efecte și sunete de sărbători: pornite', 'Efectele și sunetele de sărbători sunt pornite.'],
     mute: ['Efecte de sărbători pornite, sunete oprite', 'Ninsoarea rămâne, dar sunetele de sărbători sunt oprite.'],
@@ -727,7 +776,70 @@
     s.addEventListener('animationend', e => { if (e.target === s) s.remove(); });
     wn.decor.appendChild(s);
     wnSound('jingle', 0.7);
+    // Moșul strigă „Ho-ho-ho!" și lasă să cadă câteva cadouri
+    wn.timers.push(setTimeout(() => { if (wn && wn.fx) wnSound('hohoho', 0.9); }, 1800));
+    const T = parseFloat(s.style.getPropertyValue('--t')) * 1000;
+    for (let k = 0; k < 2 + Math.floor(Math.random() * 2); k++) {
+      wn.timers.push(setTimeout(() => {
+        if (!wn || !wn.fx || !s.isConnected) return;
+        const r = s.getBoundingClientRect();
+        if (r.right < 0 || r.left > window.innerWidth) return;
+        const g = el('i', 'wn-gift c' + Math.floor(Math.random() * 3));
+        g.style.left = (r.left + r.width * (s.classList.contains('rev') ? 0.25 : 0.75)) + 'px';
+        g.style.top = (r.top + r.height * 0.6) + 'px';
+        g.style.setProperty('--dx', Math.round(rand(-60, 60)) + 'px');
+        g.style.setProperty('--r', Math.round(rand(-200, 200)) + 'deg');
+        g.addEventListener('animationend', () => g.remove());
+        wn.decor.appendChild(g);
+      }, T * rand(0.25, 0.7)));
+    }
   }
+  // un om de zăpadă iese de jos, face cu mâna, apoi se ascunde; dacă îl
+  // apeși, aruncă un bulgăre
+  function wnSpawnSnowman() {
+    if (!wn || !wn.fx || document.hidden || wn.decor.querySelector('.wn-snowman')) return;
+    const small = window.innerWidth < 600;
+    const left = Math.random() < 0.5;
+    const m = el('div', 'wn-snowman' + (left ? '' : ' r'), SNOWMAN_SVG);
+    m.style.left = (left ? rand(10, 26) : rand(66, 80)).toFixed(1) + 'vw';
+    m.style.setProperty('--w', Math.round(small ? rand(74, 92) : rand(112, 140)) + 'px');
+    m.title = 'Aruncă un bulgăre!';
+    m.addEventListener('pointerdown', ev => {
+      ev.stopPropagation();
+      const r = m.getBoundingClientRect();
+      wnThrow(r.left + r.width / 2, r.top + r.height * 0.3);
+    });
+    m.addEventListener('animationend', e => { if (e.target === m) m.remove(); });
+    wn.decor.appendChild(m);
+    if (Math.random() < 0.6) wnSound('chime', 0.5);
+  }
+  // un bulgăre zboară într-un arc și se lipește de „geam", apoi se topește la vale
+  function wnThrow(fromX, fromY) {
+    if (!wn || !wn.fx || document.hidden || !wn.top) return;
+    const W = window.innerWidth, H = window.innerHeight;
+    const sx = fromX != null ? fromX : (Math.random() < 0.5 ? -30 : W + 30);
+    const sy = fromY != null ? fromY : H * rand(0.75, 0.95);
+    const tx = rand(W * 0.2, W * 0.8), ty = rand(H * 0.18, H * 0.55);
+    const ball = el('i', 'wn-ball');
+    ball.style.left = sx + 'px'; ball.style.top = sy + 'px';
+    ball.style.setProperty('--dx', Math.round(tx - sx) + 'px');
+    ball.style.setProperty('--dy', Math.round(ty - sy) + 'px');
+    ball.style.setProperty('--arc', Math.round(-Math.min(220, Math.abs(tx - sx) * 0.35 + 60)) + 'px');
+    wn.top.appendChild(ball);
+    wnSound('whoosh', 0.7);
+    ball.addEventListener('animationend', () => {
+      ball.remove();
+      if (!wn) return;
+      const sp = el('i', 'wn-splat');
+      sp.style.left = tx + 'px'; sp.style.top = ty + 'px';
+      sp.style.setProperty('--r', Math.round(rand(0, 360)) + 'deg');
+      sp.style.setProperty('--s', rand(0.85, 1.25).toFixed(2));
+      sp.addEventListener('animationend', () => sp.remove());
+      wn.top.appendChild(sp);
+      wnSound('splat', 0.9);
+    }, { once: true });
+  }
+  function wnSpawnSnowball() { if (wn && wn.fx && !document.hidden && wn.top && wn.top.querySelectorAll('.wn-splat').length < 3) wnThrow(); }
   function wnSpawnStar() {
     if (!wn || !wn.fx || document.hidden) return;
     const st = el('i', 'wn-star');
@@ -796,7 +908,7 @@
     wn.timers = [];
     wnSnow(on);
     if (!on) {
-      wn.decor.querySelectorAll('.wn-sleigh,.wn-star').forEach(x => x.remove());
+      wn.decor.querySelectorAll('.wn-sleigh,.wn-star,.wn-snowman,.wn-gift').forEach(x => x.remove());
       if (wn.top) wn.top.textContent = '';
       return;
     }
@@ -804,7 +916,9 @@
       const tick = wait => { wn.timers.push(setTimeout(() => { if (!wn || !wn.fx) return; fn(); tick(rand(min, max)); }, wait)); };
       tick(first);
     };
-    again(wnSpawnSleigh, 50000, 90000, rand(8000, 14000));
+    again(wnSpawnSleigh, 40000, 70000, rand(6000, 11000));
+    again(wnSpawnSnowman, 28000, 50000, rand(12000, 20000));
+    again(wnSpawnSnowball, 30000, 60000, rand(18000, 28000));
     again(wnSpawnStar, 16000, 34000, rand(4000, 9000));
     again(wnAmbient, 3000, 3000, 2500);
   }

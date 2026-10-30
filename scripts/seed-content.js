@@ -988,7 +988,7 @@ const PAGE_BLOCKS = [
     ])
   },
   { page: "index", block_key: "factions_callout_title", label: "Card „Ghid Facțiuni” — titlu", type: "text", content: "Ghid Facțiuni", sort_order: 7 },
-  { page: "index", block_key: "factions_callout_text", label: "Card „Ghid Facțiuni” — text", type: "text", content: "Proceduri, reguli, prețuri și pașii de aplicare pentru Poliție, SMURD și Armată — totul explicat direct pe site.", sort_order: 8 },
+  { page: "index", block_key: "factions_callout_text", label: "Card „Ghid Facțiuni” — text", type: "text", content: "Proceduri, reguli, prețuri și pașii de aplicare pentru Poliție, Biroul Șerifului, FIB, Guvern, Justiție, Weazel News, SMURD și Armată — totul explicat direct pe site.", sort_order: 8 },
   { page: "index", block_key: "about_title", label: "Despre — titlu", type: "text", content: "Un univers RolePlay construit de comunitate, pentru comunitate.", sort_order: 9 },
   {
     page: "index", block_key: "about_text", label: "Despre — text", type: "richtext", sort_order: 10,

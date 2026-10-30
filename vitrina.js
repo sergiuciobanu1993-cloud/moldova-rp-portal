@@ -277,7 +277,8 @@
       const w = factions.clientWidth || 1000;
       const mobile = w < 640;
       const rx = mobile ? w * 0.4 : Math.min(w * 0.42, 470);
-      return { rx, ry: rx * (mobile ? 0.95 : 0.3), mobile };
+      // (30.10.2026) elipsă mai înaltă pe desktop, ca inelul interior să nu intre sub cercul din mijloc
+      return { rx, ry: rx * (mobile ? 1.3 : 0.42), mobile };
     }
 
     function paint() {
@@ -290,10 +291,11 @@
         const ring = two && i % 2 === 1 ? 1 : 0;
         const idx = two ? Math.floor(i / 2) : i;
         const count = ring ? inner : outer;
-        const a = base * (ring ? -1.15 : 1) + (idx / count) * Math.PI * 2 + (ring ? Math.PI / count : 0);
-        const f = ring ? 0.58 : 1;
-        const x = Math.cos(a) * g.rx * f;
-        const y = Math.sin(a) * g.ry * f;
+        // (30.10.2026) ambele inele se rotesc în același sens și cu aceeași viteză:
+        // bulele păstrează distanța dintre ele și nu se mai suprapun când se întâlnesc.
+        const a = base + (idx / count) * Math.PI * 2 + (ring ? Math.PI / count : 0);
+        const x = Math.cos(a) * g.rx * (ring ? 0.6 : 1);
+        const y = Math.sin(a) * g.ry * (ring ? 0.8 : 1);
         const depth = (Math.sin(a) + 1) / 2; // 0 = în spate, 1 = în față
         const sc = 0.7 + depth * 0.3;
         it.style.transform = `translate(-50%,-50%) translate3d(${x.toFixed(1)}px,${y.toFixed(1)}px,0) scale(${sc.toFixed(3)})`;
@@ -340,7 +342,7 @@
       const g = geom();
       factions.style.setProperty('--rx', `${g.rx}px`);
       factions.style.setProperty('--ry', `${g.ry}px`);
-      factions.style.height = `${Math.round(g.ry * 2 + (g.mobile ? 110 : 170))}px`;
+      factions.style.height = `${Math.round(g.ry * 2 + (g.mobile ? 120 : 190))}px`;
       paint();
       kick();
     }

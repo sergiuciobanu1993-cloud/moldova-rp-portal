@@ -255,6 +255,7 @@
 
 </main>
 <script src="auth-client.js"></script>
+<script src="player-profile-modal.js"></script>
 <script src="vip-weapons.js?v=20261001c"></script>
 <script>
 const THEMES = {
@@ -1033,13 +1034,17 @@ document.getElementById('lx-save').addEventListener('click', async () => {
     const el = document.getElementById('nb-claims');
     if (!nb.claims.length) { el.innerHTML = `<p class="muted" style="margin:0">Nicio cerere încă. Jucători noi urmăriți: ${nb.stats.eligible} (la jumătatea drumului: ${nb.stats.halfway}).</p>`; return; }
     el.innerHTML = `<table class="reward-table" style="min-width:720px"><thead><tr><th>JUCĂTOR</th><th>ORE</th><th>MAȘINA</th><th>CERUTĂ</th><th>STARE</th><th></th></tr></thead><tbody>${nb.claims.map(c => `
-      <tr><td><b style="color:var(--text);font-size:12px">${e(c.rp_name || c.username || '—')}</b>${c.static_id ? ` <span class="muted">#${e(c.static_id)}</span>` : ''}<br><small class="muted"><code>${e(c.identifier)}</code></small></td>
+      <tr><td><button type="button" class="player-link" style="font-size:12px;color:var(--text)" title="Deschide profilul jucătorului" data-pname="${e(c.rp_name || c.username || c.identifier || '')}" data-pid="${e(c.identifier || '')}" data-prp="${e(c.rp_name || '')}" data-puser="${e(c.user_id || '')}">${e(c.rp_name || c.username || '—')}</button>${c.static_id ? ` <span class="muted">#${e(c.static_id)}</span>` : ''}<br><small class="muted"><code>${e(c.identifier)}</code></small></td>
         <td>${hm(c.minutes)}</td><td>${e(c.label || c.model)} <small class="muted">(${e(c.model)})</small></td>
         <td>${new Date(c.created_at).toLocaleString('ro-RO')}</td>
         <td>${ST[c.status] || e(c.status)}${c.handled_by_name ? `<br><small class="muted">${e(c.handled_by_name)}${c.note ? ' · ' + e(c.note) : ''}</small>` : ''}</td>
         <td><div class="rowactions">${c.status === 'pending'
           ? `<button data-nb="${c.id}" data-st="given">✓ Am dat-o</button><button class="danger" data-nb="${c.id}" data-st="rejected">Respinge</button>`
           : `<button data-nb="${c.id}" data-st="pending">Repune</button>`}</div></td></tr>`).join('')}</tbody></table>`;
+    el.querySelectorAll('.player-link[data-pname]').forEach(b => b.addEventListener('click', () => {
+      if (typeof window.openPlayerProfile !== 'function') return;
+      window.openPlayerProfile(b.dataset.pname, { identifier: b.dataset.pid || undefined, rpName: b.dataset.prp || undefined, userId: b.dataset.puser || undefined });
+    }));
     el.querySelectorAll('[data-nb]').forEach(b => b.addEventListener('click', async () => {
       let note = '';
       if (b.dataset.st === 'rejected') { note = prompt('Motivul (îl vede jucătorul):', '') ; if (note === null) return; }

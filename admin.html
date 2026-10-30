@@ -11,23 +11,49 @@
   <div id="todo-cars" style="font-size:13px;line-height:1.6"></div>
   <a href="admin-vip-shop.html#jucator-nou" style="display:inline-block;margin-top:10px;font-size:12.5px;font-weight:800;color:var(--orange)">Deschide cererile în Editorul VIP Shop →</a>
 </section>
-<!-- (07.10.2026) Tema de sezon a site-ului: se pornește / oprește de aici, pentru toți vizitatorii. -->
+<!-- (07.10.2026) Tema de sezon a site-ului: se pornește / oprește de aici, pentru toți vizitatorii.
+     (30.10.2026) Alegi între Halloween și Sărbătorile de iarnă și poți programa trecerea la altă temă. -->
 <section class="tablebox" id="theme-box" style="padding:20px 22px">
   <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:6px">
     <h2 style="margin:0;font-size:17px">Tema site-ului</h2>
     <span class="pill" id="theme-state" style="background:rgba(255,255,255,.07);color:var(--muted)">…</span>
   </div>
-  <p class="muted" style="margin:0 0 16px;max-width:70ch">Cât e pornită, tot site-ul primește culorile și decorul de Halloween, iar cutiile din VIP Shop se deschid în varianta de sezon. Fiecare vizitator își poate opri efectele din butonul cu dovleac.</p>
-  <label class="theme-switch"><input type="checkbox" id="theme-on"><span class="sw" aria-hidden="true"></span><b>🎃 Tema de Halloween</b></label>
+  <p class="muted" style="margin:0 0 16px;max-width:70ch">Cât e pornită, tot site-ul primește culorile și decorul temei. Fiecare vizitator își poate opri efectele și sunetele din butonul din stânga-jos (dovleac la Halloween, fulg la iarnă).</p>
   <div class="theme-fields">
+    <label>Tema de acum
+      <select id="theme-pick" class="filter-select">
+        <option value="">Fără temă (site-ul obișnuit)</option>
+        <option value="halloween">🎃 Halloween</option>
+        <option value="iarna">❄️ Sărbători de iarnă (Crăciun și Anul Nou)</option>
+      </select></label>
+    <span></span>
     <label>Textul benzii de pe prima pagină <small class="muted">(gol = fără bandă)</small>
-      <input id="theme-text" class="filter-select" maxlength="180" placeholder="ex. 🎃 Halloween pe Moldova RP — cutiile din VIP Shop se deschid acum în criptă!"></label>
+      <input id="theme-text" class="filter-select" maxlength="180" placeholder="ex. ❄️ Sărbători fericite pe Moldova RP!"></label>
     <label>Linkul butonului „Vezi” <small class="muted">(opțional)</small>
       <input id="theme-link" class="filter-select" maxlength="300" placeholder="/vip-shop.html"></label>
   </div>
+  <div class="theme-next">
+    <label class="theme-next-on"><input type="checkbox" id="theme-next-on"> <b>Programează trecerea la altă temă</b></label>
+    <div class="theme-fields" id="theme-next-fields" hidden>
+      <label>Trece la
+        <select id="theme-next-pick" class="filter-select">
+          <option value="">Fără temă</option>
+          <option value="halloween">🎃 Halloween</option>
+          <option value="iarna">❄️ Sărbători de iarnă</option>
+        </select></label>
+      <label>Data și ora (ora Moldovei)
+        <input id="theme-next-at" class="filter-select" type="datetime-local"></label>
+      <label>Textul benzii după trecere <small class="muted">(gol = fără bandă)</small>
+        <input id="theme-next-text" class="filter-select" maxlength="180" placeholder="ex. ❄️ Sărbători fericite pe Moldova RP!"></label>
+      <label>Linkul „Vezi” după trecere <small class="muted">(opțional)</small>
+        <input id="theme-next-link" class="filter-select" maxlength="300" placeholder="/vip-shop.html"></label>
+    </div>
+  </div>
   <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:16px">
     <button type="button" class="btn-primary" id="theme-save" disabled>Salvează</button>
-    <a href="index.html?tema=halloween" target="_blank" rel="noopener" style="font-size:12.5px;font-weight:800;color:var(--orange)">Previzualizează (o vezi doar tu) ↗</a>
+    <a href="index.html?tema=halloween" target="_blank" rel="noopener" style="font-size:12.5px;font-weight:800;color:var(--orange)">Previzualizează Halloween ↗</a>
+    <a href="index.html?tema=iarna" target="_blank" rel="noopener" style="font-size:12.5px;font-weight:800;color:var(--orange)">Previzualizează iarna ↗</a>
+    <span class="muted" style="font-size:12px">(previzualizarea o vezi doar tu)</span>
     <span id="theme-msg" class="muted" role="status"></span>
   </div>
 </section>
@@ -41,7 +67,9 @@
 .theme-switch input:focus-visible+.sw{outline:2px solid var(--orange);outline-offset:2px}
 .theme-fields{display:grid;grid-template-columns:2fr 1fr;gap:12px;margin-top:14px}
 .theme-fields label{display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:800}
-.theme-fields input{width:100%;font-weight:400}
+.theme-fields input,.theme-fields select{width:100%;font-weight:400}
+.theme-next{margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
+.theme-next-on{display:inline-flex;align-items:center;gap:8px;font-size:13.5px;cursor:pointer}
 @media (max-width:760px){.theme-fields{grid-template-columns:1fr}}
 </style>
 <section class="tablebox"><div class="title"><h2>Activitate administrativă</h2>
@@ -188,37 +216,76 @@ document.getElementById('audit-next').addEventListener('click', () => { auditSta
 
 // ---- Tema site-ului (07.10.2026) ----
 const themeUi = {
-  on: document.getElementById('theme-on'), text: document.getElementById('theme-text'), link: document.getElementById('theme-link'),
+  pick: document.getElementById('theme-pick'), text: document.getElementById('theme-text'), link: document.getElementById('theme-link'),
+  nextOn: document.getElementById('theme-next-on'), nextFields: document.getElementById('theme-next-fields'),
+  nextPick: document.getElementById('theme-next-pick'), nextAt: document.getElementById('theme-next-at'),
+  nextText: document.getElementById('theme-next-text'), nextLink: document.getElementById('theme-next-link'),
   save: document.getElementById('theme-save'), msg: document.getElementById('theme-msg'), state: document.getElementById('theme-state'),
 };
+const THEME_NAMES = { halloween: '🎃 Halloween', iarna: '❄️ Sărbători de iarnă' };
 let themeSaved = null; // ce e salvat acum pe server
-function themeForm() { return { theme: themeUi.on.checked ? 'halloween' : null, bannerText: themeUi.text.value.trim(), bannerLink: themeUi.link.value.trim() }; }
+// ora din câmp e ora Moldovei (Europe/Chisinau); serverul primește momentul exact (UTC)
+function chisinauToIso(local) {
+  if (!local) return '';
+  const guess = new Date(local + 'Z');
+  const fmt = d => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Chisinau', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).format(d).replace(' ', 'T');
+  const off = new Date(fmt(guess) + 'Z') - guess; // cât e Chișinăul înaintea UTC
+  return new Date(guess.getTime() - off).toISOString();
+}
+function isoToChisinau(iso) {
+  if (!iso) return '';
+  return new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Chisinau', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(iso)).replace(' ', 'T');
+}
+function themeForm() {
+  const f = { theme: themeUi.pick.value || null, bannerText: themeUi.text.value.trim(), bannerLink: themeUi.link.value.trim(), next: null };
+  if (themeUi.nextOn.checked && themeUi.nextAt.value) {
+    f.next = { theme: themeUi.nextPick.value || null, at: chisinauToIso(themeUi.nextAt.value), bannerText: themeUi.nextText.value.trim(), bannerLink: themeUi.nextLink.value.trim() };
+  }
+  return f;
+}
+const sameNext = (a, b) => (!a && !b) || (!!a && !!b && a.theme === b.theme && Date.parse(a.at) === Date.parse(b.at) && a.bannerText === b.bannerText && a.bannerLink === b.bannerLink);
 function themePaint() {
-  const live = themeSaved && themeSaved.theme === 'halloween';
-  themeUi.state.textContent = !themeSaved ? '…' : live ? 'HALLOWEEN — PORNITĂ' : 'OPRITĂ';
+  const live = themeSaved && themeSaved.theme;
+  let label = !themeSaved ? '…' : live ? (THEME_NAMES[live] || live).toUpperCase() + ' — PORNITĂ' : 'OPRITĂ';
+  if (themeSaved && themeSaved.next) label += ' · ' + (THEME_NAMES[themeSaved.next.theme] || 'fără temă') + ' din ' + new Date(themeSaved.next.at).toLocaleString('ro-RO', { timeZone: 'Europe/Chisinau', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  themeUi.state.textContent = label;
   themeUi.state.style.background = live ? 'rgba(255,138,31,.18)' : 'rgba(255,255,255,.07)';
   themeUi.state.style.color = live ? 'var(--orange)' : 'var(--muted)';
+  themeUi.nextFields.hidden = !themeUi.nextOn.checked;
   const f = themeForm();
-  themeUi.save.disabled = !themeSaved || (f.theme === themeSaved.theme && f.bannerText === themeSaved.bannerText && f.bannerLink === themeSaved.bannerLink);
+  themeUi.save.disabled = !themeSaved || (f.theme === (themeSaved.theme || null) && f.bannerText === themeSaved.bannerText && f.bannerLink === themeSaved.bannerLink && sameNext(f.next, themeSaved.next));
 }
 async function loadTheme() {
   try {
     const r = await apiFetch('/api/admin/tema');
     if (!r.ok) throw new Error();
     themeSaved = (await r.json()).settings;
-    themeUi.on.checked = themeSaved.theme === 'halloween';
+    themeUi.pick.value = themeSaved.theme || '';
     themeUi.text.value = themeSaved.bannerText || '';
     themeUi.link.value = themeSaved.bannerLink || '';
+    const n = themeSaved.next;
+    themeUi.nextOn.checked = !!n;
+    themeUi.nextPick.value = n ? (n.theme || '') : 'iarna';
+    themeUi.nextAt.value = n ? isoToChisinau(n.at) : '';
+    themeUi.nextText.value = n ? (n.bannerText || '') : '';
+    themeUi.nextLink.value = n ? (n.bannerLink || '') : '';
   } catch {
     themeUi.msg.style.color = '#ff8a8a';
     themeUi.msg.textContent = 'Nu am putut citi tema de pe server.';
   }
   themePaint();
 }
-[themeUi.on, themeUi.text, themeUi.link].forEach(x => x.addEventListener('input', () => { themeUi.msg.textContent = ''; themePaint(); }));
+[themeUi.pick, themeUi.text, themeUi.link, themeUi.nextOn, themeUi.nextPick, themeUi.nextAt, themeUi.nextText, themeUi.nextLink]
+  .forEach(x => x.addEventListener(x.type === 'checkbox' || x.tagName === 'SELECT' ? 'change' : 'input', () => { themeUi.msg.textContent = ''; themePaint(); }));
 themeUi.save.addEventListener('click', async () => {
   themeUi.save.disabled = true;
   themeUi.msg.style.color = '';
+  if (themeUi.nextOn.checked && !themeUi.nextAt.value) {
+    themeUi.msg.style.color = '#ff8a8a';
+    themeUi.msg.textContent = 'Alege data și ora trecerii programate.';
+    themePaint();
+    return;
+  }
   themeUi.msg.textContent = 'Se salvează…';
   try {
     const r = await apiFetch('/api/admin/tema', { method: 'PUT', body: JSON.stringify(themeForm()) });
@@ -228,7 +295,8 @@ themeUi.save.addEventListener('click', async () => {
     themeUi.text.value = themeSaved.bannerText || '';
     themeUi.link.value = themeSaved.bannerLink || '';
     themeUi.msg.style.color = 'var(--green)';
-    themeUi.msg.textContent = themeSaved.theme ? 'Salvat. Tema e pornită pentru toți vizitatorii (apare la următoarea pagină deschisă).' : 'Salvat. Tema e oprită — site-ul revine la înfățișarea obișnuită.';
+    themeUi.msg.textContent = (themeSaved.theme ? 'Salvat. Tema e pornită pentru toți vizitatorii (apare la următoarea pagină deschisă).' : 'Salvat. Tema e oprită — site-ul revine la înfățișarea obișnuită.')
+      + (themeSaved.next ? ' Trecerea programată e salvată.' : '');
     loadAudit();
   } catch (err) {
     themeUi.msg.style.color = '#ff8a8a';

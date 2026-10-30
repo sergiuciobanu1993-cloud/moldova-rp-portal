@@ -1,0 +1,128 @@
+/* Tema sărbătorilor de iarnă (Crăciun și Anul Nou) a site-ului (30.10.2026).
+   Se încarcă DOAR cât tema e pornită din Admin → Dashboard → „Tema site-ului"
+   (vezi tema.js și pwa.js). Totul e sub html.tema-iarna sau pe elemente
+   „wn-*" adăugate de tema.js, deci la oprire site-ul revine exact cum era.
+   Cuprins: 1) culori  2) antet: beculețe  3) subsol: zăpadă, brad și cadouri
+            4) decor (ninsoare, cer cu aurora, satul cu brazi, sanie, stele)
+            5) banda de pe prima pagină  6) butonul cu fulg, sfaturi, previzualizare
+            7) prima pagină (hero). */
+
+/* ---- 1) culori: noapte de iarnă, auriu cald în loc de portocaliu ---- */
+html.tema-iarna{
+  --wn-ice:#9fd8ff;--wn-red:#e8414f;--wn-green:#33c27a;--wn-gold:#f2b84b;
+  --bg:#060a12;--panel:#0d1320;--panel2:#111a29;--side:#09101b;--line:rgba(150,200,255,.16);
+  --orange:#f2b84b;--orange2:#e8992e;
+}
+html.tema-iarna body{background-color:var(--bg);
+  background-image:radial-gradient(ellipse 70vw 60vh at 4% 0%,rgba(95,184,255,.16),transparent 68%),radial-gradient(ellipse 70vw 65vh at 100% 100%,rgba(232,65,79,.11),transparent 66%);
+  background-repeat:no-repeat;background-position:0 0;background-size:100% 100%;background-attachment:fixed}
+html.tema-iarna ::selection{background:#2a5d8f;color:#fff}
+html.tema-iarna .site-header{background:rgba(6,10,18,.82);border-bottom-color:rgba(150,200,255,.2)}
+/* brăduț lângă logo */
+html.tema-iarna .brand::after{content:'';display:inline-block;flex:none;width:20px;height:22px;margin-left:3px;vertical-align:middle;
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 44'%3E%3Cpath d='M20 5l6 9h-3l7 10h-4l8 11H6l8-11h-4l7-10h-3z' fill='%2333c27a'/%3E%3Crect x='17' y='35' width='6' height='7' fill='%237a4a22'/%3E%3Cpath d='M20 0l1.500 3.200 3.500.4-2.600 2.400.7 3.400L20 7.700l-3.100 1.700.7-3.400L15 3.600l3.500-.4z' fill='%23ffd25a'/%3E%3Ccircle cx='15' cy='22' r='1.700' fill='%23ff4d5e'/%3E%3Ccircle cx='25' cy='27' r='1.700' fill='%235fb8ff'/%3E%3Ccircle cx='19' cy='31' r='1.700' fill='%23ffd25a'/%3E%3C/svg%3E") center/contain no-repeat;
+  filter:drop-shadow(0 0 5px rgba(255,210,90,.45))}
+
+/* ---- 2) antet: șirul de beculețe ---- */
+.wn-garland{position:absolute;left:0;right:0;bottom:-3px;height:3px;pointer-events:none;z-index:2;
+  background:linear-gradient(90deg,transparent,rgba(40,90,60,.9) 4%,rgba(40,90,60,.9) 96%,transparent)}
+.wn-garland.top{position:fixed;top:0;bottom:auto;z-index:31}
+.wn-garland i{position:absolute;top:1px;width:7px;height:11px;margin-left:-3.5px;border-radius:50% 50% 46% 46%;
+  transform:translateY(var(--sag,3px));background:var(--c);box-shadow:0 0 6px 1px var(--c);
+  animation:wnTwinkle 2.6s ease-in-out var(--d,0s) infinite alternate}
+.wn-garland i::before{content:'';position:absolute;left:50%;bottom:100%;width:1px;height:var(--sag,3px);margin-left:-.5px;background:rgba(40,90,60,.9)}
+.wn-garland i::after{content:'';position:absolute;left:1px;right:1px;top:-2px;height:3px;border-radius:1px;background:#3b4a3f}
+.wn-garland .c-r{--c:#ff4d5e}.wn-garland .c-g{--c:#39d98a}.wn-garland .c-y{--c:#ffd25a}.wn-garland .c-b{--c:#5fb8ff}
+@keyframes wnTwinkle{0%{opacity:.35;box-shadow:0 0 2px 0 var(--c)}100%{opacity:1;box-shadow:0 0 10px 3px var(--c)}}
+
+/* ---- 3) subsol: zăpadă pe margine + brad cu cadouri ---- */
+html.tema-iarna footer{position:relative}
+html.tema-iarna footer::before{content:'';position:absolute;left:0;right:0;top:-12px;height:22px;pointer-events:none;
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 320 22' preserveAspectRatio='none'%3E%3Cpath d='M0 12Q20 2 44 9T92 8T140 11T190 6T238 10T288 7T320 11V22H0z' fill='%23e3eef9'/%3E%3C/svg%3E") 0 0/320px 22px repeat-x;opacity:.92;filter:drop-shadow(0 -2px 6px rgba(159,216,255,.25))}
+html.tema-iarna footer::after{content:'';position:absolute;right:max(8vw,16px);top:-58px;width:118px;height:60px;pointer-events:none;
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 118 60'%3E%3Cpath d='M30 4l9 12h-5l10 13h-5l11 15H6l11-15h-5l10-13h-5z' fill='%231f8f55'/%3E%3Crect x='27' y='44' width='6' height='10' fill='%236b4020'/%3E%3Cpath d='M30 0l1.500 3 3.300.4-2.400 2.300.6 3.200L30 7.400l-3 1.500.6-3.200-2.400-2.300 3.300-.4z' fill='%23ffd25a'/%3E%3Ccircle cx='24' cy='26' r='2' fill='%23ff4d5e'/%3E%3Ccircle cx='36' cy='33' r='2' fill='%235fb8ff'/%3E%3Ccircle cx='28' cy='39' r='2' fill='%23ffd25a'/%3E%3Ccircle cx='33' cy='20' r='1.800' fill='%23ffd25a'/%3E%3Crect x='56' y='38' width='22' height='18' rx='2' fill='%23e8414f'/%3E%3Crect x='65' y='38' width='4' height='18' fill='%23ffd25a'/%3E%3Crect x='54' y='35' width='26' height='5' rx='1' fill='%23c9303d'/%3E%3Cpath d='M67 35c-6-6-10-2-6 0zM67 35c6-6 10-2 6 0z' fill='%23ffd25a'/%3E%3Crect x='84' y='44' width='18' height='12' rx='2' fill='%235fb8ff'/%3E%3Crect x='91' y='44' width='4' height='12' fill='%23ffffff'/%3E%3Crect x='82' y='42' width='22' height='4' rx='1' fill='%234a9ad8'/%3E%3C/svg%3E") center bottom/contain no-repeat;
+  filter:drop-shadow(0 0 8px rgba(255,210,90,.3))}
+
+/* ---- 4) decor ---- */
+.wn-decor{position:fixed;inset:0;z-index:30;pointer-events:none;overflow:hidden}
+.wn-snow{position:absolute;inset:0;display:block}
+/* cerul (aurora) și satul: în spatele conținutului */
+.wn-night{position:fixed;inset:0;z-index:-1;pointer-events:none;overflow:hidden}
+.wn-night i{position:absolute;display:block}
+.wn-aurora{left:-20%;right:-20%;top:-12vh;height:46vh;opacity:.5;filter:blur(28px);
+  background:radial-gradient(ellipse 30% 55% at 25% 40%,rgba(57,217,138,.35),transparent 70%),radial-gradient(ellipse 26% 50% at 55% 30%,rgba(95,184,255,.3),transparent 70%),radial-gradient(ellipse 24% 45% at 80% 45%,rgba(155,110,255,.22),transparent 70%);
+  animation:wnAurora 30s ease-in-out infinite alternate}
+@keyframes wnAurora{from{transform:translate3d(-6%,0,0) skewX(-6deg)}to{transform:translate3d(6%,2vh,0) skewX(6deg)}}
+.wn-village{left:0;right:0;bottom:0;height:140px;opacity:.9;
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 640 140'%3E%3Cpath d='M0 88Q80 58 160 82T320 78T480 84T640 74V140H0z' fill='%230e192b'/%3E%3Cg fill='%230a1422'%3E%3Cpath d='M40 96l12-30 12 30zM70 100l9-24 9 24zM520 92l13-34 13 34zM552 98l9-24 9 24zM600 94l10-28 10 28z'/%3E%3Crect x='190' y='86' width='34' height='26'/%3E%3Cpath d='M186 88l21-18 21 18z'/%3E%3Crect x='300' y='90' width='40' height='24'/%3E%3Cpath d='M295 92l25-20 25 20z'/%3E%3Crect x='410' y='84' width='30' height='30'/%3E%3Cpath d='M406 86l19-16 19 16z'/%3E%3C/g%3E%3Cg fill='%23ffcf6b'%3E%3Crect x='197' y='93' width='6' height='6'/%3E%3Crect x='211' y='93' width='6' height='6'/%3E%3Crect x='308' y='97' width='7' height='6'/%3E%3Crect x='325' y='97' width='7' height='6'/%3E%3Crect x='417' y='92' width='6' height='7'/%3E%3C/g%3E%3Cpath d='M0 114Q120 100 240 112T480 108T640 114V140H0z' fill='%23cfe3f5' opacity='.2'/%3E%3C/svg%3E") 0 100%/640px 140px repeat-x}
+@media (max-width:600px){.wn-village{height:96px;background-size:440px 96px}.wn-aurora{height:34vh}}
+/* sania Moșului: trece prin cer din când în când */
+.wn-sleigh{position:absolute;left:0;top:var(--y,18vh);width:var(--w,200px);color:rgba(232,242,255,.88);filter:drop-shadow(0 0 7px rgba(255,214,120,.55));
+  animation:wnFly var(--t,15s) linear both;will-change:transform}
+.wn-sleigh.rev{animation-name:wnFlyRev}
+.wn-sleigh svg{display:block;width:100%;height:auto;animation:wnBob 1.6s ease-in-out infinite alternate}
+.wn-trail{position:absolute;left:92%;top:68%;width:70%;height:3px;border-radius:3px;background:linear-gradient(90deg,rgba(255,214,120,.8),rgba(255,214,120,0));filter:blur(.5px)}
+@keyframes wnFly{from{transform:translate3d(110vw,0,0)}to{transform:translate3d(-45vw,var(--dy,-6vh),0)}}
+@keyframes wnFlyRev{from{transform:translate3d(-45vw,0,0) scaleX(-1)}to{transform:translate3d(110vw,var(--dy,-6vh),0) scaleX(-1)}}
+@keyframes wnBob{from{transform:translateY(-6px) rotate(-1.5deg)}to{transform:translateY(6px) rotate(1.5deg)}}
+/* stea căzătoare */
+.wn-star{position:absolute;width:130px;height:2px;border-radius:2px;background:linear-gradient(90deg,#fff,rgba(255,255,255,0));opacity:0;transform-origin:0 50%;
+  animation:wnStar 1.2s ease-out both}
+@keyframes wnStar{0%{transform:rotate(155deg) translateX(0);opacity:0}15%{opacity:.95}100%{transform:rotate(155deg) translateX(-34vw);opacity:0}}
+/* fulgii care sar din locul apăsat */
+.wn-top{position:fixed;inset:0;z-index:2000;pointer-events:none;overflow:hidden}
+.wn-cb{position:absolute;display:block;width:16px;height:16px;margin:-8px 0 0 -8px;filter:drop-shadow(0 0 4px rgba(191,230,255,.8));animation:wnCb .95s ease-out forwards}
+.wn-cb svg{display:block;width:100%;height:100%}
+@keyframes wnCb{0%{transform:translate3d(0,0,0) scale(.3) rotate(0deg);opacity:0}15%{opacity:1}100%{transform:translate3d(var(--dx,0),var(--dy,-60px),0) scale(var(--s,1)) rotate(var(--r,0deg));opacity:0}}
+
+/* ---- 5) banda de pe prima pagină ---- */
+.hw-banner{position:relative;z-index:6;display:flex;align-items:center;gap:14px;margin:78px 0 0;padding:12px max(5vw,16px);
+  background:linear-gradient(90deg,rgba(32,78,130,.55),rgba(232,65,79,.22) 58%,rgba(32,78,130,.3));border-bottom:1px solid rgba(159,216,255,.3)}
+.hw-banner-ico{flex:none;width:34px;height:34px;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect x='5' y='17' width='30' height='21' rx='3' fill='%23e8414f'/%3E%3Crect x='3' y='12' width='34' height='7' rx='2' fill='%23c9303d'/%3E%3Crect x='17.500' y='12' width='5' height='26' fill='%23ffd25a'/%3E%3Cpath d='M20 12C13 3 6 6 11 12zM20 12c7-9 14-6 9 0z' fill='%23ffd25a'/%3E%3C/svg%3E") center/contain no-repeat;
+  filter:drop-shadow(0 0 6px rgba(255,210,90,.5))}
+.hw-banner p{flex:1;min-width:0;margin:0;font-weight:800;font-size:14.5px;line-height:1.35;text-wrap:balance;color:#fff}
+.hw-banner-go{flex:none;padding:8px 15px;border-radius:999px;background:var(--orange,#f2b84b);color:#0b0b0b!important;font-weight:900;font-size:12.5px;white-space:nowrap;transition:transform .15s ease}
+.hw-banner-go:hover{transform:translateY(-1px)}
+.hw-banner-x{flex:none;width:32px;height:32px;padding:0;border-radius:50%;border:1px solid rgba(255,255,255,.18);background:rgba(0,0,0,.3);color:#fff;font-size:14px;line-height:1;cursor:pointer}
+.hw-banner-go:focus-visible,.hw-banner-x:focus-visible,.wn-fx:focus-visible,.hw-proba button:focus-visible{outline:2px solid #fff;outline-offset:2px}
+.hw-banner + .highlights-marquee{padding-top:26px}
+@media (max-width:600px){
+  .hw-banner{gap:10px;padding:10px 14px}
+  .hw-banner-ico{width:28px;height:28px}
+  .hw-banner p{font-size:13px}
+  .hw-banner-go{padding:8px 12px}
+}
+
+/* ---- 6) butonul cu fulg (efecte / sunete), sfaturi, previzualizare ---- */
+.wn-fx{position:fixed;left:18px;bottom:18px;z-index:45;width:44px;height:44px;padding:0;border-radius:50%;border:1px solid rgba(159,216,255,.45);background:rgba(9,15,26,.92);display:grid;place-items:center;cursor:pointer;color:#bfe6ff;box-shadow:0 8px 24px rgba(0,0,0,.5);transition:transform .15s ease,border-color .15s ease}
+.wn-fx:hover{transform:scale(1.06);border-color:var(--wn-gold,#f2b84b)}
+.wn-fx svg{display:block;width:24px;height:24px;filter:drop-shadow(0 0 4px rgba(159,216,255,.7))}
+html.wn-nofx .wn-fx{color:#6b7787}
+html.wn-nofx .wn-fx svg{filter:none}
+.wn-fx::after{content:'♪';position:absolute;right:-3px;top:-3px;width:17px;height:17px;border-radius:50%;display:grid;place-items:center;background:#0d1524;border:1px solid rgba(159,216,255,.6);color:#ffd25a;font:900 10px/1 system-ui,-apple-system,Segoe UI,sans-serif}
+.wn-fx[data-mode="mute"]::after{color:#8792a1;background:linear-gradient(135deg,transparent 43%,#ff5a4d 43% 57%,transparent 57%),#0d1524}
+.wn-fx[data-mode="off"]::after{display:none}
+html:has(.edit-fab) .wn-fx{bottom:74px}
+.hw-tip{position:fixed;left:18px;bottom:72px;z-index:46;max-width:min(300px,calc(100vw - 36px));padding:10px 13px;border-radius:10px;background:#0d1524;border:1px solid rgba(159,216,255,.4);color:#eaf4ff;font:600 12.5px/1.45 Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif;box-shadow:0 12px 30px rgba(0,0,0,.55);animation:wnTip .2s ease-out}
+html:has(.edit-fab) .hw-tip{bottom:128px}
+@keyframes wnTip{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.hw-proba{position:fixed;left:50%;bottom:16px;z-index:480;transform:translateX(-50%);display:flex;align-items:center;gap:10px;max-width:calc(100vw - 140px);padding:8px 8px 8px 14px;border-radius:999px;background:#0d1524;border:1px solid var(--wn-gold,#f2b84b);color:#eaf4ff;font:700 12px/1.3 Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif;box-shadow:0 12px 30px rgba(0,0,0,.55)}
+.hw-proba button{flex:none;padding:6px 11px;border-radius:999px;border:0;background:var(--wn-gold,#f2b84b);color:#0b0b0b;font:900 11.5px/1 inherit;font-family:inherit;cursor:pointer}
+@media (max-width:600px){.wn-fx{left:12px;bottom:12px}.hw-tip{left:12px;bottom:66px}}
+
+/* ---- 7) prima pagină: hero-ul primește lumină rece și o pâclă de zăpadă ---- */
+html.tema-iarna .hw-hero{display:block;position:absolute;inset:0;pointer-events:none;z-index:2}
+html.tema-iarna .hw-hero .hwh-tint{position:absolute;inset:0;mix-blend-mode:screen;
+  background:radial-gradient(70% 60% at 82% 10%,rgba(159,216,255,.16),transparent 62%),linear-gradient(180deg,rgba(30,70,130,.36),rgba(10,20,40,.1) 55%,rgba(232,65,79,.08))}
+html.tema-iarna .hw-hero .hwh-fog{position:absolute;left:-30%;right:-30%;bottom:-6%;height:34%;
+  background:radial-gradient(ellipse 22% 55% at 50% 60%,rgba(230,242,255,.22),transparent 70%) 0 100%/34% 100% repeat-x;filter:blur(10px);animation:hwhFog 40s linear infinite}
+html.tema-iarna .hw-hero .hwh-fog.b{bottom:-10%;height:28%;opacity:.8;background-size:26% 100%;animation-duration:28s;animation-direction:reverse}
+html.tema-iarna .hw-hero .hwh-bat{display:none}
+
+/* efecte oprite din buton sau „mișcare redusă" */
+html.wn-nofx .wn-aurora,html.wn-nofx .wn-garland i,html.wn-nofx.tema-iarna .hw-hero .hwh-fog{animation:none}
+html.wn-nofx .wn-garland i{opacity:.85}
+@media (prefers-reduced-motion:reduce){
+  .wn-aurora,.wn-garland i,.hw-tip,html.tema-iarna .hw-hero .hwh-fog{animation:none}
+  .wn-garland i{opacity:.85}
+}

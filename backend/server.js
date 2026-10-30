@@ -6223,14 +6223,14 @@ app.get("/api/announcements", asyncRoute(async (_req, res) => {
 }));
 
 // ---- Tema de sezon a site-ului (07.10.2026) ----
-// Fondatorul / co-fondatorul pornește din Admin o temă (deocamdată doar
-// „halloween") pentru tot site-ul și alege textul benzii de pe prima pagină.
+// Fondatorul / co-fondatorul pornește din Admin o temă („halloween" sau,
+// din 30.10.2026, „iarna" — sărbătorile de iarnă) pentru tot site-ul și alege textul benzii de pe prima pagină.
 // Starea se ține în tabela vip_settings (cheia „site_theme") — există deja,
 // deci nu e nevoie de nicio modificare în baza de date. Fiecare pagină
 // întreabă /api/tema la încărcare (vezi tema.js); răspunsul se ține 30 de
 // secunde în memorie, ca să nu lovim baza de date la fiecare vizită.
-const SITE_THEMES = ["halloween"];
-const SITE_THEME_DEFAULT = { theme: null, bannerText: "", bannerLink: "" };
+const SITE_THEMES = ["halloween", "iarna"];
+const SITE_THEME_DEFAULT = { theme: null, bannerText: "", bannerLink: "", next: null };
 let siteThemeCache = { at: 0, value: null };
 // linkul benzii: doar o pagină de-a noastră („/vip-shop.html") sau o adresă https
 function cleanThemeLink(v) {
@@ -6238,11 +6238,26 @@ function cleanThemeLink(v) {
   if (/^\/(?![\/\\])[^\s<>"']*$/.test(link) || /^https:\/\/[^\s<>"']+$/i.test(link)) return link;
   return "";
 }
+const cleanThemeText = v => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, 180);
+// (30.10.2026) Trecerea programată la altă temă: { theme, at, bannerText, bannerLink }.
+// theme null = la ora aceea tema se oprește. „at" e un moment exact (ISO, UTC).
+function normalizeThemeNext(n) {
+  if (!n || typeof n !== "object") return null;
+  const at = Date.parse(n.at);
+  if (!Number.isFinite(at)) return null;
+  return {
+    theme: SITE_THEMES.includes(n.theme) ? n.theme : null,
+    at: new Date(at).toISOString(),
+    bannerText: cleanThemeText(n.bannerText),
+    bannerLink: cleanThemeLink(n.bannerLink),
+  };
+}
 function normalizeSiteTheme(v) {
   return {
     theme: SITE_THEMES.includes(v?.theme) ? v.theme : null,
-    bannerText: String(v?.bannerText ?? "").replace(/\s+/g, " ").trim().slice(0, 180),
+    bannerText: cleanThemeText(v?.bannerText),
     bannerLink: cleanThemeLink(v?.bannerLink),
+    next: normalizeThemeNext(v?.next),
   };
 }
 async function loadSiteTheme() {
@@ -6251,6 +6266,13 @@ async function loadSiteTheme() {
   try {
     const { rows } = await pool.query(`SELECT value FROM vip_settings WHERE key = 'site_theme'`);
     value = normalizeSiteTheme(rows[0]?.value || SITE_THEME_DEFAULT);
+    // a venit ora trecerii programate: noua temă devine cea salvată
+    if (value.next && Date.parse(value.next.at) <= Date.now()) {
+      const n = value.next;
+      value = { theme: n.theme, bannerText: n.bannerText, bannerLink: n.bannerLink, next: null };
+      await pool.query(`UPDATE vip_settings SET value = $1, updated_at = NOW() WHERE key = 'site_theme'`, [JSON.stringify(value)]);
+      console.log(`Tema site-ului: trecere programată la „${n.theme || "fără temă"}".`);
+    }
   } catch (err) {
     console.error("Tema site-ului: nu am putut citi setarea —", err.message);
     if (siteThemeCache.value) value = siteThemeCache.value; // rămâne ultima stare cunoscută
@@ -6273,7 +6295,17 @@ app.put("/api/admin/tema", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async
   if (wanted != null && wanted !== "" && !SITE_THEMES.includes(wanted)) return res.status(400).json({ error: "Temă necunoscută." });
   const rawLink = String(req.body?.bannerLink ?? "").trim();
   if (rawLink && !cleanThemeLink(rawLink)) return res.status(400).json({ error: "Linkul benzii trebuie să fie o pagină de pe site (ex. /vip-shop.html) sau o adresă care începe cu https://." });
-  const settings = normalizeSiteTheme({ theme: wanted || null, bannerText: req.body?.bannerText, bannerLink: rawLink });
+  let next = null;
+  const rn = req.body?.next;
+  if (rn && rn.at) {
+    if (rn.theme != null && rn.theme !== "" && !SITE_THEMES.includes(rn.theme)) return res.status(400).json({ error: "Tema programată e necunoscută." });
+    const nl = String(rn.bannerLink ?? "").trim();
+    if (nl && !cleanThemeLink(nl)) return res.status(400).json({ error: "Linkul benzii programate trebuie să fie o pagină de pe site sau o adresă https://." });
+    next = normalizeThemeNext({ ...rn, theme: rn.theme || null });
+    if (!next) return res.status(400).json({ error: "Data trecerii programate nu e validă." });
+    if (Date.parse(next.at) <= Date.now()) return res.status(400).json({ error: "Data trecerii programate trebuie să fie în viitor." });
+  }
+  const settings = normalizeSiteTheme({ theme: wanted || null, bannerText: req.body?.bannerText, bannerLink: rawLink, next });
   await pool.query(
     `INSERT INTO vip_settings(key, value, updated_at) VALUES ('site_theme', $1, NOW())
      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,

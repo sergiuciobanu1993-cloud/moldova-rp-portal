@@ -926,7 +926,9 @@ document.getElementById('streamer-copy-btn').addEventListener('click', async () 
   ]).then(([n, v]) => {
     const items = [];
     ((n && n.notifications) || []).slice(0, 8).forEach(x => items.push({ t: ms(x.created_at), title: x.title, text: x.message, link: x.link }));
-    ((v && v.history) || []).slice(0, 5).forEach(e => items.push({ t: ms(e.createdAt), title: '🎁 ' + (e.rewardLabel || 'Recompensă'), text: 'Din ' + (e.caseName || 'VIP Shop') + (e.claimedAt ? ' · ridicată' : ' · de ridicat în joc'), link: 'vip-shop.html' }));
+    // la bani și coins eticheta din joc e doar suma („370000”) — o scriem frumos
+    const label = e => { const n = Number(e.rewardLabel); if (!Number.isFinite(n) || !/^\d+$/.test(String(e.rewardLabel || ''))) return e.rewardLabel || 'Recompensă'; return e.rewardType === 'coins' ? fmtC(n) + ' coins' : '$' + fmtC(n); };
+    ((v && v.history) || []).slice(0, 5).forEach(e => items.push({ t: ms(e.createdAt), title: '🎁 ' + label(e), text: 'Din ' + (e.caseName || 'VIP Shop') + (e.claimedAt ? ' · ridicată' : ' · de ridicat în joc'), link: 'vip-shop.html' }));
     const list = items.filter(x => Number.isFinite(x.t)).sort((a, b) => b.t - a.t).slice(0, 5);
     box.innerHTML = list.length ? list.map(x => `<div class="event"><b>${esc(day(x.t))}</b><div><strong>${x.link ? `<a href="${esc(x.link)}">${esc(x.title)}</a>` : esc(x.title)}</strong><small>${esc((x.text || '').slice(0, 140))}</small></div></div>`).join('')
       : '<div class="event"><b>—</b><div><strong>Nimic nou încă</strong><small>Aici apar tichetele, insignele, locurile din clasament și cutiile deschise.</small></div></div>';

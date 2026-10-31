@@ -140,7 +140,7 @@
 <body data-content-page="index">
   <header class="site-header">
     <a class="brand" href="#acasa" aria-label="Moldova RP - Acasă">
-      <img src="assets/logo.png" alt="Moldova RP">
+      <img src="assets/logo-128.webp" alt="Moldova RP">
       <span>MOLDOVA<span class="accent">RP</span></span>
     </a>
     <button class="menu-toggle" aria-label="Deschide meniul" aria-expanded="false">☰</button>
@@ -263,13 +263,17 @@
       <div class="hero-bg hero-imx" id="hero-imx" aria-hidden="true">
         <div class="hx-scenes">
           <div class="hx-scene"><img src="assets/imersiv/01-capitala.webp" alt="" decoding="async" style="object-position:50% 38%"></div>
-          <div class="hx-scene"><img src="assets/imersiv/02-orasul.webp" alt="" decoding="async" style="object-position:62% 55%"></div>
-          <div class="hx-scene"><img src="assets/imersiv/03-economie.webp" alt="" decoding="async" style="object-position:55% 45%"></div>
-          <div class="hx-scene"><img src="assets/imersiv/04-factiuni.webp" alt="" decoding="async" style="object-position:50% 40%"></div>
-          <div class="hx-scene"><img src="assets/imersiv/05-libertate.webp" alt="" decoding="async" style="object-position:40% 55%"></div>
-          <div class="hx-scene"><img src="assets/imersiv/06-istorie.webp" alt="" decoding="async" style="object-position:50% 28%"></div>
+          <div class="hx-scene"><img data-src="assets/imersiv/02-orasul.webp" alt="" decoding="async" style="object-position:62% 55%"></div>
+          <div class="hx-scene"><img data-src="assets/imersiv/03-economie.webp" alt="" decoding="async" style="object-position:55% 45%"></div>
+          <div class="hx-scene"><img data-src="assets/imersiv/04-factiuni.webp" alt="" decoding="async" style="object-position:50% 40%"></div>
+          <div class="hx-scene"><img data-src="assets/imersiv/05-libertate.webp" alt="" decoding="async" style="object-position:40% 55%"></div>
+          <div class="hx-scene"><img data-src="assets/imersiv/06-istorie.webp" alt="" decoding="async" style="object-position:50% 28%"></div>
         </div>
         <div class="hx-smoke"></div>
+        <script>
+        // (31.10.2026) viteza: prima scenă se încarcă imediat, celelalte 5 după ce s-a încărcat pagina (sunt ~450 KB)
+        window.addEventListener('load', function () { setTimeout(function () { document.querySelectorAll('#hero-imx img[data-src]').forEach(function (im) { im.src = im.dataset.src; im.removeAttribute('data-src'); }); }, 400); });
+        </script>
         <div class="hx-grain"></div>
         <div class="hw-hero"><span class="hwh-tint"></span><span class="hwh-fog"></span><span class="hwh-bat"></span><span class="hwh-bat"></span><span class="hwh-bat"></span><span class="hwh-fog b"></span></div>
       </div>
@@ -422,7 +426,7 @@
         </div>
       </div>
       <aside class="callout">
-        <img src="assets/logo.png" alt="" class="callout-logo">
+        <img src="assets/logo-128.webp" alt="" class="callout-logo">
         <p class="eyebrow">MOLDOVA RP</p>
         <h2 data-block="callout_title">Tot ce ai nevoie, într-un singur loc.</h2>
         <p data-block="callout_text">Regulamentele și informațiile comunității vor fi gestionate centralizat, rapid și transparent.</p>
@@ -494,7 +498,7 @@
   </main>
 
   <footer>
-    <div class="footer-brand"><img src="assets/logo.png" alt="Moldova RP"><div><strong>MOLDOVA<span class="accent">RP</span></strong><small>Portal oficial al comunității</small></div></div>
+    <div class="footer-brand"><img src="assets/logo-128.webp" alt="Moldova RP"><div><strong>MOLDOVA<span class="accent">RP</span></strong><small>Portal oficial al comunității</small></div></div>
     <div class="footer-links"><a href="incepe.html">Începe să joci</a><a href="#regulamente">Regulamente</a><a href="#jucatori">Jucători</a><a href="#factiuni">Facțiuni</a><a href="ghid-factiuni.html">Ghid facțiuni</a><a href="legislatie-rutiera.html">Legislație rutieră</a><a href="joburi.html">Joburi</a><a href="#anunturi">Anunțuri</a><a href="#actualizari">Actualizări</a><a href="https://discord.gg/moldovaroleplay" target="_blank" rel="noopener noreferrer">Discord</a><a href="https://moldovaroleplay.tebex.io" target="_blank" rel="noopener noreferrer">Magazin</a><a href="https://www.tiktok.com/@moldovarolepllay" target="_blank" rel="noopener noreferrer">TikTok</a><a href="aplicatie.html">📲 Aplicația pe telefon</a></div>
     <p class="copyright">© 2026 Moldova RP. Toate drepturile rezervate.</p>
   </footer>
@@ -544,7 +548,7 @@
     grid.innerHTML = items.map((r, i) => `
       <a class="info-card" href="regulament.html?slug=${encodeURIComponent(r.slug)}">
         <span class="card-number">${String(i + 1).padStart(2, '0')}</span>
-        <span class="card-icon"><img src="assets/logo.png" alt=""></span>
+        <span class="card-icon"><img src="assets/logo-128.webp" alt=""></span>
         <h3>${r.title}</h3>
         <p>${r.category} · versiunea ${r.version}</p>
       </a>`).join('');
@@ -628,7 +632,7 @@
 <script src="imersiv.js?v=20260930c"></script>
 <script src="orbita.js?v=20260930a"></script>
 <script src="sfera.js?v=20261001c"></script>
-<script src="vitrina.js?v=20261030a"></script>
+<script src="vitrina.js?v=20261031a"></script>
 <script src="site-audio.js?v=20261031i"></script>
 <script src="sondaj.js?v=20261031c" defer></script>
 </body>

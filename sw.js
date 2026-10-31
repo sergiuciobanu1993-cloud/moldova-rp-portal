@@ -6,14 +6,14 @@
 //     cache-ul doar dacă nu e internet.
 //   • Imaginile și fonturile: din cache, reîmprospătate în fundal.
 // La un update al acestui fișier schimbă VERSION, ca să se curețe cache-ul vechi.
-const VERSION = 'mrp-2026-10-31y';
+const VERSION = 'mrp-2026-10-31z';
 const SHELL = `${VERSION}-shell`;
 const RUNTIME = `${VERSION}-runtime`;
 const OFFLINE_URL = '/offline.html';
 const PRECACHE = [
   OFFLINE_URL,
   '/manifest.webmanifest',
-  '/assets/logo.png',
+  '/assets/logo-128.webp',
   '/assets/app/icon-192.png',
   '/assets/favicon.png',
 ];

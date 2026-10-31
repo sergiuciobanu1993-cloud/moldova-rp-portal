@@ -335,7 +335,7 @@
       const total = counts.reduce((a, b) => a + b, 0);
       if (!core || !core.isConnected) { // app.js rescrie lista la 30s
         core = el('div', 'vt-core vt-own');
-        core.innerHTML = '<img src="assets/logo.png" alt=""><strong></strong><small>în facțiuni acum</small>';
+        core.innerHTML = '<img src="assets/logo-256.webp" alt=""><strong></strong><small>în facțiuni acum</small>';
         factions.prepend(core);
       }
       core.querySelector('strong').textContent = String(total);

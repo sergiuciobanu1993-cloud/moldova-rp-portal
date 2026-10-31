@@ -22,7 +22,7 @@
 // (rămâne cât ții fila deschisă); ?tema=nu o oprește.
 (() => {
   if (window.MRP_TEMA) return;
-  const VER = '20261031e'; // aceeași ca în pwa.js — schimbă-le împreună când modifici tema
+  const VER = '20261031f'; // aceeași ca în pwa.js — schimbă-le împreună când modifici tema
   const root = document.documentElement;
   const ls = {
     get(k) { try { return localStorage.getItem(k); } catch { return null; } },
@@ -1253,7 +1253,8 @@
     again(wnSpawnPeek, 35000, 60000, rand(30000, 42000));
     again(wnSpawnSnowball, 30000, 60000, rand(18000, 28000));
     again(wnSpawnStar, 16000, 34000, rand(4000, 9000));
-    again(wnAmbient, 3000, 3000, 2500);
+    // (31.10.2026) cântecele nu mai pornesc de aici: le alege vizitatorul din
+    // widgetul de muzică din dreapta jos (site-audio.js)
   }
   function wnSetMode(mode, say) {
     if (!wn) return;

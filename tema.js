@@ -22,7 +22,7 @@
 // (rămâne cât ții fila deschisă); ?tema=nu o oprește.
 (() => {
   if (window.MRP_TEMA) return;
-  const VER = '20261031a'; // aceeași ca în pwa.js — schimbă-le împreună când modifici tema
+  const VER = '20261031b'; // aceeași ca în pwa.js — schimbă-le împreună când modifici tema
   const root = document.documentElement;
   const ls = {
     get(k) { try { return localStorage.getItem(k); } catch { return null; } },
@@ -757,7 +757,7 @@
     for (let i = 0; i < n; i++) {
       const b = el('i', 'c-' + colors[i % 4]);
       b.style.left = ((i + 0.5) / n * 100).toFixed(2) + '%';
-      b.style.setProperty('--d', (rand(0, 2.4)).toFixed(2) + 's');
+      b.style.setProperty('--d', ((i % 4) * 0.6 + Math.floor(i / 4) % 2 * 0.15).toFixed(2) + 's'); // aprinse în valuri, pe culori
       b.style.setProperty('--sag', (Math.sin(((i + 0.5) / n) * Math.PI * Math.max(4, Math.round(n / 6))) ** 2 * 7).toFixed(1) + 'px');
       g.appendChild(b);
     }
@@ -839,6 +839,38 @@
       wnSound('splat', 0.9);
     }, { once: true });
   }
+  const SLED_SVG = '<svg class="wn-sled" viewBox="0 0 160 40" aria-hidden="true"><path d="M14 8h120c6 0 10 4 10 10v4H24z" fill="#c9303d"/><path d="M18 14h118" stroke="#ffd25a" stroke-width="2"/>'
+    + '<path d="M30 22v8M70 22v8M110 22v8" stroke="#8a5a2b" stroke-width="3"/><path d="M6 34h132c8 0 12-4 14-10" fill="none" stroke="#d9e4ee" stroke-width="3.500" stroke-linecap="round"/></svg>';
+  // omul de zăpadă trece pe sanie prin josul ecranului
+  function wnSpawnSledman() {
+    if (!wn || !wn.fx || document.hidden || wn.decor.querySelector('.wn-sledman')) return;
+    const small = window.innerWidth < 600;
+    const rev = Math.random() < 0.5;
+    const m = el('div', 'wn-sledman' + (rev ? ' rev' : ''), '<span class="wn-sm">' + SNOWMAN_SVG + '</span>' + SLED_SVG);
+    m.style.setProperty('--w', Math.round(small ? rand(96, 116) : rand(140, 176)) + 'px');
+    m.style.setProperty('--t', rand(8.5, 12).toFixed(1) + 's');
+    m.title = 'Aruncă un bulgăre!';
+    m.addEventListener('pointerdown', ev => { ev.stopPropagation(); const r = m.getBoundingClientRect(); wnThrow(r.left + r.width / 2, r.top + r.height * 0.3); });
+    m.addEventListener('animationend', e => { if (e.target === m) m.remove(); });
+    wn.decor.appendChild(m);
+    wnSound('whoosh', 0.5);
+    wn.timers.push(setTimeout(() => { if (wn && wn.fx) wnSound('jingle', 0.5); }, 600));
+  }
+  // un om de zăpadă se uită de după marginea ecranului, face cu mâna și uneori aruncă un bulgăre
+  function wnSpawnPeek() {
+    if (!wn || !wn.fx || document.hidden || wn.decor.querySelector('.wn-peek')) return;
+    const small = window.innerWidth < 600;
+    const left = Math.random() < 0.5;
+    const m = el('div', 'wn-peek ' + (left ? 'l' : 'r'), SNOWMAN_SVG);
+    m.style.setProperty('--y', rand(26, 62).toFixed(1) + 'vh');
+    m.style.setProperty('--w', Math.round(small ? rand(70, 86) : rand(100, 128)) + 'px');
+    m.title = 'Aruncă un bulgăre!';
+    const toss = () => { const r = m.getBoundingClientRect(); wnThrow(left ? r.right - 10 : r.left + 10, r.top + r.height * 0.35); };
+    m.addEventListener('pointerdown', ev => { ev.stopPropagation(); toss(); });
+    m.addEventListener('animationend', e => { if (e.target === m) m.remove(); });
+    wn.decor.appendChild(m);
+    if (Math.random() < 0.5) wn.timers.push(setTimeout(() => { if (wn && wn.fx && m.isConnected) toss(); }, 3000));
+  }
   function wnSpawnSnowball() { if (wn && wn.fx && !document.hidden && wn.top && wn.top.querySelectorAll('.wn-splat').length < 3) wnThrow(); }
   function wnSpawnStar() {
     if (!wn || !wn.fx || document.hidden) return;
@@ -908,7 +940,7 @@
     wn.timers = [];
     wnSnow(on);
     if (!on) {
-      wn.decor.querySelectorAll('.wn-sleigh,.wn-star,.wn-snowman,.wn-gift').forEach(x => x.remove());
+      wn.decor.querySelectorAll('.wn-sleigh,.wn-star,.wn-snowman,.wn-gift,.wn-sledman,.wn-peek').forEach(x => x.remove());
       if (wn.top) wn.top.textContent = '';
       return;
     }
@@ -918,6 +950,8 @@
     };
     again(wnSpawnSleigh, 40000, 70000, rand(6000, 11000));
     again(wnSpawnSnowman, 28000, 50000, rand(12000, 20000));
+    again(wnSpawnSledman, 45000, 80000, rand(22000, 32000));
+    again(wnSpawnPeek, 35000, 60000, rand(30000, 42000));
     again(wnSpawnSnowball, 30000, 60000, rand(18000, 28000));
     again(wnSpawnStar, 16000, 34000, rand(4000, 9000));
     again(wnAmbient, 3000, 3000, 2500);

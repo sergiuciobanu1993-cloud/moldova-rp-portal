@@ -27,13 +27,27 @@ html.tema-iarna .brand::after{content:'';display:inline-block;flex:none;width:20
 .wn-garland{position:absolute;left:0;right:0;bottom:-3px;height:3px;pointer-events:none;z-index:2;
   background:linear-gradient(90deg,transparent,rgba(40,90,60,.9) 4%,rgba(40,90,60,.9) 96%,transparent)}
 .wn-garland.top{position:fixed;top:0;bottom:auto;z-index:31}
-.wn-garland i{position:absolute;top:1px;width:7px;height:11px;margin-left:-3.5px;border-radius:50% 50% 46% 46%;
-  transform:translateY(var(--sag,3px));background:var(--c);box-shadow:0 0 6px 1px var(--c);
-  animation:wnTwinkle 2.6s ease-in-out var(--d,0s) infinite alternate}
+.wn-garland i{position:absolute;top:1px;width:9px;height:14px;margin-left:-4.5px;border-radius:50% 50% 46% 46%;
+  transform:translateY(var(--sag,3px));
+  background:radial-gradient(circle at 38% 30%,#fff 0 14%,var(--c) 42%,var(--cd) 100%);
+  box-shadow:0 0 4px 1px var(--c),0 0 14px 4px var(--g),0 0 30px 10px var(--g2);
+  animation:wnBulb 2.4s ease-in-out var(--d,0s) infinite}
 .wn-garland i::before{content:'';position:absolute;left:50%;bottom:100%;width:1px;height:var(--sag,3px);margin-left:-.5px;background:rgba(40,90,60,.9)}
-.wn-garland i::after{content:'';position:absolute;left:1px;right:1px;top:-2px;height:3px;border-radius:1px;background:#3b4a3f}
-.wn-garland .c-r{--c:#ff4d5e}.wn-garland .c-g{--c:#39d98a}.wn-garland .c-y{--c:#ffd25a}.wn-garland .c-b{--c:#5fb8ff}
-@keyframes wnTwinkle{0%{opacity:.35;box-shadow:0 0 2px 0 var(--c)}100%{opacity:1;box-shadow:0 0 10px 3px var(--c)}}
+.wn-garland i::after{content:'';position:absolute;left:1.5px;right:1.5px;top:-3px;height:4px;border-radius:1px;background:#3b4a3f}
+.wn-garland .c-r{--c:#ff5566;--cd:#9b1424;--g:rgba(255,77,94,.75);--g2:rgba(255,77,94,.28)}
+.wn-garland .c-g{--c:#45e597;--cd:#0f6b3d;--g:rgba(57,217,138,.7);--g2:rgba(57,217,138,.26)}
+.wn-garland .c-y{--c:#ffdc6e;--cd:#a8730a;--g:rgba(255,210,90,.75);--g2:rgba(255,210,90,.3)}
+.wn-garland .c-b{--c:#6fc2ff;--cd:#14588f;--g:rgba(95,184,255,.75);--g2:rgba(95,184,255,.28)}
+/* lumina caldă pe care o aruncă beculețele pe pagină, sub antet */
+.wn-garland::after{content:'';position:absolute;left:0;right:0;top:4px;height:46px;pointer-events:none;
+  background:linear-gradient(180deg,rgba(255,214,140,.10),rgba(255,214,140,0));animation:wnGlow 4.8s ease-in-out infinite alternate}
+@keyframes wnGlow{from{opacity:.55}to{opacity:1}}
+/* aprinse în valuri: fiecare culoare se aprinde pe rând, apoi toate clipesc */
+@keyframes wnBulb{
+  0%,100%{filter:brightness(.42) saturate(.7);box-shadow:0 0 2px 0 var(--c)}
+  30%,62%{filter:brightness(1.35) saturate(1.15);box-shadow:0 0 5px 2px var(--c),0 0 16px 5px var(--g),0 0 34px 12px var(--g2)}
+  46%{filter:brightness(1.6) saturate(1.2);box-shadow:0 0 6px 2px #fff,0 0 20px 7px var(--g),0 0 42px 16px var(--g2)}
+}
 
 /* ---- 3) subsol: zăpadă pe margine + brad cu cadouri ---- */
 html.tema-iarna footer{position:relative}
@@ -121,10 +135,10 @@ html.tema-iarna .hw-hero .hwh-bat{display:none}
 
 /* efecte oprite din buton sau „mișcare redusă" */
 html.wn-nofx .wn-aurora,html.wn-nofx .wn-garland i,html.wn-nofx.tema-iarna .hw-hero .hwh-fog{animation:none}
-html.wn-nofx .wn-garland i{opacity:.85}
+html.wn-nofx .wn-garland i{filter:brightness(1.1)}
 @media (prefers-reduced-motion:reduce){
   .wn-aurora,.wn-garland i,.hw-tip,html.tema-iarna .hw-hero .hwh-fog{animation:none}
-  .wn-garland i{opacity:.85}
+  .wn-garland i{filter:brightness(1.1)}
 }
 
 /* ---- 8) (31.10.2026) Moșul cu cadouri, oamenii de zăpadă și bulgării ---- */
@@ -152,3 +166,36 @@ html.wn-nofx .wn-garland i{opacity:.85}
   filter:drop-shadow(0 2px 6px rgba(0,0,0,.35));animation:wnSplat 5.5s ease-in forwards}
 @keyframes wnSplat{0%{opacity:0;transform:rotate(var(--r,0deg)) scale(.25)}5%{opacity:.95;transform:rotate(var(--r,0deg)) scale(var(--s,1))}55%{opacity:.85;transform:translateY(18px) rotate(var(--r,0deg)) scale(var(--s,1))}100%{opacity:0;transform:translateY(80px) rotate(var(--r,0deg)) scale(calc(var(--s,1) * .9))}}
 @media (prefers-reduced-motion:reduce){.wn-snowman,.wn-ball,.wn-splat,.wn-gift{display:none}}
+
+/* ---- 9) (31.10.2026) încă oameni de zăpadă: pe sanie, care se uită de după margine, în hero ---- */
+/* omul de zăpadă pe sanie, care alunecă prin josul ecranului */
+.wn-sledman{position:absolute;left:0;bottom:4px;width:var(--w,120px);animation:wnSled var(--t,10s) linear both;will-change:transform;filter:drop-shadow(0 0 10px rgba(191,230,255,.35));pointer-events:auto;cursor:pointer}
+.wn-sledman.rev{animation-name:wnSledRev}
+.wn-sledman .wn-sm{display:block;width:62%;margin:0 0 -14% 16%;animation:wnSledBob .5s ease-in-out infinite alternate}
+.wn-sledman .wn-sm svg{display:block;width:100%;height:auto;overflow:visible}
+.wn-sledman .wn-sled{display:block;width:100%;height:auto}
+.wn-sledman .wn-arm{transform-box:fill-box;transform-origin:0% 100%;animation:wnWave .4s ease-in-out infinite alternate}
+.wn-sledman::after{content:'';position:absolute;right:96%;bottom:2px;width:70%;height:10px;border-radius:50%;background:radial-gradient(ellipse at 100% 50%,rgba(240,248,255,.55),transparent 70%);filter:blur(2px)}
+.wn-sledman.rev::after{right:auto;left:96%;background:radial-gradient(ellipse at 0% 50%,rgba(240,248,255,.55),transparent 70%)}
+@keyframes wnSled{from{transform:translate3d(-30vw,0,0)}to{transform:translate3d(115vw,0,0)}}
+@keyframes wnSledRev{from{transform:translate3d(115vw,0,0) scaleX(-1)}to{transform:translate3d(-30vw,0,0) scaleX(-1)}}
+@keyframes wnSledBob{from{transform:translateY(0) rotate(-2deg)}to{transform:translateY(-3px) rotate(2deg)}}
+/* omul de zăpadă care se uită de după marginea ecranului */
+.wn-peek{position:absolute;top:var(--y,50vh);width:var(--w,96px);pointer-events:auto;cursor:pointer;filter:drop-shadow(0 0 12px rgba(191,230,255,.35))}
+.wn-peek svg{display:block;width:100%;height:auto;overflow:visible}
+.wn-peek .wn-arm{transform-box:fill-box;transform-origin:0% 100%;animation:wnWave .45s ease-in-out infinite alternate}
+.wn-peek.l{left:0;transform-origin:0 50%;animation:wnPeekL 6.5s ease-in-out both}
+.wn-peek.r{right:0;transform-origin:100% 50%;animation:wnPeekR 6.5s ease-in-out both}
+.wn-peek.r svg{transform:scaleX(-1)}
+@keyframes wnPeekL{0%,100%{transform:translateX(-100%) rotate(18deg)}16%,80%{transform:translateX(-38%) rotate(10deg)}46%{transform:translateX(-30%) rotate(4deg)}}
+@keyframes wnPeekR{0%,100%{transform:translateX(100%) rotate(-18deg)}16%,80%{transform:translateX(38%) rotate(-10deg)}46%{transform:translateX(30%) rotate(-4deg)}}
+/* prima pagină: zăpadă la baza hero-ului și un om de zăpadă care stă acolo */
+html.tema-iarna .hw-hero::before{content:'';position:absolute;left:0;right:0;bottom:-2px;height:44px;
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 44' preserveAspectRatio='none'%3E%3Cpath d='M0 26Q30 10 64 22T130 18T200 24T270 16T340 22T400 18V44H0z' fill='%23eaf3fc' opacity='.85'/%3E%3C/svg%3E") 0 100%/400px 44px repeat-x;filter:drop-shadow(0 -2px 8px rgba(159,216,255,.3))}
+html.tema-iarna .hw-hero::after{content:'';position:absolute;left:52%;bottom:18px;width:92px;height:115px;
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 -16 120 166'%3E%3Cellipse cx='60' cy='118' rx='38' ry='32' fill='%23f4f9ff'/%3E%3Cellipse cx='60' cy='70' rx='28' ry='25' fill='%23f8fbff'/%3E%3Ccircle cx='60' cy='34' r='20' fill='%23fbfdff'/%3E%3Cg fill='%231d2633'%3E%3Ccircle cx='53' cy='29' r='2.600'/%3E%3Ccircle cx='67' cy='29' r='2.600'/%3E%3Ccircle cx='60' cy='64' r='2.600'/%3E%3Ccircle cx='60' cy='76' r='2.600'/%3E%3Ccircle cx='51' cy='42' r='1.300'/%3E%3Ccircle cx='55' cy='44.500' r='1.300'/%3E%3Ccircle cx='60' cy='45.500' r='1.300'/%3E%3Ccircle cx='65' cy='44.500' r='1.300'/%3E%3Ccircle cx='69' cy='42' r='1.300'/%3E%3C/g%3E%3Cpath d='M60 34l17 3-17 3z' fill='%23ff8a2a'/%3E%3Cpath d='M38 52q22 8 44 0l1 7q-23 8-46 0z' fill='%23e8414f'/%3E%3Cpath d='M70 56l6 20-7 1-4-18z' fill='%23c9303d'/%3E%3Crect x='42' y='4' width='36' height='7' rx='2' fill='%231d2633'/%3E%3Crect x='47' y='-14' width='26' height='20' rx='2' fill='%231d2633'/%3E%3Crect x='47' y='0' width='26' height='4' fill='%23e8414f'/%3E%3Cpath d='M34 70L8 58M86 70l26-16' stroke='%236b4020' stroke-width='3' stroke-linecap='round' fill='none'/%3E%3C/svg%3E") center bottom/contain no-repeat;
+  filter:drop-shadow(0 0 14px rgba(191,230,255,.35));transform-origin:50% 100%;animation:wnSway 3.2s ease-in-out infinite alternate}
+@keyframes wnSway{from{transform:rotate(-2.5deg)}to{transform:rotate(2.5deg)}}
+@media (max-width:900px){html.tema-iarna .hw-hero::after{display:none}}
+html.wn-nofx.tema-iarna .hw-hero::after,html.wn-nofx .wn-garland::after{animation:none}
+@media (prefers-reduced-motion:reduce){.wn-sledman,.wn-peek{display:none}html.tema-iarna .hw-hero::after,.wn-garland::after{animation:none}}

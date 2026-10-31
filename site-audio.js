@@ -284,10 +284,10 @@
 
   // pornirea la prima apăsare pe pagină (regula browserelor)
   function firstGesture(e) {
-    if (e && e.target && e.target.closest && e.target.closest(".mrp-audio-widget")) return; // widgetul se ocupă singur
+    if (e && e.target && e.target.closest && e.target.closest(".mrp-audio-widget,[data-alta-muzica]")) return; // widgetul / alt player se ocupă singur
     document.removeEventListener("pointerdown", firstGesture, true);
     document.removeEventListener("keydown", firstGesture, true);
-    play();
+    if (!otherMusic) play();
   }
   document.addEventListener("pointerdown", firstGesture, true);
   document.addEventListener("keydown", firstGesture, true);
@@ -298,6 +298,10 @@
     else if (!document.hidden && pausedByHide) { pausedByHide = false; play(); }
   });
   window.addEventListener("pagehide", persist);
+  // (31.10.2026) când pornește alt cântec pe pagină (ex. videoclipurile de pe
+  // prima pagină, secțiunea „Muzica sărbătorilor"), muzica de aici se oprește
+  var otherMusic = false;
+  document.addEventListener("mrp:alta-muzica", function () { otherMusic = true; pausedByHide = false; stop(); });
   // (31.10.2026) după 30 de secunde de muzică pe pagină: semnal pentru
   // sarcina „ascultă o melodie" din questurile de Crăciun (craciun.js)
   var heard = 0;

@@ -304,6 +304,44 @@
       </aside>
     </section>
 
+    <!-- (31.10.2026) Muzica sărbătorilor: videoclipurile OFICIALE de pe YouTube,
+         încorporate (playerul rămâne vizibil, cum cer regulile YouTube). Apare doar
+         cu tema de iarnă pornită (vezi tema-iarna.css, secțiunea 12). Playerul se
+         încarcă abia la apăsare, prin youtube-nocookie.com; când pornește un
+         cântec, muzica din colțul din dreapta jos se oprește. -->
+    <section class="section xm-music" id="muzica-sarbatori" data-alta-muzica hidden>
+      <div class="section-head"><div><p class="eyebrow">SĂRBĂTORI PE MOLDOVA RP</p><h2>🎶 Muzica sărbătorilor</h2></div></div>
+      <div class="xm-wrap">
+        <div class="xm-player" id="xm-player"><button type="button" class="xm-poster" id="xm-poster" aria-label="Pornește cântecul"><img alt="" id="xm-poster-img"><span class="xm-play" aria-hidden="true">▶</span></button></div>
+        <ol class="xm-list" id="xm-list">
+          <li><button type="button" data-yt="h2oesVeqn34"><img src="https://i.ytimg.com/vi/h2oesVeqn34/mqdefault.jpg" alt="" loading="lazy"><span><b>Colindăm Iarna</b><small>Irina Rimes, Raluka, Ana Baniciu, Nika</small></span></button></li>
+          <li><button type="button" data-yt="sL_7p2FfWLk"><img src="https://i.ytimg.com/vi/sL_7p2FfWLk/mqdefault.jpg" alt="" loading="lazy"><span><b>Moș Crăciun</b><small>Pavel și Cleopatra Stratan</small></span></button></li>
+          <li><button type="button" data-yt="rtR-u_DtaOM"><img src="https://i.ytimg.com/vi/rtR-u_DtaOM/mqdefault.jpg" alt="" loading="lazy"><span><b>Leru-i Ler</b><small>Via Dacă</small></span></button></li>
+          <li><button type="button" data-yt="_dKfLsXbSHM"><img src="https://i.ytimg.com/vi/_dKfLsXbSHM/mqdefault.jpg" alt="" loading="lazy"><span><b>Polul Nord (Brrrrrr...)</b><small>Elena &amp; Adi Cristescu feat. Uddi</small></span></button></li>
+        </ol>
+      </div>
+      <p class="xm-credit">Videoclipurile oficiale de pe YouTube ale caselor de discuri Quantum Music, Cat Music și Via Dacă.</p>
+    </section>
+    <script>
+    (() => {
+      const list = document.getElementById('xm-list'), player = document.getElementById('xm-player');
+      const poster = document.getElementById('xm-poster'), img = document.getElementById('xm-poster-img');
+      const first = list.querySelector('[data-yt]');
+      let current = first.dataset.yt;
+      const mark = id => list.querySelectorAll('[data-yt]').forEach(b => b.setAttribute('aria-current', String(b.dataset.yt === id)));
+      img.src = 'https://i.ytimg.com/vi/' + current + '/hqdefault.jpg';
+      mark(current);
+      function play(id) {
+        current = id;
+        mark(id);
+        document.dispatchEvent(new CustomEvent('mrp:alta-muzica')); // oprește muzica din widget
+        player.innerHTML = '<iframe src="https://www.youtube-nocookie.com/embed/' + id + '?autoplay=1&rel=0" title="Muzica sărbătorilor" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>';
+      }
+      poster.addEventListener('click', () => play(current));
+      list.addEventListener('click', e => { const b = e.target.closest('[data-yt]'); if (b) play(b.dataset.yt); });
+    })();
+    </script>
+
     <section class="section about" id="despre">
       <div class="about-box">
         <img src="assets/wordmark.png" alt="Moldova RP" class="wordmark">
@@ -448,6 +486,6 @@
 <script src="orbita.js?v=20260930a"></script>
 <script src="sfera.js?v=20261001c"></script>
 <script src="vitrina.js?v=20261030a"></script>
-<script src="site-audio.js?v=20261031h"></script>
+<script src="site-audio.js?v=20261031i"></script>
 </body>
 </html>

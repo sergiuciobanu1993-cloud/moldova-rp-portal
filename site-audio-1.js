@@ -298,7 +298,14 @@
     else if (!document.hidden && pausedByHide) { pausedByHide = false; play(); }
   });
   window.addEventListener("pagehide", persist);
-  setInterval(function () { if (playing) persist(); }, 1000);
+  // (31.10.2026) după 30 de secunde de muzică pe pagină: semnal pentru
+  // sarcina „ascultă o melodie" din questurile de Crăciun (craciun.js)
+  var heard = 0;
+  setInterval(function () {
+    if (!playing) return;
+    persist();
+    if (!gapUntil && ++heard === 30) document.dispatchEvent(new CustomEvent("mrp:muzica"));
+  }, 1000);
 
   // ---------------------------------------------------------------------
   // Widgetul: buton pornit/oprit, numele melodiei (deschide lista), volum

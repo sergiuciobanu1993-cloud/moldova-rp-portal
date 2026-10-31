@@ -22,7 +22,7 @@
 // (rămâne cât ții fila deschisă); ?tema=nu o oprește.
 (() => {
   if (window.MRP_TEMA) return;
-  const VER = '20261031b'; // aceeași ca în pwa.js — schimbă-le împreună când modifici tema
+  const VER = '20261031h'; // aceeași ca în pwa.js — schimbă-le împreună când modifici tema
   const root = document.documentElement;
   const ls = {
     get(k) { try { return localStorage.getItem(k); } catch { return null; } },
@@ -339,6 +339,126 @@
         tone(c, out, t + 0.06, 'sine', f * 1.5, f * 1.5, 0.35, 0.04, 0.003);
         return 0.55;
       },
+
+      // ---- (31.10.2026) „Jingle Bells" — tot refrenul (melodie din 1857, liberă de
+      // drepturi), la cutia muzicală, cu bas și clopoței de sanie pe fiecare timp ----
+      jbsong(c, out, t) {
+        const q = 0.21;
+        const C = 523.25, D = 587.33, E = 659.25, F = 698.46, G = 783.99;
+        const A1 = [[E, 1], [E, 1], [E, 2], [E, 1], [E, 1], [E, 2], [E, 1], [G, 1], [C, 1.5], [D, 0.5], [E, 4]];
+        const melody = [
+          ...A1,
+          [F, 1], [F, 1], [F, 1.5], [F, 0.5], [F, 1], [E, 1], [E, 1], [E, 0.5], [E, 0.5], [E, 1], [D, 1], [D, 1], [E, 1], [D, 2], [G, 2],
+          ...A1,
+          [F, 1], [F, 1], [F, 1.5], [F, 0.5], [F, 1], [E, 1], [E, 1], [E, 0.5], [E, 0.5], [G, 1], [G, 1], [F, 1], [D, 1], [C, 4],
+        ];
+        let at = t;
+        melody.forEach(([f, d]) => {
+          [[1, 0.11], [2, 0.04], [3.01, 0.015]].forEach(([h, a]) => {
+            const o = osc(c, 'sine', f * h), g = gain(c, 0);
+            env(g, at, 0.004, a, 0, Math.min(1.1, 0.5 + d * q));
+            o.connect(g).connect(out); o.start(at); o.stop(at + 1.2);
+          });
+          at += d * q;
+        });
+        // bas: tonica pe timpul 1, cvinta pe timpul 3 (C C C C | F C D G | C C C C | F C G C)
+        const ROOT = { C: [130.81, 196.0], F: [174.61, 130.81], D: [146.83, 220.0], G: [98.0, 146.83] };
+        'CCCCFCDGCCCCFCGC'.split('').forEach((ch, m) => {
+          ROOT[ch].forEach((f, i) => {
+            const b = t + (m * 4 + i * 2) * q, o = osc(c, 'triangle', f), g = gain(c, 0);
+            env(g, b, 0.01, 0.09, 0.05, 0.3);
+            o.connect(g).connect(out); o.start(b); o.stop(b + 0.45);
+          });
+        });
+        // clopoței de sanie: încet pe fiecare timp, mai tare pe 2 și 4
+        const hp = filt(c, 'highpass', 2000);
+        hp.connect(out);
+        for (let i = 0; i < 64; i++) {
+          const b = t + i * q, acc = i % 2 ? 1 : 0.55;
+          [3870, 5520].forEach((f, j) => {
+            const o = osc(c, 'sine', f * (1 + (Math.random() - 0.5) * 0.04)), g = gain(c, 0);
+            env(g, b, 0.002, (0.03 - j * 0.008) * acc, 0, 0.12);
+            o.connect(g).connect(hp); o.start(b); o.stop(b + 0.2);
+          });
+          const n = noiseSrc(c, 'white', b, 0.04), ng = gain(c, 0);
+          env(ng, b, 0.002, 0.035 * acc, 0, 0.04);
+          n.connect(filt(c, 'bandpass', 7000, 1.5)).connect(ng).connect(hp);
+        }
+        return at - t + 1.1;
+      },
+
+      // ---- (31.10.2026) cutiile din VIP Shop cu tema de iarnă ----
+      // rotirea s-a oprit: o bufnitură moale în zăpadă și un clinchet de clopoțel
+      xstop(c, out, t) {
+        tone(c, out, t, 'sine', 120, 55, 0.2, 0.3, 0.003);
+        const n = noiseSrc(c, 'white', t, 0.16), g = gain(c, 0);
+        env(g, t, 0.003, 0.12, 0, 0.14);
+        n.connect(filt(c, 'lowpass', 1300)).connect(g).connect(out);
+        [2350, 3870, 5520].forEach((f, j) => tone(c, out, t + 0.03, 'sine', f, f, 0.32, 0.05 - j * 0.012, 0.002));
+        return 0.4;
+      },
+      // caseta alunecă din perete: scrâșnet de zăpadă + două scuturături de clopoței
+      xslide(c, out, t) {
+        const n = noiseSrc(c, 'white', t, 0.7), bp = filt(c, 'bandpass', 700, 1.4), g = gain(c, 0);
+        bp.frequency.setValueAtTime(600, t);
+        bp.frequency.exponentialRampToValueAtTime(1500, t + 0.6);
+        env(g, t, 0.08, 0.12, 0.35, 0.22);
+        n.connect(bp).connect(g).connect(out);
+        const r = noiseSrc(c, 'brown', t, 0.7), rg = gain(c, 0);
+        env(rg, t, 0.06, 0.35, 0.3, 0.25);
+        r.connect(filt(c, 'lowpass', 300)).connect(rg).connect(out);
+        [0.5, 0.64].forEach((d, i) => [2350, 3870, 5520, 7150].forEach((f, j) =>
+          tone(c, out, t + d, 'sine', f * (1 + (Math.random() - 0.5) * 0.04), 0, 0.25, (0.05 - j * 0.01) * (i ? 0.7 : 1), 0.002)));
+        return 0.95;
+      },
+      // se vede culoarea: arpegiu major de celestă, mai sus cu cât premiul e mai rar
+      xreveal(c, out, t, k = 0) {
+        const base = [523.25, 587.33, 659.25, 698.46][Math.max(0, Math.min(3, k))];
+        [1, 1.26, 1.498, 2].forEach((r, i) => {
+          [[1, 0.09], [2.76, 0.025], [5.4, 0.008]].forEach(([h, a]) => {
+            const o = osc(c, 'sine', base * r * h), g = gain(c, 0);
+            env(g, t + i * 0.07, 0.004, a, 0, 1.2);
+            o.connect(g).connect(out); o.start(t); o.stop(t + 1.6);
+          });
+        });
+        if (k >= 2) defs.twinkle(c, out, t + 0.32);
+        return 1.6;
+      },
+      // capacul: hârtie de cadou foșnind și o fundă care se desface
+      xribbon(c, out, t) {
+        let at = t;
+        for (let i = 0; i < 5; i++) {
+          const d = 0.035 + Math.random() * 0.05, n = noiseSrc(c, 'white', at, d), g = gain(c, 0);
+          env(g, at, 0.004, 0.09 + Math.random() * 0.06, 0, d);
+          n.connect(filt(c, 'bandpass', 2600 + Math.random() * 1800, 0.9)).connect(g).connect(out);
+          at += d + 0.02 + Math.random() * 0.04;
+        }
+        tone(c, out, at, 'sine', 620, 300, 0.12, 0.12, 0.004);
+        return at - t + 0.15;
+      },
+      // premiul: „Jingle Bells" la cutia muzicală, cu atât mai sus cu cât e mai rar;
+      // la rare se aud și clopoțeii de sanie, la legendare și „Ho-ho-ho"
+      xwin(c, out, t, k = 0) {
+        k = Math.max(0, Math.min(3, k));
+        const st = Math.pow(2, [0, 2, 4, 5][k] / 12), q = 0.17;
+        const E = 659.25 * st, G = 783.99 * st, C = 523.25 * st, D = 587.33 * st;
+        const notes = k >= 2
+          ? [[E, 1], [E, 1], [E, 2], [E, 1], [E, 1], [E, 2], [E, 1], [G, 1], [C, 1.5], [D, 0.5], [E, 3]]
+          : [[E, 1], [E, 1], [E, 2], [E, 1], [E, 1], [E, 2]];
+        let at = t;
+        notes.forEach(([f, d]) => {
+          [[1, 0.12], [2, 0.045], [3.01, 0.018]].forEach(([h, a]) => {
+            const o = osc(c, 'sine', f * h), g = gain(c, 0);
+            env(g, at, 0.004, a, 0, 0.8);
+            o.connect(g).connect(out); o.start(at); o.stop(at + 0.9);
+          });
+          at += d * q;
+        });
+        let end = at - t + 0.8;
+        if (k >= 2) { const g = gain(c, 0.55); g.connect(out); defs.jingle(c, g, t + 0.05); end = Math.max(end, 1.55); }
+        if (k >= 3) { const g = gain(c, 0.9); g.connect(out); defs.hohoho(c, g, at + 0.1); end = Math.max(end, at - t + 1.15); }
+        return end;
+      },
     };
 
     // Contextul audio se creează abia la prima apăsare a vizitatorului și se
@@ -375,6 +495,16 @@
       get ready() { return !!ctx && ctx.state === 'running'; },
       // target = { ctx, out }: redare într-un alt context (folosit la teste)
       play,
+      // oprește tot ce sună acum (ex. cântecul, când se apasă „fără sunete")
+      hush() {
+        if (!ctx || !master) return;
+        const old = master;
+        try { old.gain.setTargetAtTime(0, ctx.currentTime, 0.05); } catch { /* */ }
+        setTimeout(() => { try { old.disconnect(); } catch { /* */ } }, 400);
+        master = ctx.createGain();
+        master.gain.value = 1;
+        master.connect(ctx.destination);
+      },
       // dintr-o apăsare: pornește sunetul imediat ce browserul dă drumul la
       // audio; dacă asta durează mai mult de „wait" ms, renunță (altfel s-ar
       // strânge mai multe sunete și ar porni toate odată)
@@ -684,6 +814,8 @@
   };
   let wn = null; // starea decorului de iarnă, cât e pornit
   const WN_NEXT = 'mrp_tema_iarna_urm';
+  // cântecele care se aud din când în când, pe rând (colindele se adaugă aici)
+  const WN_SONGS = ['jbsong'];
 
   function wnSound(name, vol) {
     if (!wn || wn.mode !== 'all' || wn.work || document.hidden) return false;
@@ -744,7 +876,7 @@
     if (on && !document.hidden) wn.raf = requestAnimationFrame(wnSnowFrame);
     else wn.cx.clearRect(0, 0, wn.W || 0, wn.H || 0);
   }
-  function wnVisibility() { if (wn && wn.fx) wnSnow(!document.hidden); }
+  function wnVisibility() { if (wn && wn.fx) wnSnow(!document.hidden); if (document.hidden) snd.hush(); }
 
   // beculețele de pe antet (sau de sus, pe paginile fără antet)
   function wnGarland() {
@@ -850,7 +982,7 @@
     m.style.setProperty('--w', Math.round(small ? rand(96, 116) : rand(140, 176)) + 'px');
     m.style.setProperty('--t', rand(8.5, 12).toFixed(1) + 's');
     m.title = 'Aruncă un bulgăre!';
-    m.addEventListener('pointerdown', ev => { ev.stopPropagation(); const r = m.getBoundingClientRect(); wnThrow(r.left + r.width / 2, r.top + r.height * 0.3); });
+    m.addEventListener('pointerdown', ev => { ev.stopPropagation(); const r = m.getBoundingClientRect(); wnThrow(r.left + r.width / 2, r.top + r.height * 0.3); wnBulgare(); });
     m.addEventListener('animationend', e => { if (e.target === m) m.remove(); });
     wn.decor.appendChild(m);
     wnSound('whoosh', 0.5);
@@ -866,11 +998,13 @@
     m.style.setProperty('--w', Math.round(small ? rand(70, 86) : rand(100, 128)) + 'px');
     m.title = 'Aruncă un bulgăre!';
     const toss = () => { const r = m.getBoundingClientRect(); wnThrow(left ? r.right - 10 : r.left + 10, r.top + r.height * 0.35); };
-    m.addEventListener('pointerdown', ev => { ev.stopPropagation(); toss(); });
+    m.addEventListener('pointerdown', ev => { ev.stopPropagation(); toss(); wnBulgare(); });
     m.addEventListener('animationend', e => { if (e.target === m) m.remove(); });
     wn.decor.appendChild(m);
     if (Math.random() < 0.5) wn.timers.push(setTimeout(() => { if (wn && wn.fx && m.isConnected) toss(); }, 3000));
   }
+  // (31.10.2026) semnal pentru sarcina „aruncă un bulgăre" din questurile de Crăciun (craciun.js)
+  function wnBulgare() { document.dispatchEvent(new CustomEvent('mrp:bulgare')); }
   function wnSpawnSnowball() { if (wn && wn.fx && !document.hidden && wn.top && wn.top.querySelectorAll('.wn-splat').length < 3) wnThrow(); }
   function wnSpawnStar() {
     if (!wn || !wn.fx || document.hidden) return;
@@ -886,12 +1020,11 @@
     let next = Number(ss.get(WN_NEXT)) || 0;
     if (!next) { next = now + rand(3000, 6000); ss.set(WN_NEXT, String(Math.round(next))); }
     if (now < next) return;
-    const last = ss.get('mrp_tema_iarna_ult');
-    const pool = ['musicbox', 'chime', 'jingle', 'bell'].filter(n => n !== last);
-    const name = pool[Math.floor(Math.random() * pool.length)];
-    if (!wnSound(name, name === 'bell' ? 0.7 : name === 'musicbox' ? 0.9 : 0.8)) return;
-    ss.set('mrp_tema_iarna_ult', name);
-    ss.set(WN_NEXT, String(Math.round(now + rand(50000, 95000))));
+    // (31.10.2026) în locul sunetelor scurte: cântece întregi, pe rând
+    const i = (Number(ls.get('mrp_tema_iarna_cantec')) || 0) % WN_SONGS.length;
+    if (!wnSound(WN_SONGS[i], 0.85)) return;
+    ls.set('mrp_tema_iarna_cantec', String(i + 1));
+    ss.set(WN_NEXT, String(Math.round(now + rand(100000, 160000))));
     if (!ls.get('mrp_tema_iarna_sunet_stiut')) {
       ls.set('mrp_tema_iarna_sunet_stiut', '1');
       hwTip('Site-ul are sunete de sărbători. Le poți opri din butonul cu fulg.', 7000);
@@ -934,6 +1067,174 @@
       wn.top.appendChild(f);
     }
   }
+  // ---- (31.10.2026) efecte la trecerea între pagini și la deschiderea ferestrelor ----
+  const WN_NAV = 'mrp_wn_nav';
+  // un fulg care sare dintr-un punct (aceeași animație ca la apăsare)
+  function wnBurstAt(x, y, opts = {}) {
+    if (!wn || !wn.top) return;
+    const n = opts.n || 6;
+    for (let i = 0; i < n; i++) {
+      const f = el('i', 'wn-cb' + (opts.big ? ' big' : ''), FLAKE_SVG);
+      const px = opts.w ? x + rand(-opts.w / 2, opts.w / 2) : x;
+      f.style.left = px + 'px';
+      f.style.top = y + 'px';
+      f.style.color = ['#ffffff', '#bfe6ff', '#ffd27a'][Math.floor(Math.random() * 3)];
+      f.style.setProperty('--dx', Math.round(rand(-70, 70)) + 'px');
+      f.style.setProperty('--dy', Math.round(rand(opts.up || -120, -25)) + 'px');
+      f.style.setProperty('--r', Math.round(rand(-160, 160)) + 'deg');
+      f.style.setProperty('--s', rand(0.6, 1.25).toFixed(2));
+      f.style.animationDelay = Math.round(rand(0, opts.spread || 0)) + 'ms';
+      f.addEventListener('animationend', () => f.remove());
+      wn.top.appendChild(f);
+    }
+  }
+  // Plecarea spre altă pagină: o cortină de noapte cu ninsoare coboară peste
+  // pagină (~0,3 s), apoi browserul merge mai departe. Dacă pagina nouă se
+  // încarcă greu, în mijloc se învârte un fulg.
+  function wnNav(e) {
+    if (!wn || !wn.fx || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    const a = e.target && e.target.closest && e.target.closest('a[href]');
+    if (!a || a.hasAttribute('download') || a.closest('[data-no-fx]')) return;
+    if (a.target && a.target !== '_self') return;
+    let url;
+    try { url = new URL(a.href, location.href); } catch { return; }
+    if (url.origin !== location.origin || !/^https?:$/.test(url.protocol)) return;
+    if (url.pathname === location.pathname && url.search === location.search) return; // doar o ancoră pe aceeași pagină
+    if (/^\/(admin|mdt|api)/i.test(url.pathname) || /\.(pdf|zip|apk|png|jpe?g|mp4)$/i.test(url.pathname)) return;
+    e.preventDefault();
+    ss.set(WN_NAV, String(Date.now()));
+    if (wn.mode === 'all') snd.soon('whoosh', 0.7, 200);
+    let v = document.querySelector('.wn-veil');
+    if (!v) {
+      v = el('div', 'wn-veil', '<i class="wn-veil-flake">' + FLAKE_SVG + '</i>');
+      v.setAttribute('aria-hidden', 'true');
+      document.body.appendChild(v);
+    }
+    // dacă navigarea nu pornește (ex. e oprită de browser), cortina se ridică singură
+    clearTimeout(wn.veilT);
+    wn.veilT = setTimeout(() => v.remove(), 6000);
+    setTimeout(() => { location.href = url.href; }, 300);
+  }
+  // întoarcerea cu „Înapoi": browserul poate reda pagina veche din memorie,
+  // cu cortina încă trasă — o scoatem
+  function wnShow(e) {
+    if (e.persisted) document.querySelectorAll('.wn-veil').forEach(x => x.remove());
+  }
+  // Sosirea pe pagină după un link de pe site: câțiva fulgi cad de sus pe
+  // toată lățimea și o lumină rece trece peste antet.
+  function wnArrive() {
+    const t = Number(ss.get(WN_NAV)) || 0;
+    ss.del(WN_NAV);
+    if (!wn || !wn.fx || !wn.top || Date.now() - t > 5000) return;
+    const w = window.innerWidth;
+    const n = Math.min(26, Math.round(w / 55));
+    for (let i = 0; i < n; i++) {
+      const f = el('i', 'wn-drop', FLAKE_SVG);
+      f.style.left = Math.round(rand(0, w)) + 'px';
+      f.style.color = ['#ffffff', '#bfe6ff', '#ffd27a', '#ffffff'][i % 4];
+      f.style.setProperty('--fy', Math.round(rand(window.innerHeight * 0.35, window.innerHeight * 0.8)) + 'px');
+      f.style.setProperty('--fx', Math.round(rand(-60, 60)) + 'px');
+      f.style.setProperty('--r', Math.round(rand(-220, 220)) + 'deg');
+      f.style.setProperty('--s', rand(0.6, 1.4).toFixed(2));
+      f.style.animationDelay = Math.round(rand(0, 450)) + 'ms';
+      f.style.animationDuration = Math.round(rand(1500, 2300)) + 'ms';
+      f.addEventListener('animationend', () => f.remove());
+      wn.top.appendChild(f);
+    }
+    const g = el('i', 'wn-arrive');
+    g.addEventListener('animationend', () => g.remove());
+    wn.top.appendChild(g);
+  }
+  // Ferestrele care se deschid (anunțuri, confirmări, profiluri, secțiuni
+  // pliabile): o ramă de lumină rece-aurie le încadrează o clipă, din marginea
+  // de sus sar fulgi și se aude un arpegiu scurt de clopoței.
+  const WN_POP_SEL = 'dialog,[role="dialog"],[aria-modal="true"],[class*="modal-overlay"],[class*="-overlay"],[id$="-overlay"],.cf-back';
+  const WN_POP_SKIP = '.hero-overlay,#reveal-overlay,.wn-top,.wn-decor,.vt-view,.ox-stage,[data-no-fx]';
+  const WN_PANEL_SEL = '[role="dialog"],dialog,.news-modal,.modal-box,.modal,[class*="-box"],.panel,.formbox';
+  function wnShown(t) {
+    if (!t.isConnected || t.hidden || !t.getClientRects().length) return false;
+    return getComputedStyle(t).visibility !== 'hidden';
+  }
+  function wnPanelOf(t) {
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const small = x => { const r = x.getBoundingClientRect(); return r.width > 40 && r.height > 30 && (r.width < vw * 0.96 || r.height < vh * 0.96); };
+    if (small(t)) return t;
+    const inner = [...t.querySelectorAll(WN_PANEL_SEL)].find(small) || [...t.children].find(small);
+    return inner || null;
+  }
+  function wnPop(panel, soft) {
+    if (!wn || !wn.fx || !wn.top || !panel) return;
+    const now = performance.now();
+    if (now - (wn.lastPop || 0) < 400) return;
+    wn.lastPop = now;
+    const r = panel.getBoundingClientRect();
+    if (r.bottom < 0 || r.top > window.innerHeight) return;
+    if (!soft) {
+      const ring = el('i', 'wn-pop');
+      const cs = getComputedStyle(panel);
+      Object.assign(ring.style, { left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', height: r.height + 'px', borderRadius: cs.borderRadius || '12px' });
+      ring.addEventListener('animationend', () => ring.remove());
+      wn.top.appendChild(ring);
+      wnBurstAt(r.left + r.width / 2, Math.max(12, r.top), { n: Math.min(16, Math.round(r.width / 32)), w: r.width * 0.9, up: -140, spread: 180, big: true });
+      if (wn.mode === 'all' && snd.ready) snd.play('xreveal', 0.4, 1);
+    } else {
+      wnBurstAt(r.left + Math.min(r.width, 260) / 2, r.top + 6, { n: 5, w: Math.min(r.width, 260), spread: 120 });
+      if (wn.mode === 'all' && snd.ready) snd.play('twinkle', 0.8);
+    }
+  }
+  function wnWatch(recs) {
+    if (!wn || !wn.fx) return;
+    for (const r of recs) {
+      if (r.type === 'childList') {
+        r.addedNodes.forEach(n => {
+          if (n.nodeType !== 1 || n.closest(WN_POP_SKIP)) return;
+          const t = n.matches(WN_POP_SEL) ? n : n.querySelector(WN_POP_SEL);
+          if (t && !t.closest(WN_POP_SKIP)) { wn.vis.set(t, false); wn.cand.add(t); }
+        });
+      } else {
+        const t = r.target;
+        if (t.nodeType === 1 && t.matches(WN_POP_SEL) && !t.closest(WN_POP_SKIP)) wn.cand.add(t);
+      }
+    }
+    if (wn.cand.size && !wn.popRaf) {
+      wn.popRaf = requestAnimationFrame(() => {
+        if (!wn) return;
+        wn.popRaf = 0;
+        const list = [...wn.cand];
+        wn.cand.clear();
+        list.forEach(t => {
+          const was = wn.vis.get(t), now = wnShown(t);
+          wn.vis.set(t, now);
+          if (now && was === false) wnPop(wnPanelOf(t));
+        });
+      });
+    }
+  }
+  function wnToggle(e) {
+    const d = e.target;
+    if (!wn || !wn.fx || !d || d.tagName !== 'DETAILS' || !d.open || d.closest(WN_POP_SKIP)) return;
+    wnPop(d.querySelector('summary') || d, true);
+  }
+  function wnPopStart() {
+    wn.vis = new WeakMap();
+    wn.cand = new Set();
+    document.querySelectorAll(WN_POP_SEL).forEach(t => wn.vis.set(t, wnShown(t)));
+    wn.mo = new MutationObserver(wnWatch);
+    wn.mo.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['hidden', 'class', 'style', 'open'] });
+    document.addEventListener('toggle', wnToggle, true);
+    window.addEventListener('click', wnNav);
+    window.addEventListener('pageshow', wnShow);
+  }
+  function wnPopStop() {
+    if (wn.mo) wn.mo.disconnect();
+    if (wn.popRaf) cancelAnimationFrame(wn.popRaf);
+    clearTimeout(wn.veilT);
+    document.removeEventListener('toggle', wnToggle, true);
+    window.removeEventListener('click', wnNav);
+    window.removeEventListener('pageshow', wnShow);
+    document.querySelectorAll('.wn-veil').forEach(x => x.remove());
+  }
+
   function wnLoops(on) {
     if (!wn) return;
     wn.timers.forEach(clearTimeout);
@@ -954,7 +1255,8 @@
     again(wnSpawnPeek, 35000, 60000, rand(30000, 42000));
     again(wnSpawnSnowball, 30000, 60000, rand(18000, 28000));
     again(wnSpawnStar, 16000, 34000, rand(4000, 9000));
-    again(wnAmbient, 3000, 3000, 2500);
+    // (31.10.2026) cântecele nu mai pornesc de aici: le alege vizitatorul din
+    // widgetul de muzică din dreapta jos (site-audio.js)
   }
   function wnSetMode(mode, say) {
     if (!wn) return;
@@ -967,6 +1269,7 @@
       wn.btn.title = WN_MODES_TEXT[wn.mode][0];
       wn.btn.setAttribute('aria-label', WN_MODES_TEXT[wn.mode][0] + '. Apasă ca să schimbi.');
     }
+    if (wn.mode !== 'all') snd.hush();
     wnLoops(wn.fx);
     if (say) hwTip(WN_MODES_TEXT[wn.mode][1]);
   }
@@ -999,6 +1302,7 @@
     wn.extra.push(wn.top);
     document.addEventListener('pointerdown', wnClick, { passive: true });
     document.addEventListener('click', wnTap, { passive: true });
+    wnPopStart();
     if (!reduced()) {
       wn.btn = el('button', 'wn-fx', FLAKE_SVG);
       wn.btn.type = 'button';
@@ -1012,6 +1316,7 @@
     }
     const saved = ls.get('mrp_tema_fx_iarna');
     wnSetMode(saved === '0' ? 'off' : saved === 'm' ? 'mute' : 'all', false);
+    wnArrive();
   }
   function stopIarna() {
     if (!wn) return;
@@ -1021,6 +1326,8 @@
     document.removeEventListener('visibilitychange', wnVisibility);
     document.removeEventListener('pointerdown', wnClick);
     document.removeEventListener('click', wnTap);
+    wnPopStop();
+    snd.hush();
     [wn.decor, wn.btn, ...wn.extra].forEach(x => x && x.remove());
     document.querySelectorAll('.hw-banner,.hw-tip').forEach(x => x.remove());
     root.classList.remove('wn-nofx');

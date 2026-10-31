@@ -10,7 +10,7 @@
 // din normal în Halloween), apoi tema.js întreabă serverul dacă mai e pornită
 // și adaugă decorul. Se pornește / oprește din Admin → Dashboard.
 (() => {
-  const TEME = { halloween: '/tema-halloween.css?v=20261031h', iarna: '/tema-iarna.css?v=20261031h' };
+  const TEME = { halloween: '/tema-halloween.css?v=20261031i', iarna: '/tema-iarna.css?v=20261031i' };
   try {
     let tema = null;
     const q = /[?&]tema=([a-z-]*)/i.exec(location.search);
@@ -24,7 +24,7 @@
     }
   } catch { /* fără stocare (mod privat): tema.js o aplică după răspunsul serverului */ }
   const s = document.createElement('script');
-  s.src = '/tema.js?v=20261031h';
+  s.src = '/tema.js?v=20261031i';
   s.async = true;
   document.head.appendChild(s);
   // (31.10.2026) Questurile de Crăciun: doar pentru cine e logat (craciun.js
@@ -32,7 +32,7 @@
   try {
     if ((JSON.parse(localStorage.getItem('mrp_auth') || 'null') || {}).token) {
       const x = document.createElement('script');
-      x.src = '/craciun.js?v=20261031h';
+      x.src = '/craciun.js?v=20261031i';
       x.async = true;
       document.head.appendChild(x);
     }

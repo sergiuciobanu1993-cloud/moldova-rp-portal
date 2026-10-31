@@ -85,7 +85,7 @@ html.tema-iarna footer::after{content:'';position:absolute;right:max(8vw,16px);t
 @keyframes wnStar{0%{transform:rotate(155deg) translateX(0);opacity:0}15%{opacity:.95}100%{transform:rotate(155deg) translateX(-34vw);opacity:0}}
 /* fulgii care sar din locul apăsat */
 .wn-top{position:fixed;inset:0;z-index:2000;pointer-events:none;overflow:hidden}
-.wn-cb{position:absolute;display:block;width:16px;height:16px;margin:-8px 0 0 -8px;filter:drop-shadow(0 0 4px rgba(191,230,255,.8));animation:wnCb .95s ease-out forwards}
+.wn-cb{position:absolute;display:block;width:16px;height:16px;margin:-8px 0 0 -8px;filter:drop-shadow(0 0 4px rgba(191,230,255,.8));animation:wnCb .95s ease-out both}
 .wn-cb svg{display:block;width:100%;height:100%}
 @keyframes wnCb{0%{transform:translate3d(0,0,0) scale(.3) rotate(0deg);opacity:0}15%{opacity:1}100%{transform:translate3d(var(--dx,0),var(--dy,-60px),0) scale(var(--s,1)) rotate(var(--r,0deg));opacity:0}}
 
@@ -199,3 +199,85 @@ html.tema-iarna .hw-hero::after{content:'';position:absolute;left:52%;bottom:18p
 @media (max-width:900px){html.tema-iarna .hw-hero::after{display:none}}
 html.wn-nofx.tema-iarna .hw-hero::after,html.wn-nofx .wn-garland::after{animation:none}
 @media (prefers-reduced-motion:reduce){.wn-sledman,.wn-peek{display:none}html.tema-iarna .hw-hero::after,.wn-garland::after{animation:none}}
+
+/* ---- 10) (31.10.2026) cutiile din VIP Shop: seiful devine calendar de Advent ----
+   Aceleași elemente ca la deschiderea „Seif" (vezi .vt-* în vip-shop.html):
+   casetele sunt ferestrele unui calendar de Advent cu zăpadă deasupra,
+   învelișul e hârtie de cadou roșie cu panglică și fundă aurie, iar cutia
+   colorată primește panglică albă și un fulg care se aprinde la capac. */
+html.tema-iarna .vt-vig{background:radial-gradient(ellipse 75% 70% at 50% 50%,transparent 42%,rgba(3,10,26,.88))}
+html.tema-iarna .vt-view::after{content:'';position:absolute;inset:-40px 0 0;z-index:1;pointer-events:none;opacity:.55;
+  background:radial-gradient(circle,#fff 0 1.4px,transparent 2px) 0 0/90px 90px,radial-gradient(circle,rgba(255,255,255,.8) 0 1px,transparent 1.6px) 30px 45px/60px 60px;animation:wnVtSnow 9s linear infinite}
+@keyframes wnVtSnow{to{background-position:0 90px,30px 105px}}
+html.tema-iarna .vt-door,html.tema-iarna .vt-df{border-radius:8px;border-color:#29453a;
+  background:radial-gradient(circle at 78% 74%,rgba(255,255,255,.07) 0 2px,transparent 3px),radial-gradient(circle at 22% 60%,rgba(255,255,255,.05) 0 1.5px,transparent 2.5px),linear-gradient(165deg,#1f3d2f,#0d1c16 74%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.07),inset 0 -12px 18px rgba(0,0,0,.42)}
+html.tema-iarna .vt-door:nth-child(even){border-color:#4f2329;background:radial-gradient(circle at 78% 74%,rgba(255,255,255,.07) 0 2px,transparent 3px),radial-gradient(circle at 22% 60%,rgba(255,255,255,.05) 0 1.5px,transparent 2.5px),linear-gradient(165deg,#4d1a23,#230a0f 74%)}
+html.tema-iarna .vt-df{background:linear-gradient(165deg,#5a1e28,#2a0c12 74%)}
+/* căciula de zăpadă de deasupra fiecărei ferestre (în locul mânerului) */
+html.tema-iarna .vt-door::before,html.tema-iarna .vt-df::before{left:-2px;right:-2px;top:-3px;bottom:auto;height:11px;border-radius:8px 8px 60% 40% / 8px 8px 7px 5px;
+  background:linear-gradient(#ffffff,#d6eaff);box-shadow:0 2px 3px rgba(0,0,0,.35)}
+html.tema-iarna .vt-door::after,html.tema-iarna .vt-df::after{left:50%;right:auto;top:auto;bottom:18%;width:9px;height:9px;margin-left:-4.5px;background:#6f6040}
+html.tema-iarna .vt-door span,html.tema-iarna .vt-df span{top:17px;color:#c9a45a}
+html.tema-iarna .vt-door.is-scan,html.tema-iarna .vt-df{border-color:var(--orange);box-shadow:inset 0 1px 0 rgba(255,255,255,.1),inset 0 0 28px rgba(242,184,75,.2),0 0 20px rgba(242,184,75,.45)}
+html.tema-iarna .vt-door.is-scan::after,html.tema-iarna .vt-df::after{background:var(--orange);box-shadow:0 0 9px var(--orange)}
+html.tema-iarna .vt-door.is-scan span,html.tema-iarna .vt-df span{color:#ffe3a3}
+html.tema-iarna .vt-door.is-hole{background:#02060d;border-color:#08111c;box-shadow:inset 0 0 34px #000}
+html.tema-iarna .vt-ds{background:linear-gradient(90deg,#07101a,#152434)}
+html.tema-iarna .vt-db{background:linear-gradient(0deg,#0d1824,#03070c)}
+/* învelișul: hârtie de cadou roșie cu buline albe și panglică aurie */
+html.tema-iarna .vt-view .vs{background:radial-gradient(circle at 25% 25%,rgba(255,255,255,.6) 0 1.6px,transparent 2.2px) 0 0/22px 22px,radial-gradient(circle at 75% 75%,rgba(255,255,255,.35) 0 1.2px,transparent 1.8px) 0 0/22px 22px,repeating-linear-gradient(45deg,rgba(255,255,255,.07) 0 6px,transparent 6px 18px),linear-gradient(165deg,#c41e3a,#7d0f22);box-shadow:inset 0 0 0 1px rgba(255,255,255,.12),inset 0 0 22px rgba(0,0,0,.3)}
+html.tema-iarna .vt-view .vs.l,html.tema-iarna .vt-view .vs.r{background:radial-gradient(circle at 25% 25%,rgba(255,255,255,.6) 0 1.6px,transparent 2.2px) 0 0/22px 22px,radial-gradient(circle at 75% 75%,rgba(255,255,255,.35) 0 1.2px,transparent 1.8px) 0 0/22px 22px,repeating-linear-gradient(45deg,rgba(255,255,255,.07) 0 6px,transparent 6px 18px),linear-gradient(165deg,#8e1328,#4a0812)}
+html.tema-iarna .vt-view .vs.t{background:linear-gradient(90deg,transparent 43%,#c48a1c 43% 44.5%,#f6d47a 44.5% 55.5%,#c48a1c 55.5% 57%,transparent 57%),linear-gradient(0deg,transparent 43%,#c48a1c 43% 44.5%,#f6d47a 44.5% 55.5%,#c48a1c 55.5% 57%,transparent 57%),radial-gradient(circle at 25% 25%,rgba(255,255,255,.6) 0 1.6px,transparent 2.2px) 0 0/22px 22px,radial-gradient(circle at 75% 75%,rgba(255,255,255,.35) 0 1.2px,transparent 1.8px) 0 0/22px 22px,repeating-linear-gradient(45deg,rgba(255,255,255,.07) 0 6px,transparent 6px 18px),linear-gradient(180deg,#d42a46,#9a1530)}
+html.tema-iarna .vs.f::before,html.tema-iarna .vs.l::before,html.tema-iarna .vs.r::before{background:linear-gradient(#ffe08a,#c48a1c);box-shadow:0 1px 0 rgba(255,255,255,.35) inset,0 2px 4px rgba(0,0,0,.35)}
+html.tema-iarna .vs.f::after{content:'';position:absolute;top:0;bottom:0;left:50%;width:14%;margin-left:-7%;background:linear-gradient(90deg,#c48a1c,#ffe08a 40%,#f2b84b 70%,#b07a14);box-shadow:0 0 4px rgba(0,0,0,.3)}
+html.tema-iarna .vs.f b{z-index:1;font-size:0;width:80px;height:62px;margin:-34px 0 0 -40px;border:0;border-radius:0;
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 62'%3E%3Cpath d='M37 31L24 58l7.5-3 4 6.5L41 33z' fill='%23b07a14'/%3E%3Cpath d='M43 31l13 27-7.5-3-4 6.5L39 33z' fill='%23c48a1c'/%3E%3Cpath d='M40 30C28 9 5 6 5 21s24 15 35 9z' fill='%23f2b84b'/%3E%3Cpath d='M40 30C52 9 75 6 75 21s-24 15-35 9z' fill='%23f2b84b'/%3E%3Cpath d='M40 30C31 17 15 14 13 21c2 6 17 10 27 9z' fill='%23c48a1c'/%3E%3Cpath d='M40 30C49 17 65 14 67 21c-2 6-17 10-27 9z' fill='%23c48a1c'/%3E%3Cpath d='M11 15c6-4 15-3 22 3' stroke='%23ffe3a3' stroke-width='2' fill='none' stroke-linecap='round' opacity='.7'/%3E%3Crect x='33' y='22' width='14' height='16' rx='5' fill='%23ffd770'/%3E%3Crect x='35' y='24' width='5' height='12' rx='2.5' fill='%23fff1c4' opacity='.6'/%3E%3C/svg%3E") center/contain no-repeat;box-shadow:none;filter:drop-shadow(0 3px 4px rgba(0,0,0,.45))}
+/* cutia colorată: panglică albă pe toate fețele, fulg pe față */
+html.tema-iarna .vb.f::before{left:0;top:0;width:100%;height:100%;margin:0;border-radius:0;box-shadow:none;background:linear-gradient(90deg,transparent 42%,#b3122b 42% 43.5%,#fbf6ea 43.5% 56.5%,#b3122b 56.5% 58%,transparent 58%)}
+html.tema-iarna .vb.l::before,html.tema-iarna .vb.r::before,html.tema-iarna .vl.f::before,html.tema-iarna .vl.l::before,html.tema-iarna .vl.r::before{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent 42%,#b3122b 42% 43.5%,#fbf6ea 43.5% 56.5%,#b3122b 56.5% 58%,transparent 58%)}
+html.tema-iarna .vb.l::before,html.tema-iarna .vb.r::before,html.tema-iarna .vl.l::before,html.tema-iarna .vl.r::before{filter:brightness(.72)}
+html.tema-iarna .vl.t::before{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent 42%,#b3122b 42% 43.5%,#fbf6ea 43.5% 56.5%,#b3122b 56.5% 58%,transparent 58%),linear-gradient(0deg,transparent 40%,#b3122b 40% 41.5%,#fbf6ea 41.5% 58.5%,#b3122b 58.5% 60%,transparent 60%)}
+html.tema-iarna .vb.f::after{content:'';position:absolute;left:50%;top:40%;width:46px;height:46px;margin:-23px 0 0 -23px;background:#b3122b;
+  -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='-12 -12 24 24'%3E%3Cg stroke='%23000' stroke-width='1.7' stroke-linecap='round' fill='none'%3E%3Cpath transform='rotate(0)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3Cpath transform='rotate(60)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3Cpath transform='rotate(120)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3Cpath transform='rotate(180)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3Cpath transform='rotate(240)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3Cpath transform='rotate(300)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3C/g%3E%3Ccircle r='1.8'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='-12 -12 24 24'%3E%3Cg stroke='%23000' stroke-width='1.7' stroke-linecap='round' fill='none'%3E%3Cpath transform='rotate(0)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3Cpath transform='rotate(60)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3Cpath transform='rotate(120)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3Cpath transform='rotate(180)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3Cpath transform='rotate(240)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3Cpath transform='rotate(300)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3C/g%3E%3Ccircle r='1.8'/%3E%3C/svg%3E") center/contain no-repeat;transition:background-color .3s ease}
+html.tema-iarna .vt-view.p-lid .vb.f::after{background:#f2b84b}
+html.tema-iarna .vb.f b{bottom:8px;font-size:9px;z-index:1}
+html.tema-iarna .ox-hint{color:rgba(200,228,255,.62)}
+html.wn-nofx.tema-iarna .vt-view::after{animation:none}
+@media (prefers-reduced-motion:reduce){html.tema-iarna .vt-view::after{animation:none}}
+
+/* ---- 11) (31.10.2026) trecerea între pagini și deschiderea ferestrelor ----
+   .wn-veil = cortina de noapte cu ninsoare care coboară când pleci pe altă
+   pagină; .wn-drop = fulgii care cad la sosire; .wn-arrive = lumina rece care
+   trece peste antet; .wn-pop = rama de lumină din jurul unei ferestre deschise. */
+.wn-top{z-index:100000}
+.wn-cb.big{width:20px;height:20px;margin:-10px 0 0 -10px;animation-duration:1.15s;animation-fill-mode:both}
+.wn-veil{position:fixed;left:0;right:0;top:0;height:100vh;height:100dvh;z-index:2147483000;pointer-events:none;
+  background:radial-gradient(circle at 30% 40%,#fff 0 1.6px,transparent 2.3px) 0 0/131px 113px,radial-gradient(circle at 70% 20%,rgba(255,255,255,.75) 0 1.1px,transparent 1.8px) 36px 28px/97px 71px,
+    radial-gradient(circle at 15% 80%,rgba(220,240,255,.55) 0 2.2px,transparent 3.2px) 70px 50px/173px 151px,radial-gradient(circle at 85% 65%,rgba(255,255,255,.5) 0 .9px,transparent 1.5px) 20px 90px/59px 67px,
+    radial-gradient(ellipse 80% 60% at 50% 0%,rgba(95,184,255,.18),transparent 70%),linear-gradient(180deg,#0b1830,var(--bg,#060a12) 70%);
+  transform:translateY(-104%);animation:wnVeilIn .3s cubic-bezier(.55,0,.35,1) forwards,wnVeilSnow 7s linear infinite}
+.wn-veil::after{content:'';position:absolute;left:0;right:0;bottom:-22px;height:24px;
+  background:radial-gradient(14px 12px at 14px 0,#eaf5ff 98%,transparent) 0 0/28px 24px repeat-x,linear-gradient(#eaf5ff,#eaf5ff) 0 0/100% 4px no-repeat;
+  filter:drop-shadow(0 4px 8px rgba(159,216,255,.45))}
+.wn-veil-flake{position:absolute;left:50%;top:50%;width:46px;height:46px;margin:-23px 0 0 -23px;color:#bfe6ff;opacity:0;
+  filter:drop-shadow(0 0 10px rgba(159,216,255,.8));animation:wnVeilSpin 2.4s linear infinite,wnVeilShow .4s ease .7s forwards}
+.wn-veil-flake svg{display:block;width:100%;height:100%}
+@keyframes wnVeilIn{to{transform:translateY(0)}}
+@keyframes wnVeilSnow{to{background-position:-20px 113px,46px 170px,40px 201px,20px 291px,0 0,0 0}}
+@keyframes wnVeilSpin{to{transform:rotate(360deg)}}
+@keyframes wnVeilShow{to{opacity:.9}}
+.wn-drop{position:absolute;top:-24px;display:block;width:18px;height:18px;margin-left:-9px;filter:drop-shadow(0 0 5px rgba(191,230,255,.85));
+  animation:wnDrop 1.9s cubic-bezier(.3,.2,.6,1) both}
+.wn-drop svg{display:block;width:100%;height:100%}
+@keyframes wnDrop{0%{transform:translate3d(0,0,0) scale(var(--s,1)) rotate(0deg);opacity:0}
+  12%{opacity:1}70%{opacity:.9}100%{transform:translate3d(var(--fx,0),var(--fy,50vh),0) scale(var(--s,1)) rotate(var(--r,180deg));opacity:0}}
+.wn-arrive{position:absolute;left:-40%;top:0;width:40%;height:120px;display:block;
+  background:linear-gradient(100deg,transparent,rgba(191,230,255,.22) 45%,rgba(255,236,190,.28) 55%,transparent);filter:blur(6px);
+  animation:wnArrive 1.1s cubic-bezier(.4,0,.2,1) .1s both}
+@keyframes wnArrive{from{transform:translateX(0);opacity:1}to{transform:translateX(350%);opacity:0}}
+.wn-pop{position:absolute;display:block;box-sizing:border-box;border:2px solid rgba(242,184,75,.9);
+  box-shadow:0 0 0 1px rgba(191,230,255,.5),0 0 26px rgba(159,216,255,.55),inset 0 0 22px rgba(159,216,255,.25);
+  animation:wnPop .9s ease-out both}
+@keyframes wnPop{0%{opacity:0;transform:scale(.97)}25%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(1.035)}}
+@media (prefers-reduced-motion:reduce){.wn-veil,.wn-drop,.wn-arrive,.wn-pop{display:none}}

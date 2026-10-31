@@ -22,7 +22,7 @@
 // (rămâne cât ții fila deschisă); ?tema=nu o oprește.
 (() => {
   if (window.MRP_TEMA) return;
-  const VER = '20261101c'; // aceeași ca în pwa.js — schimbă-le împreună când modifici tema
+  const VER = '20261101d'; // aceeași ca în pwa.js — schimbă-le împreună când modifici tema
   const root = document.documentElement;
   const ls = {
     get(k) { try { return localStorage.getItem(k); } catch { return null; } },
@@ -318,11 +318,11 @@
       // (01.11.2026) mai moale: fără tonul care cădea (suna a „măcăit"), doar zăpadă care se turtește
       splat(c, out, t) {
         const n = noiseSrc(c, 'white', t, 0.3), g = gain(c, 0);
-        env(g, t, 0.006, 0.16, 0.01, 0.24);
-        n.connect(filt(c, 'lowpass', 1100)).connect(g).connect(out);
+        env(g, t, 0.004, 0.42, 0.02, 0.26);
+        n.connect(filt(c, 'lowpass', 2400)).connect(g).connect(out);
         const r = noiseSrc(c, 'brown', t, 0.2), rg = gain(c, 0);
-        env(rg, t, 0.004, 0.3, 0, 0.14);
-        r.connect(filt(c, 'lowpass', 250)).connect(rg).connect(out);
+        env(rg, t, 0.003, 0.7, 0, 0.16);
+        r.connect(filt(c, 'lowpass', 500)).connect(rg).connect(out);
         return 0.35;
       },
       // aruncarea: un „fâș" scurt prin aer
@@ -331,7 +331,7 @@
         const n = noiseSrc(c, 'white', t, 0.4), bp = filt(c, 'bandpass', 1400, 0.6), g = gain(c, 0);
         bp.frequency.setValueAtTime(1200, t);
         bp.frequency.linearRampToValueAtTime(1600, t + 0.35);
-        env(g, t, 0.1, 0.08, 0, 0.22);
+        env(g, t, 0.08, 0.3, 0, 0.22);
         n.connect(bp).connect(g).connect(out);
         return 0.4;
       },
@@ -460,7 +460,7 @@
         });
         let end = at - t + 0.8;
         if (k >= 2) { const g = gain(c, 0.55); g.connect(out); defs.jingle(c, g, t + 0.05); end = Math.max(end, 1.55); }
-        if (k >= 3) { const g = gain(c, 0.9); g.connect(out); defs.hohoho(c, g, at + 0.1); end = Math.max(end, at - t + 1.15); }
+        // (01.11.2026) fără „Ho-ho-ho" (Sergiu: suna a rață)
         return end;
       },
     };
@@ -837,7 +837,7 @@
   function wnPoke(ev) {
     if (!wn || !wn.fx) return;
     wnBurstAt(ev.clientX, ev.clientY, { n: 7 });
-    wnSound('twinkle', 0.8, true);
+    wnSound('twinkle', 1.6, true);
   }
   // (01.11.2026) Sergiu: sunetele mici de pe site (clic, schimbarea paginii, deschiderea unei casete,
   // butonul cu fulg) se aud doar cât muzica din colțul din dreapta jos e pornită (site-audio.js,
@@ -935,9 +935,7 @@
     s.style.setProperty('--dy', rand(-8, 6).toFixed(1) + 'vh');
     s.addEventListener('animationend', e => { if (e.target === s) s.remove(); });
     wn.decor.appendChild(s);
-    wnSound('jingle', 0.7);
-    // Moșul strigă „Ho-ho-ho!" și lasă să cadă câteva cadouri
-    wn.timers.push(setTimeout(() => { if (wn && wn.fx) wnSound('hohoho', 0.9); }, 1800));
+    // (01.11.2026) Sergiu: sania trece fără niciun sunet (nici clopoței, nici „Ho-ho-ho"); lasă să cadă câteva cadouri
     const T = parseFloat(s.style.getPropertyValue('--t')) * 1000;
     for (let k = 0; k < 2 + Math.floor(Math.random() * 2); k++) {
       wn.timers.push(setTimeout(() => {
@@ -1016,8 +1014,7 @@
     m.addEventListener('pointerdown', ev => { ev.stopPropagation(); wnPoke(ev); const r = m.getBoundingClientRect(); wnThrow(r.left + r.width / 2, r.top + r.height * 0.3); wnBulgare(); });
     m.addEventListener('animationend', e => { if (e.target === m) m.remove(); });
     wn.decor.appendChild(m);
-    wnSound('whoosh', 0.5);
-    wn.timers.push(setTimeout(() => { if (wn && wn.fx) wnSound('jingle', 0.5); }, 600));
+    // (01.11.2026) trece fără sunet, ca sania
   }
   // un om de zăpadă se uită de după marginea ecranului, face cu mâna și uneori aruncă un bulgăre
   function wnSpawnPeek() {

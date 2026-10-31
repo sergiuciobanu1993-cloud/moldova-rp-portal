@@ -8536,7 +8536,8 @@ app.post("/api/admin/regulations", auth, requireRole(...FOUNDER_ROLES), asyncRou
       [title.trim(), finalSlug, category.trim(), content, version || "1.0", is_published ?? true]
     );
     await logAction(req.user.sub, "regulation.create", "regulation", rows[0].id, { title, category }, req.ip);
-    if (rows[0].is_published) notifyDiscordRegulation(rows[0], "adăugat", { editedBy: req.user.username });
+    // (31.10.2026) notify: false = se salvează fără mesajul cu @everyone în #anunțuri
+    if (rows[0].is_published && req.body.notify !== false) notifyDiscordRegulation(rows[0], "adăugat", { editedBy: req.user.username });
     res.status(201).json(rows[0]);
   } catch (e) {
     if (e.code === "23505") return res.status(409).json({ error: "Există deja un regulament cu acest slug." });
@@ -8565,7 +8566,7 @@ app.put("/api/admin/regulations/:id", auth, requireRole(...FOUNDER_ROLES), async
     );
     if (!rows[0]) return res.status(404).json({ error: "Regulamentul nu există." });
     await logAction(req.user.sub, "regulation.update", "regulation", id, req.body, req.ip);
-    if (rows[0].is_published) {
+    if (rows[0].is_published && req.body.notify !== false) { // (31.10.2026) notify: false = fără anunț pe Discord
       const prev = before.rows[0];
       const { added, removed } = prev ? diffLines(regulationPlainText(prev.content), regulationPlainText(rows[0].content)) : { added: [], removed: [] };
       notifyDiscordRegulation(rows[0], "modificat", {

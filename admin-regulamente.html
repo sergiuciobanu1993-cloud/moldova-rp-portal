@@ -27,6 +27,8 @@
         <div class="field"><label>Versiune</label><input id="f-version" value="1.0"></div>
         <div class="field wide"><label>Conținut</label><textarea id="f-content" class="textarea-lg" required placeholder="Textul complet al regulamentului..."></textarea></div>
         <div class="field checkbox wide"><input type="checkbox" id="f-published" checked><label for="f-published">Publicat (vizibil pe site)</label></div>
+        <!-- (31.10.2026) bifat = la salvare apare mesajul cu @everyone în #anunțuri; debifat = se salvează fără anunț (ex. corecturi mici) -->
+        <div class="field checkbox wide"><input type="checkbox" id="f-notify" checked><label for="f-notify">Anunță pe Discord (@everyone în #anunțuri)</label></div>
       </div>
       <p class="formmsg" id="form-msg" hidden></p>
       <div class="formactions">
@@ -60,6 +62,7 @@ function showForm(reg) {
   document.getElementById('f-version').value = reg ? reg.version : '1.0';
   document.getElementById('f-content').value = reg ? reg.content : '';
   document.getElementById('f-published').checked = reg ? reg.is_published : true;
+  document.getElementById('f-notify').checked = true;
   document.getElementById('f-title').focus();
 }
 
@@ -127,7 +130,8 @@ document.getElementById('reg-form').addEventListener('submit', async (e) => {
     slug: document.getElementById('f-slug').value.trim() || slugify(title),
     version: document.getElementById('f-version').value.trim() || '1.0',
     content: document.getElementById('f-content').value,
-    is_published: document.getElementById('f-published').checked
+    is_published: document.getElementById('f-published').checked,
+    notify: document.getElementById('f-notify').checked
   };
   try {
     const res = await apiFetch(

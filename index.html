@@ -257,12 +257,17 @@
         var box = document.getElementById('sondaj'), slot = document.getElementById('hero-sondaj-slot');
         var home = box && box.parentNode, next = box && box.nextSibling, wide = window.matchMedia('(min-width: 1360px)');
         if (!box || !slot) return;
+        // aceeași lățime ca a cardului „Server online" de sub el, ca marginile să fie una sub alta
+        var status = document.querySelector('#acasa .hero-status');
+        function fit() { slot.style.width = wide.matches && status && status.offsetWidth ? status.offsetWidth + 'px' : ''; }
         function place() {
           if (wide.matches) { if (box.parentNode !== slot) slot.appendChild(box); }
           else if (box.parentNode !== home) home.insertBefore(box, next);
           slot.classList.toggle('on', wide.matches);
+          fit();
         }
         if (wide.addEventListener) wide.addEventListener('change', place); else wide.addListener(place);
+        if (status && window.ResizeObserver) new ResizeObserver(fit).observe(status); else window.addEventListener('resize', fit);
         place();
       })();
       </script>

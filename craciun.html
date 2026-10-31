@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Questurile de Crăciun — Moldova RP</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="dashboard.css"><style>
+/* (31.10.2026) Pagina questurilor de Crăciun — vezi secțiunea „Questurile de
+   Crăciun" din backend/server.js pentru reguli și craciun.js pentru partea
+   care rulează pe celelalte pagini (cadourile ascunse, sarcinile). */
+.xq-gold{--gold:#f2b84b;--ice:#9fd8ff;--red:#e8414f;--green:#33c27a}
+.xq-note{margin:22px 0 0;padding:14px 16px;border-radius:12px;border:1px solid var(--line);background:rgba(255,255,255,.03);line-height:1.55}
+.xq-note[hidden]{display:none}
+.xq-note.warn{border-color:rgba(242,184,75,.45);background:rgba(242,184,75,.07)}
+.xq-note b{color:var(--gold)}
+.xq-note button{margin-left:8px}
+.xq-tickets{display:flex;align-items:center;gap:10px;padding:12px 16px;border:1px solid rgba(242,184,75,.45);border-radius:12px;background:rgba(242,184,75,.08);font-weight:800}
+.xq-tickets strong{font-size:26px;color:var(--gold);font-variant-numeric:tabular-nums}
+.xq-tickets small{display:block;font-size:10px;letter-spacing:.12em;color:var(--muted);font-weight:800}
+.xq-quests{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:26px 0 0}
+.xq-quest{padding:20px;display:grid;gap:10px;align-content:start}
+.xq-quest .top{display:flex;align-items:center;gap:12px}
+.xq-quest .ic{width:46px;height:46px;flex:none;border-radius:12px;display:grid;place-items:center;font-size:24px;background:rgba(255,255,255,.05);border:1px solid var(--line)}
+.xq-quest h3{margin:0;font-size:16px}
+.xq-quest p{margin:0;color:var(--muted);font-size:12px;line-height:1.5}
+.xq-bar{height:8px;border-radius:99px;background:rgba(255,255,255,.07);overflow:hidden}
+.xq-bar i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--gold),#ffe3a3);transition:width .6s ease}
+.xq-quest .num{display:flex;justify-content:space-between;font-size:12px;font-weight:800;font-variant-numeric:tabular-nums}
+.xq-quest.done{border-color:rgba(51,194,122,.5);background:linear-gradient(160deg,rgba(51,194,122,.08),transparent 60%),var(--panel)}
+.xq-quest.done .ic{border-color:rgba(51,194,122,.6);background:rgba(51,194,122,.12)}
+.xq-quest .ok{color:var(--green);font-weight:800;font-size:12px}
+.xq-sec{margin-top:15px}
+.xq-sec .head small{color:var(--muted);font-size:12px}
+.xq-advent{display:grid;grid-template-columns:repeat(8,1fr);gap:8px}
+.xq-door{position:relative;aspect-ratio:1;min-height:56px;border-radius:10px;border:1px solid var(--line);background:linear-gradient(160deg,#1c3a2c,#0f2019);color:#d9c38a;font:900 18px/1 Inter,system-ui,sans-serif;font-variant-numeric:tabular-nums;cursor:default;display:grid;place-items:center;padding:0}
+.xq-door:nth-child(even){background:linear-gradient(160deg,#4a1a23,#26090f)}
+.xq-door::before{content:'';position:absolute;left:-1px;right:-1px;top:-1px;height:9px;border-radius:10px 10px 50% 50%/10px 10px 6px 6px;background:linear-gradient(#fff,#d6eaff);opacity:.9}
+.xq-door small{position:absolute;bottom:5px;left:0;right:0;font-size:9px;font-weight:800;letter-spacing:.06em;color:var(--muted)}
+.xq-door.today{cursor:pointer;border-color:var(--gold);box-shadow:0 0 0 1px var(--gold),0 0 18px rgba(242,184,75,.45);color:#ffe3a3;animation:xqGlow 1.8s ease-in-out infinite}
+.xq-door.today small{color:#ffe3a3}
+.xq-door.open{cursor:pointer;background:rgba(255,255,255,.05);color:var(--text);font-size:22px}
+.xq-door.open::before{opacity:.25}
+.xq-door.open small{color:var(--gold)}
+.xq-door.future{opacity:.55}
+.xq-door.missed{opacity:.35;filter:grayscale(.7)}
+.xq-door:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+@keyframes xqGlow{50%{box-shadow:0 0 0 1px var(--gold),0 0 30px rgba(242,184,75,.7)}}
+.xq-reveal{margin-top:14px;padding:16px 18px;border-radius:12px;border:1px solid rgba(242,184,75,.45);background:rgba(242,184,75,.07);line-height:1.6;font-size:14px}
+.xq-reveal[hidden]{display:none}
+.xq-reveal b{display:block;color:var(--gold);font-size:11px;letter-spacing:.14em;text-transform:uppercase;margin-bottom:4px}
+.xq-gifts{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}
+.xq-giftslot{display:grid;gap:6px;justify-items:center;text-align:center;padding:14px 8px;border-radius:10px;border:1px dashed var(--line);font-size:11px;color:var(--muted);line-height:1.3}
+.xq-giftslot .g{font-size:26px;line-height:1;filter:grayscale(1) opacity(.35)}
+.xq-giftslot.found{border-style:solid;border-color:rgba(51,194,122,.5);color:var(--text)}
+.xq-giftslot.found .g{filter:none}
+.xq-giftslot a{color:var(--ice);font-weight:700}
+.xq-tasks{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.xq-tasks li{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:10px;border:1px solid var(--line);background:rgba(255,255,255,.02)}
+.xq-tasks .ck{width:24px;height:24px;flex:none;border-radius:7px;display:grid;place-items:center;border:2px solid var(--line);font-size:13px;font-weight:900}
+.xq-tasks li.done{border-color:rgba(51,194,122,.4)}
+.xq-tasks li.done .ck{border-color:var(--green);background:var(--green);color:#06140c}
+.xq-tasks li span{flex:1;line-height:1.45}
+.xq-tasks li.done span{color:var(--muted)}
+.xq-tasks a{color:var(--gold);font-weight:800;white-space:nowrap;font-size:12px}
+.xq-badges{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.xq-badge{display:grid;justify-items:center;gap:6px;padding:16px 10px;border-radius:12px;border:1px solid var(--line);text-align:center;font-size:12px;font-weight:800;color:var(--muted)}
+.xq-badge .b{width:54px;height:54px;border-radius:50%;display:grid;place-items:center;font-size:26px;background:rgba(255,255,255,.04);border:2px dashed var(--line);filter:grayscale(1) opacity(.45)}
+.xq-badge.on{color:var(--text);border-color:rgba(242,184,75,.45)}
+.xq-badge.on .b{filter:none;border:2px solid var(--gold);background:radial-gradient(circle,rgba(242,184,75,.25),transparent 70%);box-shadow:0 0 18px rgba(242,184,75,.35)}
+.xq-rules{margin:14px 0 0;padding-left:18px;color:var(--muted);line-height:1.7;font-size:13px}
+.xq-rules b{color:var(--text)}
+.xq-win{margin-top:14px;padding:14px 16px;border-radius:12px;border:1px solid rgba(51,194,122,.5);background:rgba(51,194,122,.08);font-weight:700;line-height:1.5}
+@media (max-width:900px){.xq-quests{grid-template-columns:1fr}.xq-advent{grid-template-columns:repeat(6,1fr)}.xq-gifts{grid-template-columns:repeat(4,1fr)}.xq-badges{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:520px){.xq-advent{grid-template-columns:repeat(4,1fr)}.xq-gifts{grid-template-columns:repeat(3,1fr)}.welcome{flex-direction:column;align-items:flex-start;gap:16px}.welcome h1{font-size:30px}.xq-tasks li{flex-wrap:wrap}}
+@media (prefers-reduced-motion:reduce){.xq-door.today{animation:none}.xq-bar i{transition:none}}
+</style><link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/assets/app/apple-touch-icon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black"><meta name="apple-mobile-web-app-title" content="Moldova RP"><script src="/pwa.js" defer></script><meta name="theme-color" content="#090a0b">
+</head>
+<body class="xq-gold">
+<header><a class="brand" href="index.html"><img src="assets/logo.png" alt="">MOLDOVA<span>RP</span></a><nav><a href="index.html">Acasă</a><a href="dashboard.html">Dashboard</a><a href="craciun.html" style="color:var(--orange)">🎄 Crăciun</a></nav><a class="logout" href="login.html" id="logout-link">Deconectare</a></header>
+<main>
+<p style="display:flex;gap:16px">
+  <a href="index.html" style="color:var(--muted);font-weight:700;font-size:13px">← Pagina principală</a>
+  <a href="dashboard.html" style="color:var(--muted);font-weight:700;font-size:13px">← Dashboard</a>
+</p>
+<section class="welcome" style="margin-top:16px">
+  <div><p>SĂRBĂTORI PE MOLDOVA RP</p><h1>Questurile de <span>Crăciun</span></h1><small id="xq-dates">…</small></div>
+  <div class="xq-tickets" title="Biletele tale la tombola de Crăciun"><span aria-hidden="true" style="font-size:24px">🎟️</span><div><small>BILETE LA TOMBOLĂ</small><strong id="xq-tickets">0</strong></div></div>
+</section>
+<p class="xq-note warn" id="xq-note" hidden></p>
+<p class="xq-note warn" id="xq-link" hidden>⚠️ Contul tău nu e legat de personajul din joc. Poți face questurile, dar la <b>tombolă</b> intră doar conturile legate (premiile se dau în joc). Leagă-l din <a href="dashboard.html" style="color:var(--gold);font-weight:800">Contul meu</a>.</p>
+
+<div class="xq-quests" id="xq-quests"></div>
+
+<section class="panel xq-sec" id="advent" aria-labelledby="advent-title">
+  <div class="head"><h2 id="advent-title">📅 Calendarul de Advent</h2><small id="advent-sub"></small></div>
+  <div class="xq-advent" id="xq-advent"></div>
+  <div class="xq-reveal" id="xq-reveal" hidden aria-live="polite"></div>
+</section>
+
+<section class="panel xq-sec" id="cadouri" aria-labelledby="gifts-title">
+  <div class="head"><h2 id="gifts-title">🎁 Vânătoarea de cadouri</h2><small id="gifts-sub"></small></div>
+  <p style="margin:0 0 14px;color:var(--muted);line-height:1.6">Pe 12 pagini ale site-ului se ascunde câte un cadou. Stai puțin pe pagină: după câteva secunde apare undeva pe ecran — apasă repede pe el, că nu stă mult!</p>
+  <div class="xq-gifts" id="xq-gifts"></div>
+</section>
+
+<section class="panel xq-sec" id="sarcini" aria-labelledby="tasks-title">
+  <div class="head"><h2 id="tasks-title">🧝 Sarcinile de azi</h2><small id="tasks-sub"></small></div>
+  <ul class="xq-tasks" id="xq-tasks"></ul>
+</section>
+
+<section class="panel xq-sec" aria-labelledby="rew-title">
+  <div class="head"><h2 id="rew-title">🏅 Insigne și tombolă</h2></div>
+  <div class="xq-badges" id="xq-badges"></div>
+  <ul class="xq-rules">
+    <li>Fiecare quest terminat îți dă <b>insigna lui</b> (apare pe profilul din Contul meu) și <b>un bilet</b> la tombolă.</li>
+    <li>Dacă le termini pe toate trei, primești insigna <b>Crăciun <span id="xq-year">2026</span></b> și încă <b>un bilet</b> — maximum 4 bilete.</li>
+    <li>Tombola se trage după sărbători, de către staff. Fiecare bilet e o șansă în plus; un jucător poate câștiga un singur premiu.</li>
+    <li>Premiile se dau <b>în joc</b>, de staff — de aceea la tombolă intră doar conturile legate de personaj.</li>
+  </ul>
+  <div id="xq-wins"></div>
+</section>
+</main>
+<script src="auth-client.js"></script>
+<script>
+const escapeHtml = s => (s ?? '').toString().replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const fmtDay = iso => new Date(iso + 'T12:00:00').toLocaleDateString('ro-RO', { day: 'numeric', month: 'long' });
+let state = null;
+
+const QUEST_TEXT = {
+  cadouri: 'Găsește cele 12 cadouri ascunse prin site.',
+  advent: 'Deschide căsuțele din calendar, câte una pe zi.',
+  sarcini: 'Bifează toate sarcinile zilei în zile diferite.',
+};
+const QUEST_UNIT = { cadouri: 'cadouri', advent: 'căsuțe', sarcini: 'zile' };
+
+function render() {
+  const s = state;
+  document.getElementById('xq-dates').textContent = `Între ${fmtDay(s.season.start)} și ${fmtDay(s.season.end)}${s.season.end.slice(0, 4) !== s.season.start.slice(0, 4) ? ' ' + s.season.end.slice(0, 4) : ''}. Calendarul de Advent: 1–24 decembrie.`;
+  document.getElementById('xq-tickets').textContent = s.tickets;
+  document.getElementById('xq-year').textContent = s.season.year;
+  const note = document.getElementById('xq-note');
+  note.hidden = false;
+  if (s.test) note.innerHTML = '🧪 <b>Mod de test</b> — questurile încep pe 1 decembrie; până atunci le vezi doar tu (fondator). Toate căsuțele se pot deschide. <button class="btn-ghost" id="xq-reset" type="button">Șterge progresul meu</button>';
+  else if (!s.active && !s.ended) note.innerHTML = `⏳ Questurile încep pe <b>${fmtDay(s.season.start)}</b>. Revino atunci!`;
+  else if (s.ended) note.innerHTML = '🎉 Questurile de anul acesta s-au încheiat. Mulțumim că ai participat! Mai jos vezi ce ai strâns.';
+  else note.hidden = true;
+  document.getElementById('xq-link').hidden = s.linked;
+  const r = document.getElementById('xq-reset');
+  if (r) r.onclick = async () => {
+    if (!confirm('Ștergi tot progresul tău de test (cadouri, căsuțe, sarcini)?')) return;
+    await apiFetch('/api/craciun/reset-test', { method: 'POST' });
+    load();
+  };
+
+  document.getElementById('xq-quests').innerHTML = s.quests.map(q => {
+    const pct = Math.min(100, Math.round(q.have / q.need * 100));
+    return `<article class="panel xq-quest${q.done ? ' done' : ''}"><div class="top"><span class="ic" aria-hidden="true">${q.icon}</span><div><h3>${escapeHtml(q.title)}</h3><p>${QUEST_TEXT[q.id]}</p></div></div>
+      <div class="num"><span>${Math.min(q.have, q.need)} / ${q.need} ${QUEST_UNIT[q.id]}</span>${q.done ? '<span class="ok">✓ Terminat</span>' : `<span style="color:var(--muted)">${pct}%</span>`}</div>
+      <div class="xq-bar" role="progressbar" aria-label="${escapeHtml(q.title)}" aria-valuemin="0" aria-valuemax="${q.need}" aria-valuenow="${Math.min(q.have, q.need)}"><i style="width:${pct}%"></i></div></article>`;
+  }).join('');
+
+  // calendarul
+  const opened = new Map(s.adventOpened.map(a => [a.day, a]));
+  document.getElementById('advent-sub').textContent = `${s.adventCount} din 24 deschise · quest: ${s.need.advent}`;
+  const adv = document.getElementById('xq-advent');
+  adv.innerHTML = Array.from({ length: 24 }, (_, i) => {
+    const d = i + 1, date = s.season.adventFrom.slice(0, 8) + String(d).padStart(2, '0');
+    const o = opened.get(d);
+    if (o) return `<button type="button" class="xq-door open" data-show="${d}" aria-label="Ziua ${d}, deschisă — vezi ce era în ea">${[...o.text][0]}<small>${d} DEC</small></button>`;
+    const canOpen = s.active && (s.test || s.adventDay === d);
+    if (canOpen) return `<button type="button" class="xq-door today" data-open="${d}" aria-label="Deschide căsuța de azi, ziua ${d}">${d}<small>DESCHIDE</small></button>`;
+    const future = s.today < date;
+    return `<div class="xq-door ${future ? 'future' : 'missed'}" title="${future ? 'Se deschide pe ' + fmtDay(date) : 'Ziua a trecut'}">${d}<small>${future ? '🔒' : 'RATATĂ'}</small></div>`;
+  }).join('');
+
+  // cadourile
+  document.getElementById('gifts-sub').textContent = `${s.gifts} din ${s.need.gifts} găsite`;
+  document.getElementById('xq-gifts').innerHTML = s.giftPages.map(g => g.found
+    ? `<div class="xq-giftslot found"><span class="g" aria-hidden="true">🎁</span>Găsit<br>${escapeHtml(g.name)}</div>`
+    : `<div class="xq-giftslot"><span class="g" aria-hidden="true">🎁</span>Se ascunde pe<br><a href="${g.link}">${escapeHtml(g.name)}</a></div>`).join('');
+
+  // sarcinile
+  document.getElementById('tasks-sub').textContent = `Zile bifate: ${s.taskDays} din ${s.need.taskDays}`;
+  document.getElementById('xq-tasks').innerHTML = !s.active
+    ? '<li><span>Sarcinile apar în fiecare zi cât țin questurile.</span></li>'
+    : s.tasks.map(t => `<li class="${t.done ? 'done' : ''}"><i class="ck" aria-hidden="true">${t.done ? '✓' : ''}</i><span>${escapeHtml(t.text)}</span>${t.done ? '' : `<a href="${t.link}">Du-te →</a>`}</li>`).join('')
+      + `<li style="border-style:dashed"><span style="color:var(--muted)">Când le bifezi pe toate ${s.tasks.length}, ziua se socotește la quest. Sarcinile noi apar la miezul nopții.</span></li>`;
+
+  // insignele
+  const BADGES = [...s.quests.map(q => ({ id: q.id, icon: q.icon, title: q.title })), { id: 'toate', icon: '🎄', title: 'Crăciun ' + s.season.year }];
+  document.getElementById('xq-badges').innerHTML = BADGES.map(b => {
+    const on = s.badges.some(x => x.id === b.id);
+    return `<div class="xq-badge${on ? ' on' : ''}"><span class="b" aria-hidden="true">${b.icon}</span>${escapeHtml(b.title)}<small style="font-weight:600;color:var(--muted)">${on ? 'Primită' : 'Încă nu'}</small></div>`;
+  }).join('');
+  document.getElementById('xq-wins').innerHTML = (s.wins || []).map(w =>
+    `<div class="xq-win">🎉 Ai câștigat la tombolă: <b>${escapeHtml(w.prize)}</b>. ${w.given_at ? 'Premiul ți-a fost dat în joc.' : 'Staff-ul ți-l dă în joc în curând.'}</div>`).join('');
+}
+
+function showDay(d, fresh) {
+  const a = state.adventOpened.find(x => x.day === d);
+  const box = document.getElementById('xq-reveal');
+  if (!a) return;
+  box.hidden = false;
+  box.innerHTML = `<b>${fresh ? 'Căsuța de azi' : 'Ziua ' + d + ' decembrie'}</b>${escapeHtml(a.text)}`;
+}
+document.getElementById('xq-advent').addEventListener('click', async e => {
+  const show = e.target.closest('[data-show]');
+  if (show) return showDay(Number(show.dataset.show));
+  const btn = e.target.closest('[data-open]');
+  if (!btn) return;
+  btn.disabled = true;
+  const d = Number(btn.dataset.open);
+  const r = await apiFetch('/api/craciun/advent', { method: 'POST', body: JSON.stringify({ day: d }) });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) { btn.disabled = false; alertBox(data.error || 'Nu s-a putut deschide.'); return; }
+  await load();
+  showDay(d, true);
+  (data.newBadges || []).forEach(b => alertBox(`${b.icon} Insignă nouă: ${b.title}! Ai primit și un bilet la tombolă.`));
+});
+function alertBox(text) {
+  const box = document.getElementById('xq-reveal');
+  box.hidden = false;
+  box.innerHTML = `<b>Calendarul de Advent</b>${escapeHtml(text)}`;
+}
+
+async function load() {
+  const r = await apiFetch('/api/craciun');
+  if (!r.ok) { document.getElementById('xq-dates').textContent = 'Nu s-au putut încărca questurile. Reîncearcă puțin mai târziu.'; return; }
+  state = await r.json();
+  render();
+}
+wireLogout('#logout-link');
+if (requireAuth()) load();
+</script>
+</body></html>

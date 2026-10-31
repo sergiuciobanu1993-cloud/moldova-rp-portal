@@ -4041,6 +4041,336 @@ app.get("/api/me/profile", auth, asyncRoute(async (req, res) => {
   res.json({ hasGameProfile: true, linked: false, ...profile });
 }));
 
+// ---------------------------------------------------------------------------
+// (31.10.2026, cerut de Sergiu) Questurile de Crăciun de pe site.
+//
+// Trei questuri, pentru jucătorii logați:
+//   1) Vânătoarea de cadouri — 12 cadouri ascunse, câte unul pe 12 pagini ale
+//      site-ului (XMAS_GIFT_PAGES). Cadoul apare după câteva secunde, într-un
+//      loc la întâmplare, și se ia cu un clic (craciun.js).
+//   2) Calendarul de Advent — 24 de căsuțe (1–24 decembrie), câte una pe zi;
+//      căsuța zilei se deschide doar în ziua ei. Quest terminat = 18 căsuțe.
+//   3) Sarcinile zilei — 3 sarcini pe zi (aceleași pentru toți, alese după
+//      dată din XMAS_TASKS). O zi cu toate 3 = o zi bifată; quest = 10 zile.
+// Fiecare quest terminat = o insignă + un bilet la tombolă; toate trei = încă
+// o insignă („Crăciun 2026") și încă un bilet. La tombolă intră doar conturile
+// legate de personajul din joc (premiile se dau în joc, de către staff).
+// Tragerea o face un fondator din Admin → Crăciun (aleator, după bilete).
+//
+// Zilele sunt după ora Chișinăului. Înainte de 1 decembrie, fondatorii pot
+// încerca totul („mod de test") și își pot șterge apoi progresul.
+// Progresul: tabela xmas_progress (kind = gift / advent / task / taskday).
+// ---------------------------------------------------------------------------
+const XMAS = {
+  year: 2026,
+  start: "2026-12-01", end: "2027-01-07",          // inclusiv
+  adventFrom: "2026-12-01", adventTo: "2026-12-24",
+  giftsNeeded: 12, adventNeeded: 18, taskDaysNeeded: 10, tasksPerDay: 3,
+};
+// cadoul nr. i+1 se ascunde pe pagina XMAS_GIFT_PAGES[i]
+const XMAS_GIFT_PAGES = ["index", "dashboard", "tichete", "vip-shop", "premium", "regulamente", "regulament", "ghid-factiuni", "ghid-factiune", "joburi", "legislatie-rutiera", "aplicatie"];
+const XMAS_PAGE_INFO = {
+  index: ["Prima pagină", "/"], dashboard: ["Contul meu", "/dashboard.html"], tichete: ["Tichete", "/tichete.html"],
+  "vip-shop": ["VIP Shop", "/vip-shop.html"], premium: ["Premium", "/premium.html"], regulamente: ["Regulamente", "/regulamente.html"],
+  regulament: ["Un regulament deschis", "/regulamente.html"], "ghid-factiuni": ["Ghidul facțiunilor", "/ghid-factiuni.html"],
+  "ghid-factiune": ["Ghidul unei facțiuni", "/ghid-factiuni.html"], joburi: ["Joburi", "/joburi.html"],
+  "legislatie-rutiera": ["Legislația rutieră", "/legislatie-rutiera.html"], aplicatie: ["Aplicația pe telefon", "/aplicatie.html"],
+};
+// page/secs = se bifează după atâtea secunde pe pagina aceea; event = după un
+// eveniment din pagină (craciun.js); server = se bifează singură pe server
+const XMAS_TASKS = [
+  { id: "regulament", text: "Citește un regulament (cel puțin 30 de secunde pe el)", page: "regulament", secs: 30, link: "/regulamente.html" },
+  { id: "joburi", text: "Uită-te prin pagina Joburi (20 de secunde)", page: "joburi", secs: 20, link: "/joburi.html" },
+  { id: "ghid", text: "Deschide ghidul unei facțiuni (20 de secunde)", page: "ghid-factiune", secs: 20, link: "/ghid-factiuni.html" },
+  { id: "legislatie", text: "Recitește Legislația rutieră (30 de secunde)", page: "legislatie-rutiera", secs: 30, link: "/legislatie-rutiera.html" },
+  { id: "tichete", text: "Verifică-ți tichetele", page: "tichete", secs: 8, link: "/tichete.html" },
+  { id: "profil", text: "Intră în Contul meu", page: "dashboard", secs: 8, link: "/dashboard.html" },
+  { id: "muzica", text: "Ascultă 30 de secunde dintr-o melodie de sărbători (butonul din dreapta jos, pe prima pagină)", event: "muzica", link: "/" },
+  { id: "bulgare", text: "Aruncă un bulgăre: apasă pe un om de zăpadă care apare pe ecran (vin din când în când)", event: "bulgare", link: "/" },
+  { id: "advent", text: "Deschide căsuța de azi din calendarul de Advent", server: true, link: "/craciun.html#advent" },
+  { id: "cadou", text: "Găsește azi un cadou ascuns pe site", server: true, link: "/craciun.html#cadouri" },
+];
+// ce e în fiecare căsuță din calendar
+const XMAS_ADVENT = [
+  "🎄 Prima căsuță! Până pe 24 decembrie te așteaptă câte una nouă în fiecare zi.",
+  "❄️ Fulgii de zăpadă au aproape mereu șase brațe — din cauza felului în care se leagă moleculele de apă când îngheață.",
+  "🚗 Sfat de iarnă: pe drum ud sau cu gheață frânează din timp. Legislația rutieră o găsești și pe site.",
+  "🥾 Pe 6 decembrie e Sfântul Nicolae: în seara dinainte, copiii își lustruiesc ghetele și le pun la ușă sau la fereastră.",
+  "🔔 În Ajunul Crăciunului, colindătorii umblă din casă în casă și sunt răsplătiți cu colaci, mere și nuci.",
+  "📜 Regulamentele se mai schimbă — fiecare modificare apare în anunțuri, pe site și pe Discord.",
+  "⛄ Ai prins omul de zăpadă care se uită de după marginea ecranului? Apasă pe el și vezi ce face.",
+  "⭐ Steaua cu care umblă colindătorii amintește de steaua care i-a călăuzit pe magi spre Betleem.",
+  "🍞 Cozonacul se face de Crăciun aproape în fiecare casă — cu nucă, cu mac sau cu rahat.",
+  "🎵 În colțul din dreapta jos al primei pagini poți alege ce melodie de sărbători să cânte.",
+  "🎄 Bradul împodobit de Crăciun a devenit obișnuit la noi abia în secolul al XIX-lea, venit din Germania.",
+  "🎫 Ai o problemă în joc? Un tichet cu filmarea de la începutul RP-ului se rezolvă cel mai repede.",
+  "🌨️ Zăpada pare albă, dar fiecare fulg e transparent — lumina împrăștiată de toți fulgii o face albă.",
+  "🤝 RP-ul bun e cel în care se distrează toată lumea — și de sărbători, și în restul anului.",
+  "🎁 Mai ai cadouri de găsit? Pe pagina Crăciun vezi pe ce pagini se mai ascund.",
+  "🧤 În joc, ca și în viață: iarna, o geacă groasă și un rezervor plin fac minuni.",
+  "🐖 Pe 20 decembrie e Ignatul — ziua în care, la sat, se taie porcul pentru masa de Crăciun.",
+  "🎭 Malanca și jocul caprei sunt tradiții de Anul Nou, mai ales în nordul Moldovei și în Bucovina.",
+  "🌾 Plugușorul se urează în ajunul Anului Nou, cu bice și clopoței, pentru un an îmbelșugat.",
+  "🌸 Pe 1 ianuarie copiii umblă cu Sorcova — o crenguță împodobită cu care le urează celor mari sănătate.",
+  "🌙 21 decembrie e cea mai lungă noapte din an în emisfera nordică — de acum zilele încep să crească.",
+  "📅 Mulți la noi țin Crăciunul și pe stil vechi, pe 7 ianuarie — de aceea questurile merg până atunci.",
+  "🎅 Moș Crăciun vine în noaptea de 24 spre 25 decembrie. Ai fost cuminte pe server anul ăsta?",
+  "🎄 Ajunul Crăciunului! Mulțumim că ești alături de noi pe Moldova RP. Sărbători fericite!",
+];
+const XMAS_QUESTS = [
+  { id: "cadouri", icon: "🎁", title: "Vânător de cadouri", need: XMAS.giftsNeeded },
+  { id: "advent", icon: "📅", title: "Calendarul de Advent", need: XMAS.adventNeeded },
+  { id: "sarcini", icon: "🧝", title: "Spiriduș harnic", need: XMAS.taskDaysNeeded },
+];
+
+function xmasToday(d = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Chisinau", year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
+}
+function xmasClock(req) {
+  const today = xmasToday();
+  const inSeason = today >= XMAS.start && today <= XMAS.end;
+  const test = !inSeason && today < XMAS.start && FOUNDER_ROLES.includes(req.user.role);
+  const adventDay = today >= XMAS.adventFrom && today <= XMAS.adventTo ? Number(today.slice(8, 10)) : null;
+  return { today, inSeason, test, active: inSeason || test, ended: today > XMAS.end, adventDay };
+}
+let xmasReady = null;
+function xmasTables() {
+  if (!xmasReady) {
+    xmasReady = pool.query(`
+      CREATE TABLE IF NOT EXISTS xmas_progress (
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        kind TEXT NOT NULL, item TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (user_id, kind, item));
+      CREATE TABLE IF NOT EXISTS xmas_winners (
+        id SERIAL PRIMARY KEY, user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        prize TEXT NOT NULL, tickets INT NOT NULL DEFAULT 0,
+        drawn_by UUID REFERENCES users(id) ON DELETE SET NULL, drawn_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        given_at TIMESTAMPTZ, given_by UUID REFERENCES users(id) ON DELETE SET NULL);`).catch(err => { xmasReady = null; throw err; });
+  }
+  return xmasReady;
+}
+// cele 3 sarcini ale zilei: aceleași pentru toți, amestecate după dată
+function xmasTasksFor(date, giftsLeft) {
+  const inAdvent = date >= XMAS.adventFrom && date <= XMAS.adventTo;
+  const list = XMAS_TASKS.filter(t => (t.id !== "advent" || inAdvent) && (t.id !== "cadou" || giftsLeft));
+  const seed = require("crypto").createHash("sha256").update("xmas-sarcini:" + date).digest();
+  for (let i = list.length - 1; i > 0; i--) {
+    const j = seed[i % seed.length] % (i + 1);
+    [list[i], list[j]] = [list[j], list[i]];
+  }
+  return list.slice(0, XMAS.tasksPerDay);
+}
+function xmasGiftToken(userId, giftId, at) {
+  const h = require("crypto").createHmac("sha256", process.env.JWT_SECRET || "xmas").update(`xmas:${userId}:${giftId}:${at}`).digest("hex").slice(0, 32);
+  return `${giftId}.${at}.${h}`;
+}
+async function xmasRows(userId) {
+  await xmasTables();
+  const { rows } = await pool.query(`SELECT kind, item, created_at FROM xmas_progress WHERE user_id = $1`, [userId]);
+  return rows;
+}
+function xmasSummary(rows, clock) {
+  const items = kind => rows.filter(r => r.kind === kind).map(r => r.item);
+  const gifts = items("gift").map(Number).sort((a, b) => a - b);
+  const advent = items("advent").map(Number).sort((a, b) => a - b);
+  const taskDays = items("taskday");
+  const giftToday = rows.some(r => r.kind === "gift" && xmasToday(new Date(r.created_at)) === clock.today);
+  const tasks = xmasTasksFor(clock.today, gifts.length < XMAS.giftsNeeded || giftToday);
+  const doneToday = new Set(items("task").filter(i => i.startsWith(clock.today + ":")).map(i => i.slice(11)));
+  const progress = { cadouri: gifts.length, advent: advent.length, sarcini: taskDays.length };
+  const quests = XMAS_QUESTS.map(q => ({ ...q, have: progress[q.id], done: progress[q.id] >= q.need }));
+  const all = quests.every(q => q.done);
+  const badges = quests.filter(q => q.done).map(q => ({ id: q.id, icon: q.icon, title: q.title }));
+  if (all) badges.push({ id: "toate", icon: "🎄", title: `Crăciun ${XMAS.year}` });
+  return {
+    gifts, advent, taskDays: taskDays.length, quests, all, badges,
+    tickets: quests.filter(q => q.done).length + (all ? 1 : 0),
+    tasks: tasks.map(t => ({ id: t.id, text: t.text, link: t.link, page: t.page || null, secs: t.secs || 0, event: t.event || null, server: !!t.server, done: doneToday.has(t.id) })),
+  };
+}
+// după orice pas: ziua bifată (toate sarcinile) + notificare la quest terminat
+async function xmasAfter(userId, clock, before) {
+  let rows = await xmasRows(userId);
+  let sum = xmasSummary(rows, clock);
+  if (sum.tasks.length && sum.tasks.every(t => t.done) && !rows.some(r => r.kind === "taskday" && r.item === clock.today)) {
+    await pool.query(`INSERT INTO xmas_progress(user_id, kind, item) VALUES ($1,'taskday',$2) ON CONFLICT DO NOTHING`, [userId, clock.today]);
+    rows = await xmasRows(userId);
+    sum = xmasSummary(rows, clock);
+  }
+  const fresh = sum.badges.filter(b => !before.badges.some(x => x.id === b.id));
+  for (const b of fresh) {
+    await notifyUser(userId, {
+      type: "craciun", title: `${b.icon} Insignă nouă: ${b.title}`,
+      message: b.id === "toate"
+        ? "Ai terminat toate questurile de Crăciun! Ai primit insigna și încă un bilet la tombolă."
+        : "Ai terminat un quest de Crăciun: primești insigna pe profil și un bilet la tombolă.",
+      link: "/craciun.html",
+    });
+  }
+  return { sum, fresh };
+}
+async function xmasTaskDone(userId, clock, id) {
+  await pool.query(`INSERT INTO xmas_progress(user_id, kind, item) VALUES ($1,'task',$2) ON CONFLICT DO NOTHING`, [userId, `${clock.today}:${id}`]);
+}
+async function xmasLinked(userId) {
+  const { rows } = await pool.query(`SELECT game_identifier FROM users WHERE id = $1`, [userId]);
+  return !!rows[0]?.game_identifier;
+}
+
+// Starea completă, pentru pagina craciun.html
+app.get("/api/craciun", auth, asyncRoute(async (req, res) => {
+  const clock = xmasClock(req);
+  const rows = await xmasRows(req.user.sub);
+  const sum = xmasSummary(rows, clock);
+  const openedAt = Object.fromEntries(rows.filter(r => r.kind === "advent").map(r => [r.item, r.created_at]));
+  const { rows: won } = await pool.query(`SELECT prize, drawn_at, given_at FROM xmas_winners WHERE user_id = $1 ORDER BY drawn_at`, [req.user.sub]);
+  res.json({
+    ...clock, season: { start: XMAS.start, end: XMAS.end, adventFrom: XMAS.adventFrom, adventTo: XMAS.adventTo, year: XMAS.year },
+    need: { gifts: XMAS.giftsNeeded, advent: XMAS.adventNeeded, taskDays: XMAS.taskDaysNeeded },
+    linked: await xmasLinked(req.user.sub),
+    giftPages: XMAS_GIFT_PAGES.map((p, i) => ({ id: i + 1, name: XMAS_PAGE_INFO[p][0], link: XMAS_PAGE_INFO[p][1], found: sum.gifts.includes(i + 1) })),
+    adventOpened: sum.advent.map(d => ({ day: d, text: XMAS_ADVENT[d - 1], at: openedAt[d] })),
+    gifts: sum.gifts.length, adventCount: sum.advent.length, taskDays: sum.taskDays,
+    quests: sum.quests, all: sum.all, badges: sum.badges, tickets: sum.tickets, tasks: sum.tasks,
+    wins: won,
+  });
+}));
+
+// Doar insignele (pentru profilul din Contul meu)
+app.get("/api/craciun/insigne", auth, asyncRoute(async (req, res) => {
+  const rows = await xmasRows(req.user.sub);
+  res.json({ year: XMAS.year, badges: xmasSummary(rows, xmasClock(req)).badges });
+}));
+
+// La fiecare pagină (craciun.js): e ascuns un cadou aici? ce sarcini se bifează aici?
+app.get("/api/craciun/pagina", auth, asyncRoute(async (req, res) => {
+  const clock = xmasClock(req);
+  if (!clock.active) return res.json({ active: false });
+  const page = String(req.query.p || "").slice(0, 40);
+  const rows = await xmasRows(req.user.sub);
+  const sum = xmasSummary(rows, clock);
+  const idx = XMAS_GIFT_PAGES.indexOf(page);
+  const gift = idx >= 0 && !sum.gifts.includes(idx + 1) ? { token: xmasGiftToken(req.user.sub, idx + 1, Date.now()) } : null;
+  res.json({
+    active: true, test: clock.test, gift,
+    tasks: sum.tasks.filter(t => !t.done && !t.server && (t.event || t.page === page)).map(t => ({ id: t.id, text: t.text, secs: t.secs, event: t.event })),
+  });
+}));
+
+// Cadoul găsit
+app.post("/api/craciun/cadou", auth, asyncRoute(async (req, res) => {
+  const clock = xmasClock(req);
+  if (!clock.active) return res.status(400).json({ error: "Questurile de Crăciun nu sunt pornite acum." });
+  const [gid, at, h] = String(req.body?.token || "").split(".");
+  const giftId = Number(gid), issued = Number(at), age = Date.now() - issued;
+  const ok = giftId >= 1 && giftId <= XMAS_GIFT_PAGES.length && h && xmasGiftToken(req.user.sub, giftId, issued) === `${gid}.${at}.${h}`;
+  if (!ok || age < 3000 || age > 3 * 3600 * 1000) return res.status(400).json({ error: "Cadoul a dispărut. Reîncarcă pagina și mai caută." });
+  const before = xmasSummary(await xmasRows(req.user.sub), clock);
+  const ins = await pool.query(`INSERT INTO xmas_progress(user_id, kind, item) VALUES ($1,'gift',$2) ON CONFLICT DO NOTHING`, [req.user.sub, String(giftId)]);
+  if (ins.rowCount && before.tasks.some(t => t.id === "cadou")) await xmasTaskDone(req.user.sub, clock, "cadou");
+  const { sum, fresh } = await xmasAfter(req.user.sub, clock, before);
+  res.json({ ok: true, isNew: !!ins.rowCount, found: sum.gifts.length, total: XMAS.giftsNeeded, newBadges: fresh, tickets: sum.tickets });
+}));
+
+// Căsuța din calendarul de Advent
+app.post("/api/craciun/advent", auth, asyncRoute(async (req, res) => {
+  const clock = xmasClock(req);
+  const day = Number(req.body?.day);
+  if (!Number.isInteger(day) || day < 1 || day > 24) return res.status(400).json({ error: "Zi greșită." });
+  if (!clock.active) return res.status(400).json({ error: "Calendarul nu e deschis acum." });
+  if (!clock.test && clock.adventDay !== day) {
+    return res.status(400).json({ error: clock.adventDay && day > clock.adventDay ? "Încă nu e ziua ei — mai ai răbdare." : "Căsuța asta se putea deschide doar în ziua ei." });
+  }
+  const before = xmasSummary(await xmasRows(req.user.sub), clock);
+  await pool.query(`INSERT INTO xmas_progress(user_id, kind, item) VALUES ($1,'advent',$2) ON CONFLICT DO NOTHING`, [req.user.sub, String(day)]);
+  if (before.tasks.some(t => t.id === "advent")) await xmasTaskDone(req.user.sub, clock, "advent");
+  const { sum, fresh } = await xmasAfter(req.user.sub, clock, before);
+  res.json({ ok: true, day, text: XMAS_ADVENT[day - 1], opened: sum.advent.length, newBadges: fresh, tickets: sum.tickets });
+}));
+
+// O sarcină a zilei bifată din pagină (craciun.js)
+app.post("/api/craciun/sarcina", auth, asyncRoute(async (req, res) => {
+  const clock = xmasClock(req);
+  if (!clock.active) return res.status(400).json({ error: "Questurile de Crăciun nu sunt pornite acum." });
+  const id = String(req.body?.id || "");
+  const before = xmasSummary(await xmasRows(req.user.sub), clock);
+  const task = before.tasks.find(t => t.id === id);
+  if (!task || task.server) return res.status(400).json({ error: "Sarcina asta nu e azi." });
+  await xmasTaskDone(req.user.sub, clock, id);
+  const { sum, fresh } = await xmasAfter(req.user.sub, clock, before);
+  res.json({ ok: true, text: task.text, doneToday: sum.tasks.filter(t => t.done).length, of: sum.tasks.length, dayDone: sum.tasks.every(t => t.done), taskDays: sum.taskDays, newBadges: fresh, tickets: sum.tickets });
+}));
+
+// Fondatori, înainte de sezon: șterge progresul propriu (după încercări)
+app.post("/api/craciun/reset-test", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
+  await xmasTables();
+  await pool.query(`DELETE FROM xmas_progress WHERE user_id = $1`, [req.user.sub]);
+  res.json({ ok: true });
+}));
+
+// Admin: participanții și tombola
+async function xmasParticipants() {
+  await xmasTables();
+  const { rows } = await pool.query(`
+    SELECT x.user_id, u.username, u.game_identifier, u.game_identifier_name, p.display_name,
+           COUNT(*) FILTER (WHERE x.kind = 'gift') AS gifts,
+           COUNT(*) FILTER (WHERE x.kind = 'advent') AS advent,
+           COUNT(*) FILTER (WHERE x.kind = 'taskday') AS taskdays,
+           MAX(x.created_at) AS last_at
+      FROM xmas_progress x JOIN users u ON u.id = x.user_id LEFT JOIN players p ON p.user_id = u.id
+     GROUP BY x.user_id, u.username, u.game_identifier, u.game_identifier_name, p.display_name`);
+  return rows.map(r => {
+    const have = { cadouri: Number(r.gifts), advent: Number(r.advent), sarcini: Number(r.taskdays) };
+    const done = XMAS_QUESTS.filter(q => have[q.id] >= q.need).length;
+    return {
+      userId: r.user_id, username: r.username, character: r.game_identifier_name || r.display_name || null, linked: !!r.game_identifier,
+      gifts: have.cadouri, advent: have.advent, taskDays: have.sarcini, quests: done,
+      tickets: done + (done === XMAS_QUESTS.length ? 1 : 0), lastAt: r.last_at,
+    };
+  }).sort((a, b) => b.tickets - a.tickets || b.gifts + b.advent + b.taskDays - (a.gifts + a.advent + a.taskDays));
+}
+async function xmasWinners() {
+  const { rows } = await pool.query(`
+    SELECT w.id, w.user_id, w.prize, w.tickets, w.drawn_at, w.given_at, u.username, u.game_identifier_name, p.display_name,
+           d.username AS drawn_by_name, g.username AS given_by_name
+      FROM xmas_winners w JOIN users u ON u.id = w.user_id LEFT JOIN players p ON p.user_id = u.id
+      LEFT JOIN users d ON d.id = w.drawn_by LEFT JOIN users g ON g.id = w.given_by
+     ORDER BY w.drawn_at`);
+  return rows.map(r => ({ id: r.id, userId: r.user_id, username: r.username, character: r.game_identifier_name || r.display_name || null, prize: r.prize, tickets: r.tickets, drawnAt: r.drawn_at, drawnBy: r.drawn_by_name, givenAt: r.given_at, givenBy: r.given_by_name }));
+}
+app.get("/api/admin/craciun", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+  res.json({ season: { start: XMAS.start, end: XMAS.end, year: XMAS.year }, clock: xmasClock(req), need: { gifts: XMAS.giftsNeeded, advent: XMAS.adventNeeded, taskDays: XMAS.taskDaysNeeded }, participants: await xmasParticipants(), winners: await xmasWinners(), canDraw: FOUNDER_ROLES.includes(req.user.role) });
+}));
+app.post("/api/admin/craciun/trage", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
+  const prize = String(req.body?.prize || "").trim().slice(0, 200);
+  if (!prize) return res.status(400).json({ error: "Scrie ce premiu se trage." });
+  const winners = await xmasWinners();
+  const pool_ = (await xmasParticipants()).filter(p => p.linked && p.tickets > 0 && !winners.some(w => w.userId === p.userId));
+  const total = pool_.reduce((s, p) => s + p.tickets, 0);
+  if (!total) return res.status(400).json({ error: "Nu mai e nimeni la tombolă (cu bilete, cont legat și fără premiu deja)." });
+  let k = require("crypto").randomInt(total), pick = pool_[0];
+  for (const p of pool_) { if (k < p.tickets) { pick = p; break; } k -= p.tickets; }
+  const { rows } = await pool.query(`INSERT INTO xmas_winners(user_id, prize, tickets, drawn_by) VALUES ($1,$2,$3,$4) RETURNING id`, [pick.userId, prize, pick.tickets, req.user.sub]);
+  await notifyUser(pick.userId, {
+    type: "craciun", title: "🎉 Ai câștigat la tombola de Crăciun!",
+    message: `Premiul tău: ${prize}. Staff-ul ți-l dă în joc în zilele următoare.`, link: "/craciun.html", external: true,
+  });
+  res.json({ ok: true, winner: { id: rows[0].id, ...pick, prize }, poolSize: pool_.length, totalTickets: total });
+}));
+app.post("/api/admin/craciun/castigator/:id/dat", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+  await xmasTables();
+  const given = req.body?.given !== false;
+  const r = await pool.query(`UPDATE xmas_winners SET given_at = ${given ? "NOW()" : "NULL"}, given_by = ${given ? "$2" : "NULL"} WHERE id = $1`, given ? [Number(req.params.id), req.user.sub] : [Number(req.params.id)]);
+  if (!r.rowCount) return res.status(404).json({ error: "Nu există." });
+  res.json({ ok: true });
+}));
+app.delete("/api/admin/craciun/castigator/:id", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
+  await xmasTables();
+  const r = await pool.query(`DELETE FROM xmas_winners WHERE id = $1`, [Number(req.params.id)]);
+  if (!r.rowCount) return res.status(404).json({ error: "Nu există." });
+  res.json({ ok: true });
+}));
+
 // Notificări proprii (24.09.2026) — vezi tabela "notifications" din
 // database/schema.sql și notifyUser() mai sus pentru context. Limitat la 50
 // cele mai recente (destul pentru un clopoțel, fără paginare — dacă devine

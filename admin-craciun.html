@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Crăciun — Admin Moldova RP</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="admin.css"><link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/assets/app/apple-touch-icon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black"><meta name="apple-mobile-web-app-title" content="Moldova RP"><script src="/pwa.js" defer></script><meta name="theme-color" content="#090a0b">
+</head>
+<body>
+<aside class="side"><a class="brand" href="index.html"><img src="assets/logo.png" alt=""><b>MOLDOVA<span>RP</span></b></a><p>ADMINISTRAȚIE</p><a href="admin.html">▦ Dashboard</a><a href="admin-utilizatori.html">👤 Utilizatori</a><a href="admin-jucatori.html">♙ Jucători</a><a href="admin-cauta.html">🔎 Caută jucător</a><a href="admin-financiar.html">◆ Facțiuni</a><a href="admin-sanctiuni.html">⚠ Sancțiuni</a><a>▤ Reclamații</a><a>⚖ CK</a><a href="admin-regulamente.html">📚 Regulamente</a><a href="admin-continut.html">📝 Conținut pagini</a><a href="admin-anunturi.html">◉ Anunțuri</a><a href="admin-actualizari.html">🆕 Actualizări</a><a href="admin-tichete.html">🎫 Tichete</a><a href="vip-shop.html">🎁 VIP Shop</a><a href="admin-vip-shop.html">🛠 Editor VIP Shop</a><a class="sel" href="admin-craciun.html">🎄 Crăciun</a><a href="admin-loguri.html">🗂 Loguri</a><a href="admin-kill-logs.html">🔪 Kill Logs</a><a>⌁ Audit Logs</a><a href="admin-txadmin.html" id="nav-txadmin">🖥 txAdmin</a><a class="back" href="dashboard.html">← Contul meu</a><a class="back" href="index.html">← Site public</a></aside>
+<main>
+<header><div><small>PANEL ADMINISTRATIV</small><h1>Questurile de Crăciun</h1></div><a class="admin" href="dashboard.html" title="Înapoi la contul meu" style="text-decoration:none"><span id="admin-name">…</span> <i></i></a></header>
+<p id="season" style="color:var(--muted);margin:-14px 0 20px">…</p>
+
+<div class="metrics">
+  <article><small>PARTICIPANȚI</small><strong id="m-part">—</strong><em>au făcut cel puțin un pas</em></article>
+  <article><small>QUESTURI TERMINATE</small><strong id="m-done">—</strong><em id="m-all">—</em></article>
+  <article><small>BILETE LA TOMBOLĂ</small><strong id="m-tickets">—</strong><em id="m-elig">—</em></article>
+  <article><small>CÂȘTIGĂTORI</small><strong id="m-wins">—</strong><em id="m-given">—</em></article>
+</div>
+
+<section class="formbox" id="draw-box" hidden>
+  <h2>🎟️ Tragerea la tombolă</h2>
+  <p style="color:var(--muted);margin:-6px 0 14px;line-height:1.6">Se alege aleator un jucător dintre cei cu bilete și cont legat de personaj, care n-au câștigat deja. Fiecare bilet e o șansă (maximum 4). Câștigătorul primește notificare pe site și pe Discord / email; premiul îl dă staff-ul în joc, apoi se bifează mai jos „Premiu dat”.</p>
+  <div class="formgrid">
+    <div class="field wide"><label for="prize">Premiul care se trage</label><input id="prize" maxlength="200" placeholder="ex: Mașină VIP pe 30 de zile / 50.000 $ în joc"></div>
+  </div>
+  <p class="formmsg" id="draw-msg" hidden style="margin:14px 0 0;font-weight:700"></p>
+  <div class="formactions"><button type="button" class="btn-primary" id="draw-btn">Trage un câștigător</button></div>
+</section>
+
+<section class="tablebox">
+  <div class="title"><h2>Câștigători</h2></div>
+  <table><thead><tr><th>JUCĂTOR</th><th>PREMIU</th><th>BILETE</th><th>TRAS</th><th>PREMIU DAT</th><th></th></tr></thead>
+  <tbody id="win-body"><tr><td colspan="6">Se încarcă…</td></tr></tbody></table>
+</section>
+
+<section class="tablebox">
+  <div class="title"><h2>Participanți</h2><input id="q" placeholder="Caută jucător…" style="padding:9px 12px;border:1px solid var(--line);background:var(--bg);color:var(--text);border-radius:9px;font:inherit;min-width:200px"></div>
+  <table><thead><tr><th>JUCĂTOR</th><th>CADOURI</th><th>ADVENT</th><th>ZILE SARCINI</th><th>BILETE</th><th>CONT LEGAT</th><th>ULTIMA ACTIVITATE</th></tr></thead>
+  <tbody id="part-body"><tr><td colspan="7">Se încarcă…</td></tr></tbody></table>
+</section>
+</main>
+<script src="auth-client.js"></script>
+<script>
+const escapeHtml = s => (s ?? '').toString().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+const fmt = d => d ? new Date(d).toLocaleString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+const fmtDay = iso => new Date(iso + 'T12:00:00').toLocaleDateString('ro-RO', { day: 'numeric', month: 'long', year: 'numeric' });
+let data = null, me = null;
+
+function who(p) {
+  return `<strong style="color:var(--text)">${escapeHtml(p.character || p.username)}</strong>${p.character ? `<br><small style="color:var(--muted)">${escapeHtml(p.username)}</small>` : ''}`;
+}
+function cell(have, need) {
+  return `<span style="font-variant-numeric:tabular-nums">${have} / ${need}</span>${have >= need ? ' <b>✓</b>' : ''}`;
+}
+function renderParts() {
+  const q = document.getElementById('q').value.trim().toLowerCase();
+  const list = data.participants.filter(p => !q || (p.username || '').toLowerCase().includes(q) || (p.character || '').toLowerCase().includes(q));
+  document.getElementById('part-body').innerHTML = list.length ? list.map(p => `<tr>
+    <td>${who(p)}</td><td>${cell(p.gifts, data.need.gifts)}</td><td>${cell(p.advent, data.need.advent)}</td><td>${cell(p.taskDays, data.need.taskDays)}</td>
+    <td><strong style="color:var(--text);font-size:14px">${p.tickets}</strong></td>
+    <td>${p.linked ? '<span class="pill on">DA</span>' : '<span class="pill off">NU</span>'}</td><td>${fmt(p.lastAt)}</td></tr>`).join('')
+    : `<tr><td colspan="7">${data.participants.length ? 'Niciun jucător nu se potrivește căutării.' : 'Încă nu a participat nimeni.'}</td></tr>`;
+}
+function render() {
+  const P = data.participants;
+  const s = data.season;
+  document.getElementById('season').textContent = `Questurile merg între ${fmtDay(s.start)} și ${fmtDay(s.end)} (ora Chișinăului). `
+    + (data.clock.inSeason ? 'Acum sunt PORNITE.' : data.clock.ended ? 'S-au încheiat — se poate trage tombola.' : 'Încă nu au început (fondatorii le pot încerca în mod de test, pe craciun.html).');
+  document.getElementById('m-part').textContent = P.length;
+  document.getElementById('m-done').textContent = P.reduce((n, p) => n + p.quests, 0);
+  document.getElementById('m-all').textContent = `${P.filter(p => p.quests === 3).length} jucători le-au terminat pe toate`;
+  const elig = P.filter(p => p.linked && p.tickets > 0);
+  document.getElementById('m-tickets').textContent = P.reduce((n, p) => n + p.tickets, 0);
+  document.getElementById('m-elig').textContent = `${elig.length} jucători intră la tombolă`;
+  document.getElementById('m-wins').textContent = data.winners.length;
+  document.getElementById('m-given').textContent = `${data.winners.filter(w => w.givenAt).length} premii date în joc`;
+  document.getElementById('draw-box').hidden = !data.canDraw;
+  document.getElementById('win-body').innerHTML = data.winners.length ? data.winners.map(w => `<tr>
+    <td>${who(w)}</td><td>${escapeHtml(w.prize)}</td><td>${w.tickets}</td><td>${fmt(w.drawnAt)}<br><small style="color:var(--muted)">de ${escapeHtml(w.drawnBy || '—')}</small></td>
+    <td>${w.givenAt ? `<span class="pill on">DAT</span><br><small style="color:var(--muted)">${fmt(w.givenAt)} · ${escapeHtml(w.givenBy || '')}</small>` : '<span class="pill warn">DE DAT</span>'}</td>
+    <td><div class="rowactions"><button type="button" data-given="${w.id}" data-v="${w.givenAt ? '0' : '1'}">${w.givenAt ? 'Anulează „dat”' : 'Marchează dat'}</button>${data.canDraw ? `<button type="button" class="danger" data-del="${w.id}">Șterge</button>` : ''}</div></td></tr>`).join('')
+    : '<tr><td colspan="6">Încă nu s-a tras nimeni.</td></tr>';
+  renderParts();
+}
+async function load() {
+  const r = await apiFetch('/api/admin/craciun');
+  if (!r.ok) { document.getElementById('part-body').innerHTML = '<tr><td colspan="7">Nu s-au putut încărca datele.</td></tr>'; return; }
+  data = await r.json();
+  render();
+}
+document.getElementById('q').addEventListener('input', () => data && renderParts());
+document.getElementById('draw-btn').addEventListener('click', async () => {
+  const prize = document.getElementById('prize').value.trim();
+  const msg = document.getElementById('draw-msg');
+  msg.hidden = false;
+  if (!prize) { msg.style.color = '#ff7a7a'; msg.textContent = 'Scrie mai întâi ce premiu se trage.'; return; }
+  if (!confirm(`Tragi un câștigător pentru: ${prize}?\n\nJucătorul primește notificare imediat.`)) { msg.hidden = true; return; }
+  const btn = document.getElementById('draw-btn');
+  btn.disabled = true;
+  const r = await apiFetch('/api/admin/craciun/trage', { method: 'POST', body: JSON.stringify({ prize }) });
+  const d = await r.json().catch(() => ({}));
+  btn.disabled = false;
+  if (!r.ok) { msg.style.color = '#ff7a7a'; msg.textContent = d.error || 'Nu s-a putut trage.'; return; }
+  msg.style.color = 'var(--green)';
+  msg.textContent = `🎉 Câștigător: ${d.winner.character || d.winner.username} (${d.winner.tickets} bilete, din ${d.poolSize} jucători cu ${d.totalTickets} bilete în total).`;
+  document.getElementById('prize').value = '';
+  load();
+});
+document.getElementById('win-body').addEventListener('click', async e => {
+  const g = e.target.closest('[data-given]');
+  const del = e.target.closest('[data-del]');
+  if (g) {
+    await apiFetch(`/api/admin/craciun/castigator/${g.dataset.given}/dat`, { method: 'POST', body: JSON.stringify({ given: g.dataset.v === '1' }) });
+    load();
+  } else if (del) {
+    if (!confirm('Ștergi câștigătorul ăsta din listă? (ex. tras din greșeală) Notificarea trimisă nu se poate retrage.')) return;
+    await apiFetch(`/api/admin/craciun/castigator/${del.dataset.del}`, { method: 'DELETE' });
+    load();
+  }
+});
+(async () => {
+  me = await requireRole('admin', 'co-fondator', 'owner');
+  if (!me) return;
+  document.getElementById('admin-name').textContent = me.username;
+  load();
+})();
+</script>
+</body></html>

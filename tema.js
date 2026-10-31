@@ -22,7 +22,7 @@
 // (rămâne cât ții fila deschisă); ?tema=nu o oprește.
 (() => {
   if (window.MRP_TEMA) return;
-  const VER = '20261031f'; // aceeași ca în pwa.js — schimbă-le împreună când modifici tema
+  const VER = '20261031h'; // aceeași ca în pwa.js — schimbă-le împreună când modifici tema
   const root = document.documentElement;
   const ls = {
     get(k) { try { return localStorage.getItem(k); } catch { return null; } },
@@ -982,7 +982,7 @@
     m.style.setProperty('--w', Math.round(small ? rand(96, 116) : rand(140, 176)) + 'px');
     m.style.setProperty('--t', rand(8.5, 12).toFixed(1) + 's');
     m.title = 'Aruncă un bulgăre!';
-    m.addEventListener('pointerdown', ev => { ev.stopPropagation(); const r = m.getBoundingClientRect(); wnThrow(r.left + r.width / 2, r.top + r.height * 0.3); });
+    m.addEventListener('pointerdown', ev => { ev.stopPropagation(); const r = m.getBoundingClientRect(); wnThrow(r.left + r.width / 2, r.top + r.height * 0.3); wnBulgare(); });
     m.addEventListener('animationend', e => { if (e.target === m) m.remove(); });
     wn.decor.appendChild(m);
     wnSound('whoosh', 0.5);
@@ -998,11 +998,13 @@
     m.style.setProperty('--w', Math.round(small ? rand(70, 86) : rand(100, 128)) + 'px');
     m.title = 'Aruncă un bulgăre!';
     const toss = () => { const r = m.getBoundingClientRect(); wnThrow(left ? r.right - 10 : r.left + 10, r.top + r.height * 0.35); };
-    m.addEventListener('pointerdown', ev => { ev.stopPropagation(); toss(); });
+    m.addEventListener('pointerdown', ev => { ev.stopPropagation(); toss(); wnBulgare(); });
     m.addEventListener('animationend', e => { if (e.target === m) m.remove(); });
     wn.decor.appendChild(m);
     if (Math.random() < 0.5) wn.timers.push(setTimeout(() => { if (wn && wn.fx && m.isConnected) toss(); }, 3000));
   }
+  // (31.10.2026) semnal pentru sarcina „aruncă un bulgăre" din questurile de Crăciun (craciun.js)
+  function wnBulgare() { document.dispatchEvent(new CustomEvent('mrp:bulgare')); }
   function wnSpawnSnowball() { if (wn && wn.fx && !document.hidden && wn.top && wn.top.querySelectorAll('.wn-splat').length < 3) wnThrow(); }
   function wnSpawnStar() {
     if (!wn || !wn.fx || document.hidden) return;

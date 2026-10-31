@@ -1,0 +1,13 @@
+# Moldova RP — ce pot citi motoarele de căutare
+User-agent: *
+Disallow: /admin
+Disallow: /mdt
+Disallow: /api/
+Disallow: /dashboard.html
+Disallow: /tichet
+Disallow: /auth-callback.html
+Disallow: /offline.html
+Disallow: /profil.html
+Allow: /
+
+Sitemap: https://moldovarp.md/sitemap.xml

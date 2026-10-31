@@ -177,6 +177,25 @@ app.use((req, res, next) => {
     next();
   }).catch(next);
 });
+// (31.10.2026) Harta site-ului pentru Google: paginile publice + fiecare regulament publicat.
+// robots.txt (fișier static) trimite aici și ascunde panoul, MDT-ul și contul.
+let sitemapCache = { at: 0, xml: "" };
+app.get("/sitemap.xml", async (_req, res) => {
+  try {
+    if (!sitemapCache.xml || Date.now() - sitemapCache.at > 3600_000) {
+      const base = (process.env.SITE_URL || "https://moldovarp.md").replace(/\/+$/, "");
+      const pages = ["", "incepe.html", "regulamente.html", "joburi.html", "legislatie-rutiera.html", "ghid-factiuni.html", "clasament.html", "concurs.html", "vip-shop.html", "premium.html", "craciun.html", "aplicatie.html"];
+      const { rows } = await pool.query(`SELECT slug, updated_at FROM regulations WHERE is_published ORDER BY slug`);
+      const esc = x => String(x).replace(/&/g, "&amp;").replace(/</g, "&lt;");
+      const urls = pages.map(p => `<url><loc>${base}/${p}</loc></url>`)
+        .concat(rows.map(r => `<url><loc>${base}/regulament.html?slug=${esc(encodeURIComponent(r.slug))}</loc>${r.updated_at ? `<lastmod>${new Date(r.updated_at).toISOString().slice(0, 10)}</lastmod>` : ""}</url>`));
+      sitemapCache = { at: Date.now(), xml: `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join("\n")}\n</urlset>\n` };
+    }
+    res.type("application/xml").set("Cache-Control", "public, max-age=3600").send(sitemapCache.xml);
+  } catch (err) {
+    res.status(500).type("text/plain").send("sitemap indisponibil");
+  }
+});
 app.use(express.static(path.join(__dirname, ".."), {
   setHeaders: (res, filePath) => {
     // sw.js și manifestul aplicației trebuie verificate mereu, ca telefoanele
@@ -184,6 +203,9 @@ app.use(express.static(path.join(__dirname, ".."), {
     if (filePath.endsWith(".html") || filePath.endsWith("sw.js") || filePath.endsWith(".webmanifest")) res.set("Cache-Control", "no-cache");
     // paginile panoului: niciodată ținute în cache (vezi PANEL_COOKIE mai sus)
     if (PANEL_FILE.test(path.basename(filePath))) res.set("Cache-Control", "no-store, private");
+    // (31.10.2026) viteza: pozele, sunetele și fonturile se țin minte o zi (și se mai folosesc încă o săptămână
+    // cât se verifică în fundal), în loc să fie cerute din nou la fiecare pagină
+    if (/\.(png|jpe?g|webp|gif|svg|ico|mp3|ogg|woff2?)$/i.test(filePath)) res.set("Cache-Control", "public, max-age=86400, stale-while-revalidate=604800");
     if (filePath.endsWith(".webmanifest")) res.type("application/manifest+json");
     if (filePath.endsWith(".apk")) {
       res.type("application/vnd.android.package-archive");
@@ -4640,6 +4662,143 @@ app.get("/api/clasament/insigne", auth, asyncRoute(async (req, res) => {
   res.json({ wins: rows });
 }));
 // ============================================================================
+// (01.11.2026) CONCURSUL DE CAPTURI „Moldova RP de sărbători” (concurs.html), cerut de Sergiu
+// Jucătorii cu contul legat de personaj pun O SINGURĂ poză (o pot șterge și pune alta,
+// dar voturile ei se pierd). Fiecare cont legat are 3 stele de dat la poze diferite,
+// nu și la poza lui; le poate muta oricând cât ține concursul. Între 20 decembrie și
+// 15 ianuarie (ora Moldovei) se pun poze și se votează; după, se văd primele 3.
+// Înainte de 20 decembrie fondatorii pot încerca totul (mod de test) și își pot șterge apoi poza.
+// Pozele (micșorate în browser, WebP/JPEG, max ~1,5 MB) stau în baza de date.
+// Staff-ul (ADMIN_ROLES) poate ascunde o poză care încalcă regulile.
+// ============================================================================
+const CONTEST = { start: "2026-12-20", end: "2027-01-15", stars: 3, maxBytes: 1_600_000 };
+let contestReady = null;
+function contestTables() {
+  if (!contestReady) {
+    contestReady = pool.query(`
+      CREATE TABLE IF NOT EXISTS contest_entries (
+        id SERIAL PRIMARY KEY, user_id UUID NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+        identifier TEXT, rp_name TEXT, caption TEXT, mime TEXT NOT NULL, image BYTEA NOT NULL, bytes INT NOT NULL,
+        hidden BOOLEAN NOT NULL DEFAULT FALSE, test BOOLEAN NOT NULL DEFAULT FALSE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+      CREATE TABLE IF NOT EXISTS contest_votes (
+        entry_id INT NOT NULL REFERENCES contest_entries(id) ON DELETE CASCADE, user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), PRIMARY KEY (entry_id, user_id));`).catch(err => { contestReady = null; throw err; });
+  }
+  return contestReady;
+}
+function contestPhase(user) {
+  const today = xmasToday();
+  if (today > CONTEST.end) return { phase: "gata", open: false, test: false };
+  if (today >= CONTEST.start) return { phase: "deschis", open: true, test: false };
+  const test = !!(user && FOUNDER_ROLES.includes(user.role));
+  return { phase: "curand", open: test, test };
+}
+function imageMime(buf) {
+  if (buf.length > 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return "image/jpeg";
+  if (buf.length > 12 && buf.toString("ascii", 0, 4) === "RIFF" && buf.toString("ascii", 8, 12) === "WEBP") return "image/webp";
+  if (buf.length > 8 && buf[0] === 0x89 && buf.toString("ascii", 1, 4) === "PNG") return "image/png";
+  return null;
+}
+app.get("/api/concurs", asyncRoute(async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  await contestTables();
+  const u = optionalUser(req);
+  const ph = contestPhase(u);
+  const isStaff = !!(u && ADMIN_ROLES.includes(u.role));
+  // în modul de test (înainte de start) se văd doar pozele de test, și doar de fondatori
+  const { rows } = await pool.query(
+    `SELECT e.id, e.user_id, e.rp_name, e.caption, e.hidden, e.test, e.created_at, COUNT(v.user_id)::int AS stars
+       FROM contest_entries e LEFT JOIN contest_votes v ON v.entry_id = e.id
+      WHERE ($1::boolean OR NOT e.test) GROUP BY e.id ORDER BY e.created_at DESC`, [ph.test]);
+  let myVotes = new Set(), linked = false;
+  if (u) {
+    myVotes = new Set((await pool.query(`SELECT entry_id FROM contest_votes WHERE user_id = $1`, [u.sub])).rows.map(r => r.entry_id));
+    linked = !!(await pool.query(`SELECT game_identifier FROM users WHERE id = $1`, [u.sub])).rows[0]?.game_identifier;
+  }
+  const visible = rows.filter(e => !e.hidden || isStaff || (u && e.user_id === u.sub));
+  const ranked = ph.phase === "gata" ? visible.filter(e => !e.hidden).sort((a, b) => b.stars - a.stars || new Date(a.created_at) - new Date(b.created_at)) : visible;
+  res.json({
+    phase: ph.phase, open: ph.open, test: ph.test, start: CONTEST.start, end: CONTEST.end, stars: CONTEST.stars,
+    me: u ? { linked, staff: isStaff, starsLeft: Math.max(0, CONTEST.stars - myVotes.size), entryId: rows.find(e => e.user_id === u.sub)?.id || null } : null,
+    entries: ranked.map(e => ({ id: e.id, name: e.rp_name || "Jucător", caption: e.caption || "", stars: e.stars, voted: myVotes.has(e.id), mine: !!(u && e.user_id === u.sub), hidden: e.hidden, at: e.created_at })),
+  });
+}));
+app.get("/api/concurs/poza/:id", asyncRoute(async (req, res) => {
+  await contestTables();
+  const { rows } = await pool.query(`SELECT mime, image, hidden, user_id FROM contest_entries WHERE id = $1`, [Number(req.params.id) || 0]);
+  const e = rows[0];
+  const u = optionalUser(req);
+  if (!e || (e.hidden && !(u && (ADMIN_ROLES.includes(u.role) || u.sub === e.user_id)))) return res.status(404).send("Nu există.");
+  res.set("Cache-Control", e.hidden ? "no-store" : "public, max-age=86400").type(e.mime).send(e.image);
+}));
+app.post("/api/concurs/poza", auth, asyncRoute(async (req, res) => {
+  await contestTables();
+  const ph = contestPhase(req.user);
+  if (!ph.open) return res.status(400).json({ error: ph.phase === "gata" ? "Concursul s-a încheiat." : `Pozele se pot trimite de pe ${new Date(CONTEST.start + "T12:00:00Z").toLocaleDateString("ro-RO", { day: "numeric", month: "long" })}.` });
+  const { rows } = await pool.query(`SELECT game_identifier, game_identifier_name FROM users WHERE id = $1`, [req.user.sub]);
+  if (!rows[0]?.game_identifier) return res.status(400).json({ error: "Leagă întâi contul de personaj (scrie /leagacont în joc)." });
+  const m = String(req.body?.image || "").match(/^data:image\/(jpeg|webp|png);base64,([A-Za-z0-9+/=]+)$/);
+  if (!m) return res.status(400).json({ error: "Alege o poză (JPG, PNG sau WebP)." });
+  const buf = Buffer.from(m[2], "base64");
+  const mime = imageMime(buf);
+  if (!mime) return res.status(400).json({ error: "Fișierul nu e o poză validă." });
+  if (buf.length > CONTEST.maxBytes) return res.status(400).json({ error: "Poza e prea mare (maxim 1,5 MB după micșorare)." });
+  const caption = String(req.body?.caption || "").replace(/\s+/g, " ").trim().slice(0, 80);
+  if (!ph.test) await pool.query(`DELETE FROM contest_entries WHERE user_id = $1 AND test`, [req.user.sub]); // poza de test a fondatorului nu intră în concursul adevărat
+  const exists = await pool.query(`SELECT id FROM contest_entries WHERE user_id = $1`, [req.user.sub]);
+  if (exists.rows[0]) return res.status(400).json({ error: "Ai pus deja o poză. Dacă vrei alta, șterge-o întâi pe cea veche (voturile ei se pierd)." });
+  const ins = await pool.query(
+    `INSERT INTO contest_entries(user_id, identifier, rp_name, caption, mime, image, bytes, test) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
+    [req.user.sub, rows[0].game_identifier, rows[0].game_identifier_name || req.user.username, caption, mime, buf, buf.length, ph.test]);
+  await logAction(req.user.sub, "contest.upload", "contest_entry", String(ins.rows[0].id), { bytes: buf.length, caption, test: ph.test }, req.ip);
+  res.json({ ok: true, id: ins.rows[0].id });
+}));
+app.delete("/api/concurs/poza", auth, asyncRoute(async (req, res) => {
+  await contestTables();
+  const ph = contestPhase(req.user);
+  if (ph.phase === "gata") return res.status(400).json({ error: "Concursul s-a încheiat; poza rămâne." });
+  const r = await pool.query(`DELETE FROM contest_entries WHERE user_id = $1 RETURNING id`, [req.user.sub]);
+  if (!r.rowCount) return res.status(404).json({ error: "Nu ai nicio poză în concurs." });
+  await logAction(req.user.sub, "contest.delete", "contest_entry", String(r.rows[0].id), {}, req.ip);
+  res.json({ ok: true });
+}));
+app.post("/api/concurs/vot/:id", auth, asyncRoute(async (req, res) => {
+  await contestTables();
+  const ph = contestPhase(req.user);
+  if (!ph.open) return res.status(400).json({ error: ph.phase === "gata" ? "Votul s-a încheiat." : "Votul începe odată cu concursul." });
+  const linked = (await pool.query(`SELECT game_identifier FROM users WHERE id = $1`, [req.user.sub])).rows[0]?.game_identifier;
+  if (!linked) return res.status(400).json({ error: "Ca să votezi, leagă-ți contul de personaj (/leagacont în joc)." });
+  const id = Number(req.params.id) || 0;
+  const e = (await pool.query(`SELECT user_id, hidden, test FROM contest_entries WHERE id = $1`, [id])).rows[0];
+  if (!e || e.hidden || (e.test && !ph.test)) return res.status(404).json({ error: "Poza nu există." });
+  if (e.user_id === req.user.sub) return res.status(400).json({ error: "Nu poți vota propria poză." });
+  const del = await pool.query(`DELETE FROM contest_votes WHERE entry_id = $1 AND user_id = $2`, [id, req.user.sub]);
+  if (!del.rowCount) {
+    // o singură cerere a contului o dată (blocăm rândurile lui), ca să nu treacă de 3 stele trimițând repede
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, ["contest:" + req.user.sub]);
+      const n = (await client.query(`SELECT COUNT(*)::int AS n FROM contest_votes WHERE user_id = $1`, [req.user.sub])).rows[0].n;
+      if (n >= CONTEST.stars) { await client.query("ROLLBACK"); return res.status(400).json({ error: `Ai dat deja toate cele ${CONTEST.stars} stele. Ia o stea de la altă poză ca s-o pui aici.` }); }
+      await client.query(`INSERT INTO contest_votes(entry_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING`, [id, req.user.sub]);
+      await client.query("COMMIT");
+    } catch (err) { await client.query("ROLLBACK").catch(() => {}); throw err; } finally { client.release(); }
+  }
+  const stars = (await pool.query(`SELECT COUNT(*)::int AS n FROM contest_votes WHERE entry_id = $1`, [id])).rows[0].n;
+  const left = CONTEST.stars - (await pool.query(`SELECT COUNT(*)::int AS n FROM contest_votes WHERE user_id = $1`, [req.user.sub])).rows[0].n;
+  res.json({ ok: true, voted: !del.rowCount, stars, starsLeft: Math.max(0, left) });
+}));
+app.post("/api/admin/concurs/:id/ascunde", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+  await contestTables();
+  const hidden = req.body?.hidden !== false;
+  const r = await pool.query(`UPDATE contest_entries SET hidden = $2 WHERE id = $1 RETURNING id`, [Number(req.params.id) || 0, hidden]);
+  if (!r.rowCount) return res.status(404).json({ error: "Poza nu există." });
+  await logAction(req.user.sub, hidden ? "contest.hide" : "contest.unhide", "contest_entry", String(req.params.id), {}, req.ip);
+  res.json({ ok: true, hidden });
+}));
+
+// ============================================================================
 // (31.10.2026) PROFILUL PUBLIC AL JUCĂTORULUI (profil.html?u=…), cerut de Sergiu
 // Îl pornește jucătorul din Contul meu (e oprit până atunci) și doar dacă are
 // contul legat de personaj. Arată: numele RP, facțiunea de stat (doar
@@ -4791,12 +4950,36 @@ function pollTables() {
         created_by UUID REFERENCES users(id) ON DELETE SET NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
       CREATE TABLE IF NOT EXISTS poll_votes (
         poll_id INT NOT NULL REFERENCES polls(id) ON DELETE CASCADE, user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        option INT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), PRIMARY KEY (poll_id, user_id));`).catch(err => { pollsReady = null; throw err; });
+        option INT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), PRIMARY KEY (poll_id, user_id));
+      ALTER TABLE polls ADD COLUMN IF NOT EXISTS ended_notified_at TIMESTAMPTZ;`).catch(err => { pollsReady = null; throw err; });
   }
   return pollsReady;
 }
 const pollOpen = p => !p.closed_at && (!p.ends_at || new Date(p.ends_at) > new Date());
 const pollEndedAt = p => p.closed_at || (p.ends_at && new Date(p.ends_at) <= new Date() ? p.ends_at : null);
+// (31.10.2026) Când se închide un sondaj (singur, la data lui, sau din Admin), fondatorii primesc
+// o notificare cu varianta câștigătoare și link spre Admin → Sondaje, de unde fac imaginea pentru Discord.
+async function notifyEndedPolls() {
+  await pollTables();
+  const { rows } = await pool.query(
+    `SELECT id, question, options FROM polls WHERE ended_notified_at IS NULL AND (closed_at IS NOT NULL OR (ends_at IS NOT NULL AND ends_at <= NOW())) ORDER BY id LIMIT 5`);
+  if (!rows.length) return;
+  const founders = (await pool.query(`SELECT u.id FROM users u JOIN roles r ON r.id = u.role_id WHERE r.name = ANY($1::text[]) AND u.is_active`, [FOUNDER_ROLES])).rows;
+  for (const p of rows) {
+    const claim = await pool.query(`UPDATE polls SET ended_notified_at = NOW() WHERE id = $1 AND ended_notified_at IS NULL RETURNING id`, [p.id]);
+    if (!claim.rowCount) continue;
+    const votes = (await pool.query(`SELECT option, COUNT(*)::int AS n FROM poll_votes WHERE poll_id = $1 GROUP BY option ORDER BY n DESC`, [p.id])).rows;
+    const total = votes.reduce((a, v) => a + v.n, 0);
+    const opts = Array.isArray(p.options) ? p.options : [];
+    const top = votes[0] ? `Câștigă „${opts[votes[0].option] ?? "?"}” cu ${Math.round(votes[0].n / total * 100)}% (${total} ${total === 1 ? "vot" : "de voturi"}).` : "Nu a votat nimeni.";
+    for (const f of founders) {
+      await notifyUser(f.id, { type: "sondaj", title: "🗳 Sondajul s-a închis", message: `„${String(p.question).slice(0, 90)}” — ${top} Fă imaginea cu rezultatul din Admin → Sondaje.`, link: "/admin-sondaje.html", external: true });
+    }
+    console.log(`Sondajul #${p.id} închis: am anunțat ${founders.length} fondatori.`);
+  }
+}
+setInterval(() => notifyEndedPolls().catch(err => console.error("Sondaje (notificare):", err.message)), 5 * 60_000);
+setTimeout(() => notifyEndedPolls().catch(() => {}), 60_000);
 async function pollView(p, userId, forceResults = false) {
   const { rows } = await pool.query(`SELECT option, COUNT(*)::int AS n FROM poll_votes WHERE poll_id = $1 GROUP BY option`, [p.id]);
   const counts = p.options.map((_, i) => (rows.find(r => r.option === i) || {}).n || 0);

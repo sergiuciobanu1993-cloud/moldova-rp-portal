@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="ro">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ff8a1f">
+  <meta name="description" content="Concursul de capturi „Moldova RP de sărbători”: trimite cea mai frumoasă poză din joc și votează-le pe ale celorlalți, între 20 decembrie și 15 ianuarie.">
+  <!-- (01.11.2026) cardul pentru Discord / Facebook -->
+  <meta property="og:type" content="website"><meta property="og:site_name" content="Moldova RP"><meta property="og:locale" content="ro_RO">
+  <meta property="og:title" content="Concurs de capturi — Moldova RP de sărbători"><meta property="og:description" content="Trimite cea mai frumoasă poză din joc și votează cu ⭐. 20 decembrie – 15 ianuarie, premii surpriză."><meta property="og:url" content="https://moldovarp.md/concurs.html">
+  <meta property="og:image" content="https://moldovarp.md/assets/og/concurs.jpg?v=1"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <title>Concurs de capturi — Moldova RP</title>
+  <link rel="icon" href="assets/favicon.png">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/assets/app/apple-touch-icon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black"><meta name="apple-mobile-web-app-title" content="Moldova RP"><script>try{var wnT=+sessionStorage.getItem("mrp_wn_nav");if(wnT&&Date.now()-wnT<5000)document.documentElement.classList.add("wn-in")}catch(e){}</script><style>/* (31.10.2026) sosirea după cortina de iarnă (tema.js, wnNav): cortina se ridică */html.wn-in::after{content:"";position:fixed;left:0;right:0;top:0;height:calc(100vh + 140px);z-index:2147483000;pointer-events:none;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='-12 -12 24 24'%3E%3Cg fill='none' stroke='%23bfe6ff' stroke-width='1.6' stroke-linecap='round'%3E%3Cpath transform='rotate(0)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3Cpath transform='rotate(60)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3Cpath transform='rotate(120)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3Cpath transform='rotate(180)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3Cpath transform='rotate(240)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3Cpath transform='rotate(300)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3C/g%3E%3C/svg%3E") 50% calc(50vh - 27px)/54px 54px no-repeat,radial-gradient(circle at 30% 40%,#fff 0 1.6px,transparent 2.3px) 0 0/131px 113px,radial-gradient(circle at 70% 20%,rgba(255,255,255,.75) 0 1.1px,transparent 1.8px) 36px 28px/97px 71px,linear-gradient(180deg,#0b1830,#060a12 75%);-webkit-mask-image:linear-gradient(180deg,#000 calc(100% - 140px),transparent);mask-image:linear-gradient(180deg,#000 calc(100% - 140px),transparent);animation:wnIn 1s cubic-bezier(.65,0,.35,1) .2s forwards}@keyframes wnIn{to{transform:translateY(-100%);visibility:hidden}}@media (prefers-reduced-motion:reduce){html.wn-in::after{display:none}}</style><script src="/pwa.js" defer></script>
+  <style>
+  /* (01.11.2026) Concursul de capturi (/api/concurs, backend/server.js „CONCURSUL DE CAPTURI”) */
+  :root{--gold:#ffd27a}
+  .page-hero{padding-left:24px;padding-right:24px;padding-bottom:26px}
+  .cc{max-width:1180px;margin:0 auto;padding:0 24px 90px;display:grid;gap:18px}
+  .cc-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:20px}
+  .cc-chip{display:inline-flex;align-items:center;gap:7px;padding:7px 13px;border-radius:999px;border:1px solid var(--line);background:rgba(255,255,255,.04);font-size:13px;font-weight:700;color:#d5d8db}
+  .cc-chip.hot{border-color:rgba(255,210,122,.5);color:var(--gold)}
+  .cc-top{display:grid;grid-template-columns:1.1fr .9fr;gap:16px}
+  .cc-box{padding:22px;border-radius:16px;border:1px solid var(--line);background:rgba(16,18,20,.9)}
+  .cc-box h2{margin:0 0 12px;font-size:20px;letter-spacing:-.02em}
+  .cc-rules{margin:0;padding-left:18px;color:#c5c9cd;line-height:1.7}
+  .cc-rules b{color:var(--text)}
+  .cc-up label.cc-drop{display:grid;place-items:center;gap:6px;min-height:150px;border:1.5px dashed rgba(255,138,31,.45);border-radius:14px;background:rgba(255,138,31,.05);cursor:pointer;text-align:center;padding:16px;color:#c5c9cd}
+  .cc-up label.cc-drop:focus-within{outline:2px solid var(--orange);outline-offset:3px}
+  .cc-up label.cc-drop img{max-width:100%;max-height:260px;border-radius:10px}
+  .cc-up input[type=file]{position:absolute;width:1px;height:1px;opacity:0}
+  .cc-up input[type=text]{width:100%;margin-top:12px;padding:12px 14px;border-radius:10px;border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--text);font:inherit}
+  .cc-up input[type=text]:focus{outline:2px solid var(--orange);outline-offset:1px}
+  .cc-row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:12px}
+  .cc-msg{margin:10px 0 0;font-size:13px;color:var(--muted)}.cc-msg.err{color:#ff8a7a}.cc-msg.ok{color:var(--green)}
+  .cc-mine{display:flex;gap:14px;align-items:center}
+  .cc-mine img{width:150px;aspect-ratio:16/9;object-fit:cover;border-radius:10px;border:1px solid var(--line)}
+  .cc-podium{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+  .cc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:14px}
+  .cc-card{position:relative;border-radius:14px;overflow:hidden;border:1px solid var(--line);background:rgba(16,18,20,.92);display:flex;flex-direction:column}
+  .cc-card.win{border-color:rgba(255,210,122,.6);box-shadow:0 12px 40px rgba(255,210,122,.12)}
+  .cc-card.hid{opacity:.55}
+  .cc-img{display:block;flex:none;width:100%;aspect-ratio:16/9;overflow:hidden;object-fit:cover;background:#0b0c0d;cursor:zoom-in;border:0;padding:0}
+  .cc-img img{display:block;width:100%;height:100%;object-fit:cover}
+  .cc-info{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:12px 14px}
+  .cc-info strong{display:block;font-size:14px}
+  .cc-info small{display:block;color:var(--muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:190px}
+  .cc-star{display:inline-flex;align-items:center;gap:6px;flex:none;padding:8px 12px;border-radius:999px;border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--text);font:800 14px/1 Inter,system-ui,sans-serif;cursor:pointer;font-variant-numeric:tabular-nums}
+  .cc-star[aria-pressed=true]{border-color:rgba(255,210,122,.6);background:rgba(255,210,122,.14);color:var(--gold)}
+  .cc-star:disabled{cursor:default;opacity:.7}
+  .cc-star:focus-visible{outline:2px solid var(--orange);outline-offset:2px}
+  .cc-rank{position:absolute;top:10px;left:10px;padding:5px 10px;border-radius:999px;background:rgba(0,0,0,.7);font-weight:900;font-size:13px;color:var(--gold)}
+  .cc-mod{position:absolute;top:10px;right:10px;padding:5px 9px;border-radius:8px;border:1px solid rgba(255,255,255,.2);background:rgba(0,0,0,.7);color:#fff;font:700 12px Inter,system-ui,sans-serif;cursor:pointer}
+  .cc-empty{color:var(--muted);margin:0}
+  .cc-lb{position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.88);display:grid;place-items:center;padding:20px}
+  .cc-lb img{max-width:min(1400px,100%);max-height:84vh;border-radius:10px}
+  .cc-lb p{margin:10px 0 0;color:#ddd;text-align:center}
+  .cc-lb button{position:absolute;top:16px;right:16px}
+  @media (max-width:860px){.cc-top{grid-template-columns:1fr}.cc-podium{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="index.html" aria-label="Moldova RP - Acasă">
+      <img src="assets/logo-128.webp" alt="Moldova RP">
+      <span>MOLDOVA<span class="accent">RP</span></span>
+    </a>
+    <button class="menu-toggle" aria-label="Deschide meniul" aria-expanded="false">☰</button>
+    <nav class="nav">
+      <a href="index.html">Acasă</a>
+      <a href="regulamente.html">Regulamente</a>
+      <a href="clasament.html">Clasament</a>
+      <a href="incepe.html">Începe să joci</a>
+      <a href="index.html#anunturi">Anunțuri</a>
+      <a class="nav-login" href="login.html">Autentificare</a>
+    </nav>
+  </header>
+
+  <main>
+    <div class="page-hero">
+      <a class="back-link" href="index.html">← Înapoi la pagina principală</a>
+      <p class="eyebrow" style="margin-top:22px">CONCURS DE CAPTURI · 20 DECEMBRIE – 15 IANUARIE</p>
+      <h1>Moldova RP de sărbători</h1>
+      <p class="muted" style="max-width:640px;margin-top:14px">Arată-ne cel mai frumos moment din oraș. Pune o captură din joc, votează-le pe ale celorlalți cu ⭐, iar primele 3 poze primesc premii surpriză în joc.</p>
+      <div class="cc-chips" id="cc-chips"></div>
+    </div>
+
+    <div class="cc">
+      <section class="cc-podium" id="cc-podium" hidden></section>
+      <div class="cc-top">
+        <section class="cc-box">
+          <h2>Regulile</h2>
+          <ul class="cc-rules">
+            <li><b>O singură poză</b> de jucător, făcută de tine pe Moldova RP.</li>
+            <li>Fără editări grele: filtrele simple sunt ok, montajele nu.</li>
+            <li>Nimic care încalcă regulamentul (fără conținut vulgar sau jignitor). Staff-ul ascunde pozele care nu respectă regulile.</li>
+            <li>Ai <b>3 stele ⭐</b> de dat, la poze diferite. Nu-ți poți vota propria poză. Le poți muta oricând până pe 15 ianuarie.</li>
+            <li>Ca să trimiți sau să votezi, contul de pe site trebuie legat de personaj (<b>/leagacont</b> în joc).</li>
+            <li>Primele 3 poze cu cele mai multe stele primesc <b>premii surpriză</b> în joc, de la staff.</li>
+          </ul>
+        </section>
+        <section class="cc-box cc-up" id="cc-up">
+          <h2>Poza ta</h2>
+          <div id="cc-up-body"><p class="cc-empty">Se încarcă…</p></div>
+        </section>
+      </div>
+      <section class="cc-box">
+        <h2 id="cc-gal-title">Pozele din concurs</h2>
+        <div class="cc-grid" id="cc-grid"></div>
+      </section>
+    </div>
+  </main>
+
+  <footer>
+    <div class="footer-brand"><img src="assets/logo-128.webp" alt="Moldova RP"><div><strong>MOLDOVA<span class="accent">RP</span></strong><small>Portal oficial al comunității</small></div></div>
+    <div class="footer-links"><a href="index.html#regulamente">Regulamente</a><a href="index.html#jucatori">Jucători</a><a href="index.html#factiuni">Facțiuni</a><a href="ghid-factiuni.html">Ghid facțiuni</a><a href="legislatie-rutiera.html">Legislație rutieră</a><a href="joburi.html">Joburi</a><a href="index.html#anunturi">Anunțuri</a></div>
+    <p class="copyright">© 2026 Moldova RP. Toate drepturile rezervate.</p>
+  </footer>
+
+  <script src="app.js"></script>
+  <script>
+  (function () {
+    var $ = function (id) { return document.getElementById(id); };
+    var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+    var auth = null; try { auth = JSON.parse(localStorage.getItem('mrp_auth') || 'null'); } catch (e) {}
+    var token = auth && auth.token;
+    var H = function (json) { var h = {}; if (token) h.Authorization = 'Bearer ' + token; if (json) h['Content-Type'] = 'application/json'; return h; };
+    var D = null, blobUrls = {};
+    var dayRo = function (iso) { return new Date(iso + 'T12:00:00Z').toLocaleDateString('ro-RO', { day: 'numeric', month: 'long' }); };
+    function imgSrc(e) { return blobUrls[e.id] || '/api/concurs/poza/' + e.id; }
+    // pozele ascunse se văd doar de staff și de autor — le cerem cu tokenul
+    function loadHidden(list) {
+      list.filter(function (e) { return e.hidden && !blobUrls[e.id]; }).forEach(function (e) {
+        fetch('/api/concurs/poza/' + e.id, { headers: H() }).then(function (r) { return r.ok ? r.blob() : null; }).then(function (b) {
+          if (!b) return; blobUrls[e.id] = URL.createObjectURL(b);
+          document.querySelectorAll('img[data-id="' + e.id + '"]').forEach(function (im) { im.src = blobUrls[e.id]; });
+        });
+      });
+    }
+    function chips() {
+      var c = [];
+      if (D.phase === 'curand') c.push('<span class="cc-chip hot">🎄 Începe pe ' + dayRo(D.start) + '</span>');
+      if (D.phase === 'deschis') { var left = Math.max(0, Math.ceil((new Date(D.end + 'T23:59:59+02:00') - Date.now()) / 86400000)); c.push('<span class="cc-chip hot">📸 Deschis · mai ' + (left === 1 ? 'e o zi' : 'sunt ' + left + ' zile') + '</span>'); }
+      if (D.phase === 'gata') c.push('<span class="cc-chip hot">🏆 Concurs încheiat</span>');
+      if (D.test) c.push('<span class="cc-chip">🧪 Mod de test (doar fondatorii)</span>');
+      c.push('<span class="cc-chip">🖼 ' + D.entries.filter(function (e) { return !e.hidden; }).length + ' poze</span>');
+      if (D.me && D.me.linked && D.open) c.push('<span class="cc-chip">⭐ Mai ai ' + D.me.starsLeft + ' din ' + D.stars + ' stele</span>');
+      $('cc-chips').innerHTML = c.join('');
+    }
+    function card(e, rank) {
+      var canVote = D.open && D.me && D.me.linked && !e.mine && !e.hidden;
+      var title = e.mine ? 'Poza ta' : canVote ? (e.voted ? 'Ia steaua înapoi' : 'Dă o stea') : (D.open ? (D.me ? (D.me.linked ? '' : 'Leagă contul ca să votezi') : 'Intră în cont ca să votezi') : '');
+      return '<article class="cc-card' + (rank && rank <= 3 ? ' win' : '') + (e.hidden ? ' hid' : '') + '">' +
+        (rank && rank <= 3 ? '<span class="cc-rank">' + ['🥇 Locul 1', '🥈 Locul 2', '🥉 Locul 3'][rank - 1] + '</span>' : '') +
+        (D.me && D.me.staff ? '<button type="button" class="cc-mod" data-mod="' + e.id + '" data-h="' + (e.hidden ? '0' : '1') + '">' + (e.hidden ? 'Arată' : 'Ascunde') + '</button>' : '') +
+        '<button type="button" class="cc-img" data-zoom="' + e.id + '" aria-label="Mărește poza lui ' + esc(e.name) + '"><img data-id="' + e.id + '" src="' + imgSrc(e) + '" alt="Captură de ' + esc(e.name) + (e.caption ? ': ' + esc(e.caption) : '') + '" loading="lazy" decoding="async"></button>' +
+        '<div class="cc-info"><div style="min-width:0"><strong>' + esc(e.name) + (e.hidden ? ' · ascunsă' : '') + '</strong><small title="' + esc(e.caption) + '">' + (e.caption ? esc(e.caption) : '&nbsp;') + '</small></div>' +
+        '<button type="button" class="cc-star" data-star="' + e.id + '" aria-pressed="' + (e.voted ? 'true' : 'false') + '"' + (canVote ? '' : ' disabled') + (title ? ' title="' + esc(title) + '"' : '') + '>⭐ <span>' + e.stars + '</span></button></div></article>';
+    }
+    function render() {
+      chips();
+      var list = D.entries;
+      if (D.phase === 'gata') {
+        var top = list.filter(function (e) { return !e.hidden; }).slice(0, 3);
+        $('cc-podium').hidden = !top.length;
+        $('cc-podium').innerHTML = top.map(function (e, i) { return card(e, i + 1); }).join('');
+      }
+      if (D.phase === 'gata') { list = list.slice(3); $('cc-gal-title').textContent = 'Celelalte poze, după stele'; }
+      $('cc-grid').innerHTML = list.length ? list.map(function (e) { return card(e, 0); }).join('')
+        : '<p class="cc-empty">' + (D.phase === 'curand' ? 'Pozele apar aici de pe ' + dayRo(D.start) + '.' : 'Încă nu a pus nimeni o poză. Fii primul!') + '</p>';
+      loadHidden(list);
+      upload();
+    }
+    function upload() {
+      var b = $('cc-up-body');
+      if (!D.me) { b.innerHTML = '<p class="cc-empty">Ca să participi, <a class="text-link" href="login.html">intră în cont</a>.</p>'; return; }
+      if (!D.me.linked) { b.innerHTML = '<p class="cc-empty">Leagă întâi contul de personaj: scrie <b>/leagacont</b> în joc și pune codul în <a class="text-link" href="dashboard.html">Contul meu</a>.</p>'; return; }
+      var mine = D.entries.find(function (e) { return e.mine; });
+      if (mine) {
+        b.innerHTML = '<div class="cc-mine"><img data-id="' + mine.id + '" src="' + imgSrc(mine) + '" alt="Poza ta"><div><strong>Poza ta e în concurs' + (mine.hidden ? ' (ascunsă de staff)' : '') + '</strong><p class="cc-msg">⭐ ' + mine.stars + (mine.stars === 1 ? ' stea' : ' stele') + (mine.caption ? ' · „' + esc(mine.caption) + '”' : '') + '</p>' +
+          (D.phase !== 'gata' ? '<div class="cc-row"><button type="button" class="btn btn-ghost" id="cc-del">Șterge poza</button></div><p class="cc-msg">Dacă o ștergi, pierzi stelele ei și poți pune alta.</p>' : '') + '</div></div><p class="cc-msg" id="cc-msg"></p>';
+        var del = $('cc-del'); if (del) del.onclick = function () {
+          if (!confirm('Ștergi poza din concurs? Stelele ei se pierd.')) return;
+          fetch('/api/concurs/poza', { method: 'DELETE', headers: H() }).then(function (r) { return r.json(); }).then(function (d) { if (d.error) $('cc-msg').textContent = d.error; load(); });
+        };
+        return;
+      }
+      if (!D.open) { b.innerHTML = '<p class="cc-empty">' + (D.phase === 'gata' ? 'Concursul s-a încheiat.' : 'Pozele se trimit de pe ' + dayRo(D.start) + ' până pe ' + dayRo(D.end) + '.') + '</p>'; return; }
+      b.innerHTML = '<label class="cc-drop" id="cc-drop"><input type="file" id="cc-file" accept="image/jpeg,image/png,image/webp"><span id="cc-prev">📷 <b>Alege captura</b><br><small>JPG sau PNG din joc (F12 pe Steam, sau tasta Print Screen)</small></span></label>' +
+        '<input type="text" id="cc-cap" maxlength="80" placeholder="Un titlu scurt (nu e obligatoriu), ex: Iarna în Paleto Bay">' +
+        '<div class="cc-row"><button type="button" class="btn btn-primary" id="cc-send" disabled>Trimite poza</button></div><p class="cc-msg" id="cc-msg"></p>';
+      var data = null;
+      $('cc-file').onchange = function () {
+        var f = this.files && this.files[0]; if (!f) return;
+        $('cc-msg').className = 'cc-msg'; $('cc-msg').textContent = 'Pregătesc poza…';
+        shrink(f).then(function (url) { data = url; $('cc-prev').innerHTML = '<img src="' + url + '" alt="Previzualizare">'; $('cc-send').disabled = false; $('cc-msg').textContent = 'Arată bine? Apasă „Trimite poza”.'; })
+          .catch(function () { $('cc-msg').className = 'cc-msg err'; $('cc-msg').textContent = 'Nu am putut citi poza. Încearcă un fișier JPG sau PNG.'; });
+      };
+      $('cc-send').onclick = function () {
+        var btn = this; btn.disabled = true; $('cc-msg').className = 'cc-msg'; $('cc-msg').textContent = 'Se trimite…';
+        fetch('/api/concurs/poza', { method: 'POST', headers: H(true), body: JSON.stringify({ image: data, caption: $('cc-cap').value }) })
+          .then(function (r) { return r.json().then(function (d) { d._ok = r.ok; return d; }); })
+          .then(function (d) { if (!d._ok) throw new Error(d.error || 'Nu s-a putut trimite.'); load(); })
+          .catch(function (e) { btn.disabled = false; $('cc-msg').className = 'cc-msg err'; $('cc-msg').textContent = e.message; });
+      };
+    }
+    // micșorăm poza în browser: cel mult 1920 px lățime, WebP (sau JPEG), sub ~1,4 MB
+    function shrink(file) {
+      return new Promise(function (ok, bad) {
+        var img = new Image(); img.onerror = bad;
+        img.onload = function () {
+          var k = Math.min(1, 1920 / img.naturalWidth), cv = document.createElement('canvas');
+          cv.width = Math.round(img.naturalWidth * k); cv.height = Math.round(img.naturalHeight * k);
+          cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+          var q = 0.85, type = cv.toDataURL('image/webp').indexOf('data:image/webp') === 0 ? 'image/webp' : 'image/jpeg', url = cv.toDataURL(type, q);
+          while (url.length * 0.75 > 1400000 && q > 0.4) { q -= 0.1; url = cv.toDataURL(type, q); }
+          URL.revokeObjectURL(img.src); ok(url);
+        };
+        img.src = URL.createObjectURL(file);
+      });
+    }
+    function load() {
+      fetch('/api/concurs', { headers: H() }).then(function (r) { return r.json(); }).then(function (d) { D = d; render(); })
+        .catch(function () { $('cc-grid').innerHTML = '<p class="cc-empty">Nu am putut încărca concursul. Încearcă din nou puțin mai târziu.</p>'; });
+    }
+    document.addEventListener('click', function (ev) {
+      var s = ev.target.closest('[data-star]');
+      if (s && !s.disabled) {
+        s.disabled = true;
+        fetch('/api/concurs/vot/' + s.dataset.star, { method: 'POST', headers: H(true) }).then(function (r) { return r.json(); }).then(function (d) {
+          if (d.error) { alert(d.error); s.disabled = false; return; }
+          var e = D.entries.find(function (x) { return String(x.id) === s.dataset.star; }); if (e) { e.voted = d.voted; e.stars = d.stars; }
+          D.me.starsLeft = d.starsLeft; render();
+        });
+        return;
+      }
+      var z = ev.target.closest('[data-zoom]');
+      if (z) {
+        var e = D.entries.find(function (x) { return String(x.id) === z.dataset.zoom; }); if (!e) return;
+        var lb = document.createElement('div'); lb.className = 'cc-lb'; lb.setAttribute('role', 'dialog'); lb.setAttribute('aria-modal', 'true');
+        lb.innerHTML = '<div><img src="' + imgSrc(e) + '" alt=""><p><b>' + esc(e.name) + '</b>' + (e.caption ? ' · ' + esc(e.caption) : '') + ' · ⭐ ' + e.stars + '</p></div><button type="button" class="btn btn-ghost">Închide</button>';
+        var close = function () { lb.remove(); document.removeEventListener('keydown', k); }, k = function (x) { if (x.key === 'Escape') close(); };
+        lb.addEventListener('click', function (x) { if (x.target === lb || x.target.closest('button')) close(); });
+        document.addEventListener('keydown', k); document.body.appendChild(lb); lb.querySelector('button').focus();
+        return;
+      }
+      var m = ev.target.closest('[data-mod]');
+      if (m) {
+        fetch('/api/admin/concurs/' + m.dataset.mod + '/ascunde', { method: 'POST', headers: H(true), body: JSON.stringify({ hidden: m.dataset.h === '1' }) }).then(function () { load(); });
+      }
+    });
+    load();
+  })();
+  </script>
+<script src="site-audio.js?v=20261031i"></script>
+</body>
+</html>

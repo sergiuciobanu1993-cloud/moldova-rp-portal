@@ -3,6 +3,8 @@
 // Votează doar cine e logat și are contul legat de personaj; rezultatele se văd
 // după vot sau după ce s-a închis sondajul. Sondajele le pun fondatorii din
 // Admin → Sondaje.
+// (31.10.2026) data-compact = varianta mică din hero-ul primei pagini (sub
+// butoane): variantele stau pe două coloane, ca să încapă în primul ecran.
 (function () {
   "use strict";
   var boxes = document.querySelectorAll("[data-sondaj]");
@@ -28,7 +30,16 @@
     ".sj-opt.mine{border-color:var(--orange,#ff8a1f)}.sj-opt.mine b{color:var(--orange,#ff8a1f)}" +
     ".sj-msg{margin:12px 0 0;font-size:13px;color:var(--muted,#9ca1a8)}.sj-msg a{color:var(--orange,#ff8a1f);font-weight:800}" +
     ".sj-err{color:#ff8a7a}" +
-    "@media (prefers-reduced-motion:reduce){.sj-opt i{transition:none}}";
+    ".sj.sj-c{max-width:580px;margin-top:26px;padding:16px 18px;border-radius:14px;background:rgba(11,12,13,.8);backdrop-filter:blur(12px);box-shadow:0 18px 40px rgba(0,0,0,.45);animation:sjIn .7s .5s ease-out both}" +
+    ".sj-c h2{margin:6px 0 2px;font-size:20px;line-height:1.2;letter-spacing:-.02em}" +
+    ".sj-c .sj-sub{margin:0 0 12px;font-size:12px}" +
+    ".sj-c .sj-opts{grid-template-columns:1fr 1fr;gap:7px}" +
+    ".sj-c .sj-opt{min-height:40px;padding:8px 12px;font-size:13px}" +
+    ".sj-c .sj-opt:last-child:nth-child(odd){grid-column:1/-1}" +
+    ".sj-c .sj-msg{margin-top:10px;font-size:12px}" +
+    "@keyframes sjIn{from{opacity:0;transform:translateY(10px)}}" +
+    "@media (max-width:560px){.sj-c .sj-opts{grid-template-columns:1fr}}" +
+    "@media (prefers-reduced-motion:reduce){.sj-opt i{transition:none}.sj.sj-c{animation:none}}";
   document.head.appendChild(css);
 
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
@@ -47,7 +58,7 @@
         (res ? "<b>" + pct + "% · " + res[i] + "</b>" : "") + "</button>";
     }).join("");
     var note = msg || (!token && p.open ? 'Ca să votezi, <a href="login.html">intră în cont</a>.' : "");
-    box.innerHTML = '<div class="sj"><p class="sj-eye">🗳 SONDAJ</p><h2>' + esc(p.question) + '</h2><p class="sj-sub">' + esc(sub) + '</p><div class="sj-opts">' + opts + "</div>" + (note ? '<p class="sj-msg">' + note + "</p>" : "") + "</div>";
+    box.innerHTML = '<div class="sj' + (box.hasAttribute("data-compact") ? " sj-c" : "") + '"><p class="sj-eye">🗳 SONDAJ</p><h2>' + esc(p.question) + '</h2><p class="sj-sub">' + esc(sub) + '</p><div class="sj-opts">' + opts + "</div>" + (note ? '<p class="sj-msg">' + note + "</p>" : "") + "</div>";
     box.setAttribute("data-poll", p.id);
     box.hidden = false;
     requestAnimationFrame(function () { [].forEach.call(box.querySelectorAll(".sj-opt i"), function (i) { i.style.width = i.dataset.w; }); });

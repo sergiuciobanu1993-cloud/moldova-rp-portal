@@ -186,6 +186,8 @@
           <a class="btn btn-primary" href="#regulamente">Vezi regulamentele</a>
           <a class="btn btn-ghost" href="#jucatori">Explorează comunitatea</a>
         </div>
+        <!-- (31.10.2026) sondajul activ, sus în hero, ca să se vadă din prima (sondaj.js; se pune din Admin → Sondaje) -->
+        <div id="sondaj" data-sondaj data-compact hidden></div>
         <div class="hc-card" id="hc-card" aria-labelledby="hc-title" hidden>
           <span class="hc-web" aria-hidden="true"></span>
           <div class="hc-thumb" aria-hidden="true"><img class="hc-img" src="assets/vip-cars/m3e46.webp" alt="" decoding="async"></div>
@@ -290,9 +292,6 @@
         <div class="empty-state">Se încarcă regulamentele…</div>
       </div>
     </section>
-
-    <!-- (31.10.2026) sondajul activ (sondaj.js; se pune din Admin → Sondaje) -->
-    <section class="section" id="sondaj" data-sondaj hidden style="padding-bottom:0"></section>
 
     <section class="section split" id="anunturi">
       <div>
@@ -510,6 +509,6 @@
 <script src="sfera.js?v=20261001c"></script>
 <script src="vitrina.js?v=20261030a"></script>
 <script src="site-audio.js?v=20261031i"></script>
-<script src="sondaj.js?v=20261031a" defer></script>
+<script src="sondaj.js?v=20261031b" defer></script>
 </body>
 </html>

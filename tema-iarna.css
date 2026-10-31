@@ -288,16 +288,26 @@ html.wn-nofx.tema-iarna .vt-view::after{animation:none}
 @keyframes wnPop{0%{opacity:0;transform:scale(.97)}25%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(1.035)}}
 @media (prefers-reduced-motion:reduce){.wn-veil,.wn-drop,.wn-arrive,.wn-pop{display:none}}
 
-/* ---- 12) (31.10.2026) prima pagină: „Muzica sărbătorilor" (videoclipuri oficiale YouTube) ---- */
+/* ---- 12) (31.10.2026) prima pagină: „Muzica sărbătorilor" (videoclipuri oficiale YouTube) ----
+   Un singur card (#xm-card). Pe ecranele late (≥1760px) scriptul din index.html îl
+   mută în hero (.xm-hero-slot), între text și cardul „Server online"; altfel stă în
+   secțiunea de sub anunțuri. Apare doar cu tema de iarnă. */
 html.tema-iarna #muzica-sarbatori[hidden]{display:block}
-.xm-wrap{display:grid;grid-template-columns:1.6fr 1fr;gap:16px;align-items:start}
-.xm-player{position:relative;aspect-ratio:16/9;border-radius:14px;overflow:hidden;background:#000;border:1px solid rgba(150,200,255,.2);box-shadow:0 18px 40px rgba(0,0,0,.45)}
+html.tema-iarna #muzica-sarbatori.xm-moved{display:none}
+.xm-hero-slot{display:none}
+html.tema-iarna .xm-hero-slot.on{display:block;position:absolute;z-index:3;top:50%;left:calc(8vw + 660px);right:calc(8vw + 440px);transform:translateY(-50%);pointer-events:none}
+.xm-hero-slot .xm-card{pointer-events:auto;width:min(470px,100%);margin:0 auto;padding:14px;border-radius:16px;background:rgba(9,14,24,.82);border:1px solid rgba(150,200,255,.22);
+  -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);box-shadow:0 22px 50px rgba(0,0,0,.5),0 0 0 1px rgba(242,184,75,.08)}
+.xm-head{display:none}
+.xm-hero-slot .xm-head{display:flex;align-items:center;gap:8px;margin:0 2px 10px;font-size:14px}
+.xm-hero-slot .xm-head b{font-weight:900;letter-spacing:.01em}
+.xm-player{position:relative;aspect-ratio:16/9;border-radius:12px;overflow:hidden;background:#000;border:1px solid rgba(150,200,255,.2)}
 .xm-player iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
 .xm-poster{position:absolute;inset:0;width:100%;height:100%;padding:0;border:0;background:#000;cursor:pointer}
 .xm-poster img{width:100%;height:100%;object-fit:cover;opacity:.75;transition:opacity .2s ease}
 .xm-poster:hover img{opacity:.9}
-.xm-play{position:absolute;left:50%;top:50%;width:72px;height:72px;margin:-36px 0 0 -36px;border-radius:50%;display:grid;place-items:center;
-  background:var(--wn-gold,#f2b84b);color:#0b0b0b;font-size:26px;padding-left:5px;box-shadow:0 0 0 8px rgba(242,184,75,.25),0 10px 30px rgba(0,0,0,.5)}
+.xm-play{position:absolute;left:50%;top:50%;width:64px;height:64px;margin:-32px 0 0 -32px;border-radius:50%;display:grid;place-items:center;
+  background:var(--wn-gold,#f2b84b);color:#0b0b0b;font-size:24px;padding-left:5px;box-shadow:0 0 0 8px rgba(242,184,75,.25),0 10px 30px rgba(0,0,0,.5)}
 .xm-poster:focus-visible{outline:3px solid var(--wn-gold,#f2b84b);outline-offset:-3px}
 .xm-list{list-style:none;margin:0;padding:0;display:grid;gap:8px}
 .xm-list button{display:grid;grid-template-columns:112px 1fr;gap:12px;align-items:center;width:100%;padding:8px;border-radius:12px;border:1px solid rgba(150,200,255,.16);
@@ -306,7 +316,19 @@ html.tema-iarna #muzica-sarbatori[hidden]{display:block}
 .xm-list button[aria-current="true"]{border-color:var(--wn-gold,#f2b84b);background:rgba(242,184,75,.1)}
 .xm-list button:focus-visible{outline:2px solid var(--wn-gold,#f2b84b);outline-offset:2px}
 .xm-list img{width:112px;aspect-ratio:16/9;object-fit:cover;border-radius:8px;display:block}
+.xm-list span{min-width:0}
 .xm-list b{display:block;font-size:15px;line-height:1.3}
 .xm-list small{display:block;margin-top:3px;color:#9aa6b6;font-size:12px;line-height:1.35}
 .xm-credit{margin:14px 0 0;color:#8592a3;font-size:12px}
-@media (max-width:860px){.xm-wrap{grid-template-columns:1fr}}
+/* în secțiune: playerul mare în stânga, lista în dreapta */
+#xm-home .xm-card{display:grid;grid-template-columns:1.6fr 1fr;gap:16px;align-items:start}
+#xm-home .xm-player{border-radius:14px;box-shadow:0 18px 40px rgba(0,0,0,.45)}
+#xm-home .xm-credit{grid-column:1/-1;margin-top:0}
+/* în hero: compact — lista pe două coloane, sub player */
+.xm-hero-slot .xm-list{grid-template-columns:1fr 1fr;margin-top:10px;gap:6px}
+.xm-hero-slot .xm-list button{grid-template-columns:56px 1fr;gap:8px;padding:5px;border-radius:9px}
+.xm-hero-slot .xm-list img{width:56px;border-radius:6px}
+.xm-hero-slot .xm-list b{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.xm-hero-slot .xm-list small{font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.xm-hero-slot .xm-credit{margin:8px 2px 0;font-size:10px}
+@media (max-width:860px){#xm-home .xm-card{grid-template-columns:1fr}}

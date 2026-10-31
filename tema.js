@@ -22,7 +22,7 @@
 // (rămâne cât ții fila deschisă); ?tema=nu o oprește.
 (() => {
   if (window.MRP_TEMA) return;
-  const VER = '20261031j'; // aceeași ca în pwa.js — schimbă-le împreună când modifici tema
+  const VER = '20261031k'; // aceeași ca în pwa.js — schimbă-le împreună când modifici tema
   const root = document.documentElement;
   const ls = {
     get(k) { try { return localStorage.getItem(k); } catch { return null; } },

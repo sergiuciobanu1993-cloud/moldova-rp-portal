@@ -441,7 +441,7 @@
   const hrs = n => `${n} ${n === 1 ? 'oră' : 'de ore'}`;
   let cfg;
   try { const r = await fetch('/api/jucator-nou'); if (!r.ok) return; cfg = await r.json(); } catch { return; }
-  if (!cfg.enabled) return;
+  if (!cfg.enabled || cfg.ended) return;
   const local = `assets/vip-cars/${encodeURIComponent(cfg.model)}.webp`;
   const cdn = `https://r2.fivemanage.com/gi0w8W6O9hhBekF3oXfQ3/vehicule/${encodeURIComponent(cfg.model)}.webp`;
   const setMask = src => { const sh = box.querySelector('.hc-shine'); sh.style.webkitMaskImage = sh.style.maskImage = `url("${src}")`; sh.style.visibility = 'visible'; };
@@ -460,7 +460,8 @@
   });
   document.getElementById('hc-hours').textContent = hrs(cfg.hours);
   document.getElementById('hc-label').textContent = cfg.label;
-  document.getElementById('hc-text').textContent = `Pentru cine avea sub ${hrs(cfg.maxStartHours)} pe server când a pornit oferta sau intră acum. Orele se numără singure; la ${hrs(cfg.hours)} jucate o ceri de aici, iar staff-ul ți-o dă în joc.`;
+  document.getElementById('hc-text').textContent = `Pentru cine avea sub ${hrs(cfg.maxStartHours)} pe server când a pornit oferta sau intră acum. Orele se numără singure; la ${hrs(cfg.hours)} jucate o ceri de aici, iar staff-ul ți-o dă în joc.`
+    + (cfg.endsAt ? ` Oferta se termină pe ${new Date(cfg.endsAt).toLocaleDateString('ro-RO', { timeZone: 'Europe/Chisinau', day: 'numeric', month: 'long' })}, la ${new Date(cfg.endsAt).toLocaleTimeString('ro-RO', { timeZone: 'Europe/Chisinau', hour: '2-digit', minute: '2-digit' })}.` : '');
   box.hidden = false; card.hidden = false;
 
   const me = document.getElementById('hc-me');

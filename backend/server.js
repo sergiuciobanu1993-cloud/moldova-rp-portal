@@ -5519,7 +5519,11 @@ app.put("/api/admin/premium", auth, requireRole(...FOUNDER_ROLES), asyncRoute(as
 // joc și bifează „Am dat-o” (newbie_car_claims) — fără nimic de făcut pe
 // serverul de joc.
 // ============================================================================
-const NEWBIE_CAR_DEFAULT = { enabled: true, launchAt: null, model: "m3e46", label: "BMW M3 E46", hours: 50, maxStartHours: 10 };
+// (31.10.2026) endsAt = până când se mai poate cere mașina (null = fără termen).
+// După el, cardul dispare de pe prima pagină și cererile noi se refuză; cererile
+// deja făcute rămân în Editorul VIP Shop ca să le dea staff-ul.
+const NEWBIE_CAR_DEFAULT = { enabled: true, launchAt: null, endsAt: null, model: "m3e46", label: "BMW M3 E46", hours: 50, maxStartHours: 10 };
+const newbieEnded = cfg => !!cfg.endsAt && Date.now() >= Date.parse(cfg.endsAt);
 function normalizeNewbieCar(v) {
   const s = v && typeof v === "object" ? v : {};
   const int = (x, min, max, def) => { const n = Math.floor(Number(x)); return Number.isFinite(n) && n >= min && n <= max ? n : def; };
@@ -5527,6 +5531,7 @@ function normalizeNewbieCar(v) {
   return {
     enabled: s.enabled !== false,
     launchAt: s.launchAt && Number.isFinite(Date.parse(s.launchAt)) ? new Date(s.launchAt).toISOString() : null,
+    endsAt: s.endsAt && Number.isFinite(Date.parse(s.endsAt)) ? new Date(s.endsAt).toISOString() : null,
     model: /^[a-z0-9_-]{2,40}$/.test(model) ? model : NEWBIE_CAR_DEFAULT.model,
     label: String(s.label ?? NEWBIE_CAR_DEFAULT.label).trim().slice(0, 60) || NEWBIE_CAR_DEFAULT.label,
     hours: int(s.hours, 1, 1000, NEWBIE_CAR_DEFAULT.hours),
@@ -5594,13 +5599,13 @@ async function newbieStatusFor(identifier, cfg) {
 app.get("/api/jucator-nou", asyncRoute(async (_req, res) => {
   const cfg = await loadNewbieCar();
   res.set("Cache-Control", "public, max-age=60");
-  res.json({ enabled: cfg.enabled, model: cfg.model, label: cfg.label, hours: cfg.hours, maxStartHours: cfg.maxStartHours, launchAt: cfg.launchAt });
+  res.json({ enabled: cfg.enabled, ended: newbieEnded(cfg), endsAt: cfg.endsAt, model: cfg.model, label: cfg.label, hours: cfg.hours, maxStartHours: cfg.maxStartHours, launchAt: cfg.launchAt });
 }));
 
 app.get("/api/jucator-nou/eu", auth, asyncRoute(async (req, res) => {
   res.set("Cache-Control", "no-store");
   const cfg = await loadNewbieCar();
-  if (!cfg.enabled) return res.json({ enabled: false });
+  if (!cfg.enabled || newbieEnded(cfg)) return res.json({ enabled: false, ended: newbieEnded(cfg) });
   const { rows } = await pool.query(`SELECT game_identifier, game_identifier_name FROM users WHERE id = $1`, [req.user.sub]);
   const identifier = rows[0]?.game_identifier;
   if (!identifier) return res.json({ enabled: true, linked: false });
@@ -5610,6 +5615,10 @@ app.get("/api/jucator-nou/eu", auth, asyncRoute(async (req, res) => {
 app.post("/api/jucator-nou/cere", auth, asyncRoute(async (req, res) => {
   const cfg = await loadNewbieCar();
   if (!cfg.enabled) return res.status(400).json({ error: "Oferta nu mai e activă." });
+  if (newbieEnded(cfg)) {
+    const end = new Date(cfg.endsAt).toLocaleDateString("ro-RO", { timeZone: "Europe/Chisinau", day: "numeric", month: "long" });
+    return res.status(400).json({ error: `Oferta s-a încheiat pe ${end}. Mașina nu se mai poate cere.` });
+  }
   const { rows } = await pool.query(`SELECT game_identifier, game_identifier_name FROM users WHERE id = $1`, [req.user.sub]);
   const identifier = rows[0]?.game_identifier;
   if (!identifier) return res.status(400).json({ error: "Leagă-ți mai întâi contul de personajul din joc (/leagacont)." });

@@ -163,6 +163,7 @@
     <div class="field"><label>Ore de jucat</label><input type="number" id="nb-hours" min="1" max="1000"></div>
     <div class="field"><label>Prag „nou” (ore la lansare)</label><input type="number" id="nb-max" min="0" max="1000"></div>
   </div>
+  <div class="field" style="margin:12px 0 0;max-width:340px"><label>Ultima zi în care se poate cere (gol = fără termen)</label><input type="date" id="nb-ends"><small class="hint">Se poate cere până în ziua aleasă, ora 23:59 (ora Chișinăului). După aceea cardul dispare de pe site.</small></div>
   <div class="field checkbox" style="margin:10px 0 0"><input type="checkbox" id="nb-enabled"><label for="nb-enabled">Oferta e activă (apare pe pagina principală)</label></div>
   <div class="formactions"><button type="button" class="btn-primary" id="nb-save">Salvează</button><a class="btn-ghost" href="index.html#acasa" target="_blank" rel="noopener">Vezi pe site</a><span class="order-saved" id="nb-saved" hidden></span></div>
   <h3 style="margin:22px 0 8px;font-size:13px">Cereri</h3>
@@ -1029,8 +1030,9 @@ document.getElementById('lx-save').addEventListener('click', async () => {
     document.getElementById('nb-hours').value = s.hours;
     document.getElementById('nb-max').value = s.maxStartHours;
     document.getElementById('nb-enabled').checked = s.enabled;
+    document.getElementById('nb-ends').value = s.endsAt ? new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Chisinau' }).format(new Date(s.endsAt)) : '';
     const pend = nb.claims.filter(c => c.status === 'pending').length;
-    document.getElementById('nb-state').textContent = `${s.enabled ? 'Activă' : 'Oprită'}${s.launchAt ? ' din ' + new Date(s.launchAt).toLocaleDateString('ro-RO') : ''} · ${nb.stats.eligible} jucători noi · ${pend} de dat`;
+    document.getElementById('nb-state').textContent = `${s.enabled ? (s.endsAt && Date.now() >= Date.parse(s.endsAt) ? 'Încheiată' : 'Activă') : 'Oprită'}${s.launchAt ? ' din ' + new Date(s.launchAt).toLocaleDateString('ro-RO') : ''}${s.endsAt ? ' până pe ' + new Date(s.endsAt).toLocaleDateString('ro-RO', { timeZone: 'Europe/Chisinau' }) : ''} · ${nb.stats.eligible} jucători noi · ${pend} de dat`;
     const el = document.getElementById('nb-claims');
     if (!nb.claims.length) { el.innerHTML = `<p class="muted" style="margin:0">Nicio cerere încă. Jucători noi urmăriți: ${nb.stats.eligible} (la jumătatea drumului: ${nb.stats.halfway}).</p>`; return; }
     el.innerHTML = `<table class="reward-table" style="min-width:720px"><thead><tr><th>JUCĂTOR</th><th>ORE</th><th>MAȘINA</th><th>CERUTĂ</th><th>STARE</th><th></th></tr></thead><tbody>${nb.claims.map(c => `
@@ -1065,9 +1067,18 @@ document.getElementById('lx-save').addEventListener('click', async () => {
     }
     catch { document.getElementById('nb-state').textContent = 'Nu am putut încărca.'; }
   }
+  // (31.10.2026) ziua aleasă, ora 23:59:59 la Chișinău → ISO (ține cont de ora de vară/iarnă)
+  function nbEndsIso(day) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return null;
+    const guess = new Date(day + 'T23:59:59Z');
+    const off = new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Chisinau', timeZoneName: 'shortOffset' }).formatToParts(guess).find(p => p.type === 'timeZoneName').value;
+    const m = /GMT([+-])(\d{1,2})(?::(\d{2}))?/.exec(off);
+    const mins = m ? (m[1] === '-' ? -1 : 1) * (Number(m[2]) * 60 + Number(m[3] || 0)) : 0;
+    return new Date(guess.getTime() - mins * 60000).toISOString();
+  }
   document.getElementById('nb-save').addEventListener('click', async () => {
     const saved = document.getElementById('nb-saved');
-    const body = { enabled: document.getElementById('nb-enabled').checked, model: document.getElementById('nb-model').value.trim(), label: document.getElementById('nb-label').value.trim(), hours: Number(document.getElementById('nb-hours').value), maxStartHours: Number(document.getElementById('nb-max').value) };
+    const body = { enabled: document.getElementById('nb-enabled').checked, model: document.getElementById('nb-model').value.trim(), label: document.getElementById('nb-label').value.trim(), hours: Number(document.getElementById('nb-hours').value), maxStartHours: Number(document.getElementById('nb-max').value), endsAt: nbEndsIso(document.getElementById('nb-ends').value) };
     try {
       const r = await apiFetch('/api/admin/jucator-nou', { method: 'PUT', body: JSON.stringify(body) });
       const d = await r.json().catch(() => ({}));

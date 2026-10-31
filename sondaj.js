@@ -46,7 +46,7 @@
   function when(iso) { return new Date(iso).toLocaleString("ro-RO", { timeZone: "Europe/Chisinau", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }); }
 
   function render(box, p, msg) {
-    var res = p.counts;
+    var res = p.counts, compact = box.hasAttribute("data-compact");
     var sub = p.open
       ? (p.endsAt ? "Votezi o singură dată · se închide pe " + when(p.endsAt) : "Votezi o singură dată")
       : "Sondaj încheiat · " + p.total + (p.total === 1 ? " vot" : " de voturi");
@@ -55,10 +55,10 @@
       var pct = res && p.total ? Math.round(res[i] / p.total * 100) : 0;
       return '<button type="button" class="sj-opt' + (p.mine === i ? " mine" : "") + '" data-i="' + i + '"' + (res || !p.open ? " disabled" : "") + ">" +
         (res ? '<i style="width:0" data-w="' + pct + '%"></i>' : "") + "<span>" + esc(o) + (p.mine === i ? " ✓" : "") + "</span>" +
-        (res ? "<b>" + pct + "% · " + res[i] + "</b>" : "") + "</button>";
+        (res ? (compact ? '<b title="' + res[i] + (res[i] === 1 ? " vot" : " voturi") + '">' + pct + "%</b>" : "<b>" + pct + "% · " + res[i] + "</b>") : "") + "</button>";
     }).join("");
     var note = msg || (!token && p.open ? 'Ca să votezi, <a href="login.html">intră în cont</a>.' : "");
-    box.innerHTML = '<div class="sj' + (box.hasAttribute("data-compact") ? " sj-c" : "") + '"><p class="sj-eye">🗳 SONDAJ</p><h2>' + esc(p.question) + '</h2><p class="sj-sub">' + esc(sub) + '</p><div class="sj-opts">' + opts + "</div>" + (note ? '<p class="sj-msg">' + note + "</p>" : "") + "</div>";
+    box.innerHTML = '<div class="sj' + (compact ? " sj-c" : "") + '"><p class="sj-eye">🗳 SONDAJ</p><h2>' + esc(p.question) + '</h2><p class="sj-sub">' + esc(sub) + '</p><div class="sj-opts">' + opts + "</div>" + (note ? '<p class="sj-msg">' + note + "</p>" : "") + "</div>";
     box.setAttribute("data-poll", p.id);
     box.hidden = false;
     requestAnimationFrame(function () { [].forEach.call(box.querySelectorAll(".sj-opt i"), function (i) { i.style.width = i.dataset.w; }); });

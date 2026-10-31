@@ -100,6 +100,19 @@
   @media (max-width:1320px){.hero-car{display:none}.hc-thumb{display:block}.hc-card{max-width:min(600px,calc(100vw - 8vw - 400px))}}
   @media (max-width:900px){.hc-card{max-width:520px}}
   @media (max-width:560px){.hc-card{flex-direction:column;align-items:stretch}.hc-thumb{width:100%;height:150px}}
+  /* (31.10.2026) Sondajul: pe ecranele de la 1360px în sus stă în dreapta sus a hero-ului
+     (locul gol de deasupra cardului „Server online"), ca hero-ul să nu se mărească; cât
+     timp e acolo, mașina mare din fundal se ascunde și cardul ei arată poza mică. */
+  .hero-sondaj-slot{display:none}
+  .hero-sondaj-slot.on{display:block;position:absolute;z-index:3;top:16px;right:8vw;width:min(422px,calc(84vw - 720px))}
+  .hero-sondaj-slot .sj.sj-c{margin-top:0;max-width:none;padding:14px 16px}
+  .hero-sondaj-slot .sj-c h2{margin:5px 0 2px;font-size:18px}
+  .hero-sondaj-slot .sj-c .sj-sub{margin-bottom:10px}
+  .hero-sondaj-slot .sj-c .sj-opts{gap:6px}
+  .hero-sondaj-slot .sj-c .sj-opt{min-height:36px;padding:6px 11px;gap:8px;font-size:12.5px}
+  .hero-sondaj-slot .sj-c .sj-msg{margin-top:8px}
+  .hero:has(.hero-sondaj-slot.on [data-sondaj]:not([hidden])) .hero-car{display:none}
+  .hero:has(.hero-sondaj-slot.on [data-sondaj]:not([hidden])) .hc-thumb{display:block}
   </style>
 </head>
 <body data-content-page="index">
@@ -237,6 +250,22 @@
       </div>
       <!-- (31.10.2026) aici se mută playerul „Muzica sărbătorilor" pe ecranele late (vezi scriptul de lângă secțiunea lui) -->
       <div class="xm-hero-slot" id="xm-hero-slot"></div>
+      <div class="hero-sondaj-slot" id="hero-sondaj-slot"></div>
+      <script>
+      // (31.10.2026) sondajul: în dreapta sus a hero-ului pe ecranele late, sub butoane pe celelalte
+      (function () {
+        var box = document.getElementById('sondaj'), slot = document.getElementById('hero-sondaj-slot');
+        var home = box && box.parentNode, next = box && box.nextSibling, wide = window.matchMedia('(min-width: 1360px)');
+        if (!box || !slot) return;
+        function place() {
+          if (wide.matches) { if (box.parentNode !== slot) slot.appendChild(box); }
+          else if (box.parentNode !== home) home.insertBefore(box, next);
+          slot.classList.toggle('on', wide.matches);
+        }
+        if (wide.addEventListener) wide.addEventListener('change', place); else wide.addListener(place);
+        place();
+      })();
+      </script>
     </section>
 
     <section class="stats-wrap">
@@ -509,6 +538,6 @@
 <script src="sfera.js?v=20261001c"></script>
 <script src="vitrina.js?v=20261030a"></script>
 <script src="site-audio.js?v=20261031i"></script>
-<script src="sondaj.js?v=20261031b" defer></script>
+<script src="sondaj.js?v=20261031c" defer></script>
 </body>
 </html>

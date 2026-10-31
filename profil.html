@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="ro">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ff8a1f">
+  <meta name="description" content="Profilul unui jucător de pe Moldova RP: orele jucate, facțiunea, locul în clasament și insignele.">
+  <meta name="robots" content="noindex">
+  <meta property="og:type" content="profile"><meta property="og:site_name" content="Moldova RP"><meta property="og:locale" content="ro_RO">
+  <meta property="og:title" content="Profil de jucător — Moldova RP"><meta property="og:description" content="Orele jucate, facțiunea, locul în clasament și insignele, pe moldovarp.md.">
+  <meta property="og:image" content="https://moldovarp.md/assets/og/clasament.jpg?v=1"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <title>Profil de jucător — Moldova RP</title>
+  <link rel="icon" href="assets/favicon.png">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/assets/app/apple-touch-icon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black"><meta name="apple-mobile-web-app-title" content="Moldova RP"><script>try{var wnT=+sessionStorage.getItem("mrp_wn_nav");if(wnT&&Date.now()-wnT<5000)document.documentElement.classList.add("wn-in")}catch(e){}</script><style>/* (31.10.2026) sosirea după cortina de iarnă (tema.js, wnNav): cortina se ridică */html.wn-in::after{content:"";position:fixed;left:0;right:0;top:0;height:calc(100vh + 140px);z-index:2147483000;pointer-events:none;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='-12 -12 24 24'%3E%3Cg fill='none' stroke='%23bfe6ff' stroke-width='1.6' stroke-linecap='round'%3E%3Cpath transform='rotate(0)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3Cpath transform='rotate(60)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3Cpath transform='rotate(120)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3Cpath transform='rotate(180)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3Cpath transform='rotate(240)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3Cpath transform='rotate(300)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3C/g%3E%3C/svg%3E") 50% calc(50vh - 27px)/54px 54px no-repeat,radial-gradient(circle at 30% 40%,#fff 0 1.6px,transparent 2.3px) 0 0/131px 113px,radial-gradient(circle at 70% 20%,rgba(255,255,255,.75) 0 1.1px,transparent 1.8px) 36px 28px/97px 71px,linear-gradient(180deg,#0b1830,#060a12 75%);-webkit-mask-image:linear-gradient(180deg,#000 calc(100% - 140px),transparent);mask-image:linear-gradient(180deg,#000 calc(100% - 140px),transparent);animation:wnIn 1s cubic-bezier(.65,0,.35,1) .2s forwards}@keyframes wnIn{to{transform:translateY(-100%);visibility:hidden}}@media (prefers-reduced-motion:reduce){html.wn-in::after{display:none}}</style><script src="/pwa.js" defer></script>
+  <style>
+  /* (31.10.2026) Profilul public al jucătorului (/api/profil/:slug) */
+  .page-hero{padding-left:24px;padding-right:24px;padding-bottom:28px}
+  .pf{max-width:1180px;margin:0 auto;padding:0 24px 90px;display:grid;gap:16px}
+  .pf-card{display:grid;grid-template-columns:auto 1fr auto;gap:22px;align-items:center;padding:26px;border-radius:18px;border:1px solid var(--line);background:linear-gradient(140deg,rgba(255,138,31,.1),transparent 55%),rgba(16,18,20,.9)}
+  .pf-av{width:96px;height:96px;border-radius:24px;display:grid;place-items:center;font-size:36px;font-weight:900;color:#0b0b0b;background:linear-gradient(145deg,#ffb15a,#ff8a1f 55%,#d9600a);box-shadow:0 14px 34px rgba(255,138,31,.25)}
+  .pf-card h1{margin:0;font-size:clamp(28px,4vw,44px);letter-spacing:-.03em;line-height:1.05;text-wrap:balance}
+  .pf-meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+  .pf-chip{display:inline-flex;align-items:center;gap:7px;padding:6px 12px;border-radius:999px;border:1px solid var(--line);background:rgba(255,255,255,.04);font-size:13px;font-weight:700;color:#d5d8db}
+  .pf-chip.on{border-color:rgba(61,220,132,.35);color:var(--green)}
+  .pf-chip.prem{border-color:rgba(255,210,122,.45);color:#ffd27a}
+  .pf-dot{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+  .pf-chip.on .pf-dot{background:var(--green);box-shadow:0 0 10px rgba(61,220,132,.8)}
+  .pf-share{display:flex;flex-direction:column;gap:8px;align-items:stretch}
+  .pf-share .btn{min-height:42px;font-size:14px;padding:0 16px}
+  .pf-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+  .pf-stat{padding:20px;border-radius:14px;border:1px solid var(--line);background:rgba(16,18,20,.88)}
+  .pf-stat small{display:block;color:var(--muted);font-size:11px;font-weight:900;letter-spacing:.14em;text-transform:uppercase}
+  .pf-stat strong{display:block;margin-top:6px;font-size:30px;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+  .pf-stat span{display:block;margin-top:2px;color:var(--muted);font-size:13px}
+  .pf-box{padding:22px;border-radius:14px;border:1px solid var(--line);background:rgba(16,18,20,.88)}
+  .pf-box h2{margin:0 0 14px;font-size:20px;letter-spacing:-.02em}
+  .pf-badges{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
+  .pf-badge{display:flex;gap:12px;align-items:center;padding:12px 14px;border-radius:12px;border:1px solid var(--line);background:rgba(255,255,255,.03)}
+  .pf-badge .ic{font-size:26px;line-height:1;flex:none}
+  .pf-badge strong{display:block;font-size:14px}
+  .pf-badge small{color:var(--muted);font-size:12px}
+  .pf-empty{color:var(--muted);margin:0}
+  .pf-missing{max-width:640px;margin:0 auto;padding:40px 24px 120px;text-align:center}
+  .pf-missing p{color:var(--muted)}
+  .pf-note{margin:0;color:var(--muted);font-size:13px}
+  @media (max-width:760px){.pf-card{grid-template-columns:auto 1fr}.pf-share{grid-column:1/-1;flex-direction:row;flex-wrap:wrap}.pf-stats{grid-template-columns:1fr}.pf-av{width:72px;height:72px;font-size:28px;border-radius:18px}}
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="index.html" aria-label="Moldova RP - Acasă">
+      <img src="assets/logo.png" alt="Moldova RP">
+      <span>MOLDOVA<span class="accent">RP</span></span>
+    </a>
+    <button class="menu-toggle" aria-label="Deschide meniul" aria-expanded="false">☰</button>
+    <nav class="nav">
+      <a href="index.html">Acasă</a>
+      <a href="regulamente.html">Regulamente</a>
+      <a href="clasament.html">Clasament</a>
+      <a href="incepe.html">Începe să joci</a>
+      <a href="index.html#anunturi">Anunțuri</a>
+      <a class="nav-login" href="login.html">Autentificare</a>
+    </nav>
+  </header>
+
+  <main>
+    <div class="page-hero">
+      <a class="back-link" href="clasament.html">← Clasamentul săptămânii</a>
+      <p class="eyebrow" style="margin-top:22px">PROFIL DE JUCĂTOR</p>
+    </div>
+
+    <div class="pf" id="pf" aria-busy="true">
+      <section class="pf-card">
+        <div class="pf-av" id="pf-av" aria-hidden="true">…</div>
+        <div>
+          <h1 id="pf-name">Se încarcă…</h1>
+          <div class="pf-meta" id="pf-meta"></div>
+        </div>
+        <div class="pf-share">
+          <button type="button" class="btn btn-primary" id="pf-copy">Copiază linkul</button>
+          <a class="btn btn-ghost" href="clasament.html">Vezi clasamentul</a>
+        </div>
+      </section>
+      <section class="pf-stats" id="pf-stats"></section>
+      <section class="pf-box">
+        <h2>Insigne</h2>
+        <div class="pf-badges" id="pf-badges"></div>
+      </section>
+      <p class="pf-note">Profilul îl face public jucătorul, din Contul meu. Banii, mașinile și sancțiunile nu apar aici.</p>
+    </div>
+    <div class="pf-missing" id="pf-missing" hidden>
+      <h1>Profilul nu există</h1>
+      <p>Jucătorul nu are profil public sau linkul e greșit. Profilul se pornește din Contul meu, după ce contul e legat de personaj.</p>
+      <a class="btn btn-primary" href="clasament.html">Vezi clasamentul săptămânii</a>
+    </div>
+  </main>
+
+  <footer>
+    <div class="footer-brand"><img src="assets/logo.png" alt="Moldova RP"><div><strong>MOLDOVA<span class="accent">RP</span></strong><small>Portal oficial al comunității</small></div></div>
+    <div class="footer-links"><a href="index.html#regulamente">Regulamente</a><a href="index.html#jucatori">Jucători</a><a href="index.html#factiuni">Facțiuni</a><a href="ghid-factiuni.html">Ghid facțiuni</a><a href="legislatie-rutiera.html">Legislație rutieră</a><a href="joburi.html">Joburi</a><a href="index.html#anunturi">Anunțuri</a></div>
+    <p class="copyright">© 2026 Moldova RP. Toate drepturile rezervate.</p>
+  </footer>
+
+  <script src="app.js"></script>
+  <script>
+  (function () {
+    var $ = function (id) { return document.getElementById(id); };
+    var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+    var slug = (new URLSearchParams(location.search).get('u') || '').trim().toLowerCase();
+    var CAT = { jucatori: 'orele jucate', factiuni: 'facțiunea săptămânii', questuri: 'questurile de Crăciun' };
+    var MEDAL = ['🥇', '🥈', '🥉'];
+    function missing() { $('pf').hidden = true; $('pf-missing').hidden = false; }
+    function date(iso, opts) { return iso ? new Date(iso).toLocaleDateString('ro-RO', Object.assign({ timeZone: 'Europe/Chisinau' }, opts)) : '—'; }
+    function ago(iso) {
+      if (!iso) return 'offline';
+      var m = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+      if (m < 60) return 'văzut acum ' + Math.max(1, m) + ' min';
+      if (m < 1440) return 'văzut acum ' + Math.round(m / 60) + ' h';
+      var d = Math.round(m / 1440); return 'văzut acum ' + d + (d === 1 ? ' zi' : ' zile');
+    }
+    if (!slug) return missing();
+    fetch('/api/profil/' + encodeURIComponent(slug)).then(function (r) { return r.ok ? r.json() : null; }).then(function (p) {
+      if (!p) return missing();
+      document.title = p.name + ' — Moldova RP';
+      $('pf-av').textContent = p.name.split(/\s+/).filter(Boolean).slice(0, 2).map(function (w) { return w[0]; }).join('').toUpperCase() || '?';
+      $('pf-name').textContent = p.name;
+      var meta = [];
+      meta.push(p.online ? '<span class="pf-chip on"><span class="pf-dot"></span>Online acum</span>' : '<span class="pf-chip"><span class="pf-dot"></span>' + esc(ago(p.lastSeen)) + '</span>');
+      if (p.faction) meta.push('<span class="pf-chip">🛡 ' + esc(p.faction.name) + (p.faction.grade ? ' · ' + esc(p.faction.grade) : '') + '</span>');
+      if (p.premium) meta.push('<span class="pf-chip prem">⭐ Premium</span>');
+      $('pf-meta').innerHTML = meta.join('');
+      $('pf-stats').innerHTML = [
+        ['Ore jucate', p.hours != null ? p.hours.toLocaleString('ro-RO') : '—', 'în total pe server'],
+        ['Săptămâna asta', p.week ? 'Locul ' + p.week.rank : '—', p.week ? String(p.week.hours).replace('.', ',') + ' ore jucate de luni' : 'nu a jucat încă de luni'],
+        ['Pe site din', date(p.memberSince, { month: 'long', year: 'numeric' }), 'contul de pe moldovarp.md'],
+      ].map(function (s) { return '<article class="pf-stat"><small>' + s[0] + '</small><strong>' + esc(s[1]) + '</strong><span>' + esc(s[2]) + '</span></article>'; }).join('');
+      var b = [];
+      var byCat = {};
+      (p.wins || []).forEach(function (w) { (byCat[w.category] = byCat[w.category] || []).push(w); });
+      Object.keys(byCat).forEach(function (c) {
+        var list = byCat[c], best = Math.min.apply(null, list.map(function (w) { return w.rank; }));
+        b.push(['🏆', 'Top al săptămânii' + (list.length > 1 ? ' ×' + list.length : ''), (MEDAL[best - 1] || '') + ' cel mai bun loc: ' + best + ' · ' + (CAT[c] || c)]);
+      });
+      ((p.xmas && p.xmas.badges) || []).forEach(function (x) { b.push([x.icon, x.title, 'Crăciun ' + p.xmas.year]); });
+      if (p.premium) b.push(['⭐', 'Premium', 'abonament activ']);
+      $('pf-badges').innerHTML = b.length ? b.map(function (x) { return '<div class="pf-badge"><span class="ic" aria-hidden="true">' + x[0] + '</span><div><strong>' + esc(x[1]) + '</strong><small>' + esc(x[2]) + '</small></div></div>'; }).join('') : '<p class="pf-empty">Încă nicio insignă. Se câștigă în clasamentul săptămânii și la questurile de Crăciun.</p>';
+      $('pf').setAttribute('aria-busy', 'false');
+    }).catch(missing);
+    $('pf-copy').addEventListener('click', function () {
+      var btn = this, url = location.origin + '/profil.html?u=' + encodeURIComponent(slug);
+      (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(function () { btn.textContent = 'Linkul e copiat ✓'; }, function () { prompt('Copiază linkul:', url); })
+        .then(function () { setTimeout(function () { btn.textContent = 'Copiază linkul'; }, 2500); });
+    });
+  })();
+  </script>
+<script src="site-audio.js?v=20261031i"></script>
+</body>
+</html>

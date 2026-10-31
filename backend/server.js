@@ -4616,12 +4616,18 @@ app.get("/api/clasament", asyncRoute(async (_req, res) => {
   const week = weekStartOf();
   const board = await weeklyBoard(week);
   const last = weekShift(week, -7);
-  const { rows } = await pool.query(`SELECT category, rank, name, value FROM weekly_winners WHERE week = $1 ORDER BY category, rank`, [last]);
-  const strip = l => l.map(({ identifier, userId, ...r }) => r);
+  const { rows } = await pool.query(`SELECT category, rank, name, value, identifier, user_id FROM weekly_winners WHERE week = $1 ORDER BY category, rank`, [last]);
+  // (31.10.2026) cine are profil public primește link spre el (profil.html?u=…)
+  await profileTables();
+  const ids = [...board.players.map(p => p.identifier), ...(board.quests || []).map(q => q.identifier), ...rows.map(w => w.identifier)].filter(Boolean);
+  const prof = ids.length ? (await pool.query(
+    `SELECT u.game_identifier AS identifier, pp.slug FROM public_profiles pp JOIN users u ON u.id = pp.user_id WHERE pp.enabled AND u.game_identifier = ANY($1)`, [ids])).rows : [];
+  const slugOf = new Map(prof.map(r => [r.identifier, r.slug]));
+  const strip = l => l.map(({ identifier, userId, user_id, ...r }) => ({ ...r, profil: slugOf.get(identifier) || null }));
   const data = {
     week: { start: week, end: weekShift(week, 6) },
     players: strip(board.players), factions: board.factions, quests: board.quests ? strip(board.quests) : null,
-    last: { start: last, end: weekShift(last, 6), winners: rows },
+    last: { start: last, end: weekShift(last, 6), winners: strip(rows) },
     updatedAt: new Date().toISOString(),
   };
   weeklyCache = { at: Date.now(), data };
@@ -4632,6 +4638,115 @@ app.get("/api/clasament/insigne", auth, asyncRoute(async (req, res) => {
   await weeklyTables();
   const { rows } = await pool.query(`SELECT week::text AS week, category, rank FROM weekly_winners WHERE user_id = $1 ORDER BY week DESC`, [req.user.sub]);
   res.json({ wins: rows });
+}));
+// ============================================================================
+// (31.10.2026) PROFILUL PUBLIC AL JUCĂTORULUI (profil.html?u=…), cerut de Sergiu
+// Îl pornește jucătorul din Contul meu (e oprit până atunci) și doar dacă are
+// contul legat de personaj. Arată: numele RP, facțiunea de stat (doar
+// Poliție/Șerif/SMURD/Guvern/FIB/Armată — bandele nu, ca să nu se strice
+// RP-ul), orele jucate, dacă e online, locul în clasamentul săptămânii,
+// insignele (Top al săptămânii, Crăciun, Premium) și de când e pe site.
+// NU arată bani, mașini, sancțiuni, Discord sau alte date private.
+// ============================================================================
+let profilesReady = null;
+function profileTables() {
+  if (!profilesReady) {
+    profilesReady = pool.query(`
+      CREATE TABLE IF NOT EXISTS public_profiles (
+        user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        slug TEXT UNIQUE NOT NULL, enabled BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW());`).catch(err => { profilesReady = null; throw err; });
+  }
+  return profilesReady;
+}
+function profileSlugBase(name) {
+  const base = String(name || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 30).replace(/-+$/g, "");
+  return base.length >= 2 ? base : "jucator";
+}
+async function profileFreeSlug(base, userId) {
+  for (let i = 1; i < 200; i++) {
+    const slug = i === 1 ? base : `${base}-${i}`;
+    const { rows } = await pool.query(`SELECT user_id FROM public_profiles WHERE slug = $1`, [slug]);
+    if (!rows[0] || rows[0].user_id === userId) return slug;
+  }
+  return `${base}-${Date.now().toString(36)}`;
+}
+const profileCache = new Map(); // slug -> { at, data }
+app.get("/api/me/profil-public", auth, asyncRoute(async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  await profileTables();
+  const { rows } = await pool.query(
+    `SELECT u.game_identifier, pp.slug, pp.enabled FROM users u LEFT JOIN public_profiles pp ON pp.user_id = u.id WHERE u.id = $1`, [req.user.sub]);
+  const r = rows[0] || {};
+  res.json({ linked: !!r.game_identifier, enabled: !!(r.slug && r.enabled), slug: r.slug || null });
+}));
+app.put("/api/me/profil-public", auth, asyncRoute(async (req, res) => {
+  await profileTables();
+  const enabled = req.body?.enabled === true;
+  const { rows } = await pool.query(`SELECT game_identifier, game_identifier_name, username FROM users WHERE id = $1`, [req.user.sub]);
+  const u = rows[0];
+  if (!u) return res.status(404).json({ error: "Contul nu există." });
+  if (enabled && !u.game_identifier) return res.status(400).json({ error: "Leagă întâi contul de personaj (scrie /leagacont în joc)." });
+  const ex = await pool.query(`SELECT slug FROM public_profiles WHERE user_id = $1`, [req.user.sub]);
+  let slug = ex.rows[0]?.slug;
+  if (!slug) {
+    if (!enabled) return res.json({ ok: true, enabled: false, slug: null });
+    slug = await profileFreeSlug(profileSlugBase(u.game_identifier_name || u.username), req.user.sub);
+    await pool.query(`INSERT INTO public_profiles(user_id, slug, enabled) VALUES ($1,$2,$3)`, [req.user.sub, slug, enabled]);
+  } else {
+    await pool.query(`UPDATE public_profiles SET enabled = $2, updated_at = NOW() WHERE user_id = $1`, [req.user.sub, enabled]);
+  }
+  profileCache.delete(slug);
+  await logAction(req.user.sub, "profile.public", "public_profile", slug, { enabled }, req.ip);
+  res.json({ ok: true, enabled, slug });
+}));
+app.get("/api/profil/:slug", asyncRoute(async (req, res) => {
+  await profileTables();
+  const slug = String(req.params.slug || "").toLowerCase().slice(0, 40);
+  const hit = profileCache.get(slug);
+  if (hit && Date.now() - hit.at < 60_000) { res.set("Cache-Control", "public, max-age=60"); return res.json(hit.data); }
+  const { rows } = await pool.query(
+    `SELECT pp.user_id, u.created_at, u.game_identifier, u.game_identifier_name
+       FROM public_profiles pp JOIN users u ON u.id = pp.user_id WHERE pp.slug = $1 AND pp.enabled`, [slug]);
+  const r = rows[0];
+  if (!r || !r.game_identifier) return res.status(404).json({ error: "Profilul nu există sau nu e public." });
+  const id = r.game_identifier;
+  await weeklyTables();
+  const week = weekStartOf();
+  const [detail, cached, weekRows, wins, xrows, premium] = await Promise.all([
+    getPlayersDetail().catch(() => ({ online: false, players: [] })),
+    pool.query(`SELECT rp_name, data, updated_at FROM game_players_cache WHERE identifier = $1`, [id]).then(x => x.rows[0] || null).catch(() => null),
+    pool.query(`SELECT rank::int, minutes::int FROM (SELECT identifier, last_minutes - start_minutes AS minutes, RANK() OVER (ORDER BY last_minutes - start_minutes DESC) AS rank
+                  FROM weekly_playtime WHERE week = $1 AND last_minutes > start_minutes) t WHERE identifier = $2`, [week, id]).then(x => x.rows[0] || null),
+    pool.query(`SELECT week::text AS week, category, rank FROM weekly_winners WHERE user_id = $1 OR identifier = $2 ORDER BY week DESC LIMIT 50`, [r.user_id, id]).then(x => x.rows),
+    xmasRows(r.user_id).catch(() => []),
+    fetchPremiumStatus(id).catch(() => null),
+  ]);
+  const live = detail.online ? (detail.players || []).find(p => p.license === id) || null : null;
+  const d = cached?.data || {};
+  const job = live?.job ?? d.job ?? null;
+  const today = xmasToday();
+  const xclock = { today, inSeason: today >= XMAS.start && today <= XMAS.end, test: false, active: today >= XMAS.start && today <= XMAS.end, ended: today > XMAS.end, adventDay: null };
+  const xmasBadges = xrows.length ? xmasSummary(xrows, xclock).badges : [];
+  const minutes = playtimeOf(live) ?? playtimeOf(d);
+  const data = {
+    slug,
+    name: live?.serverName || cached?.rp_name || r.game_identifier_name || "Jucător",
+    faction: job && WEEK_FACTION_JOBS[job] ? { name: WEEK_FACTION_JOBS[job], grade: live?.gradeLabel || d.gradeLabel || null } : null,
+    hours: minutes != null ? Math.floor(minutes / 60) : null,
+    online: !!live,
+    lastSeen: live ? null : (d.lastSeen || cached?.updated_at || null),
+    memberSince: r.created_at,
+    week: weekRows ? { rank: weekRows.rank, hours: Math.round(weekRows.minutes / 6) / 10 } : null,
+    wins: wins.map(w => ({ week: w.week, category: w.category, rank: w.rank })),
+    xmas: { year: XMAS.year, badges: xmasBadges },
+    premium: !!(premium && premium.active),
+  };
+  profileCache.set(slug, { at: Date.now(), data });
+  if (profileCache.size > 2000) profileCache.clear();
+  res.set("Cache-Control", "public, max-age=60");
+  res.json(data);
 }));
 app.get("/api/admin/clasament", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (_req, res) => {
   await weeklyTables();

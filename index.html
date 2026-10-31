@@ -163,7 +163,7 @@
     <section class="highlights-marquee">
       <div class="highlights-marquee-head">
         <div><p class="eyebrow" data-block="highlights_eyebrow">MOLDOVA RP</p><h2 data-block="highlights_title">De ce Moldova RP?</h2></div>
-        <!-- (31.10.2026) ceasul până la Revelion: de pe 1 decembrie până pe 1 ianuarie (ora Moldovei); ?revelion=1 îl arată oricând, ca previzualizare -->
+        <!-- (31.10.2026) ceasul până la Revelion: din octombrie până pe 1 ianuarie (ora Moldovei); ?revelion=1 îl arată oricând, ca previzualizare -->
         <div class="ny" id="ny" role="timer" aria-live="off" hidden>
           <div class="ny-lbl"><span class="ny-eye">🎆 PÂNĂ LA <b id="ny-year">2027</b></span><span class="ny-sub">Revelionul pe Moldova RP</span></div>
           <div class="ny-clock" id="ny-clock">
@@ -227,7 +227,8 @@
   var target = kisMidnight(yNow + 1, 0, 1), year = yNow + 1;
   var janEnd = kisMidnight(yNow, 0, 2);
   if (now < janEnd && now >= kisMidnight(yNow, 0, 1)) { target = kisMidnight(yNow, 0, 1); year = yNow; }
-  var start = kisMidnight(year - 1, 11, 1), end = kisMidnight(year, 0, 2);
+  // (31.10.2026) Sergiu: pornit de acum, nu de pe 1 decembrie — se vede din 1 octombrie până pe 1 ianuarie inclusiv
+  var start = kisMidnight(year - 1, 9, 1), end = kisMidnight(year, 0, 2);
   if (!preview && (now < start || now >= end)) return;
   document.getElementById('ny-year').textContent = year;
   document.getElementById('ny-year2').textContent = year;

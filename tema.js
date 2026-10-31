@@ -22,7 +22,7 @@
 // (rămâne cât ții fila deschisă); ?tema=nu o oprește.
 (() => {
   if (window.MRP_TEMA) return;
-  const VER = '20261031c'; // aceeași ca în pwa.js — schimbă-le împreună când modifici tema
+  const VER = '20261031d'; // aceeași ca în pwa.js — schimbă-le împreună când modifici tema
   const root = document.documentElement;
   const ls = {
     get(k) { try { return localStorage.getItem(k); } catch { return null; } },
@@ -1007,6 +1007,174 @@
       wn.top.appendChild(f);
     }
   }
+  // ---- (31.10.2026) efecte la trecerea între pagini și la deschiderea ferestrelor ----
+  const WN_NAV = 'mrp_wn_nav';
+  // un fulg care sare dintr-un punct (aceeași animație ca la apăsare)
+  function wnBurstAt(x, y, opts = {}) {
+    if (!wn || !wn.top) return;
+    const n = opts.n || 6;
+    for (let i = 0; i < n; i++) {
+      const f = el('i', 'wn-cb' + (opts.big ? ' big' : ''), FLAKE_SVG);
+      const px = opts.w ? x + rand(-opts.w / 2, opts.w / 2) : x;
+      f.style.left = px + 'px';
+      f.style.top = y + 'px';
+      f.style.color = ['#ffffff', '#bfe6ff', '#ffd27a'][Math.floor(Math.random() * 3)];
+      f.style.setProperty('--dx', Math.round(rand(-70, 70)) + 'px');
+      f.style.setProperty('--dy', Math.round(rand(opts.up || -120, -25)) + 'px');
+      f.style.setProperty('--r', Math.round(rand(-160, 160)) + 'deg');
+      f.style.setProperty('--s', rand(0.6, 1.25).toFixed(2));
+      f.style.animationDelay = Math.round(rand(0, opts.spread || 0)) + 'ms';
+      f.addEventListener('animationend', () => f.remove());
+      wn.top.appendChild(f);
+    }
+  }
+  // Plecarea spre altă pagină: o cortină de noapte cu ninsoare coboară peste
+  // pagină (~0,3 s), apoi browserul merge mai departe. Dacă pagina nouă se
+  // încarcă greu, în mijloc se învârte un fulg.
+  function wnNav(e) {
+    if (!wn || !wn.fx || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    const a = e.target && e.target.closest && e.target.closest('a[href]');
+    if (!a || a.hasAttribute('download') || a.closest('[data-no-fx]')) return;
+    if (a.target && a.target !== '_self') return;
+    let url;
+    try { url = new URL(a.href, location.href); } catch { return; }
+    if (url.origin !== location.origin || !/^https?:$/.test(url.protocol)) return;
+    if (url.pathname === location.pathname && url.search === location.search) return; // doar o ancoră pe aceeași pagină
+    if (/^\/(admin|mdt|api)/i.test(url.pathname) || /\.(pdf|zip|apk|png|jpe?g|mp4)$/i.test(url.pathname)) return;
+    e.preventDefault();
+    ss.set(WN_NAV, String(Date.now()));
+    if (wn.mode === 'all') snd.soon('whoosh', 0.7, 200);
+    let v = document.querySelector('.wn-veil');
+    if (!v) {
+      v = el('div', 'wn-veil', '<i class="wn-veil-flake">' + FLAKE_SVG + '</i>');
+      v.setAttribute('aria-hidden', 'true');
+      document.body.appendChild(v);
+    }
+    // dacă navigarea nu pornește (ex. e oprită de browser), cortina se ridică singură
+    clearTimeout(wn.veilT);
+    wn.veilT = setTimeout(() => v.remove(), 6000);
+    setTimeout(() => { location.href = url.href; }, 300);
+  }
+  // întoarcerea cu „Înapoi": browserul poate reda pagina veche din memorie,
+  // cu cortina încă trasă — o scoatem
+  function wnShow(e) {
+    if (e.persisted) document.querySelectorAll('.wn-veil').forEach(x => x.remove());
+  }
+  // Sosirea pe pagină după un link de pe site: câțiva fulgi cad de sus pe
+  // toată lățimea și o lumină rece trece peste antet.
+  function wnArrive() {
+    const t = Number(ss.get(WN_NAV)) || 0;
+    ss.del(WN_NAV);
+    if (!wn || !wn.fx || !wn.top || Date.now() - t > 5000) return;
+    const w = window.innerWidth;
+    const n = Math.min(26, Math.round(w / 55));
+    for (let i = 0; i < n; i++) {
+      const f = el('i', 'wn-drop', FLAKE_SVG);
+      f.style.left = Math.round(rand(0, w)) + 'px';
+      f.style.color = ['#ffffff', '#bfe6ff', '#ffd27a', '#ffffff'][i % 4];
+      f.style.setProperty('--fy', Math.round(rand(window.innerHeight * 0.35, window.innerHeight * 0.8)) + 'px');
+      f.style.setProperty('--fx', Math.round(rand(-60, 60)) + 'px');
+      f.style.setProperty('--r', Math.round(rand(-220, 220)) + 'deg');
+      f.style.setProperty('--s', rand(0.6, 1.4).toFixed(2));
+      f.style.animationDelay = Math.round(rand(0, 450)) + 'ms';
+      f.style.animationDuration = Math.round(rand(1500, 2300)) + 'ms';
+      f.addEventListener('animationend', () => f.remove());
+      wn.top.appendChild(f);
+    }
+    const g = el('i', 'wn-arrive');
+    g.addEventListener('animationend', () => g.remove());
+    wn.top.appendChild(g);
+  }
+  // Ferestrele care se deschid (anunțuri, confirmări, profiluri, secțiuni
+  // pliabile): o ramă de lumină rece-aurie le încadrează o clipă, din marginea
+  // de sus sar fulgi și se aude un arpegiu scurt de clopoței.
+  const WN_POP_SEL = 'dialog,[role="dialog"],[aria-modal="true"],[class*="modal-overlay"],[class*="-overlay"],[id$="-overlay"],.cf-back';
+  const WN_POP_SKIP = '.hero-overlay,#reveal-overlay,.wn-top,.wn-decor,.vt-view,.ox-stage,[data-no-fx]';
+  const WN_PANEL_SEL = '[role="dialog"],dialog,.news-modal,.modal-box,.modal,[class*="-box"],.panel,.formbox';
+  function wnShown(t) {
+    if (!t.isConnected || t.hidden || !t.getClientRects().length) return false;
+    return getComputedStyle(t).visibility !== 'hidden';
+  }
+  function wnPanelOf(t) {
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const small = x => { const r = x.getBoundingClientRect(); return r.width > 40 && r.height > 30 && (r.width < vw * 0.96 || r.height < vh * 0.96); };
+    if (small(t)) return t;
+    const inner = [...t.querySelectorAll(WN_PANEL_SEL)].find(small) || [...t.children].find(small);
+    return inner || null;
+  }
+  function wnPop(panel, soft) {
+    if (!wn || !wn.fx || !wn.top || !panel) return;
+    const now = performance.now();
+    if (now - (wn.lastPop || 0) < 400) return;
+    wn.lastPop = now;
+    const r = panel.getBoundingClientRect();
+    if (r.bottom < 0 || r.top > window.innerHeight) return;
+    if (!soft) {
+      const ring = el('i', 'wn-pop');
+      const cs = getComputedStyle(panel);
+      Object.assign(ring.style, { left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', height: r.height + 'px', borderRadius: cs.borderRadius || '12px' });
+      ring.addEventListener('animationend', () => ring.remove());
+      wn.top.appendChild(ring);
+      wnBurstAt(r.left + r.width / 2, Math.max(12, r.top), { n: Math.min(16, Math.round(r.width / 32)), w: r.width * 0.9, up: -140, spread: 180, big: true });
+      if (wn.mode === 'all' && snd.ready) snd.play('xreveal', 0.4, 1);
+    } else {
+      wnBurstAt(r.left + Math.min(r.width, 260) / 2, r.top + 6, { n: 5, w: Math.min(r.width, 260), spread: 120 });
+      if (wn.mode === 'all' && snd.ready) snd.play('twinkle', 0.8);
+    }
+  }
+  function wnWatch(recs) {
+    if (!wn || !wn.fx) return;
+    for (const r of recs) {
+      if (r.type === 'childList') {
+        r.addedNodes.forEach(n => {
+          if (n.nodeType !== 1 || n.closest(WN_POP_SKIP)) return;
+          const t = n.matches(WN_POP_SEL) ? n : n.querySelector(WN_POP_SEL);
+          if (t && !t.closest(WN_POP_SKIP)) { wn.vis.set(t, false); wn.cand.add(t); }
+        });
+      } else {
+        const t = r.target;
+        if (t.nodeType === 1 && t.matches(WN_POP_SEL) && !t.closest(WN_POP_SKIP)) wn.cand.add(t);
+      }
+    }
+    if (wn.cand.size && !wn.popRaf) {
+      wn.popRaf = requestAnimationFrame(() => {
+        if (!wn) return;
+        wn.popRaf = 0;
+        const list = [...wn.cand];
+        wn.cand.clear();
+        list.forEach(t => {
+          const was = wn.vis.get(t), now = wnShown(t);
+          wn.vis.set(t, now);
+          if (now && was === false) wnPop(wnPanelOf(t));
+        });
+      });
+    }
+  }
+  function wnToggle(e) {
+    const d = e.target;
+    if (!wn || !wn.fx || !d || d.tagName !== 'DETAILS' || !d.open || d.closest(WN_POP_SKIP)) return;
+    wnPop(d.querySelector('summary') || d, true);
+  }
+  function wnPopStart() {
+    wn.vis = new WeakMap();
+    wn.cand = new Set();
+    document.querySelectorAll(WN_POP_SEL).forEach(t => wn.vis.set(t, wnShown(t)));
+    wn.mo = new MutationObserver(wnWatch);
+    wn.mo.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['hidden', 'class', 'style', 'open'] });
+    document.addEventListener('toggle', wnToggle, true);
+    window.addEventListener('click', wnNav);
+    window.addEventListener('pageshow', wnShow);
+  }
+  function wnPopStop() {
+    if (wn.mo) wn.mo.disconnect();
+    if (wn.popRaf) cancelAnimationFrame(wn.popRaf);
+    clearTimeout(wn.veilT);
+    document.removeEventListener('toggle', wnToggle, true);
+    window.removeEventListener('click', wnNav);
+    window.removeEventListener('pageshow', wnShow);
+    document.querySelectorAll('.wn-veil').forEach(x => x.remove());
+  }
+
   function wnLoops(on) {
     if (!wn) return;
     wn.timers.forEach(clearTimeout);
@@ -1072,6 +1240,7 @@
     wn.extra.push(wn.top);
     document.addEventListener('pointerdown', wnClick, { passive: true });
     document.addEventListener('click', wnTap, { passive: true });
+    wnPopStart();
     if (!reduced()) {
       wn.btn = el('button', 'wn-fx', FLAKE_SVG);
       wn.btn.type = 'button';
@@ -1085,6 +1254,7 @@
     }
     const saved = ls.get('mrp_tema_fx_iarna');
     wnSetMode(saved === '0' ? 'off' : saved === 'm' ? 'mute' : 'all', false);
+    wnArrive();
   }
   function stopIarna() {
     if (!wn) return;
@@ -1094,6 +1264,7 @@
     document.removeEventListener('visibilitychange', wnVisibility);
     document.removeEventListener('pointerdown', wnClick);
     document.removeEventListener('click', wnTap);
+    wnPopStop();
     [wn.decor, wn.btn, ...wn.extra].forEach(x => x && x.remove());
     document.querySelectorAll('.hw-banner,.hw-tip').forEach(x => x.remove());
     root.classList.remove('wn-nofx');

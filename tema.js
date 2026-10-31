@@ -22,7 +22,7 @@
 // (rămâne cât ții fila deschisă); ?tema=nu o oprește.
 (() => {
   if (window.MRP_TEMA) return;
-  const VER = '20261101d'; // aceeași ca în pwa.js — schimbă-le împreună când modifici tema
+  const VER = '20261101f'; // aceeași ca în pwa.js — schimbă-le împreună când modifici tema
   const root = document.documentElement;
   const ls = {
     get(k) { try { return localStorage.getItem(k); } catch { return null; } },
@@ -45,6 +45,7 @@
   const snd = (() => {
     let ctx = null, master = null;
     const noiseCache = new WeakMap();
+    let cur = null; // numele sunetului care se construiește chiar acum (pentru ?sunete=1)
     function noise(c, color) {
       let m = noiseCache.get(c);
       if (!m) { m = {}; noiseCache.set(c, m); }
@@ -492,11 +493,12 @@
       const out = c.createGain();
       out.gain.value = vol;
       out.connect(target ? target.out : master);
-      try { return defs[name](c, out, c.currentTime + 0.03, k); } catch { return 0; }
+      try { cur = name; return defs[name](c, out, c.currentTime + 0.03, k); } catch { return 0; } finally { cur = null; }
     }
     return {
       names: Object.keys(defs),
       get ready() { return !!ctx && ctx.state === 'running'; },
+      get cur() { return cur; },
       // target = { ctx, out }: redare într-un alt context (folosit la teste)
       play,
       // oprește tot ce sună acum (ex. cântecul, când se apasă „fără sunete")
@@ -959,8 +961,18 @@
     const small = window.innerWidth < 600;
     const left = Math.random() < 0.5;
     const m = el('div', 'wn-snowman' + (left ? '' : ' r'), SNOWMAN_SVG);
-    m.style.left = (left ? rand(10, 26) : rand(66, 80)).toFixed(1) + 'vw';
-    m.style.setProperty('--w', Math.round(small ? rand(74, 92) : rand(112, 140)) + 'px');
+    const w = Math.round(small ? rand(74, 92) : rand(112, 140)), W = window.innerWidth;
+    // (01.11.2026) nu iese în spatele butoanelor fixate jos (muzica, fulgul, „Editează pagina"): acolo
+    // apăsarea ajungea la buton, nu la omul de zăpadă, și nu arunca bulgărele
+    const busy = [...document.querySelectorAll('.mrp-audio-widget,.wn-fx,.edit-fab')]
+      .map(b => b.getBoundingClientRect()).filter(r => r.width && r.bottom > window.innerHeight - 200);
+    let x = 0;
+    for (let i = 0; i < 12; i++) {
+      x = W * (left ? rand(0.08, 0.3) : rand(0.55, 0.85));
+      if (!busy.some(r => x < r.right + 8 && x + w > r.left - 8)) break;
+    }
+    m.style.left = Math.round(x) + 'px';
+    m.style.setProperty('--w', w + 'px');
     m.title = 'Aruncă un bulgăre!';
     m.addEventListener('pointerdown', ev => {
       ev.stopPropagation();
@@ -1425,6 +1437,47 @@
   // Shop): ce temă e pornită și redarea unui sunet al temei. Sunetele cerute
   // de aici NU țin de butonul cu dovleac — pagina care le cere are propriul
   // buton de sunet.
+  // (01.11.2026) Detector de sunete: cu ?sunete=1 la orice adresă, în stânga sus apare numele fiecărui
+  // sunet care pornește și de unde vine (tema, muzica, cutiile VIP...). Ține cât e fila deschisă;
+  // ?sunete=0 îl oprește. Nu schimbă nimic din ce se aude.
+  (() => {
+    const q2 = /[?&]sunete=([01])/.exec(location.search);
+    if (q2) { if (q2[1] === '1') ss.set('mrp_snd_log', '1'); else ss.del('mrp_snd_log'); }
+    if (ss.get('mrp_snd_log') !== '1') return;
+    const NAMES = { 'site-audio.js': 'muzica din dreapta jos', 'vip-shop.html': 'cutia VIP', 'vip-shop': 'cutia VIP' };
+    let box = null;
+    const last = {};
+    const show = label => {
+      const now = Date.now();
+      if (now - (last[label] || 0) < (/muzica/.test(label) ? 8000 : 500) || !document.body) return; // muzica: o dată la 8 s, nu la fiecare notă
+      last[label] = now;
+      if (!box) {
+        box = document.createElement('div');
+        box.style.cssText = 'position:fixed;left:10px;top:90px;z-index:2147483646;width:min(360px,calc(100vw - 20px));font:600 12px/1.5 system-ui,sans-serif;color:#fff;background:rgba(0,0,0,.85);border:1px solid #ff8a1f;border-radius:10px;padding:8px 10px;pointer-events:none';
+        box.innerHTML = '<b style="color:#ff8a1f">Sunete (?sunete=0 ca să închizi)</b>';
+        document.body.appendChild(box);
+      }
+      const row = document.createElement('div');
+      row.textContent = new Date().toLocaleTimeString('ro-RO') + ' — ' + label;
+      box.insertBefore(row, box.children[1] || null);
+      while (box.children.length > 13) box.lastChild.remove();
+    };
+    const who = () => {
+      if (snd.cur) return 'tema: ' + snd.cur;
+      const st = (new Error().stack || '').split('\n').slice(2).find(l => !/tema\.js/.test(l)) || '';
+      const f = (/\/([\w.-]+\.(?:js|html))/.exec(st) || /\/([\w-]+)(?:\?|:|$)/.exec(st) || [])[1] || 'necunoscut';
+      return NAMES[f] || f;
+    };
+    const wrap = P => {
+      const orig = P.start;
+      P.start = function (...a) { try { show(who()); } catch { /* */ } return orig.apply(this, a); };
+    };
+    if (window.OscillatorNode) wrap(OscillatorNode.prototype);
+    if (window.AudioBufferSourceNode) wrap(AudioBufferSourceNode.prototype);
+    const mp = HTMLMediaElement.prototype.play;
+    HTMLMediaElement.prototype.play = function (...a) { try { show('fișier audio/video: ' + (this.currentSrc || this.src || '').split('/').pop()); } catch { /* */ } return mp.apply(this, a); };
+  })();
+
   window.MRP_TEMA = {
     get theme() { return current; },
     sounds: snd.names,

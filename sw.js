@@ -6,7 +6,7 @@
 //     cache-ul doar dacă nu e internet.
 //   • Imaginile și fonturile: din cache, reîmprospătate în fundal.
 // La un update al acestui fișier schimbă VERSION, ca să se curețe cache-ul vechi.
-const VERSION = 'mrp-2026-10-31d';
+const VERSION = 'mrp-2026-10-31e';
 const SHELL = `${VERSION}-shell`;
 const RUNTIME = `${VERSION}-runtime`;
 const OFFLINE_URL = '/offline.html';

@@ -22,7 +22,7 @@
 // (rămâne cât ții fila deschisă); ?tema=nu o oprește.
 (() => {
   if (window.MRP_TEMA) return;
-  const VER = '20261031d'; // aceeași ca în pwa.js — schimbă-le împreună când modifici tema
+  const VER = '20261031e'; // aceeași ca în pwa.js — schimbă-le împreună când modifici tema
   const root = document.documentElement;
   const ls = {
     get(k) { try { return localStorage.getItem(k); } catch { return null; } },
@@ -340,6 +340,53 @@
         return 0.55;
       },
 
+      // ---- (31.10.2026) „Jingle Bells" — tot refrenul (melodie din 1857, liberă de
+      // drepturi), la cutia muzicală, cu bas și clopoței de sanie pe fiecare timp ----
+      jbsong(c, out, t) {
+        const q = 0.21;
+        const C = 523.25, D = 587.33, E = 659.25, F = 698.46, G = 783.99;
+        const A1 = [[E, 1], [E, 1], [E, 2], [E, 1], [E, 1], [E, 2], [E, 1], [G, 1], [C, 1.5], [D, 0.5], [E, 4]];
+        const melody = [
+          ...A1,
+          [F, 1], [F, 1], [F, 1.5], [F, 0.5], [F, 1], [E, 1], [E, 1], [E, 0.5], [E, 0.5], [E, 1], [D, 1], [D, 1], [E, 1], [D, 2], [G, 2],
+          ...A1,
+          [F, 1], [F, 1], [F, 1.5], [F, 0.5], [F, 1], [E, 1], [E, 1], [E, 0.5], [E, 0.5], [G, 1], [G, 1], [F, 1], [D, 1], [C, 4],
+        ];
+        let at = t;
+        melody.forEach(([f, d]) => {
+          [[1, 0.11], [2, 0.04], [3.01, 0.015]].forEach(([h, a]) => {
+            const o = osc(c, 'sine', f * h), g = gain(c, 0);
+            env(g, at, 0.004, a, 0, Math.min(1.1, 0.5 + d * q));
+            o.connect(g).connect(out); o.start(at); o.stop(at + 1.2);
+          });
+          at += d * q;
+        });
+        // bas: tonica pe timpul 1, cvinta pe timpul 3 (C C C C | F C D G | C C C C | F C G C)
+        const ROOT = { C: [130.81, 196.0], F: [174.61, 130.81], D: [146.83, 220.0], G: [98.0, 146.83] };
+        'CCCCFCDGCCCCFCGC'.split('').forEach((ch, m) => {
+          ROOT[ch].forEach((f, i) => {
+            const b = t + (m * 4 + i * 2) * q, o = osc(c, 'triangle', f), g = gain(c, 0);
+            env(g, b, 0.01, 0.09, 0.05, 0.3);
+            o.connect(g).connect(out); o.start(b); o.stop(b + 0.45);
+          });
+        });
+        // clopoței de sanie: încet pe fiecare timp, mai tare pe 2 și 4
+        const hp = filt(c, 'highpass', 2000);
+        hp.connect(out);
+        for (let i = 0; i < 64; i++) {
+          const b = t + i * q, acc = i % 2 ? 1 : 0.55;
+          [3870, 5520].forEach((f, j) => {
+            const o = osc(c, 'sine', f * (1 + (Math.random() - 0.5) * 0.04)), g = gain(c, 0);
+            env(g, b, 0.002, (0.03 - j * 0.008) * acc, 0, 0.12);
+            o.connect(g).connect(hp); o.start(b); o.stop(b + 0.2);
+          });
+          const n = noiseSrc(c, 'white', b, 0.04), ng = gain(c, 0);
+          env(ng, b, 0.002, 0.035 * acc, 0, 0.04);
+          n.connect(filt(c, 'bandpass', 7000, 1.5)).connect(ng).connect(hp);
+        }
+        return at - t + 1.1;
+      },
+
       // ---- (31.10.2026) cutiile din VIP Shop cu tema de iarnă ----
       // rotirea s-a oprit: o bufnitură moale în zăpadă și un clinchet de clopoțel
       xstop(c, out, t) {
@@ -448,6 +495,16 @@
       get ready() { return !!ctx && ctx.state === 'running'; },
       // target = { ctx, out }: redare într-un alt context (folosit la teste)
       play,
+      // oprește tot ce sună acum (ex. cântecul, când se apasă „fără sunete")
+      hush() {
+        if (!ctx || !master) return;
+        const old = master;
+        try { old.gain.setTargetAtTime(0, ctx.currentTime, 0.05); } catch { /* */ }
+        setTimeout(() => { try { old.disconnect(); } catch { /* */ } }, 400);
+        master = ctx.createGain();
+        master.gain.value = 1;
+        master.connect(ctx.destination);
+      },
       // dintr-o apăsare: pornește sunetul imediat ce browserul dă drumul la
       // audio; dacă asta durează mai mult de „wait" ms, renunță (altfel s-ar
       // strânge mai multe sunete și ar porni toate odată)
@@ -757,6 +814,8 @@
   };
   let wn = null; // starea decorului de iarnă, cât e pornit
   const WN_NEXT = 'mrp_tema_iarna_urm';
+  // cântecele care se aud din când în când, pe rând (colindele se adaugă aici)
+  const WN_SONGS = ['jbsong'];
 
   function wnSound(name, vol) {
     if (!wn || wn.mode !== 'all' || wn.work || document.hidden) return false;
@@ -817,7 +876,7 @@
     if (on && !document.hidden) wn.raf = requestAnimationFrame(wnSnowFrame);
     else wn.cx.clearRect(0, 0, wn.W || 0, wn.H || 0);
   }
-  function wnVisibility() { if (wn && wn.fx) wnSnow(!document.hidden); }
+  function wnVisibility() { if (wn && wn.fx) wnSnow(!document.hidden); if (document.hidden) snd.hush(); }
 
   // beculețele de pe antet (sau de sus, pe paginile fără antet)
   function wnGarland() {
@@ -959,12 +1018,11 @@
     let next = Number(ss.get(WN_NEXT)) || 0;
     if (!next) { next = now + rand(3000, 6000); ss.set(WN_NEXT, String(Math.round(next))); }
     if (now < next) return;
-    const last = ss.get('mrp_tema_iarna_ult');
-    const pool = ['musicbox', 'chime', 'jingle', 'bell'].filter(n => n !== last);
-    const name = pool[Math.floor(Math.random() * pool.length)];
-    if (!wnSound(name, name === 'bell' ? 0.7 : name === 'musicbox' ? 0.9 : 0.8)) return;
-    ss.set('mrp_tema_iarna_ult', name);
-    ss.set(WN_NEXT, String(Math.round(now + rand(50000, 95000))));
+    // (31.10.2026) în locul sunetelor scurte: cântece întregi, pe rând
+    const i = (Number(ls.get('mrp_tema_iarna_cantec')) || 0) % WN_SONGS.length;
+    if (!wnSound(WN_SONGS[i], 0.85)) return;
+    ls.set('mrp_tema_iarna_cantec', String(i + 1));
+    ss.set(WN_NEXT, String(Math.round(now + rand(100000, 160000))));
     if (!ls.get('mrp_tema_iarna_sunet_stiut')) {
       ls.set('mrp_tema_iarna_sunet_stiut', '1');
       hwTip('Site-ul are sunete de sărbători. Le poți opri din butonul cu fulg.', 7000);
@@ -1208,6 +1266,7 @@
       wn.btn.title = WN_MODES_TEXT[wn.mode][0];
       wn.btn.setAttribute('aria-label', WN_MODES_TEXT[wn.mode][0] + '. Apasă ca să schimbi.');
     }
+    if (wn.mode !== 'all') snd.hush();
     wnLoops(wn.fx);
     if (say) hwTip(WN_MODES_TEXT[wn.mode][1]);
   }
@@ -1265,6 +1324,7 @@
     document.removeEventListener('pointerdown', wnClick);
     document.removeEventListener('click', wnTap);
     wnPopStop();
+    snd.hush();
     [wn.decor, wn.btn, ...wn.extra].forEach(x => x && x.remove());
     document.querySelectorAll('.hw-banner,.hw-tip').forEach(x => x.remove());
     root.classList.remove('wn-nofx');

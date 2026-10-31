@@ -252,21 +252,27 @@ html.wn-nofx.tema-iarna .vt-view::after{animation:none}
    trece peste antet; .wn-pop = rama de lumină din jurul unei ferestre deschise. */
 .wn-top{z-index:100000}
 .wn-cb.big{width:20px;height:20px;margin:-10px 0 0 -10px;animation-duration:1.15s;animation-fill-mode:both}
-.wn-veil{position:fixed;left:0;right:0;top:0;height:100vh;height:100dvh;z-index:2147483000;pointer-events:none;
+/* (31.10.2026, a doua variantă — mai lentă) plecarea: întâi pagina se încețoșează
+   ușor, apoi coboară cortina de noapte cu ninsoare (cu marginea de jos estompată),
+   iar în mijloc apare un fulg care se rotește. Sosirea pe
+   pagina nouă (cortina care se ridică) e în <head>-ul fiecărei pagini, ca să fie
+   gata de la primul cadru (clasa html.wn-in). */
+.wn-veil{position:fixed;left:0;right:0;top:0;height:100vh;height:100dvh;z-index:2147483000;pointer-events:none;overflow:hidden}
+.wn-veil-frost{position:absolute;inset:0;display:block;background:rgba(6,10,18,0);animation:wnFrost .55s ease-out forwards}
+@keyframes wnFrost{to{background:rgba(6,10,18,.42);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}}
+.wn-veil-curtain{position:absolute;left:0;right:0;top:0;height:calc(100% + 140px);display:block;
   background:radial-gradient(circle at 30% 40%,#fff 0 1.6px,transparent 2.3px) 0 0/131px 113px,radial-gradient(circle at 70% 20%,rgba(255,255,255,.75) 0 1.1px,transparent 1.8px) 36px 28px/97px 71px,
     radial-gradient(circle at 15% 80%,rgba(220,240,255,.55) 0 2.2px,transparent 3.2px) 70px 50px/173px 151px,radial-gradient(circle at 85% 65%,rgba(255,255,255,.5) 0 .9px,transparent 1.5px) 20px 90px/59px 67px,
-    radial-gradient(ellipse 80% 60% at 50% 0%,rgba(95,184,255,.18),transparent 70%),linear-gradient(180deg,#0b1830,var(--bg,#060a12) 70%);
-  transform:translateY(-104%);animation:wnVeilIn .3s cubic-bezier(.55,0,.35,1) forwards,wnVeilSnow 7s linear infinite}
-.wn-veil::after{content:'';position:absolute;left:0;right:0;bottom:-22px;height:24px;
-  background:radial-gradient(14px 12px at 14px 0,#eaf5ff 98%,transparent) 0 0/28px 24px repeat-x,linear-gradient(#eaf5ff,#eaf5ff) 0 0/100% 4px no-repeat;
-  filter:drop-shadow(0 4px 8px rgba(159,216,255,.45))}
-.wn-veil-flake{position:absolute;left:50%;top:50%;width:46px;height:46px;margin:-23px 0 0 -23px;color:#bfe6ff;opacity:0;
-  filter:drop-shadow(0 0 10px rgba(159,216,255,.8));animation:wnVeilSpin 2.4s linear infinite,wnVeilShow .4s ease .7s forwards}
-.wn-veil-flake svg{display:block;width:100%;height:100%}
-@keyframes wnVeilIn{to{transform:translateY(0)}}
+    radial-gradient(ellipse 80% 50% at 50% 0%,rgba(95,184,255,.2),transparent 70%),linear-gradient(180deg,#0b1830,var(--bg,#060a12) 75%);
+  -webkit-mask-image:linear-gradient(180deg,#000 calc(100% - 140px),transparent);mask-image:linear-gradient(180deg,#000 calc(100% - 140px),transparent);
+  transform:translateY(-100%);animation:wnCurtain .8s cubic-bezier(.65,0,.35,1) .08s forwards,wnVeilSnow 9s linear infinite}
+@keyframes wnCurtain{to{transform:translateY(0)}}
 @keyframes wnVeilSnow{to{background-position:-20px 113px,46px 170px,40px 201px,20px 291px,0 0,0 0}}
+.wn-veil-mark{position:absolute;left:50%;top:50%;display:block;transform:translate(-50%,-50%);opacity:0;animation:wnMark .5s ease-out .45s forwards}
+.wn-veil-flake{display:block;width:54px;height:54px;color:#bfe6ff;filter:drop-shadow(0 0 12px rgba(159,216,255,.85));animation:wnVeilSpin 3.2s linear infinite}
+.wn-veil-flake svg{display:block;width:100%;height:100%}
+@keyframes wnMark{from{opacity:0;transform:translate(-50%,-50%) scale(.85)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}
 @keyframes wnVeilSpin{to{transform:rotate(360deg)}}
-@keyframes wnVeilShow{to{opacity:.9}}
 .wn-drop{position:absolute;top:-24px;display:block;width:18px;height:18px;margin-left:-9px;filter:drop-shadow(0 0 5px rgba(191,230,255,.85));
   animation:wnDrop 1.9s cubic-bezier(.3,.2,.6,1) both}
 .wn-drop svg{display:block;width:100%;height:100%}

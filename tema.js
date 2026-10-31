@@ -22,7 +22,7 @@
 // (rămâne cât ții fila deschisă); ?tema=nu o oprește.
 (() => {
   if (window.MRP_TEMA) return;
-  const VER = '20261031i'; // aceeași ca în pwa.js — schimbă-le împreună când modifici tema
+  const VER = '20261031j'; // aceeași ca în pwa.js — schimbă-le împreună când modifici tema
   const root = document.documentElement;
   const ls = {
     get(k) { try { return localStorage.getItem(k); } catch { return null; } },
@@ -1089,7 +1089,7 @@
     }
   }
   // Plecarea spre altă pagină: o cortină de noapte cu ninsoare coboară peste
-  // pagină (~0,3 s), apoi browserul merge mai departe. Dacă pagina nouă se
+  // pagină (~0,8 s), apoi browserul merge mai departe. Dacă pagina nouă se
   // încarcă greu, în mijloc se învârte un fulg.
   function wnNav(e) {
     if (!wn || !wn.fx || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
@@ -1106,14 +1106,15 @@
     if (wn.mode === 'all') snd.soon('whoosh', 0.7, 200);
     let v = document.querySelector('.wn-veil');
     if (!v) {
-      v = el('div', 'wn-veil', '<i class="wn-veil-flake">' + FLAKE_SVG + '</i>');
+      v = el('div', 'wn-veil', '<i class="wn-veil-frost"></i><i class="wn-veil-curtain"></i>'
+        + '<span class="wn-veil-mark"><i class="wn-veil-flake">' + FLAKE_SVG + '</i></span>');
       v.setAttribute('aria-hidden', 'true');
       document.body.appendChild(v);
     }
     // dacă navigarea nu pornește (ex. e oprită de browser), cortina se ridică singură
     clearTimeout(wn.veilT);
     wn.veilT = setTimeout(() => v.remove(), 6000);
-    setTimeout(() => { location.href = url.href; }, 300);
+    setTimeout(() => { location.href = url.href; }, 760); // cât coboară cortina (tema-iarna.css, .wn-veil-curtain)
   }
   // întoarcerea cu „Înapoi": browserul poate reda pagina veche din memorie,
   // cu cortina încă trasă — o scoatem

@@ -5273,6 +5273,9 @@ app.get("/api/admin/vip-shop/statistici", auth, requireRole(...FOUNDER_ROLES), a
   const from = `(($1::date - ($2::int - 1)) AT TIME ZONE '${TZ}')`;
   const prevFrom = `(($1::date - ($2::int * 2 - 1)) AT TIME ZONE '${TZ}')`;
   const premWhere = `action IN ('premium.buy','premium.starter')`;
+  // (31.10.2026) coins-urile au trecut pe unitatea 100 azi la 13:00 (ora Moldovei); ce s-a cumpărat
+  // înainte are prețul în unitatea veche, așa că îl înmulțim cu 100 ca să se poată aduna cu cele noi
+  const unit = `CASE WHEN created_at < '2026-10-31T11:00:00Z' THEN 100 ELSE 1 END`;
   const [byDay, byCase, totals, prevTotals, topPlayers, since, premDay, premKind, premTotals, premPrev, sells] = await Promise.all([
     q(`SELECT ${dayExpr} AS day, COUNT(*)::int AS n, COALESCE(SUM(price_coins),0)::bigint AS coins FROM vip_openings_seen WHERE created_at >= ${from} GROUP BY 1 ORDER BY 1`, [today, days]),
     q(`SELECT COALESCE(NULLIF(case_name,''), case_id) AS name, COUNT(*)::int AS n, COALESCE(SUM(price_coins),0)::bigint AS coins FROM vip_openings_seen WHERE created_at >= ${from} GROUP BY 1 ORDER BY 3 DESC`, [today, days]),
@@ -5280,11 +5283,11 @@ app.get("/api/admin/vip-shop/statistici", auth, requireRole(...FOUNDER_ROLES), a
     q(`SELECT COUNT(*)::int AS n, COALESCE(SUM(price_coins),0)::bigint AS coins, COUNT(DISTINCT identifier)::int AS players FROM vip_openings_seen WHERE created_at >= ${prevFrom} AND created_at < ${from}`, [today, days]),
     q(`SELECT MAX(player_name) AS name, COUNT(*)::int AS n, COALESCE(SUM(price_coins),0)::bigint AS coins FROM vip_openings_seen WHERE created_at >= ${from} GROUP BY identifier ORDER BY 3 DESC LIMIT 5`, [today, days]),
     q(`SELECT MIN(created_at) AS at FROM vip_openings_seen`, []),
-    q(`SELECT ${dayExpr} AS day, COUNT(*)::int AS n, COALESCE(SUM((metadata->>'price')::numeric),0)::bigint AS coins FROM audit_logs WHERE ${premWhere} AND created_at >= ${from} GROUP BY 1 ORDER BY 1`, [today, days]),
-    q(`SELECT action, COALESCE(metadata->>'planId', metadata->>'packId') AS kind, COUNT(*)::int AS n, COALESCE(SUM((metadata->>'price')::numeric),0)::bigint AS coins FROM audit_logs WHERE ${premWhere} AND created_at >= ${from} GROUP BY 1,2 ORDER BY 4 DESC`, [today, days]),
-    q(`SELECT COUNT(*)::int AS n, COALESCE(SUM((metadata->>'price')::numeric),0)::bigint AS coins FROM audit_logs WHERE ${premWhere} AND created_at >= ${from}`, [today, days]),
-    q(`SELECT COUNT(*)::int AS n, COALESCE(SUM((metadata->>'price')::numeric),0)::bigint AS coins FROM audit_logs WHERE ${premWhere} AND created_at >= ${prevFrom} AND created_at < ${from}`, [today, days]),
-    q(`SELECT metadata->>'currency' AS currency, COUNT(*)::int AS n, COALESCE(SUM((metadata->>'amount')::numeric),0)::bigint AS amount FROM audit_logs WHERE action = 'vip_shop.sell_back' AND created_at >= ${from} GROUP BY 1`, [today, days]),
+    q(`SELECT ${dayExpr} AS day, COUNT(*)::int AS n, COALESCE(SUM((metadata->>'price')::numeric * ${unit}),0)::bigint AS coins FROM audit_logs WHERE ${premWhere} AND created_at >= ${from} GROUP BY 1 ORDER BY 1`, [today, days]),
+    q(`SELECT action, COALESCE(metadata->>'planId', metadata->>'packId') AS kind, COUNT(*)::int AS n, COALESCE(SUM((metadata->>'price')::numeric * ${unit}),0)::bigint AS coins FROM audit_logs WHERE ${premWhere} AND created_at >= ${from} GROUP BY 1,2 ORDER BY 4 DESC`, [today, days]),
+    q(`SELECT COUNT(*)::int AS n, COALESCE(SUM((metadata->>'price')::numeric * ${unit}),0)::bigint AS coins FROM audit_logs WHERE ${premWhere} AND created_at >= ${from}`, [today, days]),
+    q(`SELECT COUNT(*)::int AS n, COALESCE(SUM((metadata->>'price')::numeric * ${unit}),0)::bigint AS coins FROM audit_logs WHERE ${premWhere} AND created_at >= ${prevFrom} AND created_at < ${from}`, [today, days]),
+    q(`SELECT metadata->>'currency' AS currency, COUNT(*)::int AS n, COALESCE(SUM((metadata->>'amount')::numeric * (CASE WHEN metadata->>'currency' = 'coins' THEN ${unit} ELSE 1 END)),0)::bigint AS amount FROM audit_logs WHERE action = 'vip_shop.sell_back' AND created_at >= ${from} GROUP BY 1`, [today, days]),
   ]);
   const num = v => Number(v) || 0;
   res.json({

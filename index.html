@@ -335,7 +335,7 @@
         current = id;
         mark(id);
         document.dispatchEvent(new CustomEvent('mrp:alta-muzica')); // oprește muzica din widget
-        player.innerHTML = '<iframe src="https://www.youtube-nocookie.com/embed/' + id + '?autoplay=1&rel=0" title="Muzica sărbătorilor" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>';
+        player.innerHTML = '<iframe src="https://www.youtube-nocookie.com/embed/' + id + '?autoplay=1&rel=0" title="Muzica sărbătorilor" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>';
       }
       poster.addEventListener('click', () => play(current));
       list.addEventListener('click', e => { const b = e.target.closest('[data-yt]'); if (b) play(b.dataset.yt); });

@@ -101,6 +101,29 @@
   .pm-sales{margin-top:14px;font-size:12px;color:var(--muted)}
   .pm-sales li{margin:3px 0}
   @media(max-width:900px){.pm-grid{grid-template-columns:1fr}}
+  /* (31.10.2026) Statistici VIP Shop și Premium */
+  .st-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px}
+  .st-range{display:inline-flex;border:1px solid var(--line);border-radius:999px;padding:3px;gap:2px}
+  .st-range button{background:transparent;border:0;border-radius:999px;padding:6px 12px;font:inherit;font-weight:800;font-size:11px;color:var(--muted);cursor:pointer}
+  .st-range button[aria-pressed="true"]{background:var(--orange);color:#0b0b0b}
+  .st-range button:focus-visible{outline:2px solid var(--orange);outline-offset:2px}
+  .st-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+  .st-kpi{padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:var(--panel2)}
+  .st-kpi small{display:block;color:var(--muted);font-size:9px;font-weight:900;letter-spacing:.1em;text-transform:uppercase}
+  .st-kpi strong{display:block;font-size:24px;margin:4px 0 2px;font-variant-numeric:tabular-nums}
+  .st-kpi em{font-style:normal;font-size:11px;font-weight:800;color:var(--muted)}
+  .st-kpi em.up{color:var(--green)}.st-kpi em.down{color:#ff8a8a}
+  .st-chart{margin-top:16px;padding:14px 12px 6px;border:1px solid var(--line);border-radius:12px;background:var(--bg);overflow-x:auto}
+  .st-chart svg{display:block;width:100%;min-width:520px;height:auto}
+  .st-legend{display:flex;gap:14px;font-size:11px;color:var(--muted);margin:0 4px 6px}
+  .st-legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+  .st-cols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:14px}
+  .st-cols section{border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--panel2)}
+  .st-cols h3{margin:0 0 8px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+  .st-cols table td,.st-cols table th{padding:7px 4px;font-size:12px}
+  .st-cols table td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .st-note{margin:12px 0 0;font-size:11px;color:var(--muted)}
+  @media(max-width:1100px){.st-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.st-cols{grid-template-columns:1fr}}
 </style>
   <link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/assets/app/apple-touch-icon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black"><meta name="apple-mobile-web-app-title" content="Moldova RP"><script src="/pwa.js" defer></script><meta name="theme-color" content="#090a0b">
 </head>
@@ -110,6 +133,22 @@
 <header><div><small>PANEL ADMINISTRATIV</small><h1>Editor VIP Shop</h1></div><a class="admin" href="dashboard.html" title="Înapoi la contul meu" style="text-decoration:none"><span id="admin-name">…</span> <i></i></a></header>
 
 <p class="vip-intro">Aici adaugi, editezi sau ștergi cutiile și recompensele din <a href="vip-shop.html">VIP Shop</a> — direct de pe site, fără să mai fie nevoie de un update pe serverul de joc de fiecare dată. Șansa fiecărei recompense se calculează automat din „pondere" — valorile nu trebuie să însumeze 100, se normalizează singure (ex: dacă o recompensă are pondere 20 și toate din cutie însumează 1000, șansa ei afișată jucătorilor va fi 2%). O cutie dezactivată dispare din VIP Shop pentru jucători, dar rămâne salvată aici, gata de reactivat.</p>
+
+<details class="formbox lx-box" id="statistici" open>
+  <summary><h2>📊 Statistici vânzări</h2><span class="lx-state" id="st-state">Se încarcă…</span></summary>
+  <div class="st-head">
+    <p class="vip-intro" style="margin:0">Cutiile deschise și ce s-a luat de la Premium, pe zile (ora Moldovei), comparat cu perioada de dinainte.</p>
+    <div class="st-range" role="group" aria-label="Perioada"><button type="button" data-days="7">7 zile</button><button type="button" data-days="30" aria-pressed="true">30 de zile</button><button type="button" data-days="90">90 de zile</button></div>
+  </div>
+  <div class="st-kpis" id="st-kpis"></div>
+  <div class="st-chart"><div class="st-legend"><span><i style="background:#ff8a1f"></i>Coins pe cutii</span><span><i style="background:#7db2ff"></i>Coins pe Premium și pachete</span></div><div id="st-chart"></div></div>
+  <div class="st-cols">
+    <section><h3>Pe cutii</h3><table id="st-cases"></table></section>
+    <section><h3>Premium și pachete</h3><table id="st-prem"></table></section>
+    <section><h3>Cine a cheltuit cel mai mult</h3><table id="st-top"></table></section>
+  </div>
+  <p class="st-note" id="st-note"></p>
+</details>
 
 <details class="formbox lx-box" id="lx-box" open>
   <summary><h2>🧼 Schimbul banilor murdari</h2><span class="lx-state" id="lx-state">Se încarcă…</span></summary>
@@ -1090,6 +1129,80 @@ document.getElementById('lx-save').addEventListener('click', async () => {
   });
   // clic pe notificare când ești deja pe pagină: doar #-ul se schimbă, fără reîncărcare
   window.addEventListener('hashchange', () => { if (location.hash === '#jucator-nou') { const box = document.getElementById('jucator-nou'); box.open = true; box.scrollIntoView({ block: 'start' }); load(); } });
+  load();
+})();
+</script>
+<script>
+// (31.10.2026) Statistici vânzări: /api/admin/vip-shop/statistici (backend/server.js, „STATISTICI VIP SHOP ȘI PREMIUM")
+(function () {
+  const $ = id => document.getElementById(id);
+  const esc = s => (s ?? '').toString().replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const fmt = n => String(Math.round(Number(n) || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  const PLAN = { p7: 'Premium 7 zile', p30: 'Premium 30 de zile', p90: 'Premium 90 de zile', start: 'Pachet Start', bronz: 'Pachet Bronz', aur: 'Pachet Aur', platina: 'Pachet Platină' };
+  let days = 30;
+  function delta(cur, prev) {
+    if (!prev) return cur ? '<em class="up">nou față de perioada trecută</em>' : '<em>la fel ca perioada trecută</em>';
+    const p = Math.round((cur - prev) / prev * 100);
+    return p === 0 ? '<em>la fel ca perioada trecută</em>' : `<em class="${p > 0 ? 'up' : 'down'}">${p > 0 ? '▲' : '▼'} ${Math.abs(p)}% față de perioada trecută</em>`;
+  }
+  function chart(d) {
+    const map = new Map();
+    const end = new Date(d.today + 'T12:00:00Z');
+    for (let i = d.days - 1; i >= 0; i--) { const t = new Date(end.getTime() - i * 86400000); map.set(t.toISOString().slice(0, 10), { c: 0, p: 0 }); }
+    d.cases.byDay.forEach(r => { if (map.has(r.day)) map.get(r.day).c = r.coins; });
+    d.premium.byDay.forEach(r => { if (map.has(r.day)) map.get(r.day).p = r.coins; });
+    const rows = [...map.entries()];
+    const max = Math.max(1, ...rows.map(([, v]) => v.c + v.p));
+    // scară rotundă: 1, 2, 5 × 10^n
+    const mag = Math.pow(10, Math.floor(Math.log10(max))); const top = [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10].map(x => x * mag).find(x => x >= max);
+    const W = 760, H = 220, L = 52, R = 8, T = 10, B = 26, w = (W - L - R) / rows.length, y = v => T + (H - T - B) * (1 - v / top);
+    let g = '';
+    for (let i = 0; i <= 4; i++) { const v = top * i / 4, yy = y(v); g += `<line x1="${L}" x2="${W - R}" y1="${yy}" y2="${yy}" stroke="rgba(255,255,255,.07)"/><text x="${L - 6}" y="${yy + 3}" text-anchor="end" font-size="10" fill="#8f949a">${fmt(v)}</text>`; }
+    const every = rows.length > 31 ? 14 : rows.length > 8 ? 5 : 1;
+    rows.forEach(([day, v], i) => {
+      const x = L + i * w + w * 0.15, bw = Math.max(2, w * 0.7);
+      const yc = y(v.c), yp = y(v.c + v.p);
+      const tip = `${day.slice(8)}.${day.slice(5, 7)}: ${fmt(v.c)} coins pe cutii, ${fmt(v.p)} pe Premium`;
+      g += `<g><title>${tip}</title>${v.c ? `<rect x="${x}" y="${yc}" width="${bw}" height="${y(0) - yc}" rx="2" fill="#ff8a1f"/>` : ''}${v.p ? `<rect x="${x}" y="${yp}" width="${bw}" height="${yc - yp}" rx="2" fill="#7db2ff"/>` : ''}</g>`;
+      if ((rows.length - 1 - i) % every === 0) g += `<text x="${x + bw / 2}" y="${H - 8}" text-anchor="middle" font-size="10" fill="#8f949a">${day.slice(8)}.${day.slice(5, 7)}</text>`;
+    });
+    $('st-chart').innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Coins cheltuiți pe zile">${g}</svg>`;
+  }
+  function table(el, head, rows, empty) {
+    $(el).innerHTML = rows.length ? `<thead><tr>${head.map((h, i) => `<th${i ? ' style="text-align:right"' : ''}>${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r => `<tr>${r.map((c, i) => `<td${i ? ' class="num"' : ''}>${c}</td>`).join('')}</tr>`).join('')}</tbody>` : `<tbody><tr><td class="muted">${empty}</td></tr></tbody>`;
+  }
+  async function load() {
+    $('st-state').textContent = 'Se încarcă…';
+    try {
+      const r = await apiFetch('/api/admin/vip-shop/statistici?days=' + days);
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Nu am putut încărca statisticile.');
+      const c = d.cases, p = d.premium;
+      // perioada de dinainte începe înainte ca site-ul să fi salvat deschideri → nu comparăm cutiile
+      const prevStart = new Date(d.today + 'T00:00:00Z').getTime() - (d.days * 2 - 1) * 86400000;
+      const noPrev = !d.trackedSince || new Date(d.trackedSince).getTime() > prevStart;
+      const cd = (a, b) => noPrev ? '<em>comparația apare după ce se adună date</em>' : delta(a, b);
+      $('st-kpis').innerHTML = [
+        ['Cutii deschise', fmt(c.n), cd(c.n, c.prev.n)],
+        ['Coins pe cutii', fmt(c.coins), cd(c.coins, c.prev.coins)],
+        ['Jucători care au deschis', fmt(c.players), cd(c.players, c.prev.players)],
+        ['Coins pe Premium și pachete', fmt(p.coins), delta(p.coins, p.prev.coins) + `<br><em>${fmt(p.n)} ${p.n === 1 ? 'cumpărare' : 'cumpărări'}</em>`],
+      ].map(([a, b, e]) => `<article class="st-kpi"><small>${a}</small><strong>${b}</strong>${e}</article>`).join('');
+      chart(d);
+      table('st-cases', ['Cutie', 'Deschise', 'Coins'], c.byCase.map(x => [esc(x.name), fmt(x.n), fmt(x.coins)]), 'Nicio cutie deschisă în perioada asta.');
+      table('st-prem', ['Ce', 'Câte', 'Coins'], p.byKind.map(x => [esc(PLAN[x.kind] || x.kind || '—'), fmt(x.n), fmt(x.coins)]), 'Nimic cumpărat în perioada asta.');
+      table('st-top', ['Jucător', 'Cutii', 'Coins'], c.topPlayers.map(x => [esc(x.name || '—'), fmt(x.n), fmt(x.coins)]), '—');
+      const sold = (d.sells || []).map(x => x.currency === 'coins' ? `${fmt(x.n)} vândute pe ${fmt(x.amount)} coins` : `${fmt(x.n)} vândute pe $${fmt(x.amount)}`).join(', ');
+      const since = d.trackedSince ? new Date(d.trackedSince).toLocaleString('ro-RO', { timeZone: 'Europe/Chisinau', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) : null;
+      $('st-note').textContent = (since ? `Cutiile se numără de pe ${since}: jocul păstrează doar ultimele 200 de deschideri, iar site-ul le salvează de atunci încoace. ` : 'Cutiile încep să se numere de acum. ') + 'Premium și pachetele: doar cele cumpărate de pe site.' + (sold ? ` Revânzări: ${sold}.` : '');
+      $('st-state').textContent = `ultimele ${days} zile`;
+    } catch (err) { $('st-state').textContent = err.message; }
+  }
+  document.querySelectorAll('.st-range button').forEach(b => b.addEventListener('click', () => {
+    days = Number(b.dataset.days);
+    document.querySelectorAll('.st-range button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    load();
+  }));
   load();
 })();
 </script>

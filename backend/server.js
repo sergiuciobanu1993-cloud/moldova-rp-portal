@@ -5214,6 +5214,93 @@ app.get("/api/vip-shop/log", auth, requireRole(...FOUNDER_ROLES), asyncRoute(asy
   res.json({ online: true, log: filtered.slice((page - 1) * per, page * per), total: filtered.length, page, per, capped: all.length >= 200 });
 }));
 
+// ============================================================================
+// (31.10.2026) STATISTICI VIP SHOP ȘI PREMIUM (Editorul VIP Shop, cerut de Sergiu)
+// Jurnalul din joc (/cases/log) dă doar ultimele 200 de deschideri, așa că
+// le copiem aici pe măsură ce apar (la 10 minute și la fiecare deschidere a
+// statisticilor) și numărăm din copia noastră. Istoricul începe deci de la
+// prima sincronizare; ce era mai vechi de ultimele 200 nu se mai poate afla.
+// Premium și pachetele: din audit_logs (premium.buy / premium.starter).
+// Zilele sunt după ora Moldovei.
+// ============================================================================
+let vipStatsReady = null;
+function vipStatsTables() {
+  if (!vipStatsReady) {
+    vipStatsReady = pool.query(`
+      CREATE TABLE IF NOT EXISTS vip_openings_seen (
+        id BIGINT PRIMARY KEY, created_at TIMESTAMPTZ NOT NULL, case_id TEXT, case_name TEXT,
+        price_coins INT NOT NULL DEFAULT 0, identifier TEXT, player_name TEXT, reward_type TEXT, reward_label TEXT,
+        seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+      CREATE INDEX IF NOT EXISTS vip_openings_seen_created ON vip_openings_seen(created_at);`).catch(err => { vipStatsReady = null; throw err; });
+  }
+  return vipStatsReady;
+}
+let vipStatsSyncAt = 0;
+async function syncVipOpenings(force) {
+  if (!force && Date.now() - vipStatsSyncAt < 2 * 60_000) return;
+  vipStatsSyncAt = Date.now();
+  await vipStatsTables();
+  if (gameIsDown()) return;
+  const { online, log } = await fetchCaseOpeningsLog(200);
+  if (!online || !log.length) return;
+  const rows = log.filter(e => Number.isFinite(Number(e.id)) && e.createdAt);
+  if (!rows.length) return;
+  const vals = [], args = [];
+  rows.forEach((e, i) => {
+    const t = Number(e.createdAt);
+    const at = new Date(Number.isFinite(t) ? (t < 1e12 ? t * 1000 : t) : Date.parse(e.createdAt));
+    if (isNaN(at)) return;
+    const b = args.length;
+    vals.push(`($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5},$${b + 6},$${b + 7},$${b + 8},$${b + 9})`);
+    args.push(Number(e.id), at, String(e.caseId || "").slice(0, 60), String(e.caseName || "").slice(0, 120), Math.max(0, Math.floor(Number(e.priceCoins) || 0)),
+      String(e.identifier || "").slice(0, 120), String(e.playerName || "").slice(0, 120), String(e.rewardType || "").slice(0, 30), String(e.rewardLabel || "").slice(0, 160));
+  });
+  if (vals.length) await pool.query(`INSERT INTO vip_openings_seen(id, created_at, case_id, case_name, price_coins, identifier, player_name, reward_type, reward_label) VALUES ${vals.join(",")} ON CONFLICT (id) DO NOTHING`, args);
+}
+setInterval(() => syncVipOpenings(true).catch(err => console.error("Statistici VIP:", err.message)), 10 * 60_000);
+setTimeout(() => syncVipOpenings(true).catch(() => {}), 45_000);
+
+app.get("/api/admin/vip-shop/statistici", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  const days = [7, 30, 90].includes(Number(req.query.days)) ? Number(req.query.days) : 30;
+  await syncVipOpenings(false).catch(err => console.error("Statistici VIP:", err.message));
+  await vipStatsTables();
+  const TZ = "Europe/Chisinau";
+  // ziua de azi (ora Moldovei) și începutul perioadei curente / anterioare
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  const q = (sql, a) => pool.query(sql, a).then(r => r.rows);
+  const dayExpr = `to_char((created_at AT TIME ZONE '${TZ}')::date, 'YYYY-MM-DD')`;
+  const from = `(($1::date - ($2::int - 1)) AT TIME ZONE '${TZ}')`;
+  const prevFrom = `(($1::date - ($2::int * 2 - 1)) AT TIME ZONE '${TZ}')`;
+  const premWhere = `action IN ('premium.buy','premium.starter')`;
+  const [byDay, byCase, totals, prevTotals, topPlayers, since, premDay, premKind, premTotals, premPrev, sells] = await Promise.all([
+    q(`SELECT ${dayExpr} AS day, COUNT(*)::int AS n, COALESCE(SUM(price_coins),0)::bigint AS coins FROM vip_openings_seen WHERE created_at >= ${from} GROUP BY 1 ORDER BY 1`, [today, days]),
+    q(`SELECT COALESCE(NULLIF(case_name,''), case_id) AS name, COUNT(*)::int AS n, COALESCE(SUM(price_coins),0)::bigint AS coins FROM vip_openings_seen WHERE created_at >= ${from} GROUP BY 1 ORDER BY 3 DESC`, [today, days]),
+    q(`SELECT COUNT(*)::int AS n, COALESCE(SUM(price_coins),0)::bigint AS coins, COUNT(DISTINCT identifier)::int AS players FROM vip_openings_seen WHERE created_at >= ${from}`, [today, days]),
+    q(`SELECT COUNT(*)::int AS n, COALESCE(SUM(price_coins),0)::bigint AS coins, COUNT(DISTINCT identifier)::int AS players FROM vip_openings_seen WHERE created_at >= ${prevFrom} AND created_at < ${from}`, [today, days]),
+    q(`SELECT MAX(player_name) AS name, COUNT(*)::int AS n, COALESCE(SUM(price_coins),0)::bigint AS coins FROM vip_openings_seen WHERE created_at >= ${from} GROUP BY identifier ORDER BY 3 DESC LIMIT 5`, [today, days]),
+    q(`SELECT MIN(created_at) AS at FROM vip_openings_seen`, []),
+    q(`SELECT ${dayExpr} AS day, COUNT(*)::int AS n, COALESCE(SUM((metadata->>'price')::numeric),0)::bigint AS coins FROM audit_logs WHERE ${premWhere} AND created_at >= ${from} GROUP BY 1 ORDER BY 1`, [today, days]),
+    q(`SELECT action, COALESCE(metadata->>'planId', metadata->>'packId') AS kind, COUNT(*)::int AS n, COALESCE(SUM((metadata->>'price')::numeric),0)::bigint AS coins FROM audit_logs WHERE ${premWhere} AND created_at >= ${from} GROUP BY 1,2 ORDER BY 4 DESC`, [today, days]),
+    q(`SELECT COUNT(*)::int AS n, COALESCE(SUM((metadata->>'price')::numeric),0)::bigint AS coins FROM audit_logs WHERE ${premWhere} AND created_at >= ${from}`, [today, days]),
+    q(`SELECT COUNT(*)::int AS n, COALESCE(SUM((metadata->>'price')::numeric),0)::bigint AS coins FROM audit_logs WHERE ${premWhere} AND created_at >= ${prevFrom} AND created_at < ${from}`, [today, days]),
+    q(`SELECT metadata->>'currency' AS currency, COUNT(*)::int AS n, COALESCE(SUM((metadata->>'amount')::numeric),0)::bigint AS amount FROM audit_logs WHERE action = 'vip_shop.sell_back' AND created_at >= ${from} GROUP BY 1`, [today, days]),
+  ]);
+  const num = v => Number(v) || 0;
+  res.json({
+    days, today,
+    trackedSince: since[0]?.at || null,
+    cases: { ...totals[0], coins: num(totals[0]?.coins), prev: { ...prevTotals[0], coins: num(prevTotals[0]?.coins) },
+      byDay: byDay.map(r => ({ day: r.day, n: r.n, coins: num(r.coins) })),
+      byCase: byCase.map(r => ({ name: r.name, n: r.n, coins: num(r.coins) })),
+      topPlayers: topPlayers.map(r => ({ name: r.name, n: r.n, coins: num(r.coins) })) },
+    premium: { n: premTotals[0]?.n || 0, coins: num(premTotals[0]?.coins), prev: { n: premPrev[0]?.n || 0, coins: num(premPrev[0]?.coins) },
+      byDay: premDay.map(r => ({ day: r.day, n: r.n, coins: num(r.coins) })),
+      byKind: premKind.map(r => ({ type: r.action === "premium.buy" ? "plan" : "pack", kind: r.kind, n: r.n, coins: num(r.coins) })) },
+    sells: sells.map(r => ({ currency: r.currency, n: r.n, amount: num(r.amount) })),
+  });
+}));
+
 // Editor de cutii/recompense VIP Shop (09.09.2026, cerut explicit de staff)
 // — administratorii pot acum adăuga/edita/șterge cutii și recompense direct
 // din panoul de admin (admin-vip-shop.html), fără să mai fie nevoie să vină

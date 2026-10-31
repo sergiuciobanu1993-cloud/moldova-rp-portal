@@ -5563,11 +5563,12 @@ const STARTER_CLEAN_NOTE = "Nu îl poate lua un personaj urmărit de Poliție, c
 const PREMIUM_DEFAULT = {
   public: false, // până nu e gata partea din joc, pagina o vede doar staff-ul
   plans: [
-    { id: "p7", days: 7, price: 30, on: true },
-    { id: "p30", days: 30, price: 100, on: true },
-    { id: "p90", days: 90, price: 250, on: true },
+    // (31.10.2026) prețurile în unitatea nouă de coins din joc (catalog.coinsUnit = 100: 1 coin vechi = 100)
+    { id: "p7", days: 7, price: 3000, on: true },
+    { id: "p30", days: 30, price: 10000, on: true },
+    { id: "p90", days: 90, price: 25000, on: true },
   ],
-  packs: { start: { price: 10, on: true }, bronz: { price: 40, on: true }, aur: { price: 80, on: true }, platina: { price: 150, on: true } },
+  packs: { start: { price: 1000, on: true }, bronz: { price: 4000, on: true }, aur: { price: 8000, on: true }, platina: { price: 15000, on: true } },
 };
 function normalizePremiumSettings(v) {
   const src = v && typeof v === "object" ? v : {};

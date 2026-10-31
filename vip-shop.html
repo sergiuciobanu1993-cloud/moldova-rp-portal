@@ -573,6 +573,9 @@ function fmtDate(iso) {
 }
 
 const REWARD_ICON = { cash: '💵', item: '🎒', vehicle: '🚗', coins: '🪙' };
+// (31.10.2026) coins-urile au acum unitatea 100 în joc (1 coin vechi = 100), deci sumele sunt mari: le scriem cu punct la mii (1.500, 20.500)
+const fmtC = n => String(Math.round(Number(n) || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+
 // (01.10.2026) Armele erau afișate cu 🎒 (rucsac) — acum 🔫: după numele
 // itemului din joc (weapon_...) sau, unde nu-l avem, după denumire.
 const WEAPON_WORDS = /\b(weapon|draco|ak-?\d*|akm|m4a?\d?|hk\d*|mp5|mp7|uzi|glock|pistol|deagle|revolver|shotgun|pump|sniper|rifle|carabin\w*|pu[sș]c[aă]|arm[aă]|smg|scar|g36|famas|aug|vector|tec-?9)\b/i;
@@ -630,7 +633,7 @@ function niceLabel(type, label, data) {
   if (!/^\$?\s*\d[\d\s.,]*$/.test(raw)) return raw;
   const n = Number(raw.replace(/[^\d]/g, ''));
   if (!Number.isFinite(n) || n <= 0) return raw;
-  if (type === 'coins') return `${n.toLocaleString('ro-RO')} coins`;
+  if (type === 'coins') return `${fmtC(n)} coins`;
   if (type === 'cash') {
     const acc = data && data.account;
     return `$${n.toLocaleString('ro-RO')}${acc === 'black_money' ? ' bani murdari' : acc ? ' în bancă' : ''}`;
@@ -742,7 +745,7 @@ function renderPending(pending) {
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 14px;background:rgba(255,255,255,.04);border-radius:8px;flex-wrap:wrap">
           <span style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">${rewardThumb(p.reward_type, rewardDataOf(p.reward_data), p.reward_label)} <strong>${escapeHtml(niceLabel(p.reward_type, p.reward_label, rewardDataOf(p.reward_data)) || p.reward_type)}</strong>${ammoNote(rewardDataOf(p.reward_data))} <span class="muted">(${escapeHtml(p.case_name || '')})</span></span>
           <span style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-            ${p.sellOffer?.coins ? `<button type="button" class="btn-ghost" style="padding:7px 12px;font-size:12px" data-sell="${Number(p.id)}" data-currency="coins" data-label="${escapeHtml(p.reward_label || '')}" data-amount="${p.sellOffer.coins}">Vinde pe 🪙 ${p.sellOffer.coins} coins</button>` : ''}
+            ${p.sellOffer?.coins ? `<button type="button" class="btn-ghost" style="padding:7px 12px;font-size:12px" data-sell="${Number(p.id)}" data-currency="coins" data-label="${escapeHtml(p.reward_label || '')}" data-amount="${p.sellOffer.coins}">Vinde pe 🪙 ${fmtC(p.sellOffer.coins)} coins</button>` : ''}
             ${p.sellOffer?.money ? `<button type="button" class="btn-ghost" style="padding:7px 12px;font-size:12px" data-sell="${Number(p.id)}" data-currency="money" data-label="${escapeHtml(p.reward_label || '')}" data-amount="${p.sellOffer.money}">Vinde pe $${Number(p.sellOffer.money).toLocaleString('ro-RO')}</button>` : ''}
             ${p.exchangeOffer ? `<button type="button" class="btn-ghost" style="padding:7px 12px;font-size:12px;border-color:rgba(66,223,138,.45)" data-exch="${Number(p.id)}" data-label="${escapeHtml(p.reward_label || '')}" data-amount="${p.exchangeOffer.amount}" data-pct="${p.exchangeOffer.pct}">🧼 Schimbă în $${Number(p.exchangeOffer.amount).toLocaleString('ro-RO')} curați (${p.exchangeOffer.pct}%)</button>` : ''}
             <span class="muted">${fmtDate(p.created_at)}</span>
@@ -790,7 +793,7 @@ async function exchangeDirty(btn) {
 async function sellBack(btn) {
   const currency = btn.dataset.currency;
   const amount = Number(btn.dataset.amount);
-  const price = currency === 'coins' ? `${amount} coins` : `$${amount.toLocaleString('ro-RO')} în bancă`;
+  const price = currency === 'coins' ? `${fmtC(amount)} coins` : `$${amount.toLocaleString('ro-RO')} în bancă`;
   const sure = await askConfirm({
     title: 'Vinzi recompensa?',
     text: `„${btn.dataset.label}” pentru ${price}.\n\nDupă vânzare nu o mai poți ridica din joc.`,
@@ -805,7 +808,7 @@ async function sellBack(btn) {
     if (!res.ok) throw new Error(d.error || 'Nu am putut vinde recompensa.');
     await loadAll();
     const m = document.getElementById('sell-msg');
-    if (m) { m.hidden = false; m.style.color = 'var(--green)'; m.textContent = `Vândut! Ai primit ${d.amount ? (currency === 'coins' ? `${d.amount} coins` : `$${Number(d.amount).toLocaleString('ro-RO')} în bancă`) : price}.`; }
+    if (m) { m.hidden = false; m.style.color = 'var(--green)'; m.textContent = `Vândut! Ai primit ${d.amount ? (currency === 'coins' ? `${fmtC(d.amount)} coins` : `$${Number(d.amount).toLocaleString('ro-RO')} în bancă`) : price}.`; }
   } catch (err) {
     msg.hidden = false; msg.style.color = '#ff8a8a'; msg.textContent = err.message;
     document.querySelectorAll('[data-sell]').forEach(b => { b.disabled = false; });
@@ -840,7 +843,7 @@ function renderLog(log) {
             </span>
           </span>
           <span style="display:flex;align-items:center;gap:10px;flex:none">
-            <span class="muted">🪙 ${entry.priceCoins}</span>
+            <span class="muted">🪙 ${fmtC(entry.priceCoins)}</span>
             ${claimedPill}
             <span class="muted">${fmtDate(entry.createdAt)}</span>
           </span>
@@ -898,14 +901,14 @@ function renderHistory(history) {
   if (!history || !history.length) { panel.hidden = true; return; }
   panel.hidden = false;
   const spent = history.reduce((s, e) => s + (Number(e.priceCoins) || 0), 0);
-  document.getElementById('history-summary').textContent = `${history.length} cutii deschise · 🪙 ${spent} coins`;
+  document.getElementById('history-summary').textContent = `${history.length} cutii deschise · 🪙 ${fmtC(spent)} coins`;
   body.innerHTML = `
     <div style="display:flex;flex-direction:column;gap:8px">
       ${history.map(entry => {
         const data = entry.rewardData || {};
         const thumb = rewardThumb(entry.rewardType, data, entry.rewardLabel);
         const claimedPill = entry.soldCurrency
-          ? `<span class="pill" style="background:rgba(125,178,255,.15);color:#7db2ff;flex:none">Vândut · ${entry.soldCurrency === 'coins' ? `🪙 ${Number(entry.soldAmount) || 0}` : `$${Number(entry.soldAmount || 0).toLocaleString('ro-RO')}`}</span>`
+          ? `<span class="pill" style="background:rgba(125,178,255,.15);color:#7db2ff;flex:none">Vândut · ${entry.soldCurrency === 'coins' ? `🪙 ${fmtC(entry.soldAmount)}` : `$${Number(entry.soldAmount || 0).toLocaleString('ro-RO')}`}</span>`
           : entry.convertedAmount
           ? `<span class="pill" style="background:rgba(66,223,138,.15);color:var(--green);flex:none">Schimbat · $${Number(entry.convertedAmount).toLocaleString('ro-RO')} curați${entry.claimedAt ? ' · ridicat' : ''}</span>`
           : entry.claimedAt
@@ -921,7 +924,7 @@ function renderHistory(history) {
             </span>
           </span>
           <span style="display:flex;align-items:center;gap:10px;flex:none">
-            <span class="muted">🪙 ${entry.priceCoins}</span>
+            <span class="muted">🪙 ${fmtC(entry.priceCoins)}</span>
             ${claimedPill}
             <span class="muted">${fmtDate(entry.createdAt)}</span>
           </span>
@@ -1001,7 +1004,7 @@ document.getElementById('preview-pool').addEventListener('keydown', e => {
 function renderCases(cases, coins, linked) {
   const panel = document.getElementById('cases-panel');
   panel.hidden = false;
-  document.getElementById('coins-balance').textContent = linked ? `🪙 ${coins} coins` : '🪙 — coins';
+  document.getElementById('coins-balance').textContent = linked ? `🪙 ${fmtC(coins)} coins` : '🪙 — coins';
   currentCasesById = {};
   cases.forEach(c => { currentCasesById[c.id] = c; });
   const grid = document.getElementById('cases-grid');
@@ -1023,7 +1026,7 @@ function renderCases(cases, coins, linked) {
       ${img ? `<div class="crate-frame"><img src="${img}" alt="" loading="lazy"></div>` : ''}
       <span class="case-tier ${accent}">${TIER_LABEL[accent] || ''}</span>
       <h3 style="margin:0 0 4px">${escapeHtml(c.name)}</h3>
-      <p class="pill warn" style="margin:0 0 12px">🪙 ${c.price} coins</p>
+      <p class="pill warn" style="margin:0 0 12px">🪙 ${fmtC(c.price)} coins</p>
       <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:14px">
         ${poolRowsHtml(c.pool.slice(0, 3))}
         ${c.pool.length > 3 ? `<button type="button" class="pool-more-link" data-preview="${escapeHtml(c.id)}">+ ${c.pool.length - 3} alte recompense…</button>` : ''}
@@ -1075,7 +1078,7 @@ function openPreview(caseId) {
   if (!c) return;
   previewCaseId = caseId;
   document.getElementById('preview-title').textContent = c.name;
-  document.getElementById('preview-price').textContent = `🪙 ${c.price} coins`;
+  document.getElementById('preview-price').textContent = `🪙 ${fmtC(c.price)} coins`;
   document.getElementById('preview-pool').innerHTML = previewPoolHtml(c.pool);
   // Cât timp contul nu e legat de personajul din joc, lăsăm butonul cu
   // textul "Deschide" — apăsarea lui pornește fluxul de legare (vezi
@@ -1120,7 +1123,7 @@ async function startOpenFlow(caseId) {
   if (afford < count) {
     const answer = await askConfirm({
       title: 'Coins-urile nu ajung pentru toate',
-      text: `Ai 🪙 ${currentCoins} coins: ajung pentru ${afford} din cele ${count} cutii „${c.name}”.`,
+      text: `Ai 🪙 ${fmtC(currentCoins)} coins: ajung pentru ${afford} din cele ${count} cutii „${c.name}”.`,
       ok: afford === 1 ? 'Deschide o cutie' : `Deschide ${afford} cutii`,
       extra: '🛒 Cumpără coins',
       cancel: 'Renunț',
@@ -1148,7 +1151,7 @@ function spinLabel(c) {
 }
 function previewOpenLabel(c) {
   if (previewInsufficientFunds) return '🛒 Coins insuficienți — cumpără pe Tebex';
-  return openQty > 1 ? `Deschide ${openQty} cutii · 🪙 ${(Number(c.price) || 0) * openQty} coins` : 'Deschide';
+  return openQty > 1 ? `Deschide ${openQty} cutii · 🪙 ${fmtC((Number(c.price) || 0) * openQty)} coins` : 'Deschide';
 }
 function syncOpenControls() {
   document.querySelectorAll('.qty [data-qty]').forEach(b => b.setAttribute('aria-pressed', String(Number(b.dataset.qty) === openQty)));
@@ -1891,14 +1894,14 @@ async function presentOne(caseId, d, i, total) {
   if (d.sell && (d.sell.coins || d.sell.money)) {
     text.textContent = `Ai câștigat: ${wonLabel}. O păstrezi sau o vinzi înapoi pentru ${d.sell.pct}% din valoare?`;
     actions.innerHTML = `
-      ${d.sell.coins ? `<button type="button" class="btn-ghost" data-rsell="coins" data-amount="${d.sell.coins}">Vinde pe 🪙 ${d.sell.coins} coins</button>` : ''}
+      ${d.sell.coins ? `<button type="button" class="btn-ghost" data-rsell="coins" data-amount="${d.sell.coins}">Vinde pe 🪙 ${fmtC(d.sell.coins)} coins</button>` : ''}
       ${d.sell.money ? `<button type="button" class="btn-ghost" data-rsell="money" data-amount="${d.sell.money}">Vinde pe $${Number(d.sell.money).toLocaleString('ro-RO')}</button>` : ''}`;
     actions.style.display = 'flex';
     closeBtn.textContent = more ? `Păstrez · următoarea cutie (${i + 2}/${total})` : 'Păstrez — o ridic din joc';
     actions.querySelectorAll('[data-rsell]').forEach(b => b.addEventListener('click', async () => {
       const currency = b.dataset.rsell;
       const amount = Number(b.dataset.amount);
-      const price = currency === 'coins' ? `${amount} coins` : `$${amount.toLocaleString('ro-RO')} în bancă`;
+      const price = currency === 'coins' ? `${fmtC(amount)} coins` : `$${amount.toLocaleString('ro-RO')} în bancă`;
       // premiile peste „comun" nu se vând dintr-o apăsare greșită
       if (winner.rarity !== 'common') {
         const sure = await askConfirm({
@@ -1914,7 +1917,7 @@ async function presentOne(caseId, d, i, total) {
         const rd = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(rd.error || 'Nu am putut vinde recompensa.');
         title.textContent = 'Vândut!';
-        text.textContent = `Ai vândut ${d.reward.label} și ai primit ${rd.amount ? (currency === 'coins' ? `${rd.amount} coins` : `$${Number(rd.amount).toLocaleString('ro-RO')} în bancă`) : price}.`;
+        text.textContent = `Ai vândut ${d.reward.label} și ai primit ${rd.amount ? (currency === 'coins' ? `${fmtC(rd.amount)} coins` : `$${Number(rd.amount).toLocaleString('ro-RO')} în bancă`) : price}.`;
         actions.style.display = 'none';
         sellMsg.hidden = true;
         closeBtn.textContent = nextOnly;

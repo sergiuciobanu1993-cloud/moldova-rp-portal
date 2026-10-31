@@ -201,6 +201,8 @@
 
 <script src="auth-client.js"></script>
 <script>
+// (31.10.2026) coins-urile au acum unitatea 100 în joc (1 coin vechi = 100): sumele le scriem cu punct la mii (1.500, 20.500)
+const fmtC = n => String(Math.round(Number(n) || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 const esc = s => (s ?? '').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 const fmtDay = ms => ms ? new Date(ms).toLocaleString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
@@ -322,13 +324,13 @@ function renderPlans() {
     return `<article class="plan${best ? ' best' : ''}">
       ${best ? '<span class="tag">CEL MAI BUN PREȚ</span>' : ''}
       <span class="days">${plural(p.days, 'zi', 'zile')}</span>
-      <span class="price">${p.price}<small>coins</small></span>
-      <span class="per">${perDay.toFixed(2).replace('.', ',')} coins pe zi${save ? ` · −${save}%` : ''}</span>
+      <span class="price">${fmtC(p.price)}<small>coins</small></span>
+      <span class="per">${perDay >= 100 ? fmtC(perDay) : perDay.toFixed(2).replace('.', ',')} coins pe zi${save ? ` · −${save}%` : ''}</span>
       <button type="button" class="btn-primary" data-plan="${esc(p.id)}" ${block || poor ? 'disabled' : ''}>${block ? esc(block) : poor ? 'Coins insuficienți' : active ? 'Prelungește' : 'Activează'}</button>
     </article>`;
   }).join('') || '<p class="muted">Nicio perioadă disponibilă acum.</p>';
   el.querySelectorAll('[data-plan]').forEach(b => b.addEventListener('click', () => buyPlan(b.dataset.plan)));
-  document.getElementById('coins-pill').textContent = D.linked && D.coins != null ? `🪙 ${D.coins} coins` : '🪙 — coins';
+  document.getElementById('coins-pill').textContent = D.linked && D.coins != null ? `🪙 ${fmtC(D.coins)} coins` : '🪙 — coins';
 }
 
 function renderPerks() {
@@ -379,7 +381,7 @@ function renderPacks() {
       <div class="top"><small>${p.newbie ? 'Pentru jucătorii noi' : 'Pachet de start'}</small><h3>${esc(p.name)}</h3></div>
       <ul>${p.lines.map(l => `<li>${esc(l)}</li>`).join('')}${(p.soonLines || []).map(l => `<li class="off soon"><span>${esc(l)}</span><span class="off-tag">În curând</span></li>`).join('')}${(p.offLines || []).map(l => `<li class="off"><span>${esc(l)}</span><span class="off-tag">Oprit deocamdată</span></li>`).join('')}</ul>
       ${p.note ? `<p class="pk-note">${esc(p.note)}</p>` : ''}
-      <div class="foot"><span class="price">${p.price}<small>coins</small></span>
+      <div class="foot"><span class="price">${fmtC(p.price)}<small>coins</small></span>
         ${mine ? `<span class="done">✓ L-ai luat${doneAt ? ' pe ' + fmtDay(doneAt) : ''}</span>` : `<button type="button" class="btn-ghost" data-pack="${esc(p.id)}" ${off ? 'disabled' : ''}>${esc(label)}</button>`}
         ${left ? `<span class="pk-left">Mai ai ${plural(left, 'zi', 'zile')} ca să-l iei</span>` : ''}
       </div>
@@ -399,7 +401,7 @@ async function buyPlan(id) {
   const p = D.plans.find(x => x.id === id); if (!p) return;
   const active = D.status && D.status.active;
   const ok = await confirmBox(active ? 'Prelungești Premium?' : 'Activezi Premium?',
-    `<b>${plural(p.days, 'zi', 'zile')}</b> de Premium pentru <b>${p.price} coins</b>.${active ? ' Se adaugă după ce se termină abonamentul actual.' : ' Bonusurile pornesc imediat în joc.'}<br>Rămâi cu ${D.coins - p.price} coins.`, `Plătesc ${p.price} coins`);
+    `<b>${plural(p.days, 'zi', 'zile')}</b> de Premium pentru <b>${fmtC(p.price)} coins</b>.${active ? ' Se adaugă după ce se termină abonamentul actual.' : ' Bonusurile pornesc imediat în joc.'}<br>Rămâi cu ${fmtC(D.coins - p.price)} coins.`, `Plătesc ${fmtC(p.price)} coins`);
   if (!ok) return;
   busy = true;
   try {
@@ -414,8 +416,8 @@ async function buyPack(id) {
   const p = D.packs.find(x => x.id === id); if (!p) return;
   const ok = await confirmBox(`Pachetul ${p.name}?`,
     p.newbie
-      ? `Plătești <b>${p.price} coins</b>. Pachetul Start se ia <b>o singură dată pe cont</b>, pe ${esc(D.name || 'personajul tău')}. După el poți lua oricând și Bronz, Aur sau Platină.`
-      : `Plătești <b>${p.price} coins</b>. Poți lua <b>un singur pachet pe personaj</b>, deci după asta nu mai poți cumpăra altul pe ${esc(D.name || 'acest personaj')}.${p.note ? '<br>' + esc(p.note) : ''}`, `Plătesc ${p.price} coins`);
+      ? `Plătești <b>${fmtC(p.price)} coins</b>. Pachetul Start se ia <b>o singură dată pe cont</b>, pe ${esc(D.name || 'personajul tău')}. După el poți lua oricând și Bronz, Aur sau Platină.`
+      : `Plătești <b>${fmtC(p.price)} coins</b>. Poți lua <b>un singur pachet pe personaj</b>, deci după asta nu mai poți cumpăra altul pe ${esc(D.name || 'acest personaj')}.${p.note ? '<br>' + esc(p.note) : ''}`, `Plătesc ${fmtC(p.price)} coins`);
   if (!ok) return;
   busy = true;
   try {

@@ -316,6 +316,9 @@ async function loadProfileExtra() {
 // Cutiile deschise de mine în VIP Shop (29.09.2026) — aceeași listă ca
 // „Istoricul tău” din pagina VIP Shop, acum și în Dashboard.
 const VIP_ICON = { cash: '💵', item: '🎒', vehicle: '🚗', coins: '🪙' };
+// (31.10.2026) coins-urile au acum unitatea 100 în joc (1 coin vechi = 100), deci sumele sunt mari: le scriem cu punct la mii (1.500, 20.500)
+const fmtC = n => String(Math.round(Number(n) || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+
 async function loadVipHistory() {
   const panel = document.getElementById('vip-history-panel');
   const body = document.getElementById('vip-history-body');
@@ -331,11 +334,11 @@ async function loadVipHistory() {
     const list = d.history || [];
     if (!list.length) { sum.textContent = ''; body.innerHTML = '<p class="muted" style="margin:0">Nu ai deschis încă nicio cutie. Vezi <a href="vip-shop.html">VIP Shop</a>.</p>'; return; }
     const spent = list.reduce((s, e) => s + (Number(e.priceCoins) || 0), 0);
-    sum.textContent = `${list.length} cutii · 🪙 ${spent} coins${list.length >= 50 ? ' (ultimele 50)' : ''}`;
+    sum.textContent = `${list.length} cutii · 🪙 ${fmtC(spent)} coins${list.length >= 50 ? ' (ultimele 50)' : ''}`;
     body.innerHTML = `<details class="fold"><summary><span>${list.length} cutii deschise</span><span class="fold-btn"></span></summary><div class="thread">${list.map(e => `
       <div class="msg">
         <b>${VIP_ICON[e.rewardType] || '🎁'} ${escapeHtml(e.rewardLabel || '—')}</b>
-        <span>${escapeHtml(e.caseName || '')} · 🪙 ${Number(e.priceCoins) || 0} · ${e.claimedAt ? 'ridicat' : '<span style="color:var(--orange)">de ridicat cu /recompense</span>'}</span>
+        <span>${escapeHtml(e.caseName || '')} · 🪙 ${fmtC(e.priceCoins)} · ${e.claimedAt ? 'ridicat' : '<span style="color:var(--orange)">de ridicat cu /recompense</span>'}</span>
         <small>${fmtDate(e.createdAt)}</small>
       </div>`).join('')}</div></details>`;
   } catch {

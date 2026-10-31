@@ -4044,7 +4044,7 @@ app.get("/api/me/profile", auth, asyncRoute(async (req, res) => {
 // ---------------------------------------------------------------------------
 // (31.10.2026, cerut de Sergiu) Questurile de Crăciun de pe site.
 //
-// Trei questuri, pentru jucătorii logați:
+// Patru questuri, pentru jucătorii logați (al 4-lea, întrebările din regulament, e descris lângă XMAS_QUIZ):
 //   1) Vânătoarea de cadouri — 12 cadouri ascunse, câte unul pe 12 pagini ale
 //      site-ului (XMAS_GIFT_PAGES). Cadoul apare după câteva secunde, într-un
 //      loc la întâmplare, și se ia cu un clic (craciun.js).
@@ -4052,7 +4052,7 @@ app.get("/api/me/profile", auth, asyncRoute(async (req, res) => {
 //      căsuța zilei se deschide doar în ziua ei. Quest terminat = 18 căsuțe.
 //   3) Sarcinile zilei — 3 sarcini pe zi (aceleași pentru toți, alese după
 //      dată din XMAS_TASKS). O zi cu toate 3 = o zi bifată; quest = 10 zile.
-// Fiecare quest terminat = o insignă + un bilet la tombolă; toate trei = încă
+// Fiecare quest terminat = o insignă + un bilet la tombolă; toate patru = încă
 // o insignă („Crăciun 2026") și încă un bilet. La tombolă intră doar conturile
 // legate de personajul din joc (premiile se dau în joc, de către staff).
 // Tragerea o face un fondator din Admin → Crăciun (aleator, după bilete).
@@ -4066,6 +4066,27 @@ const XMAS = {
   start: "2026-12-01", end: "2027-01-07",          // inclusiv
   adventFrom: "2026-12-01", adventTo: "2026-12-24",
   giftsNeeded: 12, adventNeeded: 18, taskDaysNeeded: 10, tasksPerDay: 3,
+  quizPerDay: 5, quizNeeded: 100,                   // (31.10.2026) întrebările din regulament
+};
+// (31.10.2026, cerut de Sergiu) Al 4-lea quest: 5 întrebări pe zi din regulamente,
+// tot sezonul (1 decembrie – 7 ianuarie). Banca de întrebări e în
+// backend/xmas-quiz.json (198 de întrebări, fiecare cu punctul din regulament și
+// explicația). Fiecare jucător le primește în altă ordine, iar variantele de
+// răspuns sunt amestecate pentru fiecare jucător — ca răspunsurile să nu se poată
+// copia „pe poziții". Răspunsul corect pleacă spre jucător abia după ce a răspuns,
+// o singură dată (fără reîncercare). Quest terminat = XMAS.quizNeeded răspunsuri corecte.
+const XMAS_QUIZ = require("./xmas-quiz.json");
+const XMAS_QUIZ_BY_ID = new Map(XMAS_QUIZ.map(q => [q.id, q]));
+const XMAS_REG_TITLES = {
+  "reguli-generale": "Reguli generale", "regulament-roleplay": "Manualul RolePlay", "sanctiuni-oficiale": "Sancțiuni oficiale",
+  "regulament-site-tichete-discord": "Site, tichete și Discord", "termeni-si-conditii": "Termeni și condiții",
+  "regulament-oficial-advanced-rp": "Advanced RP", "arme-donate": "Arme donate", "permis-port-arma": "Permis de port armă",
+  "livrari-materiale": "Livrări de materiale", "regulament-jafuri-moldova-rp": "Jafuri", "rapiri-ostatici": "Răpiri și ostatici",
+  "regulament-oficial-organizatii-ilegale-ganguri": "Bande", "regulament-familii-ganguri": "Familii",
+  "regulament-oficial-sistem-turf": "Capturi (turf)", "regulament-oficial-drop-event": "Drop event",
+  "razboiul-pentru-materiale": "Războiul pentru materiale", "atacuri-teroriste": "Atacuri teroriste",
+  "ateliere-dealeri": "Ateliere și dealeri", "legea-martiala": "Legea marțială", "verificari-anti-cheat": "Verificări anti-cheat",
+  "structuri-de-stat": "Structuri de stat",
 };
 // cadoul nr. i+1 se ascunde pe pagina XMAS_GIFT_PAGES[i]
 const XMAS_GIFT_PAGES = ["index", "dashboard", "tichete", "vip-shop", "premium", "regulamente", "regulament", "ghid-factiuni", "ghid-factiune", "joburi", "legislatie-rutiera", "aplicatie"];
@@ -4121,6 +4142,7 @@ const XMAS_QUESTS = [
   { id: "cadouri", icon: "🎁", title: "Vânător de cadouri", need: XMAS.giftsNeeded },
   { id: "advent", icon: "📅", title: "Calendarul de Advent", need: XMAS.adventNeeded },
   { id: "sarcini", icon: "🧝", title: "Spiriduș harnic", need: XMAS.taskDaysNeeded },
+  { id: "regulament", icon: "📜", title: "Cunoscător al regulamentului", need: XMAS.quizNeeded },
 ];
 
 function xmasToday(d = new Date()) {
@@ -4164,6 +4186,39 @@ function xmasGiftToken(userId, giftId, at) {
   const h = require("crypto").createHmac("sha256", process.env.JWT_SECRET || "xmas").update(`xmas:${userId}:${giftId}:${at}`).digest("hex").slice(0, 32);
   return `${giftId}.${at}.${h}`;
 }
+// ziua din sezon (0 = 1 decembrie); în modul de test, înainte de sezon, e ziua 0
+function xmasDayIndex(date) {
+  const d = Math.round((Date.parse(date + "T12:00:00Z") - Date.parse(XMAS.start + "T12:00:00Z")) / 86400000);
+  return Math.max(0, d);
+}
+function xmasSeeded(seedText, n) {
+  const order = Array.from({ length: n }, (_, i) => i);
+  let h = require("crypto").createHash("sha256").update(seedText).digest(), k = 0;
+  for (let i = n - 1; i > 0; i--) {
+    if (k + 2 > h.length) { h = require("crypto").createHash("sha256").update(h).digest(); k = 0; }
+    const j = ((h[k] << 8) | h[k + 1]) % (i + 1); k += 2;
+    [order[i], order[j]] = [order[j], order[i]];
+  }
+  return order;
+}
+// cele 5 întrebări de azi ale jucătorului, cu variantele în ordinea lui
+function xmasQuizFor(userId, date) {
+  const order = xmasSeeded("xmas-quiz:" + userId, XMAS_QUIZ.length);
+  const start = (xmasDayIndex(date) * XMAS.quizPerDay) % XMAS_QUIZ.length;
+  const out = [];
+  for (let i = 0; i < XMAS.quizPerDay; i++) {
+    const q = XMAS_QUIZ[order[(start + i) % XMAS_QUIZ.length]];
+    const perm = xmasSeeded(`xmas-variante:${userId}:${q.id}`, q.options.length);
+    out.push({ q, perm, correct: perm.indexOf(q.answer) });
+  }
+  return out;
+}
+function xmasQuizView(item, answered) {
+  const { q, perm, correct } = item;
+  const v = { id: q.id, q: q.q, options: perm.map(i => q.options[i]), reg: XMAS_REG_TITLES[q.reg] || q.reg, link: `/regulament.html?slug=${encodeURIComponent(q.reg)}` };
+  if (answered) Object.assign(v, { chosen: answered.chosen, ok: answered.ok, correct, ref: q.ref, explain: q.explain });
+  return v;
+}
 async function xmasRows(userId) {
   await xmasTables();
   const { rows } = await pool.query(`SELECT kind, item, created_at FROM xmas_progress WHERE user_id = $1`, [userId]);
@@ -4177,13 +4232,14 @@ function xmasSummary(rows, clock) {
   const giftToday = rows.some(r => r.kind === "gift" && xmasToday(new Date(r.created_at)) === clock.today);
   const tasks = xmasTasksFor(clock.today, gifts.length < XMAS.giftsNeeded || giftToday);
   const doneToday = new Set(items("task").filter(i => i.startsWith(clock.today + ":")).map(i => i.slice(11)));
-  const progress = { cadouri: gifts.length, advent: advent.length, sarcini: taskDays.length };
+  const quizOk = rows.filter(r => r.kind === "quiz1").length;
+  const progress = { cadouri: gifts.length, advent: advent.length, sarcini: taskDays.length, regulament: quizOk };
   const quests = XMAS_QUESTS.map(q => ({ ...q, have: progress[q.id], done: progress[q.id] >= q.need }));
   const all = quests.every(q => q.done);
   const badges = quests.filter(q => q.done).map(q => ({ id: q.id, icon: q.icon, title: q.title }));
   if (all) badges.push({ id: "toate", icon: "🎄", title: `Crăciun ${XMAS.year}` });
   return {
-    gifts, advent, taskDays: taskDays.length, quests, all, badges,
+    gifts, advent, taskDays: taskDays.length, quizOk, quests, all, badges,
     tickets: quests.filter(q => q.done).length + (all ? 1 : 0),
     tasks: tasks.map(t => ({ id: t.id, text: t.text, link: t.link, page: t.page || null, secs: t.secs || 0, event: t.event || null, server: !!t.server, done: doneToday.has(t.id) })),
   };
@@ -4226,11 +4282,12 @@ app.get("/api/craciun", auth, asyncRoute(async (req, res) => {
   const { rows: won } = await pool.query(`SELECT prize, drawn_at, given_at FROM xmas_winners WHERE user_id = $1 ORDER BY drawn_at`, [req.user.sub]);
   res.json({
     ...clock, season: { start: XMAS.start, end: XMAS.end, adventFrom: XMAS.adventFrom, adventTo: XMAS.adventTo, year: XMAS.year },
-    need: { gifts: XMAS.giftsNeeded, advent: XMAS.adventNeeded, taskDays: XMAS.taskDaysNeeded },
+    need: { gifts: XMAS.giftsNeeded, advent: XMAS.adventNeeded, taskDays: XMAS.taskDaysNeeded, quiz: XMAS.quizNeeded, quizPerDay: XMAS.quizPerDay },
     linked: await xmasLinked(req.user.sub),
     giftPages: XMAS_GIFT_PAGES.map((p, i) => ({ id: i + 1, name: XMAS_PAGE_INFO[p][0], link: XMAS_PAGE_INFO[p][1], found: sum.gifts.includes(i + 1) })),
     adventOpened: sum.advent.map(d => ({ day: d, text: XMAS_ADVENT[d - 1], at: openedAt[d] })),
-    gifts: sum.gifts.length, adventCount: sum.advent.length, taskDays: sum.taskDays,
+    gifts: sum.gifts.length, adventCount: sum.advent.length, taskDays: sum.taskDays, quizOk: sum.quizOk,
+    quiz: clock.active ? xmasQuizToday(req.user.sub, clock.today, rows) : [],
     quests: sum.quests, all: sum.all, badges: sum.badges, tickets: sum.tickets, tasks: sum.tasks,
     wins: won,
   });
@@ -4301,6 +4358,37 @@ app.post("/api/craciun/sarcina", auth, asyncRoute(async (req, res) => {
   res.json({ ok: true, text: task.text, doneToday: sum.tasks.filter(t => t.done).length, of: sum.tasks.length, dayDone: sum.tasks.every(t => t.done), taskDays: sum.taskDays, newBadges: fresh, tickets: sum.tickets });
 }));
 
+function xmasQuizAnswers(rows, date) {
+  const m = new Map();
+  for (const r of rows) {
+    if ((r.kind === "quiz1" || r.kind === "quiz0") && r.item.startsWith(date + "|")) {
+      const [, id, chosen] = r.item.split("|");
+      m.set(id, { ok: r.kind === "quiz1", chosen: Number(chosen) });
+    }
+  }
+  return m;
+}
+function xmasQuizToday(userId, date, rows) {
+  const ans = xmasQuizAnswers(rows, date);
+  return xmasQuizFor(userId, date).map(it => xmasQuizView(it, ans.get(it.q.id)));
+}
+// Răspunsul la o întrebare din regulament (o singură încercare)
+app.post("/api/craciun/intrebare", auth, asyncRoute(async (req, res) => {
+  const clock = xmasClock(req);
+  if (!clock.active) return res.status(400).json({ error: "Questurile de Crăciun nu sunt pornite acum." });
+  const id = String(req.body?.id || ""), choice = Number(req.body?.choice);
+  const item = xmasQuizFor(req.user.sub, clock.today).find(it => it.q.id === id);
+  if (!item) return res.status(400).json({ error: "Întrebarea asta nu e azi la tine. Reîncarcă pagina." });
+  if (!Number.isInteger(choice) || choice < 0 || choice >= item.perm.length) return res.status(400).json({ error: "Alege un răspuns." });
+  const rows = await xmasRows(req.user.sub);
+  if (xmasQuizAnswers(rows, clock.today).has(id)) return res.status(400).json({ error: "Ai răspuns deja la întrebarea asta." });
+  const before = xmasSummary(rows, clock);
+  const ok = choice === item.correct;
+  await pool.query(`INSERT INTO xmas_progress(user_id, kind, item) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`, [req.user.sub, ok ? "quiz1" : "quiz0", `${clock.today}|${id}|${choice}`]);
+  const { sum, fresh } = await xmasAfter(req.user.sub, clock, before);
+  res.json({ ok: true, question: xmasQuizView(item, { ok, chosen: choice }), quizOk: sum.quizOk, need: XMAS.quizNeeded, newBadges: fresh, tickets: sum.tickets });
+}));
+
 // Fondatori, înainte de sezon: șterge progresul propriu (după încercări)
 app.post("/api/craciun/reset-test", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
   await xmasTables();
@@ -4316,18 +4404,19 @@ async function xmasParticipants() {
            COUNT(*) FILTER (WHERE x.kind = 'gift') AS gifts,
            COUNT(*) FILTER (WHERE x.kind = 'advent') AS advent,
            COUNT(*) FILTER (WHERE x.kind = 'taskday') AS taskdays,
+           COUNT(*) FILTER (WHERE x.kind = 'quiz1') AS quizok,
            MAX(x.created_at) AS last_at
       FROM xmas_progress x JOIN users u ON u.id = x.user_id LEFT JOIN players p ON p.user_id = u.id
      GROUP BY x.user_id, u.username, u.game_identifier, u.game_identifier_name, p.display_name`);
   return rows.map(r => {
-    const have = { cadouri: Number(r.gifts), advent: Number(r.advent), sarcini: Number(r.taskdays) };
+    const have = { cadouri: Number(r.gifts), advent: Number(r.advent), sarcini: Number(r.taskdays), regulament: Number(r.quizok) };
     const done = XMAS_QUESTS.filter(q => have[q.id] >= q.need).length;
     return {
       userId: r.user_id, username: r.username, character: r.game_identifier_name || r.display_name || null, linked: !!r.game_identifier,
-      gifts: have.cadouri, advent: have.advent, taskDays: have.sarcini, quests: done,
+      gifts: have.cadouri, advent: have.advent, taskDays: have.sarcini, quiz: have.regulament, quests: done,
       tickets: done + (done === XMAS_QUESTS.length ? 1 : 0), lastAt: r.last_at,
     };
-  }).sort((a, b) => b.tickets - a.tickets || b.gifts + b.advent + b.taskDays - (a.gifts + a.advent + a.taskDays));
+  }).sort((a, b) => b.tickets - a.tickets || b.gifts + b.advent + b.taskDays + b.quiz - (a.gifts + a.advent + a.taskDays + a.quiz));
 }
 async function xmasWinners() {
   const { rows } = await pool.query(`
@@ -4339,7 +4428,7 @@ async function xmasWinners() {
   return rows.map(r => ({ id: r.id, userId: r.user_id, username: r.username, character: r.game_identifier_name || r.display_name || null, prize: r.prize, tickets: r.tickets, drawnAt: r.drawn_at, drawnBy: r.drawn_by_name, givenAt: r.given_at, givenBy: r.given_by_name }));
 }
 app.get("/api/admin/craciun", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
-  res.json({ season: { start: XMAS.start, end: XMAS.end, year: XMAS.year }, clock: xmasClock(req), need: { gifts: XMAS.giftsNeeded, advent: XMAS.adventNeeded, taskDays: XMAS.taskDaysNeeded }, participants: await xmasParticipants(), winners: await xmasWinners(), canDraw: FOUNDER_ROLES.includes(req.user.role) });
+  res.json({ season: { start: XMAS.start, end: XMAS.end, year: XMAS.year }, clock: xmasClock(req), need: { gifts: XMAS.giftsNeeded, advent: XMAS.adventNeeded, taskDays: XMAS.taskDaysNeeded, quiz: XMAS.quizNeeded }, participants: await xmasParticipants(), winners: await xmasWinners(), canDraw: FOUNDER_ROLES.includes(req.user.role) });
 }));
 app.post("/api/admin/craciun/trage", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
   const prize = String(req.body?.prize || "").trim().slice(0, 200);

@@ -12,7 +12,7 @@
 .xq-tickets{display:flex;align-items:center;gap:10px;padding:12px 16px;border:1px solid rgba(242,184,75,.45);border-radius:12px;background:rgba(242,184,75,.08);font-weight:800}
 .xq-tickets strong{font-size:26px;color:var(--gold);font-variant-numeric:tabular-nums}
 .xq-tickets small{display:block;font-size:10px;letter-spacing:.12em;color:var(--muted);font-weight:800}
-.xq-quests{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:26px 0 0}
+.xq-quests{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:26px 0 0}
 .xq-quest{padding:20px;display:grid;gap:10px;align-content:start}
 .xq-quest .top{display:flex;align-items:center;gap:12px}
 .xq-quest .ic{width:46px;height:46px;flex:none;border-radius:12px;display:grid;place-items:center;font-size:24px;background:rgba(255,255,255,.05);border:1px solid var(--line)}
@@ -57,14 +57,34 @@
 .xq-tasks li span{flex:1;line-height:1.45}
 .xq-tasks li.done span{color:var(--muted)}
 .xq-tasks a{color:var(--gold);font-weight:800;white-space:nowrap;font-size:12px}
-.xq-badges{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.xq-badges{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
 .xq-badge{display:grid;justify-items:center;gap:6px;padding:16px 10px;border-radius:12px;border:1px solid var(--line);text-align:center;font-size:12px;font-weight:800;color:var(--muted)}
 .xq-badge .b{width:54px;height:54px;border-radius:50%;display:grid;place-items:center;font-size:26px;background:rgba(255,255,255,.04);border:2px dashed var(--line);filter:grayscale(1) opacity(.45)}
 .xq-badge.on{color:var(--text);border-color:rgba(242,184,75,.45)}
 .xq-badge.on .b{filter:none;border:2px solid var(--gold);background:radial-gradient(circle,rgba(242,184,75,.25),transparent 70%);box-shadow:0 0 18px rgba(242,184,75,.35)}
+.xq-quiz{list-style:none;margin:0;padding:0;display:grid;gap:12px;counter-reset:xq}
+.xq-q{padding:16px 18px;border-radius:12px;border:1px solid var(--line);background:rgba(255,255,255,.02)}
+.xq-q h3{margin:0 0 4px;font-size:15px;line-height:1.45}
+.xq-q h3::before{counter-increment:xq;content:counter(xq) ". ";color:var(--gold)}
+.xq-q .from{font-size:11px;color:var(--muted);margin:0 0 12px}
+.xq-q .from a{color:var(--ice);font-weight:700}
+.xq-opts{display:grid;gap:8px}
+.xq-opt{display:flex;gap:10px;align-items:center;width:100%;padding:11px 14px;border-radius:10px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--text);font:600 13px/1.45 Inter,system-ui,sans-serif;text-align:left;cursor:pointer;transition:border-color .15s ease,background .15s ease}
+.xq-opt:hover:not(:disabled){border-color:var(--gold);background:rgba(242,184,75,.06)}
+.xq-opt:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.xq-opt:disabled{cursor:default}
+.xq-opt i{flex:none;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-style:normal;font-size:11px;font-weight:900;border:1px solid var(--line);color:var(--muted)}
+.xq-opt.right{border-color:var(--green);background:rgba(51,194,122,.1)}
+.xq-opt.right i{background:var(--green);border-color:var(--green);color:#06140c}
+.xq-opt.wrong{border-color:var(--red);background:rgba(232,65,79,.1)}
+.xq-opt.wrong i{background:var(--red);border-color:var(--red);color:#fff}
+.xq-q.done .xq-opt:not(.right):not(.wrong){opacity:.55}
+.xq-ex{margin:12px 0 0;padding:10px 12px;border-radius:9px;background:rgba(255,255,255,.04);font-size:13px;line-height:1.55}
+.xq-ex b{color:var(--gold)}
 .xq-rules{margin:14px 0 0;padding-left:18px;color:var(--muted);line-height:1.7;font-size:13px}
 .xq-rules b{color:var(--text)}
 .xq-win{margin-top:14px;padding:14px 16px;border-radius:12px;border:1px solid rgba(51,194,122,.5);background:rgba(51,194,122,.08);font-weight:700;line-height:1.5}
+@media (max-width:1100px){.xq-quests{grid-template-columns:repeat(2,1fr)}}
 @media (max-width:900px){.xq-quests{grid-template-columns:1fr}.xq-advent{grid-template-columns:repeat(6,1fr)}.xq-gifts{grid-template-columns:repeat(4,1fr)}.xq-badges{grid-template-columns:repeat(2,1fr)}}
 @media (max-width:520px){.xq-advent{grid-template-columns:repeat(4,1fr)}.xq-gifts{grid-template-columns:repeat(3,1fr)}.welcome{flex-direction:column;align-items:flex-start;gap:16px}.welcome h1{font-size:30px}.xq-tasks li{flex-wrap:wrap}}
 @media (prefers-reduced-motion:reduce){.xq-door.today{animation:none}.xq-bar i{transition:none}}
@@ -103,12 +123,18 @@
   <ul class="xq-tasks" id="xq-tasks"></ul>
 </section>
 
+<section class="panel xq-sec" id="regulament" aria-labelledby="quiz-title">
+  <div class="head"><h2 id="quiz-title">📜 Întrebările zilei din regulament</h2><small id="quiz-sub"></small></div>
+  <p style="margin:0 0 14px;color:var(--muted);line-height:1.6">În fiecare zi primești 5 întrebări din regulamentele serverului. Ai o singură încercare la fiecare: după ce răspunzi vezi răspunsul corect și punctul din regulament. Dacă nu știi, deschide regulamentul și caută — așa se învață.</p>
+  <ol class="xq-quiz" id="xq-quiz"></ol>
+</section>
+
 <section class="panel xq-sec" aria-labelledby="rew-title">
   <div class="head"><h2 id="rew-title">🏅 Insigne și tombolă</h2></div>
   <div class="xq-badges" id="xq-badges"></div>
   <ul class="xq-rules">
     <li>Fiecare quest terminat îți dă <b>insigna lui</b> (apare pe profilul din Contul meu) și <b>un bilet</b> la tombolă.</li>
-    <li>Dacă le termini pe toate trei, primești insigna <b>Crăciun <span id="xq-year">2026</span></b> și încă <b>un bilet</b> — maximum 4 bilete.</li>
+    <li>Dacă le termini pe toate patru, primești insigna <b>Crăciun <span id="xq-year">2026</span></b> și încă <b>un bilet</b> — maximum 5 bilete.</li>
     <li>Tombola se trage după sărbători, de către staff. Fiecare bilet e o șansă în plus; un jucător poate câștiga un singur premiu.</li>
     <li>Premiile se dau <b>în joc</b>, de staff — de aceea la tombolă intră doar conturile legate de personaj.</li>
   </ul>
@@ -125,8 +151,18 @@ const QUEST_TEXT = {
   cadouri: 'Găsește cele 12 cadouri ascunse prin site.',
   advent: 'Deschide căsuțele din calendar, câte una pe zi.',
   sarcini: 'Bifează toate sarcinile zilei în zile diferite.',
+  regulament: 'Răspunde corect la întrebările zilnice din regulament.',
 };
-const QUEST_UNIT = { cadouri: 'cadouri', advent: 'căsuțe', sarcini: 'zile' };
+const QUEST_UNIT = { cadouri: 'cadouri', advent: 'căsuțe', sarcini: 'zile', regulament: 'corecte' };
+
+function renderQuests() {
+  return state.quests.map(q => {
+    const pct = Math.min(100, Math.round(q.have / q.need * 100));
+    return `<article class="panel xq-quest${q.done ? ' done' : ''}"><div class="top"><span class="ic" aria-hidden="true">${q.icon}</span><div><h3>${escapeHtml(q.title)}</h3><p>${QUEST_TEXT[q.id]}</p></div></div>
+      <div class="num"><span>${Math.min(q.have, q.need)} / ${q.need} ${QUEST_UNIT[q.id]}</span>${q.done ? '<span class="ok">✓ Terminat</span>' : `<span style="color:var(--muted)">${pct}%</span>`}</div>
+      <div class="xq-bar" role="progressbar" aria-label="${escapeHtml(q.title)}" aria-valuemin="0" aria-valuemax="${q.need}" aria-valuenow="${Math.min(q.have, q.need)}"><i style="width:${pct}%"></i></div></article>`;
+  }).join('');
+}
 
 function render() {
   const s = state;
@@ -147,12 +183,7 @@ function render() {
     load();
   };
 
-  document.getElementById('xq-quests').innerHTML = s.quests.map(q => {
-    const pct = Math.min(100, Math.round(q.have / q.need * 100));
-    return `<article class="panel xq-quest${q.done ? ' done' : ''}"><div class="top"><span class="ic" aria-hidden="true">${q.icon}</span><div><h3>${escapeHtml(q.title)}</h3><p>${QUEST_TEXT[q.id]}</p></div></div>
-      <div class="num"><span>${Math.min(q.have, q.need)} / ${q.need} ${QUEST_UNIT[q.id]}</span>${q.done ? '<span class="ok">✓ Terminat</span>' : `<span style="color:var(--muted)">${pct}%</span>`}</div>
-      <div class="xq-bar" role="progressbar" aria-label="${escapeHtml(q.title)}" aria-valuemin="0" aria-valuemax="${q.need}" aria-valuenow="${Math.min(q.have, q.need)}"><i style="width:${pct}%"></i></div></article>`;
-  }).join('');
+  document.getElementById('xq-quests').innerHTML = renderQuests();
 
   // calendarul
   const opened = new Map(s.adventOpened.map(a => [a.day, a]));
@@ -181,6 +212,9 @@ function render() {
     : s.tasks.map(t => `<li class="${t.done ? 'done' : ''}"><i class="ck" aria-hidden="true">${t.done ? '✓' : ''}</i><span>${escapeHtml(t.text)}</span>${t.done ? '' : `<a href="${t.link}">Du-te →</a>`}</li>`).join('')
       + `<li style="border-style:dashed"><span style="color:var(--muted)">Când le bifezi pe toate ${s.tasks.length}, ziua se socotește la quest. Sarcinile noi apar la miezul nopții.</span></li>`;
 
+  // întrebările din regulament
+  renderQuiz();
+
   // insignele
   const BADGES = [...s.quests.map(q => ({ id: q.id, icon: q.icon, title: q.title })), { id: 'toate', icon: '🎄', title: 'Crăciun ' + s.season.year }];
   document.getElementById('xq-badges').innerHTML = BADGES.map(b => {
@@ -190,6 +224,45 @@ function render() {
   document.getElementById('xq-wins').innerHTML = (s.wins || []).map(w =>
     `<div class="xq-win">🎉 Ai câștigat la tombolă: <b>${escapeHtml(w.prize)}</b>. ${w.given_at ? 'Premiul ți-a fost dat în joc.' : 'Staff-ul ți-l dă în joc în curând.'}</div>`).join('');
 }
+
+const LETTERS = ['A', 'B', 'C', 'D'];
+function quizItem(q) {
+  const done = 'ok' in q;
+  const opts = q.options.map((o, i) => {
+    const cls = done ? (i === q.correct ? ' right' : i === q.chosen ? ' wrong' : '') : '';
+    return `<button type="button" class="xq-opt${cls}" data-q="${escapeHtml(q.id)}" data-i="${i}"${done ? ' disabled' : ''}><i aria-hidden="true">${LETTERS[i]}</i><span>${escapeHtml(o)}</span></button>`;
+  }).join('');
+  const ex = done ? `<p class="xq-ex" role="status">${q.ok ? '<b>Corect!</b> ' : '<b>Greșit.</b> Răspunsul corect: ' + escapeHtml(q.options[q.correct]) + '. '}${escapeHtml(q.explain)} <span style="color:var(--muted)">(${escapeHtml(q.reg)}, ${escapeHtml(q.ref)})</span></p>` : '';
+  return `<li class="xq-q${done ? ' done' : ''}"><h3>${escapeHtml(q.q)}</h3><p class="from">Din: <a href="${q.link}" target="_blank" rel="noopener">${escapeHtml(q.reg)} ↗</a></p><div class="xq-opts">${opts}</div>${ex}</li>`;
+}
+function renderQuiz() {
+  const s = state;
+  const answered = (s.quiz || []).filter(q => 'ok' in q).length;
+  document.getElementById('quiz-sub').textContent = s.active ? `Azi: ${answered} din ${s.quiz.length} · corecte în total: ${s.quizOk} din ${s.need.quiz}` : `Corecte în total: ${s.quizOk} din ${s.need.quiz}`;
+  document.getElementById('xq-quiz').innerHTML = s.active && s.quiz.length
+    ? s.quiz.map(quizItem).join('')
+    : '<li class="xq-q"><span style="color:var(--muted)">Întrebările apar în fiecare zi cât țin questurile.</span></li>';
+}
+document.getElementById('xq-quiz').addEventListener('click', async e => {
+  const b = e.target.closest('.xq-opt');
+  if (!b || b.disabled) return;
+  const li = b.closest('.xq-q');
+  li.querySelectorAll('.xq-opt').forEach(x => { x.disabled = true; });
+  const r = await apiFetch('/api/craciun/intrebare', { method: 'POST', body: JSON.stringify({ id: b.dataset.q, choice: Number(b.dataset.i) }) });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) { li.querySelectorAll('.xq-opt').forEach(x => { x.disabled = false; }); alert(d.error || 'Nu s-a putut trimite răspunsul.'); return; }
+  const i = state.quiz.findIndex(q => q.id === d.question.id);
+  if (i >= 0) state.quiz[i] = d.question;
+  state.quizOk = d.quizOk;
+  if (d.newBadges && d.newBadges.length) { await load(); } else {
+    li.outerHTML = quizItem(d.question);
+    const answered = state.quiz.filter(q => 'ok' in q).length;
+    document.getElementById('quiz-sub').textContent = `Azi: ${answered} din ${state.quiz.length} · corecte în total: ${state.quizOk} din ${state.need.quiz}`;
+    const q = state.quests.find(x => x.id === 'regulament');
+    if (q) { q.have = d.quizOk; q.done = d.quizOk >= q.need; }
+    document.getElementById('xq-quests').innerHTML = renderQuests();
+  }
+});
 
 function showDay(d, fresh) {
   const a = state.adventOpened.find(x => x.day === d);

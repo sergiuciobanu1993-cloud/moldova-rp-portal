@@ -1,0 +1,2705 @@
+[
+ {
+  "id": "reguli-generale#1",
+  "reg": "reguli-generale",
+  "ref": "1.2",
+  "q": "Când intră în vigoare schimbările din regulamentele serverului?",
+  "options": [
+   "Imediat ce sunt scrise de un membru al staff-ului",
+   "Doar după anunțul oficial pe site și pe Discord, în canalul de anunțuri",
+   "După 7 zile de la modificare, fără anunț",
+   "Doar după ce sunt votate de jucători"
+  ],
+  "answer": 1,
+  "explain": "Conform 1.2, schimbările intră în vigoare doar după anunțul oficial pe site și pe Discord, în canalul de anunțuri."
+ },
+ {
+  "id": "reguli-generale#2",
+  "reg": "reguli-generale",
+  "ref": "1.3",
+  "q": "Ce se întâmplă cu pedeapsa dacă o încălcare a stricat o scenă RP pentru alții?",
+  "options": [
+   "Pedeapsa se dublează",
+   "Pedeapsa rămâne aceeași",
+   "Pedeapsa crește de 1,5 ori (ex.: 100 de minute devin 150)",
+   "Pedeapsa se transformă automat în Ban"
+  ],
+  "answer": 2,
+  "explain": "Punctul 1.3 prevede că pedeapsa crește de 1,5 ori dacă încălcarea a stricat o scenă RP pentru alții, de exemplu 100 de minute devin 150."
+ },
+ {
+  "id": "reguli-generale#3",
+  "reg": "reguli-generale",
+  "ref": "1.4",
+  "q": "Ai pierdut obiecte pentru că nu le-ai ridicat la timp (funcție automată a jocului). Ce face staff-ul?",
+  "options": [
+   "Nu le dă înapoi",
+   "Le returnează integral",
+   "Returnează jumătate din valoare",
+   "Le returnează doar dacă faci tichet în 24 de ore"
+  ],
+  "answer": 0,
+  "explain": "Conform 1.4, staff-ul nu dă înapoi bani, bunuri sau servicii pierdute din cauza funcțiilor automate ale jocului, cum ar fi obiectele neridicate la timp."
+ },
+ {
+  "id": "reguli-generale#4",
+  "reg": "reguli-generale",
+  "ref": "2.1",
+  "q": "Câte conturi de joc poate avea un om și care e pedeapsa dacă are mai multe?",
+  "options": [
+   "Două conturi; Warn pentru al treilea",
+   "Un singur cont; blocarea tuturor conturilor 30 de zile / Ban permanent",
+   "Un singur cont; Demorgan 60 de minute",
+   "Oricâte, dacă le anunță printr-un tichet"
+  ],
+  "answer": 1,
+  "explain": "Punctul 2.1: un om are un singur cont de joc, iar pedeapsa este blocarea tuturor conturilor 30 de zile sau Ban permanent."
+ },
+ {
+  "id": "reguli-generale#5",
+  "reg": "reguli-generale",
+  "ref": "2.2",
+  "q": "Ce sancțiune primește un jucător care își vinde, dă sau schimbă contul de joc?",
+  "options": [
+   "Warn",
+   "Ban 7 zile",
+   "Ban 30 de zile",
+   "Ban permanent"
+  ],
+  "answer": 3,
+  "explain": "Conform 2.2, este interzis să dai, să vinzi sau să schimbi contul de joc, iar sancțiunea este Ban permanent."
+ },
+ {
+  "id": "reguli-generale#6",
+  "reg": "reguli-generale",
+  "ref": "2.6",
+  "q": "Ai primit Demorgan pentru un nume nonRP, l-ai schimbat, apoi ai revenit la același nume. Ce sancțiune primești?",
+  "options": [
+   "Demorgan 150 de minute",
+   "Warn",
+   "Ban 3 zile",
+   "Mute 60 de minute"
+  ],
+  "answer": 0,
+  "explain": "Punctul 2.6 prevede Demorgan până la schimbarea numelui, iar dacă revii la același nume după pedeapsă: Demorgan 150 de minute."
+ },
+ {
+  "id": "reguli-generale#7",
+  "reg": "reguli-generale",
+  "ref": "3.1",
+  "q": "Care este excepția prin care informații OOC pot fi date în chat-ul sau vocea IC?",
+  "options": [
+   "Oricând, dacă scrii „OOC” înainte",
+   "Max. 4 jucători de acord, lângă staff sau în zonă verde unde aproape toți sunt de acord",
+   "Doar membrii aceleiași facțiuni, oriunde",
+   "Doar noaptea, după ora 23:00"
+  ],
+  "answer": 1,
+  "explain": "Conform 3.1, chat-ul și vocea sunt IC; excepție fac cel mult 4 jucători care sunt de acord, lângă un membru al staff-ului sau într-o zonă verde unde aproape toți sunt de acord."
+ },
+ {
+  "id": "reguli-generale#8",
+  "reg": "reguli-generale",
+  "ref": "3.2",
+  "q": "Ce sancțiune se aplică pentru spam, flood, CapsLock sau mesaje fără sens?",
+  "options": [
+   "Ban 3–10 zile",
+   "Demorgan 26 de minute",
+   "Mute 10–240 de minute / Warn",
+   "Kick"
+  ],
+  "answer": 2,
+  "explain": "Punctul 3.2 interzice spam-ul, flood-ul, CapsLock-ul și mesajele fără sens, cu sancțiunea Mute 10–240 de minute sau Warn."
+ },
+ {
+  "id": "reguli-generale#9",
+  "reg": "reguli-generale",
+  "ref": "3.8",
+  "q": "Ce sancțiune primește un jucător care jignește direct părinții sau rudele cuiva?",
+  "options": [
+   "Warn",
+   "Mute 120 de minute",
+   "Demorgan 90 de minute",
+   "Ban 30–60 de zile"
+  ],
+  "answer": 3,
+  "explain": "Conform 3.8, jignirea directă a părinților sau rudelor cuiva se sancționează cu Ban 30–60 de zile."
+ },
+ {
+  "id": "reguli-generale#10",
+  "reg": "reguli-generale",
+  "ref": "3.9",
+  "q": "Jignirile grosolane și înjurăturile sunt interzise (Warn). Unde se aplică excepția de la această regulă?",
+  "options": [
+   "În chat-ul OOC",
+   "Pe stația radio",
+   "În zona verde",
+   "În mesajele private"
+  ],
+  "answer": 1,
+  "explain": "Punctul 3.9 interzice jignirile grosolane și înjurăturile, cu excepția stației radio; sancțiunea este Warn."
+ },
+ {
+  "id": "reguli-generale#11",
+  "reg": "reguli-generale",
+  "ref": "3.14",
+  "q": "Cineva îți înjură grosolan rudele. Ce prevede 3.14?",
+  "options": [
+   "Poate fi omorât fără dialog IC, iar asta nu se pedepsește ca DM",
+   "Trebuie doar să faci tichet, orice atac fiind DM",
+   "Poți să-l omori doar după 15 minute de dialog IC",
+   "Poți răspunde doar înjurând înapoi"
+  ],
+  "answer": 0,
+  "explain": "Conform 3.14, cine îți înjură rudele, națiunea sau te înjură grosolan poate fi omorât fără dialog IC, iar fapta nu se pedepsește ca DM."
+ },
+ {
+  "id": "reguli-generale#12",
+  "reg": "reguli-generale",
+  "ref": "4.1",
+  "q": "SK (Spawn Kill) înseamnă atacarea cuiva la respawn sau imediat după ce a reapărut. Care este excepția?",
+  "options": [
+   "Războiul dintre bande",
+   "Jaful legal al unei case",
+   "Autoapărarea",
+   "Ordinul unui lider de facțiune"
+  ],
+  "answer": 1,
+  "explain": "Punctul 4.1 definește SK și prevede ca excepție jaful legal al unei case; sancțiunea este Demorgan 60 de minute + 1 Warn / Ban 2–5 zile."
+ },
+ {
+  "id": "reguli-generale#13",
+  "reg": "reguli-generale",
+  "ref": "4.2",
+  "q": "TK (Team Kill) este atacarea colegilor de facțiune sau familie. În ce caz este permis?",
+  "options": [
+   "Când colegul a pierdut o misiune",
+   "Când liderul o cere",
+   "În autoapărare",
+   "Niciodată, fără excepție"
+  ],
+  "answer": 2,
+  "explain": "Conform 4.2, TK este interzis, singura excepție fiind autoapărarea."
+ },
+ {
+  "id": "reguli-generale#14",
+  "reg": "reguli-generale",
+  "ref": "4.4",
+  "q": "Conform principiului 1 la 1 de la PowerGaming, când trebuie să cedezi?",
+  "options": [
+   "Când ești singur în fața a doi sau mai mulți înarmați",
+   "Când ești doi contra trei",
+   "Doar când ești în fața Poliției",
+   "Doar dacă adversarii au arme de foc grele"
+  ],
+  "answer": 0,
+  "explain": "Punctul 4.4: când ești singur în fața a doi sau mai mulți înarmați trebuie să cedezi; doi contra trei nu mai este PG."
+ },
+ {
+  "id": "reguli-generale#15",
+  "reg": "reguli-generale",
+  "ref": "4.5",
+  "q": "După moarte (NLR), ce perioadă uită personajul?",
+  "options": [
+   "Ultimele 5 minute",
+   "Ultimele 30 de minute",
+   "Ultima oră",
+   "Ultimele 15 minute"
+  ],
+  "answer": 3,
+  "explain": "Conform 4.5, după moarte personajul uită ultimele 15 minute de dinainte și nu folosește informațiile din ele."
+ },
+ {
+  "id": "reguli-generale#16",
+  "reg": "reguli-generale",
+  "ref": "4.6",
+  "q": "Intrarea în apă, AFK sau ieșirea din joc doar ca să scapi de o scenă este Fugă din RP. Când este totuși permisă?",
+  "options": [
+   "Dacă scena durează peste 10 minute",
+   "Cu acordul ambelor părți",
+   "Dacă ai pierdut mai mult de jumătate din viață",
+   "Dacă ești într-o zonă verde"
+  ],
+  "answer": 1,
+  "explain": "Punctul 4.6 interzice fuga din RP prin AFK, ieșire din joc, apă, interior închis sau scară verticală, cu excepția acordului ambelor părți."
+ },
+ {
+  "id": "reguli-generale#17",
+  "reg": "reguli-generale",
+  "ref": "4.7",
+  "q": "Ce sancțiune primește cine își schimbă sau ascunde arma când moare, ca s-o păstreze?",
+  "options": [
+   "Demorgan 100 de minute / Ban 2–5 zile + confiscarea armei",
+   "Warn",
+   "Demorgan 26 de minute",
+   "Ban permanent"
+  ],
+  "answer": 0,
+  "explain": "Conform 4.7, schimbarea sau ascunderea armei la moarte se sancționează cu Demorgan 100 de minute / Ban 2–5 zile + confiscarea armei."
+ },
+ {
+  "id": "reguli-generale#18",
+  "reg": "reguli-generale",
+  "ref": "4.9",
+  "q": "Ce sancțiune primește prima dată un jucător care îi provoacă pe alții să încalce regulile (Provoking)?",
+  "options": [
+   "Ban 3 zile",
+   "Demorgan 26 de minute",
+   "Demorgan 60 de minute + 1 Warn",
+   "Mute 30 de minute"
+  ],
+  "answer": 1,
+  "explain": "Punctul 4.9 prevede Demorgan 26 de minute (Provoking); dacă se repetă: Demorgan 35–90 de minute / Ban 3–30 de zile."
+ },
+ {
+  "id": "reguli-generale#19",
+  "reg": "reguli-generale",
+  "ref": "4.12",
+  "q": "Cineva încalcă intenționat regulile într-o zonă verde. Ce ai voie să faci?",
+  "options": [
+   "Să-l ataci ca să-l oprești",
+   "Să-l provoci înapoi",
+   "Să-l ignori complet, fără provocări sau agresivitate",
+   "Să-l scoți din zona verde cu mașina"
+  ],
+  "answer": 2,
+  "explain": "Conform 4.12, poți să-l ignori complet; nu ai voie să răspunzi cu provocări sau agresivitate."
+ },
+ {
+  "id": "reguli-generale#20",
+  "reg": "reguli-generale",
+  "ref": "4.13",
+  "q": "Ce sancțiune se aplică pentru un /do scris în favoarea ta (ex.: „/do îl dezarmează dintr-o mișcare”)?",
+  "options": [
+   "Warn",
+   "Demorgan 45 de minute",
+   "Ban 1 zi",
+   "Demorgan 15–35 de minute"
+  ],
+  "answer": 3,
+  "explain": "Punctul 4.13 prevede pentru acțiuni scrise în favoarea ta Demorgan 15–35 de minute (pentru cele jignitoare: 10–35 de minute)."
+ },
+ {
+  "id": "reguli-generale#21",
+  "reg": "reguli-generale",
+  "ref": "4.15",
+  "q": "Conform 4.15, în care dintre situații NU este DM să ataci pe cineva?",
+  "options": [
+   "Ți-a depășit mașina în trafic",
+   "Îți fură sau încearcă să-ți fure mașina",
+   "A refuzat să-ți vândă ceva",
+   "Te-a ignorat când l-ai salutat"
+  ],
+  "answer": 1,
+  "explain": "Printre excepțiile de la DM (4.15) se află cel care îți fură sau încearcă să-ți fure mașina; excepția se aplică doar cât ține situația."
+ },
+ {
+  "id": "reguli-generale#22",
+  "reg": "reguli-generale",
+  "ref": "5.8",
+  "q": "Ce sancțiune primește un jucător care ocolește o pedeapsă (de exemplu, intră pe alt cont)?",
+  "options": [
+   "Ban 7 zile",
+   "Warn",
+   "Ban permanent",
+   "Dublarea pedepsei inițiale"
+  ],
+  "answer": 2,
+  "explain": "Conform 5.8, ocolirea unei pedepse (alt cont, alt personaj etc.) se sancționează cu Ban permanent."
+ },
+ {
+  "id": "reguli-generale#23",
+  "reg": "reguli-generale",
+  "ref": "5.19",
+  "q": "Ce sancțiune se aplică pentru macro-uri, scripturi sau texturi care fac pereții transparenți?",
+  "options": [
+   "Ban 30 de zile / Ban permanent",
+   "Demorgan 60 de minute + 2 Warn",
+   "Warn",
+   "Ban 3–7 zile"
+  ],
+  "answer": 0,
+  "explain": "Punctul 5.19 interzice fișierele modificate, macro-urile, scripturile și programele care dau avantaj; sancțiunea este Ban 30 de zile / Ban permanent."
+ },
+ {
+  "id": "reguli-generale#24",
+  "reg": "reguli-generale",
+  "ref": "6.1",
+  "q": "După câte zile la rând fără să intre pe server pot fi luate de stat casele și afacerile unui proprietar?",
+  "options": [
+   "7 zile",
+   "14 zile",
+   "60 de zile",
+   "30 de zile"
+  ],
+  "answer": 3,
+  "explain": "Conform 6.1, după 30 de zile la rând de absență casele și afacerile pot fi luate de stat, cu excepția absenței anunțate din timp prin tichet pe site."
+ },
+ {
+  "id": "reguli-generale#25",
+  "reg": "reguli-generale",
+  "ref": "6.2",
+  "q": "Câte afaceri poate avea un jucător pe cont?",
+  "options": [
+   "Una singură",
+   "Două",
+   "Trei",
+   "Oricâte, dacă le plătește"
+  ],
+  "answer": 0,
+  "explain": "Punctul 6.2: un jucător poate avea o singură afacere pe cont; afacerea în plus se ia fără despăgubire."
+ },
+ {
+  "id": "regulament-roleplay#1",
+  "reg": "regulament-roleplay",
+  "ref": "Cap. I, pct. 2",
+  "q": "Ai o armă îndreptată spre tine și nu ai șanse reale de apărare. Ce presupune regula Value of Life (VoL)?",
+  "options": [
+   "Ataci, pentru că personajul nu vrea să piardă",
+   "Ridici mâinile și cooperezi pentru a-ți proteja viața",
+   "Fugi direct spre persoana care te amenință"
+  ],
+  "answer": 1,
+  "explain": "Conform VoL (Cap. I, pct. 2), viața personajului este cea mai importantă valoare; ridicarea mâinilor când ai arma îndreptată spre tine este exemplul corect."
+ },
+ {
+  "id": "regulament-roleplay#2",
+  "reg": "regulament-roleplay",
+  "ref": "Cap. I, pct. 3",
+  "q": "Care dintre următoarele comportamente încalcă regula FearRP?",
+  "options": [
+   "Tremuri și cooperezi în timpul unei răpiri",
+   "Încerci să calmezi agresorii",
+   "Glumești în timp ce ai pistolul la cap"
+  ],
+  "answer": 2,
+  "explain": "FearRP (Cap. I, pct. 3) obligă la interpretarea fricii când viața personajului e în pericol; a glumi cu pistolul la cap este dat explicit ca exemplu greșit."
+ },
+ {
+  "id": "regulament-roleplay#3",
+  "reg": "regulament-roleplay",
+  "ref": "Regulament CK, Art. 2",
+  "q": "Ce se întâmplă cu averea personajului în cazul unui CK Mic?",
+  "options": [
+   "Întreaga avere este păstrată",
+   "Se confiscă între 30% și 50% din avere",
+   "Se pierd armele, muniția și banii cash"
+  ],
+  "answer": 0,
+  "explain": "La CK Mic (Art. 2) personajul este șters, dar orele jucate și întreaga avere sunt păstrate; relațiile și informațiile RP anterioare devin inexistente."
+ },
+ {
+  "id": "regulament-roleplay#4",
+  "reg": "regulament-roleplay",
+  "ref": "Regulament CK, Art. 3",
+  "q": "Ce pierde jucătorul în cazul unui CK Mediu?",
+  "options": [
+   "Vehiculele și proprietățile",
+   "Orele jucate pe server",
+   "Armele, muniția, inventarul și banii cash",
+   "Întreaga avere"
+  ],
+  "answer": 2,
+  "explain": "La CK Mediu (Art. 3) se pierd armele, muniția, inventarul și banii lichizi, iar vehiculele, proprietățile și celelalte bunuri rămân."
+ },
+ {
+  "id": "regulament-roleplay#5",
+  "reg": "regulament-roleplay",
+  "ref": "Regulament CK, Art. 4",
+  "q": "Ce parte din averea totală se confiscă la un CK Mare și cine îl poate aproba?",
+  "options": [
+   "10–20%, aprobat de liderul facțiunii",
+   "30–50%, aprobat doar de Administrația Serverului",
+   "100%, aprobat de Poliție"
+  ],
+  "answer": 1,
+  "explain": "Art. 4: la CK Mare se confiscă între 30% și 50% din averea totală, iar acesta poate fi aprobat doar de Administrația Serverului."
+ },
+ {
+  "id": "regulament-roleplay#6",
+  "reg": "regulament-roleplay",
+  "ref": "Regulament CK, Art. 5",
+  "q": "La câte caziere active poate Administrația aproba aplicarea unui CK?",
+  "options": [
+   "10",
+   "7",
+   "5",
+   "3"
+  ],
+  "answer": 2,
+  "explain": "Art. 5 (Sistemul de Cazier): la acumularea a 5 caziere active, Administrația poate aproba un CK, în funcție de gravitatea faptelor și istoricul personajului."
+ },
+ {
+  "id": "regulament-roleplay#7",
+  "reg": "regulament-roleplay",
+  "ref": "Regulament CK, Art. 6",
+  "q": "Care dintre următoarele NU reprezintă un motiv valid pentru percheziție?",
+  "options": [
+   "Faptul că persoana poartă mască la volan",
+   "Un mandat emis",
+   "Persoana este surprinsă în timpul unei infracțiuni",
+   "Martorii sau victimele indică persoana"
+  ],
+  "answer": 0,
+  "explain": "Art. 6 enumeră purtarea măștii la volan printre situațiile care NU reprezintă motiv de percheziție; mandatul, flagrantul și martorii sunt motive valide."
+ },
+ {
+  "id": "regulament-roleplay#8",
+  "reg": "regulament-roleplay",
+  "ref": "X. Dispozitivele electronice ale personajelor decedate",
+  "q": "Poate Poliția verifica mesajele din telefonul unui personaj decedat, într-un RolePlay obișnuit?",
+  "options": [
+   "Da, dacă scena RP s-a încheiat",
+   "Da, dacă suspectul era membru al unei organizații criminale",
+   "Nu, cu excepția evenimentelor sau investigațiilor aprobate de administrație"
+  ],
+  "answer": 2,
+  "explain": "Dispozitivele electronice ale unui personaj decedat sunt protejate și nu pot fi confiscate sau verificate; excepție fac doar scenariile aprobate și coordonate de administrație."
+ },
+ {
+  "id": "regulament-roleplay#9",
+  "reg": "regulament-roleplay",
+  "ref": "Protestele cetățenești – Proteste de amploare",
+  "q": "Protestele cu câți participanți estimați trebuie anunțate administrației înainte de începere?",
+  "options": [
+   "5 sau mai mulți",
+   "10 sau mai mulți",
+   "30 sau mai mulți",
+   "15 sau mai mulți"
+  ],
+  "answer": 3,
+  "explain": "Protestele la care se estimează participarea a 15 sau mai mulți jucători trebuie anunțate administrației înainte de începere, pentru supraveghere și prevenirea conflictelor OOC."
+ },
+ {
+  "id": "regulament-roleplay#10",
+  "reg": "regulament-roleplay",
+  "ref": "Codul Respectului, Art. 3",
+  "q": "Un jucător insultă pe cineva, apoi spune „Glumeam.”. Ce prevede Codul Respectului?",
+  "options": [
+   "Scuza nu justifică abaterea; impactul asupra persoanei vizate prevalează",
+   "Dacă cei doi se cunosc, abaterea nu se sancționează",
+   "Abaterea se sancționează doar dacă a avut loc OOC"
+  ],
+  "answer": 0,
+  "explain": "Art. 3 (Nu există „a fost doar o glumă”): astfel de expresii nu justifică încălcarea, iar impactul asupra comunității și persoanei vizate prevalează asupra intenției declarate."
+ },
+ {
+  "id": "regulament-roleplay#11",
+  "reg": "regulament-roleplay",
+  "ref": "Codul Respectului, Art. 6",
+  "q": "Ce sancțiune prevede scara sancțiunilor din Codul Respectului pentru prima abatere?",
+  "options": [
+   "Suspendare între 7 și 14 zile",
+   "Avertisment oficial și mute între 30 și 120 de minute",
+   "Ban permanent",
+   "Suspendare între 1 și 3 zile"
+  ],
+  "answer": 1,
+  "explain": "Conform Art. 6, prima abatere atrage avertisment oficial și mute între 30 și 120 de minute; a doua abatere înseamnă suspendare de 1–3 zile."
+ },
+ {
+  "id": "regulament-roleplay#12",
+  "reg": "regulament-roleplay",
+  "ref": "Cap. II, pct. 1",
+  "q": "Ce reprezintă Meta Gaming (MG)?",
+  "options": [
+   "Efectuarea unor acțiuni imposibile sau nerealiste",
+   "Uciderea unui jucător fără motiv RP",
+   "Folosirea informațiilor obținute OOC pentru a influența acțiunile IC"
+  ],
+  "answer": 2,
+  "explain": "Cap. II, pct. 1: Meta Gaming este utilizarea informațiilor din afara RolePlay-ului (OOC), de ex. de pe Discord sau stream, pentru a influența deciziile personajului (IC)."
+ },
+ {
+  "id": "regulament-roleplay#13",
+  "reg": "regulament-roleplay",
+  "ref": "Cap. II, pct. 2",
+  "q": "Care dintre următoarele este un exemplu de Power Gaming (PG)?",
+  "options": [
+   "Sari de pe o clădire și continui să alergi fără răni",
+   "Descrii acțiunile prin /me și oferi timp de reacție",
+   "Forțezi o ușă folosind uneltele potrivite"
+  ],
+  "answer": 0,
+  "explain": "Power Gaming (Cap. II, pct. 2) înseamnă acțiuni imposibile sau nerealiste; săritul de pe o clădire fără răni este dat explicit ca exemplu greșit."
+ },
+ {
+  "id": "regulament-roleplay#14",
+  "reg": "regulament-roleplay",
+  "ref": "Cap. II, pct. 3",
+  "q": "Conduci un vehicul complet distrus ca și cum ar fi perfect funcțional. Ce abatere comiți?",
+  "options": [
+   "Cop Bait",
+   "Fail RolePlay (FRP)",
+   "Stream Sniping"
+  ],
+  "answer": 1,
+  "explain": "Fail RolePlay (Cap. II, pct. 3) este orice acțiune lipsită de logică sau realism; condusul unui vehicul distrus ca fiind funcțional este exemplu explicit."
+ },
+ {
+  "id": "regulament-roleplay#15",
+  "reg": "regulament-roleplay",
+  "ref": "Cap. II, pct. 4",
+  "q": "Împuști un jucător doar pentru că te-a claxonat. Cum se numește această abatere?",
+  "options": [
+   "Revenge Kill (RK)",
+   "Combat Logging",
+   "Random DeathMatch (RDM)"
+  ],
+  "answer": 2,
+  "explain": "RDM (Cap. II, pct. 4) înseamnă uciderea sau încercarea de a ucide fără motiv RP clar; împușcarea cuiva pentru că te-a claxonat este exemplu greșit dat în text."
+ },
+ {
+  "id": "regulament-roleplay#16",
+  "reg": "regulament-roleplay",
+  "ref": "Cap. II, pct. 5",
+  "q": "Lovești cu pumnii persoane pe stradă, fără motiv, dar nimeni nu moare. Cum este încadrată fapta?",
+  "options": [
+   "DeathMatch (DM)",
+   "Nu este abatere, deoarece nu a murit nimeni",
+   "Mass RolePlay"
+  ],
+  "answer": 0,
+  "explain": "DeathMatch (Cap. II, pct. 5) este violența fizică fără motiv RP suficient, chiar dacă nu se termină cu moartea; atacurile cu pumnii intră în această categorie."
+ },
+ {
+  "id": "regulament-roleplay#17",
+  "reg": "regulament-roleplay",
+  "ref": "Cap. III, pct. 6",
+  "q": "Ce reprezintă Vehicle DeathMatch (VDM)?",
+  "options": [
+   "Lovirea accidentală a unui pieton în timpul unei urmăriri",
+   "Folosirea intenționată a vehiculului ca armă, fără justificare RP solidă",
+   "Blocarea unui drum fără a călca persoane"
+  ],
+  "answer": 1,
+  "explain": "Cap. III, pct. 6: VDM este utilizarea intenționată a vehiculului ca armă pentru a răni sau ucide un jucător; vehiculul este mijloc de transport, nu armă."
+ },
+ {
+  "id": "regulament-roleplay#18",
+  "reg": "regulament-roleplay",
+  "ref": "Cap. III, pct. 7",
+  "q": "Imediat după ce ești externat de la spital, mergi să îl ataci pe cel care te-a învins, doar din răzbunare. Ce abatere este?",
+  "options": [
+   "Revenge Kill (RK)",
+   "Cop Fear",
+   "Forced RolePlay"
+  ],
+  "answer": 0,
+  "explain": "Revenge Kill (Cap. III, pct. 7) înseamnă reluarea unui conflict încheiat doar din răzbunare, fără un nou context RP; atacul imediat după externare e exemplu explicit."
+ },
+ {
+  "id": "regulament-roleplay#19",
+  "reg": "regulament-roleplay",
+  "ref": "Cap. III, pct. 8",
+  "q": "Conform New Life Rule (NLR), ce trebuie să faci după ce personajul tău a murit într-o acțiune și a fost respawnat?",
+  "options": [
+   "Revii la schimbul de focuri cu echipament nou",
+   "Le transmiți colegilor pozițiile adversarilor",
+   "Nu revii la locul conflictului și nu îți amintești detaliile lui"
+  ],
+  "answer": 2,
+  "explain": "NLR (Cap. III, pct. 8): după respawn personajul nu își mai amintește detaliile conflictului care a dus la moartea sa și nu revine la locul acestuia."
+ },
+ {
+  "id": "regulament-roleplay#20",
+  "reg": "regulament-roleplay",
+  "ref": "Cap. III, pct. 9",
+  "q": "Când este considerată Combat Logging părăsirea intenționată a serverului pentru a evita consecințele RP?",
+  "options": [
+   "Doar dacă are loc în timpul unui schimb de focuri",
+   "Înainte, în timpul sau imediat după conflict",
+   "Doar dacă jucătorul nu revine în aceeași zi"
+  ],
+  "answer": 1,
+  "explain": "Cap. III, pct. 9: deconectarea intenționată pentru a evita consecințele este abatere indiferent dacă are loc înainte, în timpul sau imediat după conflict."
+ },
+ {
+  "id": "regulament-roleplay#21",
+  "reg": "regulament-roleplay",
+  "ref": "Cap. III, pct. 10",
+  "q": "După ce personajul tău a murit, le spui colegilor pe Discord unde se află adversarii. Ce abatere comiți?",
+  "options": [
+   "Ghosting",
+   "Cop Bait",
+   "Vehicle DeathMatch"
+  ],
+  "answer": 0,
+  "explain": "Ghosting (Cap. III, pct. 10) este transmiterea informațiilor obținute după ce personajul nu mai poate participa la acțiune, de exemplu după deces."
+ },
+ {
+  "id": "regulament-roleplay#22",
+  "reg": "regulament-roleplay",
+  "ref": "Cap. III, pct. 11",
+  "q": "Ce sancțiune prevede regulamentul pentru Stream Sniping?",
+  "options": [
+   "Avertisment verbal",
+   "Demorgan simplu",
+   "Ban temporar sau ban permanent, în funcție de gravitate și recidivă"
+  ],
+  "answer": 2,
+  "explain": "Stream Sniping (Cap. III, pct. 11) este tratat ca încălcare majoră și se sancționează cu ban temporar sau permanent, în funcție de gravitate și recidivă."
+ },
+ {
+  "id": "regulament-roleplay#23",
+  "reg": "regulament-roleplay",
+  "ref": "Cap. III, pct. 12",
+  "q": "Treci intenționat prin fața secției claxonând și insultând poliția, doar ca să începi o urmărire. Ce abatere este?",
+  "options": [
+   "Ghosting",
+   "Character Consistency",
+   "Mass RolePlay",
+   "Cop Bait"
+  ],
+  "answer": 3,
+  "explain": "Cop Bait (Cap. III, pct. 12) este provocarea intenționată a forțelor de ordine doar pentru a genera o urmărire sau un conflict, fără motiv RP."
+ },
+ {
+  "id": "regulament-roleplay#24",
+  "reg": "regulament-roleplay",
+  "ref": "Cap. III, pct. 16",
+  "q": "Scrii „/me îl leagă instant și îl bagă în portbagaj”, fără să îi lași celuilalt timp de reacție. Ce încalci?",
+  "options": [
+   "Forced RolePlay",
+   "Cop Fear",
+   "New Life Rule"
+  ],
+  "answer": 0,
+  "explain": "Forced RolePlay (Cap. III, pct. 16) înseamnă impunerea rezultatului unei acțiuni fără posibilitatea de reacție; acest /me este dat explicit ca exemplu greșit."
+ },
+ {
+  "id": "regulament-roleplay#25",
+  "reg": "regulament-roleplay",
+  "ref": "Cap. III, pct. 17",
+  "q": "Ce tip de scene necesită acordul tuturor participanților (Consent RolePlay)?",
+  "options": [
+   "Orice control rutier",
+   "Tortura extremă, scenele cu caracter sexual sau mutilările permanente",
+   "Orice jaf organizat"
+  ],
+  "answer": 1,
+  "explain": "Cap. III, pct. 17: scenele sensibile precum tortura extremă, scenele sexuale sau mutilările permanente necesită acordul tuturor; fără acord, scena se adaptează sau se întrerupe."
+ },
+ {
+  "id": "regulament-roleplay#26",
+  "reg": "regulament-roleplay",
+  "ref": "Roleplay Scârbos (RS), pct. 9",
+  "q": "Ce sancțiune prevede Nivelul II pentru o încălcare clară și intenționată de Roleplay Scârbos?",
+  "options": [
+   "Avertisment verbal",
+   "75 de minute + Warn",
+   "Ban permanent direct",
+   "30 de minute, fără Warn"
+  ],
+  "answer": 1,
+  "explain": "Sistemul de sancționare RS (pct. 9) prevede la Nivelul II, pentru o încălcare clară și intenționată, 75 de minute + Warn."
+ },
+ {
+  "id": "regulament-roleplay#27",
+  "reg": "regulament-roleplay",
+  "ref": "Obligația de înregistrare video, Art. 3",
+  "q": "Cât timp trebuie păstrate, minimum, înregistrările activităților oficiale?",
+  "options": [
+   "72 de ore",
+   "24 de ore",
+   "7 zile",
+   "48 de ore"
+  ],
+  "answer": 3,
+  "explain": "Art. 3: înregistrările se păstrează minimum 48 de ore de la încheierea activității sau până la soluționarea definitivă a unei reclamații formulate în acest interval."
+ },
+ {
+  "id": "regulament-roleplay#28",
+  "reg": "regulament-roleplay",
+  "ref": "Obligația de înregistrare video, Art. 2",
+  "q": "Un coleg din organizație filmează integral un Turf. Ești scutit de obligația de a înregistra?",
+  "options": [
+   "Da, o singură filmare ajunge pentru toată echipa",
+   "Da, dacă liderul organizației aprobă",
+   "Nu, obligația de înregistrare este individuală"
+  ],
+  "answer": 2,
+  "explain": "Art. 2: obligația de înregistrare revine fiecărui participant; faptul că un alt membru filmează nu îi exonerează pe ceilalți."
+ },
+ {
+  "id": "regulament-roleplay#29",
+  "reg": "regulament-roleplay",
+  "ref": "Cap. IV, pct. 2",
+  "q": "Care dintre următoarele vehicule este considerat nepotrivit pentru Off-Road?",
+  "options": [
+   "ATV",
+   "Pick-up",
+   "Supercar",
+   "SUV"
+  ],
+  "answer": 2,
+  "explain": "Cap. IV, pct. 2 enumeră supercar-urile, sedan-urile, coupe-urile sportive și limuzinele ca vehicule nepotrivite; SUV-urile, pick-up-urile și ATV-urile sunt recomandate."
+ },
+ {
+  "id": "regulament-roleplay#30",
+  "reg": "regulament-roleplay",
+  "ref": "Cap. IV, pct. 7–8",
+  "q": "Dacă ești implicat într-o urmărire, când ai voie să îți repari sau să îți alimentezi vehiculul?",
+  "options": [
+   "Doar după încheierea oficială a urmăririi",
+   "Oricând, dacă scapi din raza poliției",
+   "Imediat ce vehiculul este grav avariat"
+  ],
+  "answer": 0,
+  "explain": "Cap. IV, pct. 7–8: pe durata urmăririi sunt interzise repararea, schimbarea vehiculului și alimentarea; repararea e permisă doar după încheierea oficială a urmăririi."
+ },
+ {
+  "id": "regulament-roleplay#31",
+  "reg": "regulament-roleplay",
+  "ref": "Cap. IV, Sistemul de escaladare a intervenției",
+  "q": "Ce determină metodele de oprire pe care Poliția le poate folosi într-o urmărire?",
+  "options": [
+   "Timpul scurs de la începerea urmăririi",
+   "Nivelul de risc creat de persoana urmărită",
+   "Numărul de polițiști prezenți"
+  ],
+  "answer": 1,
+  "explain": "Sistemul de escaladare prevede că metodele de oprire nu depind de timpul scurs, ci de nivelul de risc creat de suspect; nici administrația nu ia în calcul durata urmăririi."
+ },
+ {
+  "id": "regulament-roleplay#32",
+  "reg": "regulament-roleplay",
+  "ref": "Cap. IV, Sistemul de escaladare – Nivelul III",
+  "q": "Suspectul urmărit trage asupra poliției. În ce nivel de risc se încadrează situația?",
+  "options": [
+   "Nivelul I — risc redus",
+   "Nivelul II — risc mediu",
+   "Nivelul III — risc ridicat"
+  ],
+  "answer": 2,
+  "explain": "Folosirea armelor de foc și tragerea asupra poliției sunt caracteristici ale Nivelului III — risc ridicat, la care se pot folosi PIT, Spike Strip și blocaje complete."
+ },
+ {
+  "id": "regulament-roleplay#33",
+  "reg": "regulament-roleplay",
+  "ref": "Cap. V, pct. 11",
+  "q": "Apare o neînțelegere privind regulamentul în timpul unei scene. Ce prevede principiul „RolePlay First”?",
+  "options": [
+   "Opriți scena și discutați regulile OOC",
+   "Continuați scena realist și raportați situația după finalizarea ei",
+   "Părăsiți scena și deschideți imediat un ticket"
+  ],
+  "answer": 1,
+  "explain": "Cap. V, pct. 11: continuați scena în mod realist, evitați discuțiile OOC și raportați situația administrației după finalizarea scenei."
+ },
+ {
+  "id": "regulament-roleplay#34",
+  "reg": "regulament-roleplay",
+  "ref": "Cap. X, pct. 5",
+  "q": "Cum trebuie interpretat corect rolul de ostatic?",
+  "options": [
+   "Cooperează din teamă și încearcă să calmeze situația",
+   "Rămâne complet indiferent la amenințări",
+   "Glumește permanent pentru a destinde atmosfera"
+  ],
+  "answer": 0,
+  "explain": "Cap. X, pct. 5: ostaticul este un personaj care reacționează la frică; cooperarea din teamă și calmarea situației sunt exemple corecte, indiferența și glumele nu."
+ },
+ {
+  "id": "regulament-roleplay#35",
+  "reg": "regulament-roleplay",
+  "ref": "Cap. VI, pct. 2",
+  "q": "Revii la același nume interzis după ce ai fost pedepsit pentru el. Ce sancțiune prevede regulamentul?",
+  "options": [
+   "Avertisment verbal",
+   "Demorgan 150 de minute",
+   "Ban permanent",
+   "Demorgan 30 de minute"
+  ],
+  "answer": 1,
+  "explain": "Cap. VI, pct. 2: numele interzis atrage Demorgan până la schimbare, iar revenirea la același nume după pedeapsă se sancționează cu Demorgan 150 de minute."
+ },
+ {
+  "id": "regulament-roleplay#36",
+  "reg": "regulament-roleplay",
+  "ref": "Cap. VI, pct. 7",
+  "q": "O persoană poartă o mască ce îi acoperă complet fața. După ce o poți recunoaște?",
+  "options": [
+   "După ID-ul afișat",
+   "După skin",
+   "După tatuaje vizibile sau îmbrăcăminte unică",
+   "Pentru că ai văzut-o pe Discord"
+  ],
+  "answer": 2,
+  "explain": "Cap. VI, pct. 7 permite recunoașterea după mers, tatuaje vizibile, îmbrăcăminte unică sau voce foarte cunoscută cu istoric RP; recunoașterea după ID, skin sau Discord e interzisă."
+ },
+ {
+  "id": "regulament-roleplay#37",
+  "reg": "regulament-roleplay",
+  "ref": "Cap. VII, pct. 5",
+  "q": "Ce întrebare ar trebui să îți pui în fiecare situație, conform capitolului despre calitatea RolePlay-ului?",
+  "options": [
+   "„Ce îmi oferă cel mai mare avantaj ca jucător?”",
+   "„Ce ar face personajul meu în această situație?”",
+   "„Cum închei scena cât mai repede?”"
+  ],
+  "answer": 1,
+  "explain": "Cap. VII, pct. 5 (Gândește ca personajul tău): întreabă-te ce ar face personajul, nu ce îți oferă cel mai mare avantaj ca jucător; aceasta e esența Advanced RolePlay."
+ },
+ {
+  "id": "regulament-roleplay#38",
+  "reg": "regulament-roleplay",
+  "ref": "Cap. VIII, pct. 6",
+  "q": "Ce înseamnă „Main Character Syndrome”?",
+  "options": [
+   "Jucătorul își tratează personajul ca fiind mai important decât întreaga lume din jur",
+   "Liderul unei organizații este automat personajul principal",
+   "Interpretarea mai multor personaje în același timp"
+  ],
+  "answer": 0,
+  "explain": "Cap. VIII, pct. 6: Main Character Syndrome apare când jucătorul își construiește personajul ca și cum ar fi mai important decât întreaga lume din jurul său, ceea ce trebuie evitat."
+ },
+ {
+  "id": "regulament-roleplay#39",
+  "reg": "regulament-roleplay",
+  "ref": "Cap. IX, pct. 9",
+  "q": "În ce limbă se vorbește în scenele RolePlay (IC) pe Moldova RolePlay?",
+  "options": [
+   "În orice limbă, dacă toți participanții o înțeleg",
+   "În română sau în rusă, la alegere",
+   "Exclusiv în limba română"
+  ],
+  "answer": 2,
+  "explain": "Cap. IX, pct. 9: în orice scenă IC se vorbește exclusiv în română; un personaj străin poate avea accent sau folosi rar un cuvânt străin, dar nu conversații întregi."
+ },
+ {
+  "id": "regulament-roleplay#40",
+  "reg": "regulament-roleplay",
+  "ref": "Cap. XI, pct. 6",
+  "q": "Conform capitolului despre cultura serverului, prin ce se măsoară succesul comunității?",
+  "options": [
+   "Prin averea personajelor",
+   "Prin poveștile care iau naștere în oraș",
+   "Prin numărul de membri ai organizațiilor"
+  ],
+  "answer": 1,
+  "explain": "Cap. XI, pct. 6 (Orașul este personajul principal): succesul comunității nu se măsoară prin averea unui personaj, ci prin poveștile care iau naștere în oraș."
+ },
+ {
+  "id": "sanctiuni-oficiale#1",
+  "reg": "sanctiuni-oficiale",
+  "ref": "Cap. 2 (MG)",
+  "q": "Ce sancțiune primește un jucător pentru MetaGaming (MG)?",
+  "options": [
+   "Demorgan 45 de minute",
+   "Demorgan 26 de minute + 1 Warn",
+   "Demorgan 60 de minute + 2 Warn",
+   "Ban 3 zile"
+  ],
+  "answer": 1,
+  "explain": "MG (folosirea informațiilor din afara jocului pentru avantaj IC) este la capitolul 2, cu 26 de minute și sancțiune suplimentară +1 Warn."
+ },
+ {
+  "id": "sanctiuni-oficiale#2",
+  "reg": "sanctiuni-oficiale",
+  "ref": "Cap. 2 (DM)",
+  "q": "Ce sancțiune primește un jucător pentru DM (DeathMatch)?",
+  "options": [
+   "Demorgan 26 de minute",
+   "Demorgan 60 de minute + 1 Warn",
+   "Demorgan 75 de minute + 1 Warn",
+   "Ban 7 zile"
+  ],
+  "answer": 0,
+  "explain": "DM (atacarea sau uciderea fără motiv RP valid) se află la capitolul 2 și se sancționează cu 26 de minute."
+ },
+ {
+  "id": "sanctiuni-oficiale#3",
+  "reg": "sanctiuni-oficiale",
+  "ref": "Cap. 5 (RDM)",
+  "q": "Ce sancțiune primește un jucător pentru RDM (Random DeathMatch)?",
+  "options": [
+   "Demorgan 26 de minute",
+   "Demorgan 45 de minute",
+   "Demorgan 60 de minute + 1 Warn",
+   "Ban permanent"
+  ],
+  "answer": 2,
+  "explain": "RDM este la capitolul 5 (60 de minute), cu sancțiune suplimentară +1 Warn."
+ },
+ {
+  "id": "sanctiuni-oficiale#4",
+  "reg": "sanctiuni-oficiale",
+  "ref": "Cap. 4 (VDM)",
+  "q": "Ce sancțiune primește un jucător pentru VDM (lovirea intenționată a unui jucător cu vehiculul, fără motiv RP)?",
+  "options": [
+   "Demorgan 26 de minute",
+   "Demorgan 60 de minute + 2 Warn",
+   "Warn",
+   "Demorgan 45 de minute + 1 Warn"
+  ],
+  "answer": 3,
+  "explain": "VDM este la capitolul 4 (45 de minute), cu sancțiune suplimentară +1 Warn."
+ },
+ {
+  "id": "sanctiuni-oficiale#5",
+  "reg": "sanctiuni-oficiale",
+  "ref": "Cap. 4 (PG)",
+  "q": "Ce sancțiune primește un jucător pentru PowerGaming (PG)?",
+  "options": [
+   "Demorgan 45 de minute",
+   "Demorgan 26 de minute + 1 Warn",
+   "Demorgan 60 de minute + 1 Warn",
+   "Ban 2 zile"
+  ],
+  "answer": 0,
+  "explain": "PG (forțarea unei acțiuni RP sau acțiuni nerealiste cu avantaj) este la capitolul 4, cu 45 de minute, fără Warn suplimentar."
+ },
+ {
+  "id": "sanctiuni-oficiale#6",
+  "reg": "sanctiuni-oficiale",
+  "ref": "Cap. 5 (NF)",
+  "q": "Ce sancțiune primește un jucător pentru NF (No Fear), adică ignorarea fricii față de o armă sau amenințare reală?",
+  "options": [
+   "Demorgan 26 de minute",
+   "Demorgan 60 de minute + 1 Warn",
+   "Demorgan 40 de minute",
+   "Mute 60 de minute"
+  ],
+  "answer": 1,
+  "explain": "NF este la capitolul 5 (60 de minute), cu sancțiune suplimentară +1 Warn."
+ },
+ {
+  "id": "sanctiuni-oficiale#7",
+  "reg": "sanctiuni-oficiale",
+  "ref": "Cap. 5 (RK)",
+  "q": "Ce înseamnă RK (Revenge Kill), sancționat cu 60 de minute + 1 Warn?",
+  "options": [
+   "Uciderea unui coleg de facțiune",
+   "Uciderea cuiva la respawn",
+   "Revenirea pentru a ucide sau ataca pe cineva ca răzbunare după ce personajul a fost ucis",
+   "Uciderea unui polițist în timpul unei urmăriri"
+  ],
+  "answer": 2,
+  "explain": "Conform capitolului 5, RK este revenirea pentru a ucide sau ataca o persoană ca răzbunare după ce personajul a fost ucis; se dă 60 de minute + 1 Warn."
+ },
+ {
+  "id": "sanctiuni-oficiale#8",
+  "reg": "sanctiuni-oficiale",
+  "ref": "Cap. 5 (Disconnect în RP)",
+  "q": "Ce sancțiune primește un jucător care iese intenționat din joc în timpul unei situații RP ca să scape de consecințe?",
+  "options": [
+   "Demorgan 25 de minute",
+   "Demorgan 45 de minute",
+   "Ban 30 de zile",
+   "Demorgan 60 de minute + 1 Warn"
+  ],
+  "answer": 3,
+  "explain": "Disconnect în RP este la capitolul 5 (60 de minute), cu sancțiune suplimentară +1 Warn."
+ },
+ {
+  "id": "sanctiuni-oficiale#9",
+  "reg": "sanctiuni-oficiale",
+  "ref": "Cap. 5 (Fugă în safe-zone)",
+  "q": "Ce sancțiune se aplică pentru intrarea intenționată într-o zonă sigură ca să eviți o urmărire sau un conflict?",
+  "options": [
+   "Demorgan 60 de minute + 1 Warn",
+   "Demorgan 26 de minute",
+   "Demorgan 40 de minute",
+   "Warn"
+  ],
+  "answer": 0,
+  "explain": "Fuga în safe-zone este la capitolul 5 (60 de minute), cu sancțiune suplimentară +1 Warn."
+ },
+ {
+  "id": "sanctiuni-oficiale#10",
+  "reg": "sanctiuni-oficiale",
+  "ref": "Cap. 5 (Bug Abuse)",
+  "q": "Ce sancțiune primește un jucător pentru Bug Abuse (exploatarea unui bug pentru avantaj)?",
+  "options": [
+   "Demorgan 26 de minute + 1 Warn",
+   "Demorgan 45 de minute",
+   "Demorgan 60 de minute + 2 Warn",
+   "Demorgan 75 de minute"
+  ],
+  "answer": 2,
+  "explain": "Bug Abuse este la capitolul 5 (60 de minute), cu sancțiune suplimentară +2 Warn."
+ },
+ {
+  "id": "sanctiuni-oficiale#11",
+  "reg": "sanctiuni-oficiale",
+  "ref": "Cap. 5 (Trolling)",
+  "q": "Ce sancțiune primește un jucător pentru Trolling (comportament intenționat perturbator care strică RP-ul)?",
+  "options": [
+   "Demorgan 26 de minute",
+   "Demorgan 60 de minute + 2 Warn",
+   "Demorgan 45 de minute + 1 Warn",
+   "Kick"
+  ],
+  "answer": 1,
+  "explain": "Trolling este la capitolul 5 (60 de minute), cu sancțiune suplimentară +2 Warn."
+ },
+ {
+  "id": "sanctiuni-oficiale#12",
+  "reg": "sanctiuni-oficiale",
+  "ref": "Cap. 1",
+  "q": "Ce sancțiune se aplică pentru activități ilegale fără mască, când regulamentul activității impune purtarea ei?",
+  "options": [
+   "Demorgan 60 de minute",
+   "Demorgan 40 de minute",
+   "Warn",
+   "Demorgan 25 de minute"
+  ],
+  "answer": 3,
+  "explain": "Capitolul 1 prevede 25 de minute pentru ilegalități fără mască."
+ },
+ {
+  "id": "sanctiuni-oficiale#13",
+  "reg": "sanctiuni-oficiale",
+  "ref": "Cap. 3",
+  "q": "Ce sancțiune se aplică pentru folosirea sistemului de ticket în timpul unei situații RP, ca să obții avantaj (Ticket în RP)?",
+  "options": [
+   "Demorgan 40 de minute",
+   "Demorgan 26 de minute",
+   "Demorgan 60 de minute + 1 Warn",
+   "Mute 30 de minute"
+  ],
+  "answer": 0,
+  "explain": "Ticket în RP este singura abatere de la capitolul 3 și se sancționează cu 40 de minute."
+ },
+ {
+  "id": "sanctiuni-oficiale#14",
+  "reg": "sanctiuni-oficiale",
+  "ref": "Cap. 6",
+  "q": "Care este sancțiunea pentru Roleplay Scârbos (RS)?",
+  "options": [
+   "Demorgan 60 de minute",
+   "Demorgan 75 de minute + 1 Warn",
+   "Demorgan 45 de minute + 2 Warn",
+   "Ban 3 zile"
+  ],
+  "answer": 1,
+  "explain": "Capitolul 6 prevede pentru Roleplay Scârbos (RS) 75 de minute, cu sancțiune suplimentară +1 Warn."
+ },
+ {
+  "id": "sanctiuni-oficiale#15",
+  "reg": "sanctiuni-oficiale",
+  "ref": "10 – Verificări anti-cheat, 3.2",
+  "q": "La o verificare anti-cheat, un jucător șterge sau ascunde fișiere. Cum se tratează și ce sancțiune riscă?",
+  "options": [
+   "Nu se pedepsește dacă verificarea e de bunăvoie",
+   "Warn / Ban 3–7 zile",
+   "Ca folosire de programe interzise: Ban 15–30 de zile / Ban permanent",
+   "Demorgan 60 de minute + 2 Warn"
+  ],
+  "answer": 2,
+  "explain": "Conform 3.2 din Verificări anti-cheat (cap. 10), ștergerea sau ascunderea fișierelor se socotește ca folosire de programe interzise: Ban 15–30 de zile / Ban permanent."
+ },
+ {
+  "id": "regulament-site-tichete-discord#1",
+  "reg": "regulament-site-tichete-discord",
+  "ref": "4.8",
+  "q": "În cât timp de la incident trebuie făcută o reclamație pe site?",
+  "options": [
+   "24 de ore",
+   "48 de ore",
+   "72 de ore",
+   "7 zile"
+  ],
+  "answer": 1,
+  "explain": "Conform punctului 4.8, reclamația se face în cel mult 48 de ore de la incident; cele depuse mai târziu pot fi respinse."
+ },
+ {
+  "id": "regulament-site-tichete-discord#2",
+  "reg": "regulament-site-tichete-discord",
+  "ref": "4.2",
+  "q": "Ce tip de link NU este acceptat ca dovadă video într-o reclamație?",
+  "options": [
+   "YouTube",
+   "Google Drive",
+   "Link de Discord",
+   "Imgur"
+  ],
+  "answer": 2,
+  "explain": "Punctul 4.2 acceptă dovezi pe YouTube, Twitch, Google Drive sau Imgur, dar nu link de Discord."
+ },
+ {
+  "id": "regulament-site-tichete-discord#3",
+  "reg": "regulament-site-tichete-discord",
+  "ref": "4.6",
+  "q": "Ce cerințe trebuie să îndeplinească clipul dintr-o reclamație?",
+  "options": [
+   "Cel puțin 720p, cu HUD-ul jocului și ceasul vizibile",
+   "Orice calitate, dacă se aude sunetul",
+   "Cel puțin 1080p, HUD-ul poate fi ascuns"
+  ],
+  "answer": 0,
+  "explain": "Punctul 4.6 cere calitate de cel puțin 720p, cu HUD-ul jocului și data (ceasul) vizibile pe ecran."
+ },
+ {
+  "id": "regulament-site-tichete-discord#4",
+  "reg": "regulament-site-tichete-discord",
+  "ref": "4.7",
+  "q": "Cât de lung poate fi, cel mult, fragmentul video pus într-o reclamație?",
+  "options": [
+   "30 de secunde",
+   "2 minute",
+   "5 minute",
+   "10 minute"
+  ],
+  "answer": 1,
+  "explain": "Punctul 4.7 spune că se pune doar fragmentul relevant, de cel mult 2 minute; clipul întreg se poate adăuga separat, ca al doilea link."
+ },
+ {
+  "id": "regulament-site-tichete-discord#5",
+  "reg": "regulament-site-tichete-discord",
+  "ref": "4.3",
+  "q": "Cât timp după decizie nu ai voie să ștergi sau să ascunzi dovezile dintr-o reclamație?",
+  "options": [
+   "12 ore",
+   "24 de ore",
+   "48 de ore",
+   "72 de ore"
+  ],
+  "answer": 2,
+  "explain": "Punctul 4.3 interzice ștergerea sau ascunderea dovezilor mai devreme de 48 de ore de la decizie (Ban 7–15 zile)."
+ },
+ {
+  "id": "regulament-site-tichete-discord#6",
+  "reg": "regulament-site-tichete-discord",
+  "ref": "4.5",
+  "q": "Cum se face contestația împotriva unei pedepse primite?",
+  "options": [
+   "Prin tichet",
+   "În privat, la un membru al staff-ului",
+   "Pe un canal public de Discord"
+  ],
+  "answer": 0,
+  "explain": "Punctul 4.5 precizează că și contestația se face prin tichet, nu în privat la membrii staff-ului."
+ },
+ {
+  "id": "regulament-site-tichete-discord#7",
+  "reg": "regulament-site-tichete-discord",
+  "ref": "2.3",
+  "q": "Ce faci dacă ți-ai creat din greșeală un al doilea cont pe site?",
+  "options": [
+   "Îl păstrezi ca rezervă",
+   "Îl dai unui prieten",
+   "Îl raportezi printr-un tichet"
+  ],
+  "answer": 2,
+  "explain": "Punctul 2.3 permite un singur cont; excepția este contul făcut din greșeală și raportat prin tichet."
+ },
+ {
+  "id": "regulament-site-tichete-discord#8",
+  "reg": "regulament-site-tichete-discord",
+  "ref": "3.13",
+  "q": "Sunt moderate de staff mesajele private dintre jucători?",
+  "options": [
+   "Da, toate sunt citite și moderate",
+   "Nu, cu excepția încălcărilor grave dovedite prin tichet",
+   "Nu, în nicio situație"
+  ],
+  "answer": 1,
+  "explain": "Conform punctului 3.13, mesajele private nu sunt moderate, cu excepția încălcărilor grave (amenințări, date personale, vânzări pe bani reali etc.) dovedite prin tichet."
+ },
+ {
+  "id": "termeni-si-conditii#1",
+  "reg": "termeni-si-conditii",
+  "ref": "Art. 1",
+  "q": "Care este vârsta minimă pentru accesul pe server fără acordul părinților sau tutorilor?",
+  "options": [
+   "12 ani",
+   "14 ani",
+   "16 ani",
+   "18 ani"
+  ],
+  "answer": 1,
+  "explain": "Art. 1 permite accesul de la minimum 14 ani; sub această vârstă e nevoie de acordul părinților sau tutorilor legali."
+ },
+ {
+  "id": "termeni-si-conditii#2",
+  "reg": "termeni-si-conditii",
+  "ref": "Art. 3",
+  "q": "Cât timp sunt stocate, cel mult, datele colectate (IP, ID-uri, loguri)?",
+  "options": [
+   "3 luni",
+   "6 luni",
+   "12 luni",
+   "5 ani"
+  ],
+  "answer": 2,
+  "explain": "Art. 3 prevede stocarea datelor pentru o perioadă rezonabilă, de maximum 12 luni, în condiții de siguranță."
+ },
+ {
+  "id": "termeni-si-conditii#3",
+  "reg": "termeni-si-conditii",
+  "ref": "Art. 5",
+  "q": "În ce termen se poate depune un apel împotriva unei decizii a echipei administrative?",
+  "options": [
+   "24 de ore",
+   "48 de ore",
+   "7 zile"
+  ],
+  "answer": 1,
+  "explain": "Art. 5 spune că apelurile se depun doar prin canalele oficiale, în termen de 48 de ore."
+ },
+ {
+  "id": "termeni-si-conditii#4",
+  "reg": "termeni-si-conditii",
+  "ref": "Art. 7",
+  "q": "Ce înseamnă să continui să folosești serviciile după publicarea modificărilor la Termeni?",
+  "options": [
+   "Accepți tacit modificările",
+   "Modificările nu ți se aplică",
+   "Trebuie să semnezi un nou acord"
+  ],
+  "answer": 0,
+  "explain": "Art. 7 prevede că folosirea serviciilor după publicarea modificărilor implică acceptarea lor tacită."
+ },
+ {
+  "id": "regulament-oficial-advanced-rp#1",
+  "reg": "regulament-oficial-advanced-rp",
+  "ref": "1.3",
+  "q": "Care este răscumpărarea maximă la răpirea unui lider de facțiune, fără dosar aprobat?",
+  "options": [
+   "50.000$",
+   "100.000$",
+   "150.000$",
+   "250.000$"
+  ],
+  "answer": 2,
+  "explain": "Punctul 1.3 limitează răscumpărarea la cel mult 150.000$ sau arme ori echipament de aceeași valoare."
+ },
+ {
+  "id": "regulament-oficial-advanced-rp#2",
+  "reg": "regulament-oficial-advanced-rp",
+  "ref": "1.3",
+  "q": "Dacă sunt răpiți atât liderul, cât și adjunctul unei facțiuni, câte răscumpărări se pot cere?",
+  "options": [
+   "Câte una pentru fiecare",
+   "O singură răscumpărare",
+   "Dublul sumei maxime"
+  ],
+  "answer": 1,
+  "explain": "Punctul 1.3 prevede că, dacă sunt răpiți și liderul, și adjunctul, se cere o singură răscumpărare."
+ },
+ {
+  "id": "regulament-oficial-advanced-rp#3",
+  "reg": "regulament-oficial-advanced-rp",
+  "ref": "3.1",
+  "q": "Cum și când se depune dosarul pentru un scenariu Advanced RP?",
+  "options": [
+   "Prin tichet pe site, înainte de a începe scenariul",
+   "În privat unui admin, după scenariu",
+   "Pe un canal public de Discord, oricând"
+  ],
+  "answer": 0,
+  "explain": "Punctul 3.1 cere ca dosarul să fie depus printr-un tichet pe site, la Tichete, înainte de a începe scenariul."
+ },
+ {
+  "id": "regulament-oficial-advanced-rp#4",
+  "reg": "regulament-oficial-advanced-rp",
+  "ref": "3.5",
+  "q": "În cât timp răspunde staff-ul, cel mult, la un dosar Advanced RP?",
+  "options": [
+   "24 de ore",
+   "48 de ore",
+   "72 de ore",
+   "7 zile"
+  ],
+  "answer": 1,
+  "explain": "Punctul 3.5: staff-ul răspunde în cel mult 48 de ore și poate aproba, respinge, cere modificări sau aproba doar unele etape."
+ },
+ {
+  "id": "regulament-oficial-advanced-rp#5",
+  "reg": "regulament-oficial-advanced-rp",
+  "ref": "4.3",
+  "q": "Cine are obligația să filmeze un scenariu Advanced RP?",
+  "options": [
+   "Doar atacatorii",
+   "Doar supraveghetorul numit de staff",
+   "Fiecare parte, tot scenariul"
+  ],
+  "answer": 2,
+  "explain": "Punctul 4.3 cere ca fiecare parte să filmeze tot scenariul, iar clipul se păstrează 48 de ore."
+ },
+ {
+  "id": "regulament-oficial-advanced-rp#6",
+  "reg": "regulament-oficial-advanced-rp",
+  "ref": "4.5",
+  "q": "Ce este interzis față de un ostatic într-un scenariu Advanced RP?",
+  "options": [
+   "Să fie păzit pe durata scenariului",
+   "Să fie eliberat la final",
+   "Să fie dus în zona stabilită în dosar",
+   "Să fie umilit (dezbrăcat, pus să cânte sau să danseze)"
+  ],
+  "answer": 3,
+  "explain": "Punctul 4.5: ostaticul nu e omorât automat, nu e umilit și nu e ținut mai mult decât e nevoie."
+ },
+ {
+  "id": "regulament-oficial-advanced-rp#7",
+  "reg": "regulament-oficial-advanced-rp",
+  "ref": "2.6",
+  "q": "Unde se poate face un interogatoriu cu violență, aprobat prin dosar?",
+  "options": [
+   "În zona verde a spitalului",
+   "În sediul celui interogat",
+   "În afara zonelor verzi și a sediului celui interogat"
+  ],
+  "answer": 2,
+  "explain": "Punctul 2.6 permite interogatoriul cu violență doar în afara zonelor verzi și în afara sediului celui interogat."
+ },
+ {
+  "id": "regulament-oficial-advanced-rp#8",
+  "reg": "regulament-oficial-advanced-rp",
+  "ref": "4.1",
+  "q": "Poți schimba sau extinde un scenariu Advanced RP aprobat, în timpul jocului?",
+  "options": [
+   "Da, dacă ești liderul facțiunii",
+   "Nu, fără acordul staff-ului",
+   "Da, dacă cealaltă parte e de acord OOC"
+  ],
+  "answer": 1,
+  "explain": "Punctul 4.1: scenariul se joacă exact cum a fost aprobat și nu se schimbă sau extinde fără acordul staff-ului."
+ },
+ {
+  "id": "arme-donate#1",
+  "reg": "arme-donate",
+  "ref": "1",
+  "q": "Ce se întâmplă cu o armă donată când personajul moare (în afara unei capturi)?",
+  "options": [
+   "Cade pe jos",
+   "Dispare definitiv",
+   "Rămâne la proprietar"
+  ],
+  "answer": 2,
+  "explain": "Conform punctului 1, armele donate sunt legate de personaj și nu se pierd la moarte sau la respawn la spital."
+ },
+ {
+  "id": "arme-donate#2",
+  "reg": "arme-donate",
+  "ref": "1",
+  "q": "Mori în timpul unei capturi de teritoriu cu arma donată în mână. Ce se întâmplă cu ea?",
+  "options": [
+   "Rămâne în inventarul tău",
+   "Cade pe jos, iar după finalul capturii o poate lua oricine",
+   "Se întoarce automat la tine după respawn"
+  ],
+  "answer": 1,
+  "explain": "Excepția de la punctul 1: la capturi, arma donată din mână cade la moarte; după final o poate lua oricine și o păstrează."
+ },
+ {
+  "id": "arme-donate#3",
+  "reg": "arme-donate",
+  "ref": "2",
+  "q": "Ți s-a luat arma donată într-un jaf RP valid. Ce urmează?",
+  "options": [
+   "Arma rămâne la cel care te-a jefuit, fără rambursare",
+   "Staff-ul ți-o returnează la cerere",
+   "Primești înapoi diamantele"
+  ],
+  "answer": 0,
+  "explain": "Punctele 2 și 4: arma luată într-un jaf valid trece la jefuitor, nu se returnează, iar diamantele nu se rambursează."
+ },
+ {
+  "id": "arme-donate#4",
+  "reg": "arme-donate",
+  "ref": "2",
+  "q": "Care dintre acestea este interzis când vrei să iei arma donată a cuiva?",
+  "options": [
+   "Jefuirea într-o scenă RP cu FearRP respectat",
+   "Omorârea persoanei doar ca să-i iei arma",
+   "Păstrarea armei luate într-un jaf valid"
+  ],
+  "answer": 1,
+  "explain": "Punctul 2 interzice omorârea cuiva doar pentru a-i lua arma (RDM / DM); jaful RP corect și păstrarea armei sunt permise."
+ },
+ {
+  "id": "arme-donate#5",
+  "reg": "arme-donate",
+  "ref": "3",
+  "q": "Când poți recupera o armă donată confiscată legal de Poliție?",
+  "options": [
+   "Niciodată, se pierde definitiv",
+   "Imediat după reținere, la cerere",
+   "Doar dacă o cumperi de la un polițist",
+   "După ce îți ispășești pedeapsa și achiți amenzile"
+  ],
+  "answer": 3,
+  "explain": "Punctul 3: arma rămâne în custodia Poliției și se recuperează după ispășirea pedepsei și achitarea amenzilor."
+ },
+ {
+  "id": "arme-donate#6",
+  "reg": "arme-donate",
+  "ref": "4",
+  "q": "Pe ce bază se returnează o armă donată luată prin RDM, jaf invalid sau bug?",
+  "options": [
+   "Pe baza dovezilor (clip video), după verificarea staff-ului",
+   "Automat, fără dovezi",
+   "Doar dacă agresorul este de acord"
+  ],
+  "answer": 0,
+  "explain": "Punctul 4: arma luată prin încălcarea regulamentului se returnează după verificarea staff-ului, pe baza dovezilor video."
+ },
+ {
+  "id": "permis-port-arma#1",
+  "reg": "permis-port-arma",
+  "ref": "2.1",
+  "q": "Ce arme îți permite să porți permisul de port armă?",
+  "options": [
+   "Revolverele și pistoalele speciale (Categoria I.2)",
+   "Pistoalele semi-automate din Categoria I.1, cumpărate legal",
+   "Pușca Pump Shotgun, oriunde"
+  ],
+  "answer": 1,
+  "explain": "Punctul 2.1: permisul acoperă doar pistoalele semi-automate din Categoria I.1 și muniția lor, cumpărate legal din magazinul de arme."
+ },
+ {
+  "id": "permis-port-arma#2",
+  "reg": "permis-port-arma",
+  "ref": "2.3",
+  "q": "Cum trebuie purtată arma cu permis?",
+  "options": [
+   "Ascunsă, scoasă doar pentru legitimă apărare",
+   "În mână, ca să se vadă că ești înarmat",
+   "La vedere, la centură, oricând"
+  ],
+  "answer": 0,
+  "explain": "Punctul 2.3: arma se poartă ascunsă și se scoate doar pentru legitimă apărare, împotriva unui atac care are loc chiar atunci."
+ },
+ {
+  "id": "permis-port-arma#3",
+  "reg": "permis-port-arma",
+  "ref": "2.4",
+  "q": "Unde este interzis să porți arma, chiar dacă ai permis?",
+  "options": [
+   "Pe stradă, ascunsă asupra ta",
+   "În clădirile statului, de exemplu spitalul sau tribunalul",
+   "Nicăieri, permisul e valabil peste tot"
+  ],
+  "answer": 1,
+  "explain": "Punctul 2.4 interzice portul armei în clădirile statului (Guvern, sediile Poliției și Șerifului, spital, tribunal), la evenimente publice și când ești băut sau drogat."
+ },
+ {
+  "id": "permis-port-arma#4",
+  "reg": "permis-port-arma",
+  "ref": "2.8",
+  "q": "Ce trebuie să faci după ce ai folosit arma, chiar în legitimă apărare?",
+  "options": [
+   "Nimic, dacă a fost legitimă apărare",
+   "Doar un tichet pe site",
+   "Anunți imediat Poliția și, dacă sunt răniți, SMURD"
+  ],
+  "answer": 2,
+  "explain": "Punctul 2.8: după folosirea armei anunți imediat Poliția și, dacă sunt răniți, SMURD."
+ },
+ {
+  "id": "permis-port-arma#5",
+  "reg": "permis-port-arma",
+  "ref": "3.4",
+  "q": "După ce ți s-a retras permisul, cât timp nu îl poți obține din nou (în cazul obișnuit)?",
+  "options": [
+   "7 zile",
+   "14 zile",
+   "30 de zile",
+   "90 de zile"
+  ],
+  "answer": 2,
+  "explain": "Punctul 3.4: cine a pierdut permisul nu îl poate obține din nou 30 de zile; pentru fapte grave conducerea Poliției îl poate interzice definitiv."
+ },
+ {
+  "id": "livrari-materiale#1",
+  "reg": "livrari-materiale",
+  "ref": "1.3",
+  "q": "La ce distanță minimă de locul de încărcare, descărcare sau prelucrare a materialelor este interzis să pândești o organizație?",
+  "options": [
+   "350 m",
+   "200 m",
+   "500 m",
+   "600 m"
+  ],
+  "answer": 0,
+  "explain": "Conform punctului 1.3, este interzis să pândești o organizație la aceste locuri sau la mai puțin de 350 m de ele (excepție: respawn-ul propriei organizații)."
+ },
+ {
+  "id": "livrari-materiale#2",
+  "reg": "livrari-materiale",
+  "ref": "2.1",
+  "q": "Ce componență trebuie să aibă coloana statului la o livrare de materiale?",
+  "options": [
+   "Minimum 8 oameni și 4 mașini, maximum 20 de oameni",
+   "Minimum 4 oameni și 2 mașini, maximum 10 oameni",
+   "Minimum 10 oameni și 5 mașini, fără limită maximă"
+  ],
+  "answer": 0,
+  "explain": "Punctul 2.1 prevede o coloană de cel puțin 8 oameni și 4 mașini și cel mult 20 de oameni, din toate structurile de stat la un loc."
+ },
+ {
+  "id": "livrari-materiale#3",
+  "reg": "livrari-materiale",
+  "ref": "2.6",
+  "q": "În ce interval este „ora sigură”, când livrările statului nu pot fi atacate?",
+  "options": [
+   "Între 12:00 și 13:00",
+   "Între 23:00 și 00:00",
+   "Între 15:00 și 16:00",
+   "Între 18:00 și 19:00"
+  ],
+  "answer": 2,
+  "explain": "Conform punctului 2.6, între 15:00 și 16:00 livrările statului nu pot fi atacate; fiecare structură are cel mult o livrare sigură pe zi."
+ },
+ {
+  "id": "livrari-materiale#4",
+  "reg": "livrari-materiale",
+  "ref": "2.8",
+  "q": "În ce interval orar se pot face livrările statului?",
+  "options": [
+   "Între 10:00 și 22:00",
+   "Între 15:00 și 00:00",
+   "Oricând, fără restricții",
+   "Între 12:00 și 01:00"
+  ],
+  "answer": 1,
+  "explain": "Punctul 2.8 spune că livrările statului se fac doar între 15:00 și 00:00; după 00:00 transporturile organizațiilor legale sunt interzise."
+ },
+ {
+  "id": "livrari-materiale#5",
+  "reg": "livrari-materiale",
+  "ref": "3.2",
+  "q": "Cum poate fi atacată o coloană a statului aflată în mers?",
+  "options": [
+   "Prin blocarea drumului din timp, cu cel puțin 4 mașini care acoperă tot drumul",
+   "Prin tragere din mașină în timpul mersului",
+   "Prin blocarea drumului chiar în fața coloanei"
+  ],
+  "answer": 0,
+  "explain": "Conform punctului 3.2, coloana se atacă doar blocând drumul cu cel puțin 4 mașini puse din timp; e interzis să pui blocajul chiar în fața coloanei."
+ },
+ {
+  "id": "livrari-materiale#6",
+  "reg": "livrari-materiale",
+  "ref": "3.8",
+  "q": "Câte alianțe IC sunt permise la atacul asupra unei livrări a Armatei?",
+  "options": [
+   "Niciuna",
+   "Una",
+   "Două",
+   "Trei"
+  ],
+  "answer": 2,
+  "explain": "Punctul 3.8 permite o singură alianță IC la atac, iar la livrările Armatei două alianțe IC."
+ },
+ {
+  "id": "livrari-materiale#7",
+  "reg": "livrari-materiale",
+  "ref": "3.13",
+  "q": "Câte livrări ale statului poate ataca cu succes o organizație într-o zi?",
+  "options": [
+   "Cel mult 2",
+   "Cel mult 6",
+   "Nelimitat",
+   "Cel mult 4"
+  ],
+  "answer": 3,
+  "explain": "Conform punctului 3.13, o organizație atacă cu succes cel mult 4 livrări ale statului pe zi; la livrările organizațiilor ilegale nu există limită."
+ },
+ {
+  "id": "livrari-materiale#8",
+  "reg": "livrari-materiale",
+  "ref": "3.14",
+  "q": "Ce cerințe au clipurile atacatorilor unei livrări?",
+  "options": [
+   "Un clip, minimum 480p, păstrat 24 de ore",
+   "Cel puțin 2 clipuri, minimum 720p, cu sunetul jocului, păstrate 72 de ore",
+   "Doar capturi de ecran cu deschiderea camionului"
+  ],
+  "answer": 1,
+  "explain": "Punctul 3.14 cere cel puțin 2 clipuri de la pregătire până la final, cel puțin 720p, cu sunetul jocului, păstrate 72 de ore; deschiderea camionului se filmează întreagă."
+ },
+ {
+  "id": "livrari-materiale#9",
+  "reg": "livrari-materiale",
+  "ref": "1.11",
+  "q": "Cum se pot face livrările de materiale?",
+  "options": [
+   "Doar pe drum (pe pământ), nu cu elicopterul sau avionul",
+   "Cu elicopterul, dacă drumul e blocat",
+   "Cu orice vehicul, inclusiv avionul"
+  ],
+  "answer": 0,
+  "explain": "Conform punctului 1.11, livrările se fac doar pe drum, nu cu elicopterul sau avionul."
+ },
+ {
+  "id": "livrari-materiale#10",
+  "reg": "livrari-materiale",
+  "ref": "3.4",
+  "q": "Ai voie să ataci o livrare care este deja atacată de altă organizație?",
+  "options": [
+   "Nu, doar după ce lupta s-a terminat și coloana a pornit din nou",
+   "Da, oricând",
+   "Da, dacă ai o alianță IC cu atacatorii"
+  ],
+  "answer": 0,
+  "explain": "Punctul 3.4 interzice atacul asupra unei livrări deja atacate; după terminarea schimbului de focuri și pornirea coloanei, ea poate fi atacată din nou."
+ },
+ {
+  "id": "regulament-jafuri-moldova-rp#1",
+  "reg": "regulament-jafuri-moldova-rp",
+  "ref": "6",
+  "q": "De câte ori poate jefui o Mafie/un Gang Pacific Bank?",
+  "options": [
+   "Maximum 2 jafuri la fiecare 5 zile",
+   "Maximum 1 jaf pe zi",
+   "Maximum 1 jaf la fiecare 5 zile",
+   "Fără limită"
+  ],
+  "answer": 2,
+  "explain": "La capitolul 6, Pacific Bank are limita de maximum 1 jaf la fiecare 5 zile pentru fiecare Mafie/Gang."
+ },
+ {
+  "id": "regulament-jafuri-moldova-rp#2",
+  "reg": "regulament-jafuri-moldova-rp",
+  "ref": "6",
+  "q": "Care este limita de jafuri la Fleeca Bank pentru fiecare Mafie/Gang?",
+  "options": [
+   "Maximum 1 jaf la fiecare 5 zile",
+   "Maximum 2 jafuri la fiecare 5 zile",
+   "Maximum 3 jafuri pe săptămână",
+   "Fără limită"
+  ],
+  "answer": 1,
+  "explain": "Capitolul 6 prevede maximum 2 jafuri la Fleeca Bank la fiecare 5 zile, pentru fiecare Mafie/Gang."
+ },
+ {
+  "id": "regulament-jafuri-moldova-rp#3",
+  "reg": "regulament-jafuri-moldova-rp",
+  "ref": "7",
+  "q": "Ce interval dinaintea conflictului trebuie să conțină, minimum, înregistrarea video a unui jaf?",
+  "options": [
+   "Ultimele 5 minute",
+   "Ultimul minut",
+   "Ultimele 15 minute",
+   "Nu e nevoie de nimic înainte de conflict"
+  ],
+  "answer": 0,
+  "explain": "Conform capitolului 7, înregistrarea trebuie să conțină minimum ultimele 5 minute înainte de începerea conflictului și întreaga desfășurare a jafului."
+ },
+ {
+  "id": "regulament-jafuri-moldova-rp#4",
+  "reg": "regulament-jafuri-moldova-rp",
+  "ref": "7",
+  "q": "Cât timp trebuie păstrate, minimum, dovezile video ale unui jaf?",
+  "options": [
+   "12 ore",
+   "72 de ore",
+   "24 de ore",
+   "7 zile"
+  ],
+  "answer": 2,
+  "explain": "Capitolul 7 cere păstrarea dovezilor video minimum 24 de ore de la încheierea acțiunii și prezentarea lor la cerere."
+ },
+ {
+  "id": "regulament-jafuri-moldova-rp#5",
+  "reg": "regulament-jafuri-moldova-rp",
+  "ref": "4",
+  "q": "Care este durata maximă a negocierii la un jaf, dacă părțile nu decid altfel?",
+  "options": [
+   "5 minute",
+   "20 de minute",
+   "30 de minute",
+   "10 minute"
+  ],
+  "answer": 3,
+  "explain": "Conform capitolului 4, durata maximă a negocierii este de 10 minute, dacă ambele părți nu decid altfel."
+ },
+ {
+  "id": "regulament-jafuri-moldova-rp#6",
+  "reg": "regulament-jafuri-moldova-rp",
+  "ref": "10, Jaf Magazin",
+  "q": "Ce arme sunt permise la jaful unui magazin?",
+  "options": [
+   "Orice armă de foc",
+   "Doar pistoalele și revolverele",
+   "Pistoalele, SMG-urile și puștile de asalt",
+   "Doar armele albe"
+  ],
+  "answer": 1,
+  "explain": "La Jaf Magazin (cap. 10) sunt permise exclusiv pistoalele și revolverele."
+ },
+ {
+  "id": "regulament-jafuri-moldova-rp#7",
+  "reg": "regulament-jafuri-moldova-rp",
+  "ref": "10, Jaf ATM",
+  "q": "Care dintre următoarele este adevărată pentru jaful unui ATM?",
+  "options": [
+   "Nu există negociere, conflictul direct este permis",
+   "Negocierea este obligatorie",
+   "Fulger și SIS pot interveni",
+   "Este obligatoriu un ostatic"
+  ],
+  "answer": 0,
+  "explain": "La Jaf ATM (cap. 10): 2 jefuitori, 2 polițiști, fără negociere, conflict direct permis, fără Fulger și SIS."
+ },
+ {
+  "id": "regulament-jafuri-moldova-rp#8",
+  "reg": "regulament-jafuri-moldova-rp",
+  "ref": "10, Jaf Pacific Bank",
+  "q": "Câți ostatici sunt obligatorii pentru începerea negocierii la jaful Pacific Bank?",
+  "options": [
+   "Minimum 1",
+   "Minimum 4",
+   "Nu sunt necesari ostatici",
+   "Minimum 2"
+  ],
+  "answer": 3,
+  "explain": "La Jaf Pacific Bank sunt obligatorii minimum 2 ostatici; dacă numărul scade sub 2 înainte de finalul negocierii, poliția poate interveni imediat."
+ },
+ {
+  "id": "regulament-jafuri-moldova-rp#9",
+  "reg": "regulament-jafuri-moldova-rp",
+  "ref": "10, Jaf Armată",
+  "q": "Câți atacatori pot participa, maximum, la un jaf asupra Armatei?",
+  "options": [
+   "6",
+   "8",
+   "12",
+   "20"
+  ],
+  "answer": 2,
+  "explain": "La Jaf Armată participă maximum 12 atacatori; Armata primește alertă la primul lockpick."
+ },
+ {
+  "id": "regulament-jafuri-moldova-rp#10",
+  "reg": "regulament-jafuri-moldova-rp",
+  "ref": "16.13",
+  "q": "În ce interval orar se pot jefui magazinele, afacerile și băncile?",
+  "options": [
+   "Între 15:00 și 00:00",
+   "Între 12:00 și 01:00",
+   "Între 17:00 și 22:00",
+   "Non-stop"
+  ],
+  "answer": 1,
+  "explain": "Punctul 16.13 prevede că magazinele, afacerile și băncile se jefuiesc doar între 12:00 și 01:00."
+ },
+ {
+  "id": "regulament-jafuri-moldova-rp#11",
+  "reg": "regulament-jafuri-moldova-rp",
+  "ref": "16.9",
+  "q": "Cât timp poate fi ținut, maximum, un ostatic la jaf, de la chemarea negociatorului?",
+  "options": [
+   "30 de minute",
+   "10 minute",
+   "15 minute",
+   "60 de minute"
+  ],
+  "answer": 0,
+  "explain": "Conform punctului 16.9, ostaticul nu se ține mai mult de 30 de minute de la chemarea negociatorului."
+ },
+ {
+  "id": "regulament-jafuri-moldova-rp#12",
+  "reg": "regulament-jafuri-moldova-rp",
+  "ref": "16.10",
+  "q": "Ce pot cere jefuitorii la un jaf de magazin, afacere sau bancă?",
+  "options": [
+   "O răscumpărare de până la 35.000 $",
+   "Arme și echipament",
+   "Doar un coridor verde pentru retragere",
+   "Eliberarea unor colegi arestați"
+  ],
+  "answer": 2,
+  "explain": "Punctul 16.10 spune că la jafuri nu se cere răscumpărare, ci doar un coridor verde pentru retragere."
+ },
+ {
+  "id": "rapiri-ostatici#1",
+  "reg": "rapiri-ostatici",
+  "ref": "1.4",
+  "q": "Câți oameni poți jefui sau răpi, maximum, deodată?",
+  "options": [
+   "3",
+   "4",
+   "10",
+   "6"
+  ],
+  "answer": 3,
+  "explain": "Conform punctului 1.4, nu jefuiești și nu răpești mai mult de 6 oameni deodată; la mai multe victime, între răpiri trec cel mult 5 minute."
+ },
+ {
+  "id": "rapiri-ostatici#2",
+  "reg": "rapiri-ostatici",
+  "ref": "1.5",
+  "q": "Câți atacatori trebuie să fie, cel puțin, față de numărul victimelor?",
+  "options": [
+   "Cel puțin la fel de mulți",
+   "Cel puțin de două ori mai mulți",
+   "Cel puțin de trei ori mai mulți"
+  ],
+  "answer": 1,
+  "explain": "Punctul 1.5 cere ca atacatorii să fie de cel puțin două ori mai mulți decât victimele (excepție: cererea de a părăsi locul)."
+ },
+ {
+  "id": "rapiri-ostatici#3",
+  "reg": "rapiri-ostatici",
+  "ref": "2.3",
+  "q": "Când este permis să jefuiești un jucător de unul singur?",
+  "options": [
+   "Între 17:00 și 10:00, în zonele roșii",
+   "Niciodată",
+   "Oricând, în zonele verzi",
+   "Doar între 08:00 și 12:00"
+  ],
+  "answer": 0,
+  "explain": "Punctul 2.3 cere cel puțin 2 atacatori la jefuire, cu excepția intervalului 17:00–10:00 în zonele roșii, când se poate jefui și singur."
+ },
+ {
+  "id": "rapiri-ostatici#4",
+  "reg": "rapiri-ostatici",
+  "ref": "3.1",
+  "q": "Câți răpitori trebuie să participe, cel puțin, la o răpire?",
+  "options": [
+   "2",
+   "3",
+   "6",
+   "4"
+  ],
+  "answer": 3,
+  "explain": "Conform punctului 3.1, la o răpire participă cel puțin 4 răpitori."
+ },
+ {
+  "id": "rapiri-ostatici#5",
+  "reg": "rapiri-ostatici",
+  "ref": "3.2",
+  "q": "Care este răscumpărarea maximă pentru liderul sau adjunctul unei organizații?",
+  "options": [
+   "35.000 $",
+   "50.000 $",
+   "150.000 $",
+   "300.000 $"
+  ],
+  "answer": 2,
+  "explain": "Punctul 3.2 stabilește maximum 150.000 $ (sau arme/echipament de aceeași valoare) pentru lider sau adjunct; pentru un ostatic oarecare, 35.000 $."
+ },
+ {
+  "id": "rapiri-ostatici#6",
+  "reg": "rapiri-ostatici",
+  "ref": "3.6",
+  "q": "În ce interval sunt interzise răpirile pentru răscumpărare?",
+  "options": [
+   "Între 00:00 și 06:00",
+   "Între 02:00 și 10:00",
+   "Între 08:00 și 12:00",
+   "Între 22:00 și 08:00"
+  ],
+  "answer": 1,
+  "explain": "Conform punctului 3.6, răpirile pentru răscumpărare sunt interzise între 02:00 și 10:00, cu excepțiile prevăzute."
+ },
+ {
+  "id": "rapiri-ostatici#7",
+  "reg": "rapiri-ostatici",
+  "ref": "3.7",
+  "q": "Câte răpiri poate face o organizație într-un interval de 12 ore?",
+  "options": [
+   "Cel mult 2, cu cel puțin 3 ore între ele",
+   "Cel mult 1",
+   "Cel mult 3, cu cel puțin o oră între ele",
+   "Nelimitat"
+  ],
+  "answer": 0,
+  "explain": "Punctul 3.7 permite cel mult 2 răpiri la 12 ore, cu cel puțin 3 ore între ele."
+ },
+ {
+  "id": "rapiri-ostatici#8",
+  "reg": "rapiri-ostatici",
+  "ref": "4.6",
+  "q": "Cât timp are statul să reacționeze de la primul apel despre ostatici?",
+  "options": [
+   "10 minute",
+   "15 minute",
+   "30 de minute",
+   "60 de minute"
+  ],
+  "answer": 2,
+  "explain": "Conform punctului 4.6, statul are 30 de minute; dacă negociatorul nu ajunge, răpitorii pot omorî un ostatic la 5 minute."
+ },
+ {
+  "id": "regulament-oficial-organizatii-ilegale-ganguri#1",
+  "reg": "regulament-oficial-organizatii-ilegale-ganguri",
+  "ref": "1.2",
+  "q": "Câte alianțe poate avea o bandă cu alte bande?",
+  "options": [
+   "Cel mult 2",
+   "Cel mult 3",
+   "Nelimitat",
+   "Cel mult 1"
+  ],
+  "answer": 3,
+  "explain": "Conform punctului 1.2, o bandă poate avea cel mult 1 alianță cu altă bandă; dușmanii nu sunt limitați."
+ },
+ {
+  "id": "regulament-oficial-organizatii-ilegale-ganguri#2",
+  "reg": "regulament-oficial-organizatii-ilegale-ganguri",
+  "ref": "1.3.4",
+  "q": "După ruperea unei alianțe, cât timp nu poți declara război fostului aliat?",
+  "options": [
+   "6 ore",
+   "24 de ore",
+   "12 ore",
+   "7 zile"
+  ],
+  "answer": 1,
+  "explain": "Punctul 1.3.4 interzice declararea războiului fostului aliat timp de 24 de ore după ruperea alianței."
+ },
+ {
+  "id": "regulament-oficial-organizatii-ilegale-ganguri#3",
+  "reg": "regulament-oficial-organizatii-ilegale-ganguri",
+  "ref": "1.4",
+  "q": "Ce nu știu IC membrii cu gradele 1–3 ai unei bande (dacă nu participă la acțiuni criminale)?",
+  "options": [
+   "Cu ce se ocupă banda și numele conducerii",
+   "Culoarea bandei",
+   "Unde este sediul bandei"
+  ],
+  "answer": 0,
+  "explain": "Conform punctului 1.4, membrii cu gradele 1–3 nu știu IC cu ce se ocupă banda și nici numele conducerii."
+ },
+ {
+  "id": "regulament-oficial-organizatii-ilegale-ganguri#4",
+  "reg": "regulament-oficial-organizatii-ilegale-ganguri",
+  "ref": "2.2",
+  "q": "Cu câți oameni, cel puțin, se merge în vizită pe teritoriul altei bande?",
+  "options": [
+   "3",
+   "5",
+   "15",
+   "10"
+  ],
+  "answer": 3,
+  "explain": "Punctul 2.2 cere cel puțin 10 oameni, doar pentru discuții de diplomație, comerț și altele asemănătoare."
+ },
+ {
+  "id": "regulament-oficial-organizatii-ilegale-ganguri#5",
+  "reg": "regulament-oficial-organizatii-ilegale-ganguri",
+  "ref": "3.1",
+  "q": "În ce interval orar se poate face atacul pe sediul unei bande sau familii?",
+  "options": [
+   "Între 12:00 și 18:00",
+   "Între 21:00 și 23:00",
+   "Între 16:00 și 23:00",
+   "Între 17:00 și 22:00"
+  ],
+  "answer": 2,
+  "explain": "Conform punctului 3.1, atacul pe sediu se poate face doar între 16:00 și 23:00."
+ },
+ {
+  "id": "regulament-oficial-organizatii-ilegale-ganguri#6",
+  "reg": "regulament-oficial-organizatii-ilegale-ganguri",
+  "ref": "3.11",
+  "q": "Cât poate lua, maximum, partea care a atacat cu succes un sediu din depozitul celor atacați?",
+  "options": [
+   "1/2 din depozit",
+   "1/4 din depozit",
+   "Tot depozitul",
+   "Doar banii, nu și materialele"
+  ],
+  "answer": 1,
+  "explain": "Punctul 3.11 permite luarea a cel mult 1/4 din depozit (bani și materiale), cât timp ține sediul, cel mult 20 de minute."
+ },
+ {
+  "id": "regulament-oficial-organizatii-ilegale-ganguri#7",
+  "reg": "regulament-oficial-organizatii-ilegale-ganguri",
+  "ref": "3.14",
+  "q": "Cu cât timp înainte de o captură este interzis atacul pe sediu?",
+  "options": [
+   "60 de minute",
+   "15 minute",
+   "30 de minute",
+   "2 ore"
+  ],
+  "answer": 0,
+  "explain": "Conform punctului 3.14, atacul pe sediu este interzis cu 60 de minute înainte de o captură."
+ },
+ {
+  "id": "regulament-oficial-organizatii-ilegale-ganguri#8",
+  "reg": "regulament-oficial-organizatii-ilegale-ganguri",
+  "ref": "4.5",
+  "q": "Cu cât timp înainte trebuie stabilită, cel puțin, o strelă?",
+  "options": [
+   "10 minute",
+   "1 oră",
+   "30 de minute",
+   "24 de ore"
+  ],
+  "answer": 2,
+  "explain": "Punctul 4.5 cere ca strela să fie stabilită cu cel puțin 30 de minute înainte."
+ },
+ {
+  "id": "regulament-familii-ganguri#1",
+  "reg": "regulament-familii-ganguri",
+  "ref": "1.1",
+  "q": "Ce înlocuiește, la familii, avertismentele pentru lider?",
+  "options": [
+   "Banul liderului",
+   "Amenzile în bani",
+   "Pierderea tuturor teritoriilor",
+   "Suspendarea familiei pe ore sau zile"
+  ],
+  "answer": 3,
+  "explain": "Conform punctului 1.1, la familii avertismentele pentru lider se înlocuiesc cu suspendarea familiei pe ore sau zile."
+ },
+ {
+  "id": "regulament-familii-ganguri#2",
+  "reg": "regulament-familii-ganguri",
+  "ref": "1.4",
+  "q": "Unde trebuie scrisă o alianță, ruperea ei sau o declarație de război între familii ca să fie valabilă?",
+  "options": [
+   "Doar IC, în joc",
+   "În canalul de familii de pe Discord, într-un mesaj nou, needitat",
+   "Într-un tichet pe site",
+   "În chat-ul OOC din joc"
+  ],
+  "answer": 1,
+  "explain": "Punctul 1.4 cere ca acestea să fie scrise în canalul de familii de pe Discord; mesajul nu se editează, iar orice schimbare se scrie într-un mesaj nou."
+ },
+ {
+  "id": "regulament-familii-ganguri#3",
+  "reg": "regulament-familii-ganguri",
+  "ref": "1.7",
+  "q": "Care este respawn-ul unei familii?",
+  "options": [
+   "Casa (sediul) înregistrată pe familie",
+   "Spitalul cel mai apropiat",
+   "Orice casă a liderului",
+   "Zona de respawn a bandei aliate"
+  ],
+  "answer": 0,
+  "explain": "Conform punctului 1.7, respawn-ul familiei este casa (sediul) înregistrată pe familie."
+ },
+ {
+  "id": "regulament-familii-ganguri#4",
+  "reg": "regulament-familii-ganguri",
+  "ref": "1.15",
+  "q": "Ce se întâmplă dacă liderul unei familii este descoperit printr-o anchetă RP?",
+  "options": [
+   "Familia este desființată imediat",
+   "Liderul primește ban permanent",
+   "Nu se întâmplă nimic",
+   "Familia este suspendată 5 zile, iar membrii pot fi reținuți 14 zile pentru percheziție"
+  ],
+  "answer": 3,
+  "explain": "Punctul 1.15: familia este suspendată 5 zile, iar facțiunile de stat pot reține membrii, recunoscuți după ținută, timp de 14 zile pentru percheziție."
+ },
+ {
+  "id": "regulament-familii-ganguri#5",
+  "reg": "regulament-familii-ganguri",
+  "ref": "2.4",
+  "q": "Ce se poate face la o captură dacă două familii au aceeași culoare?",
+  "options": [
+   "Captura se anulează",
+   "Ambele luptă fără ținută de familie",
+   "Una dintre ele își poate schimba ținuta, ca să se deosebească",
+   "Staff-ul schimbă culoarea uneia definitiv"
+  ],
+  "answer": 2,
+  "explain": "Conform punctului 2.4, dacă două familii au aceeași culoare, una își poate schimba ținuta pentru captură ca să se deosebească."
+ },
+ {
+  "id": "regulament-oficial-sistem-turf#1",
+  "reg": "regulament-oficial-sistem-turf",
+  "ref": "3.8",
+  "q": "Din Sezonul 2 (noiembrie), în ce zile au loc capturile bandelor?",
+  "options": [
+   "Marți, joi și sâmbătă",
+   "Marți, joi și duminică",
+   "Luni, miercuri și vineri",
+   "În fiecare zi"
+  ],
+  "answer": 1,
+  "explain": "Conform punctului 3.8, din Sezonul 2 bandele au capturi marți, joi și duminică (familiile: luni, miercuri, vineri și sâmbătă)."
+ },
+ {
+  "id": "regulament-oficial-sistem-turf#2",
+  "reg": "regulament-oficial-sistem-turf",
+  "ref": "3, 3.2",
+  "q": "În ce interval trebuie să cadă startul unei capturi?",
+  "options": [
+   "Între 21:00 și 23:00",
+   "Între 16:00 și 23:00",
+   "Între 19:00 și 21:00",
+   "Între 22:00 și 00:00"
+  ],
+  "answer": 0,
+  "explain": "Capitolul 3 prevede start între 21:00 și 23:00, interval care rămâne valabil și din Sezonul 2."
+ },
+ {
+  "id": "regulament-oficial-sistem-turf#3",
+  "reg": "regulament-oficial-sistem-turf",
+  "ref": "3.3",
+  "q": "Cât durează o captură și cât ține pregătirea?",
+  "options": [
+   "20 de minute, din care primele 5 sunt pregătire",
+   "10 minute, fără pregătire",
+   "15 minute, din care primele 3 sunt pregătire",
+   "30 de minute, din care primele 10 sunt pregătire"
+  ],
+  "answer": 2,
+  "explain": "Punctul 3.3: captura ține 15 minute, primele 3 minute sunt pregătirea, apoi începe lupta; orice captură se termină cel târziu la 23:15."
+ },
+ {
+  "id": "regulament-oficial-sistem-turf#4",
+  "reg": "regulament-oficial-sistem-turf",
+  "ref": "2.3",
+  "q": "Câți membri online trebuie să aibă, cel puțin, organizația care anunță o captură?",
+  "options": [
+   "1",
+   "5",
+   "8",
+   "3"
+  ],
+  "answer": 3,
+  "explain": "Conform punctului 2.3, la anunț organizația care atacă trebuie să aibă cel puțin 3 membri online."
+ },
+ {
+  "id": "regulament-oficial-sistem-turf#5",
+  "reg": "regulament-oficial-sistem-turf",
+  "ref": "4.3",
+  "q": "De cât timp trebuie să fii membru al organizației ca să fii numărat într-o captură?",
+  "options": [
+   "De cel puțin 24 de ore",
+   "De cel puțin 72 de ore",
+   "De cel puțin 48 de ore",
+   "De cel puțin 7 zile"
+  ],
+  "answer": 1,
+  "explain": "Punctul 4.3 cere să fii membru al organizației de cel puțin 72 de ore (ore de ceas); dacă ai trecut prin altă organizație, se numără de la zero."
+ },
+ {
+  "id": "regulament-oficial-sistem-turf#6",
+  "reg": "regulament-oficial-sistem-turf",
+  "ref": "3.6",
+  "q": "Câte capturi pot avea loc deodată pe tot serverul?",
+  "options": [
+   "Cel mult 2",
+   "Cel mult 1",
+   "Cel mult 4",
+   "Nelimitat"
+  ],
+  "answer": 0,
+  "explain": "Conform punctului 3.6, pe tot serverul sunt cel mult 2 capturi deodată."
+ },
+ {
+  "id": "regulament-oficial-sistem-turf#7",
+  "reg": "regulament-oficial-sistem-turf",
+  "ref": "3.5",
+  "q": "Ce pauză minimă trebuie să fie între două capturi ale aceleiași organizații?",
+  "options": [
+   "10 minute",
+   "15 minute",
+   "60 de minute",
+   "30 de minute"
+  ],
+  "answer": 3,
+  "explain": "Punctul 3.5 cere cel puțin 30 de minute între două capturi ale aceleiași organizații, de la sfârșitul uneia la începutul celeilalte."
+ },
+ {
+  "id": "regulament-oficial-sistem-turf#8",
+  "reg": "regulament-oficial-sistem-turf",
+  "ref": "5.6",
+  "q": "Cine câștigă captura dacă la minutul 15 timpul de control este egal?",
+  "options": [
+   "Atacul",
+   "Partea cu mai multe omoruri",
+   "Apărarea",
+   "Captura se reia"
+  ],
+  "answer": 2,
+  "explain": "Conform punctului 5.6, atacul câștigă doar cu strict mai mult timp de control; la egalitate câștigă apărarea."
+ },
+ {
+  "id": "regulament-oficial-sistem-turf#9",
+  "reg": "regulament-oficial-sistem-turf",
+  "ref": "6.4",
+  "q": "Când sunt permise vestele la o captură?",
+  "options": [
+   "Întotdeauna",
+   "Doar cu acordul scris al ambelor părți, trimis curatorului înainte de start",
+   "Doar pentru apărători",
+   "Niciodată, fără excepție"
+  ],
+  "answer": 1,
+  "explain": "Punctul 6.4: vestele sunt interzise, cu excepția acordului scris al ambelor părți (ce vestă și câte), trimis curatorului înainte de start."
+ },
+ {
+  "id": "regulament-oficial-sistem-turf#10",
+  "reg": "regulament-oficial-sistem-turf",
+  "ref": "11.4",
+  "q": "În cât timp de la finalul capturii se face contestația la bande?",
+  "options": [
+   "În cel mult 6 ore",
+   "În cel mult 2 ore",
+   "În cel mult 12 ore",
+   "În cel mult 48 de ore"
+  ],
+  "answer": 0,
+  "explain": "Conform punctului 11.4, contestația se face prin tichet în cel mult 6 ore de la final la bande și 12 ore la familii."
+ },
+ {
+  "id": "regulament-oficial-drop-event#1",
+  "reg": "regulament-oficial-drop-event",
+  "ref": "3.1",
+  "q": "Care este raza zonei oficiale a Drop-ului, în jurul locului unde a fost lansat coletul?",
+  "options": [
+   "200 de metri",
+   "350 de metri",
+   "600 de metri",
+   "1000 de metri"
+  ],
+  "answer": 2,
+  "explain": "Conform punctului 3.1, zona oficială a Drop-ului este un cerc cu raza de 600 de metri în jurul coletului."
+ },
+ {
+  "id": "regulament-oficial-drop-event#2",
+  "reg": "regulament-oficial-drop-event",
+  "ref": "4.1",
+  "q": "Cu ce vehicule este permisă deplasarea la Drop și în zona de conflict?",
+  "options": [
+   "Cu orice vehicul personal",
+   "Cu vehicule Sport și Off-Road",
+   "Doar cu mașinile organizației, de orice tip",
+   "Doar cu vehicule și motociclete Off-Road"
+  ],
+  "answer": 3,
+  "explain": "Punctul 4.1 permite exclusiv vehicule din categoria Off-Road și motociclete Off-Road; cele Sport sau de alt tip sunt interzise."
+ },
+ {
+  "id": "regulament-oficial-drop-event#3",
+  "reg": "regulament-oficial-drop-event",
+  "ref": "3.3",
+  "q": "Până când se poate intra în zona Drop-ului?",
+  "options": [
+   "Oricând, până la finalul evenimentului",
+   "Doar până la deschiderea coletului",
+   "Doar în primele 5 minute după lansare",
+   "Doar înainte de lansarea coletului"
+  ],
+  "answer": 1,
+  "explain": "Conform punctului 3.3, se intră doar până la deschiderea coletului; după aceea nu mai intră nimeni nou, iar cine iese nu mai poate reveni."
+ },
+ {
+  "id": "regulament-oficial-drop-event#4",
+  "reg": "regulament-oficial-drop-event",
+  "ref": "4.2",
+  "q": "Care dintre acestea este interzisă pe durata evenimentului Drop?",
+  "options": [
+   "Dronele",
+   "Folosirea motocicletelor Off-Road",
+   "Ambuscadele",
+   "Jefuirea jucătorilor eliminați"
+  ],
+  "answer": 0,
+  "explain": "Punctul 4.2 interzice puștile cu lunetă, vederea termică și dronele; ambuscadele, motocicletele Off-Road și Full Loot sunt permise."
+ },
+ {
+  "id": "regulament-oficial-drop-event#5",
+  "reg": "regulament-oficial-drop-event",
+  "ref": "7",
+  "q": "Când pot interveni medicii la un Drop?",
+  "options": [
+   "Oricând, pentru a ridica jucătorii căzuți",
+   "Doar pentru organizația câștigătoare",
+   "Niciodată, nici după eveniment",
+   "Doar după finalizarea oficială a Drop-ului"
+  ],
+  "answer": 3,
+  "explain": "Conform capitolului 7, pe durata evenimentului medicii nu pot interveni; ei pot interveni după finalizarea oficială a Drop-ului."
+ },
+ {
+  "id": "regulament-oficial-drop-event#6",
+  "reg": "regulament-oficial-drop-event",
+  "ref": "12.1",
+  "q": "Ce organizație câștigă evenimentul Drop?",
+  "options": [
+   "Cea care ajunge prima la colet",
+   "Cea cu cele mai multe omoruri",
+   "Cea care rămâne singură în zonă la final, după deschiderea coletului",
+   "Cea cu cei mai mulți participanți"
+  ],
+  "answer": 2,
+  "explain": "Punctul 12.1: câștigă organizația care rămâne singură în zonă la final, după deschiderea coletului; cât timp mai sunt adversari, lupta continuă."
+ },
+ {
+  "id": "razboiul-pentru-materiale#1",
+  "reg": "razboiul-pentru-materiale",
+  "ref": "1.2",
+  "q": "Cu cât timp înainte se anunță începutul Războiului pentru materiale și unde?",
+  "options": [
+   "Cu 10 minute înainte, în chat-ul din joc",
+   "Cu cel puțin o oră înainte, pe Discord, în canalul noutati-ilegale",
+   "Cu o zi înainte, pe site",
+   "Nu se anunță"
+  ],
+  "answer": 1,
+  "explain": "Conform punctului 1.2, începutul se anunță cu cel puțin o oră înainte, pe Discord, în canalul noutati-ilegale."
+ },
+ {
+  "id": "razboiul-pentru-materiale#2",
+  "reg": "razboiul-pentru-materiale",
+  "ref": "1.5",
+  "q": "Poate participa organizația câștigătoare la următorul Război pentru materiale?",
+  "options": [
+   "Nu, decât cu aprobarea curatorului",
+   "Da, fără restricții",
+   "Da, dar cu jumătate din membri",
+   "Nu, niciodată"
+  ],
+  "answer": 0,
+  "explain": "Punctul 1.5: organizația câștigătoare nu participă la următorul Război pentru materiale, excepție făcând aprobarea curatorului."
+ },
+ {
+  "id": "razboiul-pentru-materiale#3",
+  "reg": "razboiul-pentru-materiale",
+  "ref": "2.2",
+  "q": "În cât timp după start trebuie să intre toți participanții în zona evenimentului?",
+  "options": [
+   "În cel mult 1 minut",
+   "În cel mult 15 minute",
+   "În cel mult 5 minute",
+   "Oricând până la final"
+  ],
+  "answer": 2,
+  "explain": "Conform punctului 2.2, după start toți participanții intră în zonă în cel mult 5 minute."
+ },
+ {
+  "id": "razboiul-pentru-materiale#4",
+  "reg": "razboiul-pentru-materiale",
+  "ref": "2.6",
+  "q": "Cum se pot ocupa acoperișurile și înălțimile la Războiul pentru materiale (dacă curatorul nu anunță altfel)?",
+  "options": [
+   "Oricât, pe toată durata",
+   "Cel mult 10 minute, de două ori",
+   "Sunt complet interzise",
+   "Cel mult 5 minute, o singură dată pe eveniment"
+  ],
+  "answer": 3,
+  "explain": "Punctul 2.6 permite ocuparea acoperișurilor și înălțimilor cel mult 5 minute, o singură dată pe eveniment, dacă curatorul nu anunță altfel."
+ },
+ {
+  "id": "atacuri-teroriste#1",
+  "reg": "atacuri-teroriste",
+  "ref": "1.2",
+  "q": "Cât de des pot avea loc atacuri teroriste pe server?",
+  "options": [
+   "Cel mult o dată pe zi",
+   "Cel mult o dată la 3 zile",
+   "Cel mult o dată pe săptămână",
+   "Fără limită"
+  ],
+  "answer": 1,
+  "explain": "Conform punctului 1.2, atacurile teroriste au loc cel mult o dată la 3 zile pe server, iar banda organizatoare este apoi înghețată 7 zile."
+ },
+ {
+  "id": "atacuri-teroriste#2",
+  "reg": "atacuri-teroriste",
+  "ref": "1.5",
+  "q": "Câți oameni trebuie să participe, cel puțin, din partea teroriștilor (fără aprobare specială a staff-ului)?",
+  "options": [
+   "15",
+   "8",
+   "10",
+   "20"
+  ],
+  "answer": 0,
+  "explain": "Punctul 1.5 cere cel puțin 15 oameni din partea teroriștilor, excepție făcând aprobarea staff-ului."
+ },
+ {
+  "id": "atacuri-teroriste#3",
+  "reg": "atacuri-teroriste",
+  "ref": "1.9",
+  "q": "Care este răscumpărarea maximă pentru un ostatic la un atac terorist?",
+  "options": [
+   "35.000 $",
+   "150.000 $",
+   "60.000 $ + 2 adrenaline",
+   "40.000 $ + 4 adrenaline"
+  ],
+  "answer": 3,
+  "explain": "Conform punctului 1.9, răscumpărarea maximă pentru un ostatic este 40.000 $ + 4 adrenaline."
+ },
+ {
+  "id": "atacuri-teroriste#4",
+  "reg": "atacuri-teroriste",
+  "ref": "2.9",
+  "q": "În ce interval orar pot avea loc atacurile teroriste?",
+  "options": [
+   "Între 12:00 și 01:00",
+   "Între 16:00 și 23:00",
+   "Între 17:00 și 22:00",
+   "Între 21:00 și 23:00"
+  ],
+  "answer": 2,
+  "explain": "Punctul 2.9 prevede că atacurile teroriste au loc doar între 17:00 și 22:00."
+ },
+ {
+  "id": "atacuri-teroriste#5",
+  "reg": "atacuri-teroriste",
+  "ref": "2.3",
+  "q": "Cât de des poate fi omorât un ostatic la un atac terorist (în afara asaltului sau a nerespectării cerințelor)?",
+  "options": [
+   "Cel mult o dată la 5 minute",
+   "Cel mult o dată la 7 minute",
+   "Cel mult o dată la 15 minute",
+   "Niciodată"
+  ],
+  "answer": 1,
+  "explain": "Conform punctului 2.3, un ostatic poate fi omorât cel mult o dată la 7 minute; excepție: asaltul statului sau nerespectarea cerințelor."
+ },
+ {
+  "id": "ateliere-dealeri#1",
+  "reg": "ateliere-dealeri",
+  "ref": "1.1",
+  "q": "Cine participă la capturarea atelierelor și a dealerilor?",
+  "options": [
+   "Orice jucător de pe server",
+   "Doar membrii bandelor și ai familiilor",
+   "Bandele, familiile și angajații Guvernului"
+  ],
+  "answer": 1,
+  "explain": "Punctul 1.1: participă doar membrii bandelor și ai familiilor; Poliția, Șerifii și FIB pot interveni doar după regulile lor."
+ },
+ {
+  "id": "ateliere-dealeri#2",
+  "reg": "ateliere-dealeri",
+  "ref": "1.7",
+  "q": "Ce cerințe are clipul pe care fiecare organizație îl filmează la eveniment?",
+  "options": [
+   "Tot evenimentul, cel puțin 720p, cu sunetul jocului, păstrat 48 de ore",
+   "Doar finalul, orice calitate, păstrat 24 de ore",
+   "Nu este obligatoriu niciun clip"
+  ],
+  "answer": 0,
+  "explain": "Punctul 1.7 cere cel puțin un clip cu tot evenimentul, de cel puțin 720p și cu sunetul jocului, păstrat 48 de ore."
+ },
+ {
+  "id": "ateliere-dealeri#3",
+  "reg": "ateliere-dealeri",
+  "ref": "2.3",
+  "q": "Pot două organizații să facă alianță la capturarea unui atelier?",
+  "options": [
+   "Da, dacă liderii se înțeleg",
+   "Da, dar doar împotriva statului",
+   "Nu, pe eveniment nu există alianțe"
+  ],
+  "answer": 2,
+  "explain": "Punctul 2.3: pe eveniment nu există alianțe (Mustrare pentru lider)."
+ },
+ {
+  "id": "ateliere-dealeri#4",
+  "reg": "ateliere-dealeri",
+  "ref": "3.1",
+  "q": "Care dintre acestea este interzis la capturarea atelierelor și a dealerilor?",
+  "options": [
+   "Venirea cu mașinile organizației",
+   "Schimbul de focuri cu o altă organizație întâlnită",
+   "Mașini personale în culoarea organizației",
+   "Folosirea dronelor, a taser-ului sau a cătușelor"
+  ],
+  "answer": 3,
+  "explain": "Punctul 3.1 interzice taser-ul, puștile cu lunetă grele, colierele, cătușele, frânghiile și dronele."
+ },
+ {
+  "id": "legea-martiala#1",
+  "reg": "legea-martiala",
+  "ref": "1.3",
+  "q": "Cât poate dura, cel mult, legea marțială?",
+  "options": [
+   "6 ore",
+   "12 ore",
+   "24 de ore",
+   "48 de ore"
+  ],
+  "answer": 1,
+  "explain": "Punctul 1.3: legea marțială ține cel mult 12 ore."
+ },
+ {
+  "id": "legea-martiala#2",
+  "reg": "legea-martiala",
+  "ref": "1.8",
+  "q": "Se pot face capturi în timpul legii marțiale?",
+  "options": [
+   "Da, oricând",
+   "Da, doar cu acordul FIB",
+   "Nu, până la încheierea legii marțiale"
+  ],
+  "answer": 2,
+  "explain": "Punctul 1.8: până la încheierea legii marțiale nu se fac capturi (Demorgan 90 de minute pentru toți / Mustrare pentru lider)."
+ },
+ {
+  "id": "legea-martiala#3",
+  "reg": "legea-martiala",
+  "ref": "3.2",
+  "q": "Ce este interzis organizațiilor criminale în timpul unei urmăriri sau al unui schimb de focuri pe legea marțială?",
+  "options": [
+   "Fuga în zonele de respawn ale organizațiilor sau familiilor",
+   "Unirea IC cu alte organizații pentru a rezista",
+   "Respectarea regulilor generale ale serverului"
+  ],
+  "answer": 0,
+  "explain": "Punctul 3.2 interzice fuga în zonele de respawn în timpul unei urmăriri sau al unui schimb de focuri (Ban 2 zile); unirea IC e permisă (3.1)."
+ },
+ {
+  "id": "legea-martiala#4",
+  "reg": "legea-martiala",
+  "ref": "1.6",
+  "q": "Ce vehicule au voie să intre în baraje în timpul legii marțiale?",
+  "options": [
+   "Orice mașină a organizației",
+   "Doar vehiculele blindate grele, speciale",
+   "Motocicletele și mașinile mici"
+  ],
+  "answer": 1,
+  "explain": "Punctul 1.6 interzice intrarea cu mașina în baraje, cu excepția vehiculelor blindate grele, speciale."
+ },
+ {
+  "id": "verificari-anti-cheat#1",
+  "reg": "verificari-anti-cheat",
+  "ref": "1.4",
+  "q": "Ai fost chemat la o verificare anti-cheat. În cât timp trebuie să intri pe canal?",
+  "options": [
+   "5 minute",
+   "15 minute",
+   "30 de minute",
+   "60 de minute"
+  ],
+  "answer": 1,
+  "explain": "Punctul 1.4: jucătorul chemat are la dispoziție cel mult 15 minute ca să intre pe canal."
+ },
+ {
+  "id": "verificari-anti-cheat#2",
+  "reg": "verificari-anti-cheat",
+  "ref": "1.1",
+  "q": "Unde și cum se face verificarea anti-cheat?",
+  "options": [
+   "În joc, prin chat",
+   "Pe orice server de Discord, prin mesaje private",
+   "Pe Discord-ul oficial, într-un canal vocal, cu share screen"
+  ],
+  "answer": 2,
+  "explain": "Punctul 1.1: verificarea se face doar pe Discord-ul oficial, într-un canal vocal, cu share screen, de un membru al staff-ului desemnat."
+ },
+ {
+  "id": "verificari-anti-cheat#3",
+  "reg": "verificari-anti-cheat",
+  "ref": "3.2",
+  "q": "Cum se consideră ștergerea sau ascunderea fișierelor în timpul verificării?",
+  "options": [
+   "Ca folosire de programe interzise",
+   "Ca o abatere minoră, fără pedeapsă",
+   "Ca refuz politicos, fără consecințe"
+  ],
+  "answer": 0,
+  "explain": "Punctul 3.2: ștergerea sau ascunderea fișierelor în timpul verificării se socotește ca folosire de programe interzise (Ban 15–30 de zile / Ban permanent)."
+ },
+ {
+  "id": "verificari-anti-cheat#4",
+  "reg": "verificari-anti-cheat",
+  "ref": "2.2",
+  "q": "Are voie staff-ul să se uite la conversațiile tale personale în timpul verificării?",
+  "options": [
+   "Da, oricând",
+   "Nu, fără acordul tău",
+   "Da, dacă verificarea durează mult"
+  ],
+  "answer": 1,
+  "explain": "Punctul 2.2: staff-ul nu poate cere sau vedea conversațiile ori fișierele personale fără acordul jucătorului (grupurile care vând programe interzise nu sunt conversații personale)."
+ },
+ {
+  "id": "verificari-anti-cheat#5",
+  "reg": "verificari-anti-cheat",
+  "ref": "2.5",
+  "q": "Poți verifica de viruși programele cerute la verificare?",
+  "options": [
+   "Nu, este interzis",
+   "Da, dar doar pe site-ul ales de staff",
+   "Doar după terminarea verificării",
+   "Da, pe orice site vrei"
+  ],
+  "answer": 3,
+  "explain": "Punctul 2.5: jucătorul poate verifica de viruși orice program cerut, pe orice site vrea; staff-ul nu are voie să-l oprească sau să aleagă site-ul."
+ },
+ {
+  "id": "structuri-de-stat#1",
+  "reg": "structuri-de-stat",
+  "ref": "4.6",
+  "q": "Cât poate dura, cel mult, timpul în celulă pentru 5 stele (fără mandat sau hotărâre a instanței)?",
+  "options": [
+   "25 de minute",
+   "50 de minute",
+   "60 de minute",
+   "100 de minute"
+  ],
+  "answer": 1,
+  "explain": "Punctul 4.6: cel mult 10 minute pentru fiecare stea, deci cel mult 50 de minute pentru 5 stele."
+ },
+ {
+  "id": "structuri-de-stat#2",
+  "reg": "structuri-de-stat",
+  "ref": "4.2",
+  "q": "Ai refuzat avocatul la începutul reținerii. Îl mai poți cere ulterior?",
+  "options": [
+   "Da, oricând",
+   "Da, dar doar în celulă",
+   "Nu, cine refuză la început nu îl mai poate cere"
+  ],
+  "answer": 2,
+  "explain": "Punctul 4.2: cine a refuzat avocatul la început nu îl mai poate cere după."
+ },
+ {
+  "id": "structuri-de-stat#3",
+  "reg": "structuri-de-stat",
+  "ref": "4.5",
+  "q": "Ai murit în timpul reținerii și ai ajuns la spital. Mai poți fi reținut pentru aceeași situație?",
+  "options": [
+   "Nu, nu mai poți fi reținut pentru acea situație",
+   "Da, oricând în aceeași zi",
+   "Da, dacă polițistul te găsește la spital"
+  ],
+  "answer": 0,
+  "explain": "Punctul 4.5: cine a murit în timpul reținerii și este la spital nu mai poate fi reținut pentru acea situație."
+ },
+ {
+  "id": "structuri-de-stat#4",
+  "reg": "structuri-de-stat",
+  "ref": "3.5",
+  "q": "Cine poate cere unui angajat al statului să-și arate legitimația?",
+  "options": [
+   "Doar staff-ul serverului",
+   "Doar procurorul",
+   "Orice participant la situația RP"
+  ],
+  "answer": 2,
+  "explain": "Punctul 3.5: legitimația se arată la cererea oricărui participant la situația RP; cererile la întâmplare sau provocatoare pot fi ignorate."
+ },
+ {
+  "id": "structuri-de-stat#5",
+  "reg": "structuri-de-stat",
+  "ref": "9.5",
+  "q": "După plecarea dintr-o bandă, după cât timp poate fi angajat un membru obișnuit într-o structură de stat?",
+  "options": [
+   "Imediat",
+   "După 3 zile",
+   "După 7 zile",
+   "După 30 de zile"
+  ],
+  "answer": 1,
+  "explain": "Punctul 9.5: angajarea e posibilă abia după 3 zile de la plecare; pentru fostul lider sau adjunct pauza e de 7 zile."
+ },
+ {
+  "id": "structuri-de-stat#6",
+  "reg": "structuri-de-stat",
+  "ref": "3.4",
+  "q": "Ce număr trebuie să aibă insigna unui polițist, șerif sau agent FIB (în afara detectivilor și agenților sub acoperire)?",
+  "options": [
+   "Numărul egal cu ID-ul static al jucătorului",
+   "Un număr ales liber de angajat",
+   "Numărul gradului din structură"
+  ],
+  "answer": 0,
+  "explain": "Punctul 3.4: insigna are numărul egal cu ID-ul static al jucătorului (#1234) și se vede tot timpul."
+ }
+]

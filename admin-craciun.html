@@ -16,7 +16,7 @@
 
 <section class="formbox" id="draw-box" hidden>
   <h2>🎟️ Tragerea la tombolă</h2>
-  <p style="color:var(--muted);margin:-6px 0 14px;line-height:1.6">Se alege aleator un jucător dintre cei cu bilete și cont legat de personaj, care n-au câștigat deja. Fiecare bilet e o șansă (maximum 4). Câștigătorul primește notificare pe site și pe Discord / email; premiul îl dă staff-ul în joc, apoi se bifează mai jos „Premiu dat”.</p>
+  <p style="color:var(--muted);margin:-6px 0 14px;line-height:1.6">Se alege aleator un jucător dintre cei cu bilete și cont legat de personaj, care n-au câștigat deja. Fiecare bilet e o șansă (maximum 5). Câștigătorul primește notificare pe site și pe Discord / email; premiul îl dă staff-ul în joc, apoi se bifează mai jos „Premiu dat”.</p>
   <div class="formgrid">
     <div class="field wide"><label for="prize">Premiul care se trage</label><input id="prize" maxlength="200" placeholder="ex: Mașină VIP pe 30 de zile / 50.000 $ în joc"></div>
   </div>
@@ -32,8 +32,8 @@
 
 <section class="tablebox">
   <div class="title"><h2>Participanți</h2><input id="q" placeholder="Caută jucător…" style="padding:9px 12px;border:1px solid var(--line);background:var(--bg);color:var(--text);border-radius:9px;font:inherit;min-width:200px"></div>
-  <table><thead><tr><th>JUCĂTOR</th><th>CADOURI</th><th>ADVENT</th><th>ZILE SARCINI</th><th>BILETE</th><th>CONT LEGAT</th><th>ULTIMA ACTIVITATE</th></tr></thead>
-  <tbody id="part-body"><tr><td colspan="7">Se încarcă…</td></tr></tbody></table>
+  <table><thead><tr><th>JUCĂTOR</th><th>CADOURI</th><th>ADVENT</th><th>ZILE SARCINI</th><th>REGULAMENT</th><th>BILETE</th><th>CONT LEGAT</th><th>ULTIMA ACTIVITATE</th></tr></thead>
+  <tbody id="part-body"><tr><td colspan="8">Se încarcă…</td></tr></tbody></table>
 </section>
 </main>
 <script src="auth-client.js"></script>
@@ -53,10 +53,10 @@ function renderParts() {
   const q = document.getElementById('q').value.trim().toLowerCase();
   const list = data.participants.filter(p => !q || (p.username || '').toLowerCase().includes(q) || (p.character || '').toLowerCase().includes(q));
   document.getElementById('part-body').innerHTML = list.length ? list.map(p => `<tr>
-    <td>${who(p)}</td><td>${cell(p.gifts, data.need.gifts)}</td><td>${cell(p.advent, data.need.advent)}</td><td>${cell(p.taskDays, data.need.taskDays)}</td>
+    <td>${who(p)}</td><td>${cell(p.gifts, data.need.gifts)}</td><td>${cell(p.advent, data.need.advent)}</td><td>${cell(p.taskDays, data.need.taskDays)}</td><td>${cell(p.quiz || 0, data.need.quiz)}</td>
     <td><strong style="color:var(--text);font-size:14px">${p.tickets}</strong></td>
     <td>${p.linked ? '<span class="pill on">DA</span>' : '<span class="pill off">NU</span>'}</td><td>${fmt(p.lastAt)}</td></tr>`).join('')
-    : `<tr><td colspan="7">${data.participants.length ? 'Niciun jucător nu se potrivește căutării.' : 'Încă nu a participat nimeni.'}</td></tr>`;
+    : `<tr><td colspan="8">${data.participants.length ? 'Niciun jucător nu se potrivește căutării.' : 'Încă nu a participat nimeni.'}</td></tr>`;
 }
 function render() {
   const P = data.participants;
@@ -65,7 +65,7 @@ function render() {
     + (data.clock.inSeason ? 'Acum sunt PORNITE.' : data.clock.ended ? 'S-au încheiat — se poate trage tombola.' : 'Încă nu au început (fondatorii le pot încerca în mod de test, pe craciun.html).');
   document.getElementById('m-part').textContent = P.length;
   document.getElementById('m-done').textContent = P.reduce((n, p) => n + p.quests, 0);
-  document.getElementById('m-all').textContent = `${P.filter(p => p.quests === 3).length} jucători le-au terminat pe toate`;
+  document.getElementById('m-all').textContent = `${P.filter(p => p.quests === 4).length} jucători le-au terminat pe toate`;
   const elig = P.filter(p => p.linked && p.tickets > 0);
   document.getElementById('m-tickets').textContent = P.reduce((n, p) => n + p.tickets, 0);
   document.getElementById('m-elig').textContent = `${elig.length} jucători intră la tombolă`;

@@ -1153,10 +1153,11 @@ function previewOpenLabel(c) {
 function syncOpenControls() {
   document.querySelectorAll('.qty [data-qty]').forEach(b => b.setAttribute('aria-pressed', String(Number(b.dataset.qty) === openQty)));
   document.querySelectorAll('input[data-fast]').forEach(i => { i.checked = fastOpen; });
-  const spooky = document.documentElement.classList.contains('tema-halloween');
+  const root = document.documentElement.classList;
+  const seifLabel = root.contains('tema-halloween') ? '⚰️ Criptă' : root.contains('tema-iarna') ? '🎁 Cadou' : '🗄️ Seif';
   document.querySelectorAll('.style-pick [data-style]').forEach(b => {
     b.setAttribute('aria-pressed', String(b.dataset.style === openStyle));
-    if (b.dataset.style === 'seif') b.textContent = spooky ? '⚰️ Criptă' : '🗄️ Seif';
+    if (b.dataset.style === 'seif') b.textContent = seifLabel;
   });
   document.querySelectorAll('[data-spin]').forEach(btn => {
     const c = currentCasesById[btn.dataset.spin];
@@ -1277,18 +1278,27 @@ const oxSfx = (() => {
   // criptă": lespede trasă, acord rece, scârțâit, orgă și râs (sunt făcute în
   // tema.js). Butonul 🔊 de aici le oprește la fel ca pe cele obișnuite; dacă
   // tema nu poate reda sunetul, rămâne cel obișnuit.
-  const spooky = (name, r) => !off && !!(window.MRP_TEMA && MRP_TEMA.theme === 'halloween' && MRP_TEMA.play
-    && MRP_TEMA.play(name, { k: Math.max(0, OX_TIERS.indexOf(r)) }) > 0);
+  // (31.10.2026) Cu tema de iarnă: zăpadă, clopoței, hârtie de cadou și
+  // „Jingle Bells" la cutia muzicală (tot din tema.js).
+  const THEME_SFX = {
+    halloween: { stop: 'thud', slide: 'slab', tier: 'reveal', lid: 'creak', win: 'organ' },
+    iarna: { stop: 'xstop', slide: 'xslide', tier: 'xreveal', lid: 'xribbon', win: 'xwin' },
+  };
+  const themed = (ev, r) => {
+    if (off || !window.MRP_TEMA || !MRP_TEMA.play) return false;
+    const name = (THEME_SFX[MRP_TEMA.theme] || {})[ev];
+    return !!name && MRP_TEMA.play(name, { k: Math.max(0, OX_TIERS.indexOf(r)) }) > 0;
+  };
   return {
     get off() { return off; },
     toggle() { off = !off; try { localStorage.setItem('mrp_ox_mute', off ? '1' : '0'); } catch {} return off; },
     unlock() { const c = ac(); if (c && c.state === 'suspended') c.resume(); },
     click() { tone(1150, 0.035, 'square', 0.035, 0.7); },          // un premiu trece prin mijloc
-    stop() { if (spooky('thud')) return; noise(0.18, 0.16); tone(180, 0.22, 'sine', 0.2, 0.6); }, // rotirea s-a oprit
-    slide() { if (spooky('slab')) return; noise(0.55, 0.13); tone(90, 0.5, 'sine', 0.12, 1.7); },  // caseta iese din perete
-    tier(r) { if (spooky('reveal', r)) return; const k = OX_TIERS.indexOf(r); tone(330 + k * 70, 0.3, 'triangle', 0.12, 1.5); noise(0.25, 0.1); }, // se vede culoarea
-    lid() { if (spooky('creak')) return; tone(240, 0.16, 'square', 0.04, 1.9); },                   // capacul
-    win(r) { if (spooky('organ', r)) return; const base = 523 + OX_TIERS.indexOf(r) * 60; [0, 4, 7, 12].forEach((s, k) => setTimeout(() => tone(base * Math.pow(2, s / 12), 0.35, 'triangle', 0.1), k * 70)); },
+    stop() { if (themed('stop')) return; noise(0.18, 0.16); tone(180, 0.22, 'sine', 0.2, 0.6); }, // rotirea s-a oprit
+    slide() { if (themed('slide')) return; noise(0.55, 0.13); tone(90, 0.5, 'sine', 0.12, 1.7); },  // caseta iese din perete
+    tier(r) { if (themed('tier', r)) return; const k = OX_TIERS.indexOf(r); tone(330 + k * 70, 0.3, 'triangle', 0.12, 1.5); noise(0.25, 0.1); }, // se vede culoarea
+    lid() { if (themed('lid')) return; tone(240, 0.16, 'square', 0.04, 1.9); },                   // capacul
+    win(r) { if (themed('win', r)) return; const base = 523 + OX_TIERS.indexOf(r) * 60; [0, 4, 7, 12].forEach((s, k) => setTimeout(() => tone(base * Math.pow(2, s / 12), 0.35, 'triangle', 0.1), k * 70)); },
   };
 })();
 (() => {
@@ -1308,6 +1318,18 @@ const confettiFx = (() => {
   const COUNT = { common: 0, uncommon: 50, rare: 110, legendary: 190 };
   // (07.10.2026) silueta unui liliac — cu tema de Halloween pornită, o parte
   // din confetti devin lilieci în culoarea rarității
+  // (31.10.2026) fulg de zăpadă cu 6 brațe — cu tema de iarnă, jumătate din
+  // confetti devin fulgi care cad mai încet
+  const FLAKE = (() => {
+    const p = new Path2D();
+    for (let a = 0; a < 6; a++) {
+      const r = a * Math.PI / 3, co = Math.cos(r), si = Math.sin(r);
+      const at = (x, y) => [x * co - y * si, x * si + y * co];
+      p.moveTo(0, 0); p.lineTo(...at(0, -10));
+      p.moveTo(...at(-3.2, -8.6)); p.lineTo(...at(0, -5.8)); p.lineTo(...at(3.2, -8.6));
+    }
+    return p;
+  })();
   const BAT = new Path2D('M0-3L-1.500-6-2.500-3.500C-8-8-16-8-22-6c2 2 3 5 2.500 8 3-2 5.500-2 7.500 1 1.500-2 4-2 6 .5 1-1 2-1.500 3.500-1L0 6l2.500-3.500c1.500-.5 2.500 0 3.500 1 2-2.500 4.500-2.500 6-.5 2-3 4.500-3 7.500-1-.5-3 .5-6 2.500-8-6-2-14-2-19.500 2.500L1.500-6z');
   let parts = [], raf = 0, W = 0, H = 0;
   const pale = hex => {
@@ -1327,7 +1349,7 @@ const confettiFx = (() => {
     for (const p of parts) {
       if (now < p.t0) continue;
       const age = now - p.t0;
-      p.vy = Math.min(p.vy + 0.045, 6.5);
+      p.vy = p.flake ? Math.min(p.vy + 0.012, 2.4) : Math.min(p.vy + 0.045, 6.5);
       p.x += p.vx + Math.sin(age / 260 + p.ph) * 0.9;
       p.y += p.vy;
       p.rot += p.vr;
@@ -1338,6 +1360,7 @@ const confettiFx = (() => {
       g.globalAlpha = p.y > H - 140 ? Math.max(0, (H + 30 - p.y) / 170) : 0.95;
       g.fillStyle = p.c;
       if (p.bat) { g.scale(p.w / 11, p.w / 11); g.fill(BAT); } // liliac (tema de Halloween)
+      else if (p.flake) { g.scale(p.w / 10, p.w / 10); g.strokeStyle = p.c; g.lineWidth = 1.8; g.lineCap = 'round'; g.stroke(FLAKE); } // fulg (tema de iarnă)
       else g.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
       g.restore();
     }
@@ -1353,12 +1376,15 @@ const confettiFx = (() => {
       const count = Math.round(base * Math.min(1, Math.max(0.5, W / 1100)));
       const main = OX_COLOR[rarity] || '#ffffff';
       const spooky = document.documentElement.classList.contains('tema-halloween');
+      const winter = !spooky && document.documentElement.classList.contains('tema-iarna');
       const colors = spooky ? [main, '#ff7a14', pale(main), '#9b5cff']
+        : winter ? [main, '#ffffff', '#bfe6ff', '#f2b84b']
         : rarity === 'legendary' ? [main, '#ffd874', '#eb4b4b', '#ffffff'] : [main, main, pale(main), '#ffffff'];
       const now = performance.now();
       for (let i = 0; i < count; i++) {
         parts.push({
           bat: spooky && i % 3 === 0,
+          flake: winter && i % 2 === 0,
           x: Math.random() * W, y: -20 - Math.random() * H * 0.25,
           vx: (Math.random() - 0.5) * 1.6, vy: 1.5 + Math.random() * 3,
           rot: Math.random() * 6.28, vr: (Math.random() - 0.5) * 0.24,

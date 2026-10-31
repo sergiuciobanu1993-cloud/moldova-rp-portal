@@ -22,7 +22,7 @@
 // (rămâne cât ții fila deschisă); ?tema=nu o oprește.
 (() => {
   if (window.MRP_TEMA) return;
-  const VER = '20261031b'; // aceeași ca în pwa.js — schimbă-le împreună când modifici tema
+  const VER = '20261031c'; // aceeași ca în pwa.js — schimbă-le împreună când modifici tema
   const root = document.documentElement;
   const ls = {
     get(k) { try { return localStorage.getItem(k); } catch { return null; } },
@@ -338,6 +338,79 @@
         tone(c, out, t, 'sine', f, f, 0.5, 0.09, 0.003);
         tone(c, out, t + 0.06, 'sine', f * 1.5, f * 1.5, 0.35, 0.04, 0.003);
         return 0.55;
+      },
+
+      // ---- (31.10.2026) cutiile din VIP Shop cu tema de iarnă ----
+      // rotirea s-a oprit: o bufnitură moale în zăpadă și un clinchet de clopoțel
+      xstop(c, out, t) {
+        tone(c, out, t, 'sine', 120, 55, 0.2, 0.3, 0.003);
+        const n = noiseSrc(c, 'white', t, 0.16), g = gain(c, 0);
+        env(g, t, 0.003, 0.12, 0, 0.14);
+        n.connect(filt(c, 'lowpass', 1300)).connect(g).connect(out);
+        [2350, 3870, 5520].forEach((f, j) => tone(c, out, t + 0.03, 'sine', f, f, 0.32, 0.05 - j * 0.012, 0.002));
+        return 0.4;
+      },
+      // caseta alunecă din perete: scrâșnet de zăpadă + două scuturături de clopoței
+      xslide(c, out, t) {
+        const n = noiseSrc(c, 'white', t, 0.7), bp = filt(c, 'bandpass', 700, 1.4), g = gain(c, 0);
+        bp.frequency.setValueAtTime(600, t);
+        bp.frequency.exponentialRampToValueAtTime(1500, t + 0.6);
+        env(g, t, 0.08, 0.12, 0.35, 0.22);
+        n.connect(bp).connect(g).connect(out);
+        const r = noiseSrc(c, 'brown', t, 0.7), rg = gain(c, 0);
+        env(rg, t, 0.06, 0.35, 0.3, 0.25);
+        r.connect(filt(c, 'lowpass', 300)).connect(rg).connect(out);
+        [0.5, 0.64].forEach((d, i) => [2350, 3870, 5520, 7150].forEach((f, j) =>
+          tone(c, out, t + d, 'sine', f * (1 + (Math.random() - 0.5) * 0.04), 0, 0.25, (0.05 - j * 0.01) * (i ? 0.7 : 1), 0.002)));
+        return 0.95;
+      },
+      // se vede culoarea: arpegiu major de celestă, mai sus cu cât premiul e mai rar
+      xreveal(c, out, t, k = 0) {
+        const base = [523.25, 587.33, 659.25, 698.46][Math.max(0, Math.min(3, k))];
+        [1, 1.26, 1.498, 2].forEach((r, i) => {
+          [[1, 0.09], [2.76, 0.025], [5.4, 0.008]].forEach(([h, a]) => {
+            const o = osc(c, 'sine', base * r * h), g = gain(c, 0);
+            env(g, t + i * 0.07, 0.004, a, 0, 1.2);
+            o.connect(g).connect(out); o.start(t); o.stop(t + 1.6);
+          });
+        });
+        if (k >= 2) defs.twinkle(c, out, t + 0.32);
+        return 1.6;
+      },
+      // capacul: hârtie de cadou foșnind și o fundă care se desface
+      xribbon(c, out, t) {
+        let at = t;
+        for (let i = 0; i < 5; i++) {
+          const d = 0.035 + Math.random() * 0.05, n = noiseSrc(c, 'white', at, d), g = gain(c, 0);
+          env(g, at, 0.004, 0.09 + Math.random() * 0.06, 0, d);
+          n.connect(filt(c, 'bandpass', 2600 + Math.random() * 1800, 0.9)).connect(g).connect(out);
+          at += d + 0.02 + Math.random() * 0.04;
+        }
+        tone(c, out, at, 'sine', 620, 300, 0.12, 0.12, 0.004);
+        return at - t + 0.15;
+      },
+      // premiul: „Jingle Bells" la cutia muzicală, cu atât mai sus cu cât e mai rar;
+      // la rare se aud și clopoțeii de sanie, la legendare și „Ho-ho-ho"
+      xwin(c, out, t, k = 0) {
+        k = Math.max(0, Math.min(3, k));
+        const st = Math.pow(2, [0, 2, 4, 5][k] / 12), q = 0.17;
+        const E = 659.25 * st, G = 783.99 * st, C = 523.25 * st, D = 587.33 * st;
+        const notes = k >= 2
+          ? [[E, 1], [E, 1], [E, 2], [E, 1], [E, 1], [E, 2], [E, 1], [G, 1], [C, 1.5], [D, 0.5], [E, 3]]
+          : [[E, 1], [E, 1], [E, 2], [E, 1], [E, 1], [E, 2]];
+        let at = t;
+        notes.forEach(([f, d]) => {
+          [[1, 0.12], [2, 0.045], [3.01, 0.018]].forEach(([h, a]) => {
+            const o = osc(c, 'sine', f * h), g = gain(c, 0);
+            env(g, at, 0.004, a, 0, 0.8);
+            o.connect(g).connect(out); o.start(at); o.stop(at + 0.9);
+          });
+          at += d * q;
+        });
+        let end = at - t + 0.8;
+        if (k >= 2) { const g = gain(c, 0.55); g.connect(out); defs.jingle(c, g, t + 0.05); end = Math.max(end, 1.55); }
+        if (k >= 3) { const g = gain(c, 0.9); g.connect(out); defs.hohoho(c, g, at + 0.1); end = Math.max(end, at - t + 1.15); }
+        return end;
       },
     };
 

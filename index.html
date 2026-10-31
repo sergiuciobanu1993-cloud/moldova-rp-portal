@@ -5,6 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#ff8a1f">
   <meta name="description" content="Moldova RP — portal oficial al comunității. Regulamente, jucători, facțiuni și anunțuri.">
+  <!-- (31.10.2026) cardul care apare când cineva pune linkul pe Discord / Facebook (imaginea: assets/og/) -->
+  <meta property="og:type" content="website"><meta property="og:site_name" content="Moldova RP"><meta property="og:locale" content="ro_RO">
+  <meta property="og:title" content="Moldova RP — Portal Oficial"><meta property="og:description" content="Server FiveM de roleplay. Regulamente, facțiuni, joburi, anunțuri și contul tău de jucător, pe portalul oficial."><meta property="og:url" content="https://moldovarp.md/">
+  <meta property="og:image" content="https://moldovarp.md/assets/og/acasa.jpg?v=1"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="Moldova RP — Portal Oficial">
+  <meta name="twitter:card" content="summary_large_image">
   <title>Moldova RP — Portal Oficial</title>
   <link rel="icon" href="assets/favicon.png">
   <link rel="stylesheet" href="styles.css?v=20260907e">
@@ -103,6 +108,7 @@
   /* (31.10.2026) Sondajul: pe ecranele de la 1360px în sus stă în dreapta sus a hero-ului
      (locul gol de deasupra cardului „Server online"), ca hero-ul să nu se mărească; cât
      timp e acolo, mașina mare din fundal se ascunde și cardul ei arată poza mică. */
+  .hero-actions{flex-wrap:wrap} /* (31.10.2026) al treilea buton: „Începe să joci” (ghidul pentru jucătorii noi) */
   .hero-sondaj-slot{display:none}
   .hero-sondaj-slot.on{display:block;position:absolute;z-index:3;top:16px;right:8vw;width:min(422px,calc(84vw - 720px))}
   .hero-sondaj-slot .sj.sj-c{margin-top:0;max-width:none;padding:14px 16px}
@@ -198,6 +204,7 @@
         <div class="hero-actions">
           <a class="btn btn-primary" href="#regulamente">Vezi regulamentele</a>
           <a class="btn btn-ghost" href="#jucatori">Explorează comunitatea</a>
+          <a class="btn btn-ghost" href="incepe.html">🎮 Începe să joci</a>
         </div>
         <!-- (31.10.2026) sondajul activ, sus în hero, ca să se vadă din prima (sondaj.js; se pune din Admin → Sondaje) -->
         <div id="sondaj" data-sondaj data-compact hidden></div>
@@ -408,7 +415,7 @@
 
   <footer>
     <div class="footer-brand"><img src="assets/logo.png" alt="Moldova RP"><div><strong>MOLDOVA<span class="accent">RP</span></strong><small>Portal oficial al comunității</small></div></div>
-    <div class="footer-links"><a href="#regulamente">Regulamente</a><a href="#jucatori">Jucători</a><a href="#factiuni">Facțiuni</a><a href="ghid-factiuni.html">Ghid facțiuni</a><a href="legislatie-rutiera.html">Legislație rutieră</a><a href="joburi.html">Joburi</a><a href="#anunturi">Anunțuri</a><a href="#actualizari">Actualizări</a><a href="https://discord.gg/moldovaroleplay" target="_blank" rel="noopener noreferrer">Discord</a><a href="https://moldovaroleplay.tebex.io" target="_blank" rel="noopener noreferrer">Magazin</a><a href="https://www.tiktok.com/@moldovarolepllay" target="_blank" rel="noopener noreferrer">TikTok</a><a href="aplicatie.html">📲 Aplicația pe telefon</a></div>
+    <div class="footer-links"><a href="incepe.html">Începe să joci</a><a href="#regulamente">Regulamente</a><a href="#jucatori">Jucători</a><a href="#factiuni">Facțiuni</a><a href="ghid-factiuni.html">Ghid facțiuni</a><a href="legislatie-rutiera.html">Legislație rutieră</a><a href="joburi.html">Joburi</a><a href="#anunturi">Anunțuri</a><a href="#actualizari">Actualizări</a><a href="https://discord.gg/moldovaroleplay" target="_blank" rel="noopener noreferrer">Discord</a><a href="https://moldovaroleplay.tebex.io" target="_blank" rel="noopener noreferrer">Magazin</a><a href="https://www.tiktok.com/@moldovarolepllay" target="_blank" rel="noopener noreferrer">TikTok</a><a href="aplicatie.html">📲 Aplicația pe telefon</a></div>
     <p class="copyright">© 2026 Moldova RP. Toate drepturile rezervate.</p>
   </footer>
 

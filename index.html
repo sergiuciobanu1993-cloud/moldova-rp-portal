@@ -108,6 +108,22 @@
   /* (31.10.2026) Sondajul: pe ecranele de la 1360px în sus stă în dreapta sus a hero-ului
      (locul gol de deasupra cardului „Server online"), ca hero-ul să nu se mărească; cât
      timp e acolo, mașina mare din fundal se ascunde și cardul ei arată poza mică. */
+  /* (31.10.2026) ceasul până la Revelion, în rândul „De ce Moldova RP?” (nu mărește hero-ul) */
+  .ny{display:flex;align-items:center;gap:16px;margin-left:auto;padding:10px 14px 10px 16px;border-radius:14px;background:linear-gradient(135deg,rgba(255,210,122,.1),rgba(80,130,220,.08));border:1px solid rgba(255,210,122,.32)}
+  .ny[hidden],.ny-clock[hidden]{display:none}
+  .ny-lbl{display:flex;flex-direction:column;gap:2px}
+  .ny-eye{font-size:10px;font-weight:900;letter-spacing:.17em;color:#ffd27a}
+  .ny-eye b{font-weight:900}
+  .ny-sub{font-size:12px;color:var(--muted)}
+  .ny-clock{display:flex;gap:6px}
+  .ny-u{display:flex;flex-direction:column;align-items:center;min-width:46px;padding:5px 4px 4px;border-radius:9px;background:rgba(7,8,9,.6);border:1px solid rgba(255,255,255,.08)}
+  .ny-u b{font-size:20px;line-height:1.1;font-weight:900;font-variant-numeric:tabular-nums;color:#fff}
+  .ny-u small{font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  .ny-done{margin:0;font-size:18px;font-weight:900;color:#ffd27a}
+  .ny.boom{animation:nyBoom 1.2s ease-out}
+  @keyframes nyBoom{0%{box-shadow:0 0 0 0 rgba(255,210,122,.7)}100%{box-shadow:0 0 0 26px rgba(255,210,122,0)}}
+  @media (max-width:700px){.ny{margin-left:0;width:100%;justify-content:space-between;flex-wrap:wrap}.ny-u{min-width:42px}}
+  @media (prefers-reduced-motion:reduce){.ny.boom{animation:none}}
   .hero-actions{flex-wrap:wrap} /* (31.10.2026) al treilea buton: „Începe să joci” (ghidul pentru jucătorii noi) */
   .hero-sondaj-slot{display:none}
   .hero-sondaj-slot.on{display:block;position:absolute;z-index:3;top:16px;right:8vw;width:min(422px,calc(84vw - 720px))}
@@ -147,6 +163,17 @@
     <section class="highlights-marquee">
       <div class="highlights-marquee-head">
         <div><p class="eyebrow" data-block="highlights_eyebrow">MOLDOVA RP</p><h2 data-block="highlights_title">De ce Moldova RP?</h2></div>
+        <!-- (31.10.2026) ceasul până la Revelion: de pe 1 decembrie până pe 1 ianuarie (ora Moldovei); ?revelion=1 îl arată oricând, ca previzualizare -->
+        <div class="ny" id="ny" role="timer" aria-live="off" hidden>
+          <div class="ny-lbl"><span class="ny-eye">🎆 PÂNĂ LA <b id="ny-year">2027</b></span><span class="ny-sub">Revelionul pe Moldova RP</span></div>
+          <div class="ny-clock" id="ny-clock">
+            <span class="ny-u"><b id="ny-d">00</b><small>zile</small></span>
+            <span class="ny-u"><b id="ny-h">00</b><small>ore</small></span>
+            <span class="ny-u"><b id="ny-m">00</b><small>min</small></span>
+            <span class="ny-u"><b id="ny-s">00</b><small>sec</small></span>
+          </div>
+          <p class="ny-done" id="ny-done" hidden>La mulți ani, <b id="ny-year2">2027</b>! 🥂</p>
+        </div>
         <a class="text-link" href="index.html#despre">Vezi mai multe →</a>
       </div>
       <div class="highlights-marquee-viewport">
@@ -179,6 +206,58 @@
       </div>
     </section>
 
+<script>
+// (31.10.2026) Ceasul până la Revelion (vezi .ny mai sus). Ora țintă: 1 ianuarie, 00:00, ora Moldovei.
+(function () {
+  var box = document.getElementById('ny'); if (!box) return;
+  var preview = /[?&]revelion=1\b/.test(location.search);
+  // ora Moldovei → UTC: decalajul zonei la momentul dat (iarna +2)
+  function kisOffsetMin(t) {
+    try {
+      var p = new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Chisinau', timeZoneName: 'shortOffset' }).formatToParts(new Date(t));
+      var z = (p.find(function (x) { return x.type === 'timeZoneName'; }) || {}).value || 'GMT+2';
+      var m = z.match(/GMT([+-])(\d+)(?::(\d+))?/); if (!m) return 120;
+      return (m[1] === '-' ? -1 : 1) * (Number(m[2]) * 60 + Number(m[3] || 0));
+    } catch (e) { return 120; }
+  }
+  function kisMidnight(y, mo, d) { var u = Date.UTC(y, mo, d); return u - kisOffsetMin(u) * 60000; }
+  var now = Date.now();
+  var yNow = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Chisinau', year: 'numeric' }).format(new Date(now)));
+  // în ianuarie (până pe 1 inclusiv) arătăm „La mulți ani” pentru anul curent; altfel numărăm spre anul următor
+  var target = kisMidnight(yNow + 1, 0, 1), year = yNow + 1;
+  var janEnd = kisMidnight(yNow, 0, 2);
+  if (now < janEnd && now >= kisMidnight(yNow, 0, 1)) { target = kisMidnight(yNow, 0, 1); year = yNow; }
+  var start = kisMidnight(year - 1, 11, 1), end = kisMidnight(year, 0, 2);
+  if (!preview && (now < start || now >= end)) return;
+  document.getElementById('ny-year').textContent = year;
+  document.getElementById('ny-year2').textContent = year;
+  var el = { d: document.getElementById('ny-d'), h: document.getElementById('ny-h'), m: document.getElementById('ny-m'), s: document.getElementById('ny-s') };
+  var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+  var timer = 0, done = false;
+  function tick() {
+    var left = Math.max(0, Math.floor((target - Date.now()) / 1000));
+    if (left <= 0) {
+      if (!done) {
+        done = true;
+        document.getElementById('ny-clock').hidden = true;
+        box.querySelector('.ny-sub').textContent = 'De la toată echipa Moldova RP';
+        box.querySelector('.ny-eye').textContent = '🎆 ' + year;
+        document.getElementById('ny-done').hidden = false;
+        box.classList.add('boom');
+      }
+      return;
+    }
+    el.d.textContent = pad(Math.floor(left / 86400));
+    el.h.textContent = pad(Math.floor(left % 86400 / 3600));
+    el.m.textContent = pad(Math.floor(left % 3600 / 60));
+    el.s.textContent = pad(left % 60);
+    box.setAttribute('aria-label', 'Până la Revelion: ' + Math.floor(left / 86400) + ' zile, ' + Math.floor(left % 86400 / 3600) + ' ore și ' + Math.floor(left % 3600 / 60) + ' minute');
+  }
+  box.hidden = false;
+  tick();
+  timer = setInterval(tick, 1000);
+})();
+</script>
     <section class="hero" id="acasa">
       <div class="hero-bg hero-imx" id="hero-imx" aria-hidden="true">
         <div class="hx-scenes">

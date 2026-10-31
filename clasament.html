@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="ro">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ff8a1f">
+  <meta name="description" content="Moldova RP — clasamentul săptămânii: cei mai activi jucători și facțiuni.">
+  <title>Clasamentul săptămânii — Moldova RP</title>
+  <link rel="icon" href="assets/favicon.png">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/assets/app/apple-touch-icon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black"><meta name="apple-mobile-web-app-title" content="Moldova RP"><script>try{var wnT=+sessionStorage.getItem("mrp_wn_nav");if(wnT&&Date.now()-wnT<5000)document.documentElement.classList.add("wn-in")}catch(e){}</script><style>/* (31.10.2026) sosirea după cortina de iarnă (tema.js, wnNav): cortina se ridică */html.wn-in::after{content:"";position:fixed;left:0;right:0;top:0;height:calc(100vh + 140px);z-index:2147483000;pointer-events:none;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='-12 -12 24 24'%3E%3Cg fill='none' stroke='%23bfe6ff' stroke-width='1.6' stroke-linecap='round'%3E%3Cpath transform='rotate(0)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3Cpath transform='rotate(60)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3Cpath transform='rotate(120)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3Cpath transform='rotate(180)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3Cpath transform='rotate(240)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3Cpath transform='rotate(300)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3C/g%3E%3C/svg%3E") 50% calc(50vh - 27px)/54px 54px no-repeat,radial-gradient(circle at 30% 40%,#fff 0 1.6px,transparent 2.3px) 0 0/131px 113px,radial-gradient(circle at 70% 20%,rgba(255,255,255,.75) 0 1.1px,transparent 1.8px) 36px 28px/97px 71px,linear-gradient(180deg,#0b1830,#060a12 75%);-webkit-mask-image:linear-gradient(180deg,#000 calc(100% - 140px),transparent);mask-image:linear-gradient(180deg,#000 calc(100% - 140px),transparent);animation:wnIn 1s cubic-bezier(.65,0,.35,1) .2s forwards}@keyframes wnIn{to{transform:translateY(-100%);visibility:hidden}}@media (prefers-reduced-motion:reduce){html.wn-in::after{display:none}}</style><script src="/pwa.js" defer></script>
+  <style>
+  /* (31.10.2026) Clasamentul săptămânii — datele vin din /api/clasament (backend/server.js, „Clasamentul săptămânii") */
+  .lb{max-width:1180px;margin:0 auto;padding:0 8vw 90px;display:grid;gap:22px}
+  .lb-meta{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}
+  .lb-chip{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:99px;border:1px solid var(--line);background:rgba(255,255,255,.03);font-size:12px;font-weight:700;color:#cfd3d7}
+  .lb-chip b{color:var(--orange)}
+  .lb-box{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:22px}
+  .lb-box h2{margin:0;font-size:22px;letter-spacing:-.01em}
+  .lb-head{display:flex;justify-content:space-between;align-items:end;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+  .lb-head small{color:var(--muted);font-size:12px}
+  .lb-podium{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+  .lb-win{display:flex;gap:12px;align-items:center;padding:14px 16px;border-radius:12px;border:1px solid var(--line);background:linear-gradient(150deg,rgba(255,138,31,.08),transparent 60%),var(--panel2)}
+  .lb-win .m{flex:none;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;font-size:22px;background:rgba(255,255,255,.05)}
+  .lb-win small{display:block;color:var(--muted);font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+  .lb-win strong{display:block;font-size:15px;margin-top:2px}
+  .lb-win span{color:#cfd3d7;font-size:12px}
+  .lb-tabs{display:flex;gap:8px;flex-wrap:wrap}
+  .lb-tabs button{min-height:40px;padding:0 16px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--text);font:800 13px Inter,system-ui,sans-serif;cursor:pointer}
+  .lb-tabs button[aria-selected="true"]{background:rgba(255,138,31,.14);border-color:var(--orange);color:var(--orange)}
+  .lb-tabs button:focus-visible{outline:2px solid var(--orange);outline-offset:2px}
+  .lb-table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+  .lb-table th{text-align:left;color:var(--muted);font-size:10px;letter-spacing:.12em;font-weight:800;padding:10px 12px;border-bottom:1px solid var(--line)}
+  .lb-table td{padding:12px;border-bottom:1px solid var(--line);font-size:14px}
+  .lb-table tr:last-child td{border-bottom:0}
+  .lb-table td.r{text-align:right;font-weight:800}
+  .lb-table th.r{text-align:right}
+  .lb-rank{display:inline-grid;place-items:center;width:30px;height:30px;border-radius:8px;background:rgba(255,255,255,.05);font-weight:900;font-size:13px}
+  .lb-table tr.top1 .lb-rank{background:#f2b84b;color:#111}.lb-table tr.top2 .lb-rank{background:#c9d1d9;color:#111}.lb-table tr.top3 .lb-rank{background:#cd7f4b;color:#111}
+  .lb-org{color:var(--muted);font-size:12px}
+  .lb-empty{color:var(--muted);padding:18px 4px}
+  .lb-scroll{overflow-x:auto}
+  .lb-rules{margin:0;padding-left:18px;color:var(--muted);line-height:1.8;font-size:13px}
+  .lb-rules b{color:var(--text)}
+  @media (max-width:640px){.lb{padding:0 18px 70px}.lb-box{padding:16px}.lb-table td{padding:10px 8px;font-size:13px}.lb-hide-sm{display:none}}
+  </style>
+</head>
+<body data-content-page="clasament">
+  <header class="site-header">
+    <a class="brand" href="index.html" aria-label="Moldova RP - Acasă">
+      <img src="assets/logo.png" alt="Moldova RP">
+      <span>MOLDOVA<span class="accent">RP</span></span>
+    </a>
+    <button class="menu-toggle" aria-label="Deschide meniul" aria-expanded="false">☰</button>
+    <nav class="nav">
+      <a href="index.html">Acasă</a>
+      <a href="regulamente.html">Regulamente</a>
+      <a href="index.html#jucatori">Jucători</a>
+      <a class="active" href="clasament.html">Clasament</a>
+      <a href="legislatie-rutiera.html">Legislație Rutieră</a>
+      <a href="joburi.html">Joburi</a>
+      <a href="index.html#anunturi">Anunțuri</a>
+      <a class="nav-login" href="login.html">Autentificare</a>
+    </nav>
+  </header>
+
+  <main>
+    <div class="page-hero">
+      <a class="back-link" href="index.html">← Înapoi la pagina principală</a>
+      <p class="eyebrow" style="margin-top:22px">TOPUL SĂPTĂMÂNII</p>
+      <h1>Clasament</h1>
+      <p class="muted" style="max-width:640px;margin-top:14px">Cei mai activi jucători și facțiuni de pe server în săptămâna asta. Clasamentul pornește de la zero în fiecare luni la 00:00. Primii 3 jucători și prima facțiune primesc o insignă pe profil și un premiu în joc de la staff.</p>
+      <div class="lb-meta"><span class="lb-chip">📅 <span id="lb-week">…</span></span><span class="lb-chip">⏱ Se actualizează la câteva minute</span></div>
+    </div>
+
+    <div class="lb">
+      <section class="lb-box" id="lb-last" hidden aria-labelledby="lb-last-title">
+        <div class="lb-head"><h2 id="lb-last-title">🏆 Câștigătorii săptămânii trecute</h2><small id="lb-last-week"></small></div>
+        <div class="lb-podium" id="lb-podium"></div>
+      </section>
+
+      <section class="lb-box" aria-labelledby="lb-now-title">
+        <div class="lb-head"><h2 id="lb-now-title">Săptămâna asta</h2>
+          <div class="lb-tabs" role="tablist" aria-label="Clasamente">
+            <button type="button" role="tab" aria-selected="true" data-tab="jucatori">🎮 Jucători</button>
+            <button type="button" role="tab" aria-selected="false" data-tab="factiuni">🛡 Facțiuni</button>
+            <button type="button" role="tab" aria-selected="false" data-tab="questuri" hidden>🎄 Questuri</button>
+          </div>
+        </div>
+        <div class="lb-scroll" id="lb-table" role="tabpanel"><p class="lb-empty">Se încarcă…</p></div>
+      </section>
+
+      <section class="lb-box" aria-labelledby="lb-rules-title">
+        <div class="lb-head"><h2 id="lb-rules-title">Cum funcționează</h2></div>
+        <ul class="lb-rules">
+          <li><b>Jucători</b> — se numără orele jucate pe server de luni 00:00 până duminică 23:59 (ora Chișinăului).</li>
+          <li><b>Facțiuni</b> — se adună orele tuturor membrilor din săptămâna asta: structurile de stat și bandele/familiile.</li>
+          <li id="lb-rule-quests" hidden><b>Questuri</b> — cât țin questurile de Crăciun: punctele strânse pe site (cadou 5, căsuța din calendar 2, zi cu toate sarcinile 3, răspuns corect din regulament 1).</li>
+          <li>Luni dimineață, primii 3 jucători și prima facțiune primesc <b>insigna „Top al săptămânii”</b> pe profil (cei cu cont legat de personaj) și un <b>premiu în joc</b> de la staff.</li>
+        </ul>
+      </section>
+    </div>
+  </main>
+
+  <footer>
+    <div class="footer-brand"><img src="assets/logo.png" alt="Moldova RP"><div><strong>MOLDOVA<span class="accent">RP</span></strong><small>Portal oficial al comunității</small></div></div>
+    <div class="footer-links"><a href="index.html#regulamente">Regulamente</a><a href="index.html#jucatori">Jucători</a><a href="index.html#factiuni">Facțiuni</a><a href="ghid-factiuni.html">Ghid facțiuni</a><a href="legislatie-rutiera.html">Legislație rutieră</a><a href="joburi.html">Joburi</a><a href="index.html#anunturi">Anunțuri</a></div>
+    <p class="copyright">© 2026 Moldova RP. Toate drepturile rezervate.</p>
+  </footer>
+
+  <script src="app.js"></script>
+<script src="site-audio.js?v=20261031i"></script>
+<script>
+(() => {
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const day = iso => new Date(iso + 'T12:00:00').toLocaleDateString('ro-RO', { day: 'numeric', month: 'long' });
+  const hours = m => { const h = Math.floor(m / 60), r = m % 60; return h ? `${h} h ${String(r).padStart(2, '0')} min` : `${r} min`; };
+  const MEDAL = ['🥇', '🥈', '🥉'];
+  const CAT = { jucatori: 'Jucători', factiuni: 'Facțiuni', questuri: 'Questuri' };
+  let data = null, tab = 'jucatori';
+  function table() {
+    const box = document.getElementById('lb-table');
+    const rows = tab === 'jucatori' ? data.players : tab === 'factiuni' ? data.factions : (data.quests || []);
+    if (!rows.length) { box.innerHTML = '<p class="lb-empty">Încă nu s-a strâns nimic săptămâna asta. Intră pe server și fii primul! 🎮</p>'; return; }
+    const cls = i => i < 3 ? ` class="top${i + 1}"` : '';
+    if (tab === 'jucatori') box.innerHTML = `<table class="lb-table"><thead><tr><th>LOC</th><th>JUCĂTOR</th><th class="lb-hide-sm">FACȚIUNE</th><th class="r">ORE JUCATE</th></tr></thead><tbody>${
+      rows.map((r, i) => `<tr${cls(i)}><td><span class="lb-rank">${i + 1}</span></td><td>${esc(r.name)}</td><td class="lb-hide-sm lb-org">${esc(r.org || '—')}</td><td class="r">${hours(r.minutes)}</td></tr>`).join('')}</tbody></table>`;
+    else if (tab === 'factiuni') box.innerHTML = `<table class="lb-table"><thead><tr><th>LOC</th><th>FACȚIUNE</th><th class="r lb-hide-sm">MEMBRI ACTIVI</th><th class="r">ORE ÎN TOTAL</th></tr></thead><tbody>${
+      rows.map((r, i) => `<tr${cls(i)}><td><span class="lb-rank">${i + 1}</span></td><td>${esc(r.name)}</td><td class="r lb-hide-sm">${r.active}</td><td class="r">${hours(r.minutes)}</td></tr>`).join('')}</tbody></table>`;
+    else box.innerHTML = `<table class="lb-table"><thead><tr><th>LOC</th><th>JUCĂTOR</th><th class="r">PUNCTE</th></tr></thead><tbody>${
+      rows.map((r, i) => `<tr${cls(i)}><td><span class="lb-rank">${i + 1}</span></td><td>${esc(r.name)}</td><td class="r">${r.points}</td></tr>`).join('')}</tbody></table>`;
+  }
+  function render() {
+    document.getElementById('lb-week').innerHTML = `Săptămâna <b>${day(data.week.start)} – ${day(data.week.end)}</b>`;
+    const qt = document.querySelector('[data-tab="questuri"]');
+    qt.hidden = !data.quests;
+    document.getElementById('lb-rule-quests').hidden = !data.quests;
+    const w = data.last.winners || [];
+    const last = document.getElementById('lb-last');
+    last.hidden = !w.length;
+    if (w.length) {
+      document.getElementById('lb-last-week').textContent = `${day(data.last.start)} – ${day(data.last.end)}`;
+      document.getElementById('lb-podium').innerHTML = w.map(x => `<div class="lb-win"><span class="m" aria-hidden="true">${x.category === 'factiuni' ? '🛡' : MEDAL[x.rank - 1] || '🏅'}</span><div><small>${CAT[x.category] || ''} · locul ${x.rank}</small><strong>${esc(x.name)}</strong><span>${x.category === 'questuri' ? x.value + ' puncte' : hours(x.value)}</span></div></div>`).join('');
+    }
+    table();
+  }
+  document.querySelector('.lb-tabs').addEventListener('click', e => {
+    const b = e.target.closest('[data-tab]');
+    if (!b) return;
+    tab = b.dataset.tab;
+    document.querySelectorAll('.lb-tabs [data-tab]').forEach(x => x.setAttribute('aria-selected', String(x === b)));
+    if (data) table();
+  });
+  async function load() {
+    try {
+      const r = await fetch('/api/clasament');
+      if (!r.ok) throw new Error();
+      data = await r.json();
+      render();
+    } catch { document.getElementById('lb-table').innerHTML = '<p class="lb-empty">Clasamentul nu s-a putut încărca. Reîncearcă în câteva minute.</p>'; }
+  }
+  load();
+  setInterval(load, 3 * 60 * 1000);
+})();
+</script>
+</body>
+</html>

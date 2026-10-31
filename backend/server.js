@@ -100,6 +100,8 @@ const PANEL_PAGE_ACCESS = {
   "admin-cauta.html": "mods",
   "admin-sanctiuni.html": "mods",
   "admin-jucatori.html": "admins",
+  "admin-craciun.html": "admins",   // (31.10.2026) questurile de Crăciun (tragerea la tombolă: doar fondatorii, în API)
+  "admin-clasament.html": "admins", // (31.10.2026) premiile clasamentului săptămânii
 };
 function panelPageRoles(file) {
   const k = PANEL_PAGE_ACCESS[file];
@@ -925,6 +927,8 @@ async function syncPlayerSnapshots() {
     }))).catch(() => {});
     // (12.10.2026) mașina pentru jucătorii noi — orele la prima vedere după lansare
     noteNewbieSeen(detail.players).catch(err => console.error("Jucători noi (mașina 50h):", err.message));
+    // (31.10.2026) clasamentul săptămânii — orele jucate în săptămâna curentă
+    noteWeeklyPlaytime(detail.players).catch(err => console.error("Clasamentul săptămânii:", err.message));
 
     // (19.09.2026, optimizare resurse) Înainte, acest tur trimitea câte un
     // UPDATE separat pentru FIECARE jucător online — cu zeci de jucători pe
@@ -4459,6 +4463,201 @@ app.delete("/api/admin/craciun/castigator/:id", auth, requireRole(...FOUNDER_ROL
   if (!r.rowCount) return res.status(404).json({ error: "Nu există." });
   res.json({ ok: true });
 }));
+
+// ---------------------------------------------------------------------------
+// (31.10.2026, cerut de Sergiu) Clasamentul săptămânii, pe pagina clasament.html.
+//   • Jucători — orele jucate de luni (00:00) până duminică (23:59), ora Chișinăului.
+//     Le aflăm din sincronizarea de la fiecare minut: la prima vedere în
+//     săptămână ținem minte orele totale ale personajului (start_minutes), apoi
+//     mereu ultimele (last_minutes); orele săptămânii = diferența.
+//   • Facțiuni — suma orelor membrilor: facțiunile de stat după job
+//     (WEEK_FACTION_JOBS) și bandele/familiile din joc (lista din fetchAssets).
+//   • Questuri — doar cât țin questurile de Crăciun: punctele strânse în
+//     săptămână (cadou 5, căsuță 2, zi de sarcini 3, răspuns corect 1).
+// Luni, săptămâna trecută se închide singură (weekly_final): primii 3 jucători,
+// prima facțiune și primii 3 la questuri ajung în weekly_winners — primesc
+// notificare pe site și insigna „🏆 Top al săptămânii" pe profil (cei cu cont
+// legat), iar staff-ul le dă premiul în joc din Admin → Clasament.
+// ---------------------------------------------------------------------------
+const WEEK_FACTION_JOBS = { police: "Poliție", sheriff: "Departamentul Șerifului", ambulance: "SMURD", primarie: "Guvern", fib: "FIB", army: "Armata" };
+const WEEK_QUEST_POINTS = { gift: 5, advent: 2, taskday: 3, quiz1: 1 };
+function weekStartOf(d = new Date()) {
+  const day = new Date(xmasToday(d) + "T12:00:00Z");
+  day.setUTCDate(day.getUTCDate() - (day.getUTCDay() + 6) % 7);
+  return day.toISOString().slice(0, 10);
+}
+function weekShift(week, days) {
+  const d = new Date(week + "T12:00:00Z");
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+// momentul (UTC) în care începe o zi la Chișinău
+function chisinauMidnight(date) {
+  const guess = new Date(date + "T00:00:00Z");
+  const off = new Intl.DateTimeFormat("en-US", { timeZone: "Europe/Chisinau", timeZoneName: "shortOffset" }).formatToParts(guess).find(p => p.type === "timeZoneName").value;
+  const m = /GMT([+-])(\d{1,2})(?::(\d{2}))?/.exec(off);
+  const mins = m ? (m[1] === "-" ? -1 : 1) * (Number(m[2]) * 60 + Number(m[3] || 0)) : 0;
+  return new Date(guess.getTime() - mins * 60000);
+}
+let weeklyReady = null;
+function weeklyTables() {
+  if (!weeklyReady) {
+    weeklyReady = pool.query(`
+      CREATE TABLE IF NOT EXISTS weekly_playtime (
+        week DATE NOT NULL, identifier TEXT NOT NULL, rp_name TEXT, org TEXT,
+        start_minutes INT NOT NULL, last_minutes INT NOT NULL, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (week, identifier));
+      CREATE TABLE IF NOT EXISTS weekly_final (week DATE PRIMARY KEY, at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+      CREATE TABLE IF NOT EXISTS weekly_winners (
+        id SERIAL PRIMARY KEY, week DATE NOT NULL, category TEXT NOT NULL, rank INT NOT NULL,
+        identifier TEXT, user_id UUID REFERENCES users(id) ON DELETE SET NULL, name TEXT, value INT NOT NULL DEFAULT 0,
+        prize TEXT, given_at TIMESTAMPTZ, given_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), UNIQUE (week, category, rank));`).catch(err => { weeklyReady = null; throw err; });
+  }
+  return weeklyReady;
+}
+// cine e în ce bandă/familie (din joc), ținut 30 de minute
+let weeklyGangs = { at: 0, map: new Map(), loading: null };
+function weeklyGangMap() {
+  if (Date.now() - weeklyGangs.at > 30 * 60 * 1000 && !weeklyGangs.loading) {
+    weeklyGangs.loading = fetchAssets({}).then(a => {
+      const list = (a.gangs || []).filter(g => g && g.identifier && g.label);
+      if (a.online && list.length) weeklyGangs.map = new Map(list.map(g => [String(g.identifier), String(g.label).slice(0, 60)]));
+      weeklyGangs.at = Date.now();
+    }).catch(() => { weeklyGangs.at = Date.now() - 25 * 60 * 1000; }).finally(() => { weeklyGangs.loading = null; });
+  }
+  return weeklyGangs.map;
+}
+// apelată la fiecare tur de sincronizare (la minut)
+async function noteWeeklyPlaytime(players) {
+  await weeklyTables();
+  const gangs = weeklyGangMap();
+  const week = weekStartOf();
+  const rows = (players || []).map(pl => {
+    const job = String(pl.job || "").toLowerCase();
+    const org = WEEK_FACTION_JOBS[job] || gangs.get(String(pl.license)) || null;
+    return { id: pl.license, name: (pl.serverName || pl.name || "").toString().slice(0, 64) || null, org, min: playtimeOf(pl) };
+  }).filter(r => r.id && Number.isFinite(r.min));
+  if (!rows.length) return;
+  const vals = [], params = [week];
+  rows.forEach((r, k) => { params.push(r.id, r.name, r.org, r.min); vals.push(`($${k * 4 + 2}::text,$${k * 4 + 3}::text,$${k * 4 + 4}::text,$${k * 4 + 5}::int)`); });
+  await pool.query(
+    `INSERT INTO weekly_playtime(week, identifier, rp_name, org, start_minutes, last_minutes)
+     SELECT $1::date, v.id, v.name, v.org, v.min, v.min FROM (VALUES ${vals.join(",")}) AS v(id, name, org, min)
+     ON CONFLICT (week, identifier) DO UPDATE SET last_minutes = GREATEST(weekly_playtime.last_minutes, EXCLUDED.last_minutes),
+       rp_name = COALESCE(EXCLUDED.rp_name, weekly_playtime.rp_name), org = EXCLUDED.org, updated_at = NOW()`, params);
+}
+async function weeklyBoard(week) {
+  await weeklyTables();
+  const [players, factions] = await Promise.all([
+    pool.query(`SELECT identifier, rp_name, org, last_minutes - start_minutes AS minutes FROM weekly_playtime
+                 WHERE week = $1 AND last_minutes > start_minutes ORDER BY minutes DESC, rp_name LIMIT 25`, [week]),
+    pool.query(`SELECT org, SUM(last_minutes - start_minutes)::int AS minutes, COUNT(*) FILTER (WHERE last_minutes - start_minutes >= 60)::int AS active
+                  FROM weekly_playtime WHERE week = $1 AND org IS NOT NULL GROUP BY org HAVING SUM(last_minutes - start_minutes) > 0
+                 ORDER BY minutes DESC LIMIT 15`, [week]),
+  ]);
+  // questurile de Crăciun: doar dacă săptămâna se suprapune cu sezonul
+  let quests = null;
+  if (weekShift(week, 6) >= XMAS.start && week <= XMAS.end) {
+    await xmasTables();
+    const from = chisinauMidnight(week), to = chisinauMidnight(weekShift(week, 7));
+    const { rows } = await pool.query(
+      `SELECT x.user_id, COALESCE(u.game_identifier_name, p.display_name, u.username) AS name, u.game_identifier AS identifier,
+              SUM(CASE x.kind WHEN 'gift' THEN ${WEEK_QUEST_POINTS.gift} WHEN 'advent' THEN ${WEEK_QUEST_POINTS.advent}
+                              WHEN 'taskday' THEN ${WEEK_QUEST_POINTS.taskday} WHEN 'quiz1' THEN ${WEEK_QUEST_POINTS.quiz1} ELSE 0 END)::int AS points
+         FROM xmas_progress x JOIN users u ON u.id = x.user_id LEFT JOIN players p ON p.user_id = u.id
+        WHERE x.created_at >= $1 AND x.created_at < $2 AND NOT EXISTS (SELECT 1 FROM roles r WHERE r.id = u.role_id AND r.name = ANY($3))
+        GROUP BY x.user_id, u.game_identifier_name, p.display_name, u.username, u.game_identifier
+       HAVING SUM(CASE x.kind WHEN 'gift' THEN 1 WHEN 'advent' THEN 1 WHEN 'taskday' THEN 1 WHEN 'quiz1' THEN 1 ELSE 0 END) > 0
+        ORDER BY points DESC, name LIMIT 15`, [from, to, ["owner", "co-fondator"]]);
+    quests = rows.map(r => ({ userId: r.user_id, name: r.name, identifier: r.identifier, points: r.points }));
+  }
+  return {
+    players: players.rows.map(r => ({ identifier: r.identifier, name: r.rp_name || "Jucător", org: r.org, minutes: r.minutes })),
+    factions: factions.rows.map(r => ({ name: r.org, minutes: r.minutes, active: r.active })),
+    quests,
+  };
+}
+// închide săptămânile trecute (o singură dată pe săptămână)
+async function weeklyFinalize() {
+  await weeklyTables();
+  const current = weekStartOf();
+  const { rows: pending } = await pool.query(
+    `SELECT DISTINCT week::text AS week FROM weekly_playtime WHERE week < $1 AND week NOT IN (SELECT week FROM weekly_final) ORDER BY week`, [current]);
+  for (const { week } of pending) {
+    const claim = await pool.query(`INSERT INTO weekly_final(week) VALUES ($1) ON CONFLICT DO NOTHING`, [week]);
+    if (!claim.rowCount) continue; // altă instanță a închis-o deja
+    const b = await weeklyBoard(week);
+    const winners = [
+      ...b.players.slice(0, 3).map((p, i) => ({ category: "jucatori", rank: i + 1, identifier: p.identifier, name: p.name, value: p.minutes })),
+      ...b.factions.slice(0, 1).map((f, i) => ({ category: "factiuni", rank: i + 1, identifier: null, name: f.name, value: f.minutes })),
+      ...(b.quests || []).slice(0, 3).map((q, i) => ({ category: "questuri", rank: i + 1, identifier: q.identifier, userId: q.userId, name: q.name, value: q.points })),
+    ];
+    for (const w of winners) {
+      let userId = w.userId || null;
+      if (!userId && w.identifier) {
+        const { rows } = await pool.query(`SELECT id FROM users WHERE game_identifier = $1 LIMIT 1`, [w.identifier]);
+        userId = rows[0]?.id || null;
+      }
+      await pool.query(`INSERT INTO weekly_winners(week, category, rank, identifier, user_id, name, value) VALUES ($1,$2,$3,$4,$5,$6,$7)
+                        ON CONFLICT (week, category, rank) DO NOTHING`, [week, w.category, w.rank, w.identifier, userId, w.name, w.value]);
+      if (userId) {
+        const what = w.category === "jucatori" ? `locul ${w.rank} la orele jucate (${Math.round(w.value / 60)} ore)` : `locul ${w.rank} la questurile de Crăciun (${w.value} puncte)`;
+        await notifyUser(userId, { type: "clasament", title: "🏆 Ești în topul săptămânii!", message: `Ai ieșit pe ${what}. Ai primit insigna pe profil, iar staff-ul îți dă premiul în joc în curând.`, link: "/clasament.html" });
+      }
+    }
+    console.log(`Clasamentul săptămânii ${week}: închis (${winners.length} câștigători).`);
+  }
+}
+let weeklyCache = { at: 0, data: null };
+app.get("/api/clasament", asyncRoute(async (_req, res) => {
+  res.set("Cache-Control", "public, max-age=60");
+  if (weeklyCache.data && Date.now() - weeklyCache.at < 90_000) return res.json(weeklyCache.data);
+  const week = weekStartOf();
+  const board = await weeklyBoard(week);
+  const last = weekShift(week, -7);
+  const { rows } = await pool.query(`SELECT category, rank, name, value FROM weekly_winners WHERE week = $1 ORDER BY category, rank`, [last]);
+  const strip = l => l.map(({ identifier, userId, ...r }) => r);
+  const data = {
+    week: { start: week, end: weekShift(week, 6) },
+    players: strip(board.players), factions: board.factions, quests: board.quests ? strip(board.quests) : null,
+    last: { start: last, end: weekShift(last, 6), winners: rows },
+    updatedAt: new Date().toISOString(),
+  };
+  weeklyCache = { at: Date.now(), data };
+  res.json(data);
+}));
+// insignele „Top al săptămânii" ale contului (pentru Contul meu)
+app.get("/api/clasament/insigne", auth, asyncRoute(async (req, res) => {
+  await weeklyTables();
+  const { rows } = await pool.query(`SELECT week::text AS week, category, rank FROM weekly_winners WHERE user_id = $1 ORDER BY week DESC`, [req.user.sub]);
+  res.json({ wins: rows });
+}));
+app.get("/api/admin/clasament", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (_req, res) => {
+  await weeklyTables();
+  const { rows } = await pool.query(
+    `SELECT w.id, w.week::text AS week, w.category, w.rank, w.name, w.value, w.prize, w.given_at, g.username AS given_by_name,
+            u.username, w.identifier
+       FROM weekly_winners w LEFT JOIN users u ON u.id = w.user_id LEFT JOIN users g ON g.id = w.given_by
+      ORDER BY w.week DESC, w.category, w.rank LIMIT 200`);
+  res.json({ currentWeek: weekStartOf(), winners: rows, factionJobs: WEEK_FACTION_JOBS });
+}));
+app.put("/api/admin/clasament/:id", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+  await weeklyTables();
+  const id = Number(req.params.id);
+  const prize = req.body?.prize === undefined ? undefined : String(req.body.prize || "").trim().slice(0, 200) || null;
+  const given = req.body?.given;
+  const sets = [], params = [id];
+  if (prize !== undefined) { params.push(prize); sets.push(`prize = $${params.length}`); }
+  if (given === true) { params.push(req.user.sub); sets.push(`given_at = NOW(), given_by = $${params.length}`); }
+  if (given === false) sets.push(`given_at = NULL, given_by = NULL`);
+  if (!sets.length) return res.status(400).json({ error: "Nimic de schimbat." });
+  const r = await pool.query(`UPDATE weekly_winners SET ${sets.join(", ")} WHERE id = $1`, params);
+  if (!r.rowCount) return res.status(404).json({ error: "Nu există." });
+  res.json({ ok: true });
+}));
+setInterval(() => weeklyFinalize().catch(err => console.error("Clasamentul săptămânii:", err.message)), 10 * 60 * 1000);
+setTimeout(() => weeklyFinalize().catch(err => console.error("Clasamentul săptămânii:", err.message)), 30 * 1000);
 
 // Notificări proprii (24.09.2026) — vezi tabela "notifications" din
 // database/schema.sql și notifyUser() mai sus pentru context. Limitat la 50

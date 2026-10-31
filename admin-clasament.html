@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Clasament — Admin Moldova RP</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="admin.css"><link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/assets/app/apple-touch-icon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black"><meta name="apple-mobile-web-app-title" content="Moldova RP"><script src="/pwa.js" defer></script><meta name="theme-color" content="#090a0b">
+</head>
+<body>
+<aside class="side"><a class="brand" href="index.html"><img src="assets/logo.png" alt=""><b>MOLDOVA<span>RP</span></b></a><p>ADMINISTRAȚIE</p><a href="admin.html">▦ Dashboard</a><a href="admin-utilizatori.html">👤 Utilizatori</a><a href="admin-jucatori.html">♙ Jucători</a><a href="admin-cauta.html">🔎 Caută jucător</a><a href="admin-financiar.html">◆ Facțiuni</a><a href="admin-sanctiuni.html">⚠ Sancțiuni</a><a>▤ Reclamații</a><a>⚖ CK</a><a href="admin-regulamente.html">📚 Regulamente</a><a href="admin-continut.html">📝 Conținut pagini</a><a href="admin-anunturi.html">◉ Anunțuri</a><a href="admin-actualizari.html">🆕 Actualizări</a><a href="admin-tichete.html">🎫 Tichete</a><a href="vip-shop.html">🎁 VIP Shop</a><a href="admin-vip-shop.html">🛠 Editor VIP Shop</a><a href="admin-craciun.html">🎄 Crăciun</a><a class="sel" href="admin-clasament.html">🏆 Clasament</a><a href="admin-loguri.html">🗂 Loguri</a><a href="admin-kill-logs.html">🔪 Kill Logs</a><a>⌁ Audit Logs</a><a href="admin-txadmin.html" id="nav-txadmin">🖥 txAdmin</a><a class="back" href="dashboard.html">← Contul meu</a><a class="back" href="index.html">← Site public</a></aside>
+<main>
+<header><div><small>PANEL ADMINISTRATIV</small><h1>Clasamentul săptămânii</h1></div><a class="admin" href="dashboard.html" title="Înapoi la contul meu" style="text-decoration:none"><span id="admin-name">…</span> <i></i></a></header>
+<p style="color:var(--muted);margin:-14px 0 20px;line-height:1.6">Luni la 00:00 (ora Chișinăului) săptămâna trecută se închide singură: primii 3 jucători (ore jucate), prima facțiune și — cât țin questurile de Crăciun — primii 3 la questuri ajung aici. Jucătorii cu cont legat primesc notificare și insigna pe profil. Voi le dați premiul în joc, scrieți aici ce ați dat și apăsați „Marchează dat”. Clasamentul live: <a href="clasament.html" target="_blank" rel="noopener" style="color:var(--orange);font-weight:800">clasament.html ↗</a></p>
+<section class="tablebox">
+  <div class="title"><h2>Câștigători</h2></div>
+  <table><thead><tr><th>SĂPTĂMÂNA</th><th>CATEGORIE</th><th>LOC</th><th>CINE</th><th>REZULTAT</th><th>PREMIU</th><th>STARE</th><th></th></tr></thead>
+  <tbody id="w-body"><tr><td colspan="8">Se încarcă…</td></tr></tbody></table>
+</section>
+</main>
+<script src="auth-client.js"></script>
+<script>
+const escapeHtml = s => (s ?? '').toString().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+const day = iso => new Date(iso + 'T12:00:00').toLocaleDateString('ro-RO', { day: 'numeric', month: 'short' });
+const week = iso => { const e = new Date(iso + 'T12:00:00'); e.setDate(e.getDate() + 6); return `${day(iso)} – ${e.toLocaleDateString('ro-RO', { day: 'numeric', month: 'short' })}`; };
+const hours = m => `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')} min`;
+const CAT = { jucatori: '🎮 Jucători', factiuni: '🛡 Facțiuni', questuri: '🎄 Questuri' };
+async function load() {
+  const r = await apiFetch('/api/admin/clasament');
+  if (!r.ok) { document.getElementById('w-body').innerHTML = '<tr><td colspan="8">Nu s-au putut încărca datele.</td></tr>'; return; }
+  const d = await r.json();
+  document.getElementById('w-body').innerHTML = d.winners.length ? d.winners.map(w => `<tr>
+    <td>${week(w.week)}</td><td>${CAT[w.category] || escapeHtml(w.category)}</td><td><strong style="color:var(--text)">${w.rank}</strong></td>
+    <td><strong style="color:var(--text)">${escapeHtml(w.name || '—')}</strong>${w.username ? `<br><small style="color:var(--muted)">cont: ${escapeHtml(w.username)}</small>` : (w.category === 'factiuni' ? '<br><small style="color:var(--muted)">premiul îl primește liderul</small>' : '<br><small style="color:var(--muted)">fără cont legat</small>')}</td>
+    <td>${w.category === 'questuri' ? w.value + ' puncte' : hours(w.value)}</td>
+    <td><input data-prize="${w.id}" value="${escapeHtml(w.prize || '')}" placeholder="ex: 50.000 $ în joc" style="width:100%;min-width:150px;padding:8px 10px;border:1px solid var(--line);background:var(--bg);color:var(--text);border-radius:8px;font:inherit"></td>
+    <td>${w.given_at ? `<span class="pill on">DAT</span><br><small style="color:var(--muted)">${escapeHtml(w.given_by_name || '')}</small>` : '<span class="pill warn">DE DAT</span>'}</td>
+    <td><div class="rowactions"><button type="button" data-save="${w.id}" data-given="${w.given_at ? '0' : '1'}">${w.given_at ? 'Anulează „dat”' : 'Marchează dat'}</button></div></td></tr>`).join('')
+    : '<tr><td colspan="8">Încă nu s-a încheiat nicio săptămână. Primii câștigători apar luni, după prima săptămână completă.</td></tr>';
+}
+document.getElementById('w-body').addEventListener('click', async e => {
+  const b = e.target.closest('[data-save]');
+  if (!b) return;
+  const prize = document.querySelector(`[data-prize="${b.dataset.save}"]`).value;
+  b.disabled = true;
+  await apiFetch(`/api/admin/clasament/${b.dataset.save}`, { method: 'PUT', body: JSON.stringify({ prize, given: b.dataset.given === '1' }) });
+  load();
+});
+document.getElementById('w-body').addEventListener('change', e => {
+  const i = e.target.closest('[data-prize]');
+  if (i) apiFetch(`/api/admin/clasament/${i.dataset.prize}`, { method: 'PUT', body: JSON.stringify({ prize: i.value }) });
+});
+(async () => {
+  const me = await requireRole('admin', 'co-fondator', 'owner');
+  if (!me) return;
+  document.getElementById('admin-name').textContent = me.username;
+  load();
+})();
+</script>
+</body></html>

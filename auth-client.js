@@ -89,6 +89,7 @@ const PANEL_ACCESS = {
   "admin-sanctiuni.html": PANEL_MODS,
   "admin-jucatori.html": PANEL_ADMINS,
   "admin-craciun.html": PANEL_ADMINS,   // (31.10.2026) tragerea la tombolă o fac doar fondatorii (server)
+  "admin-clasament.html": PANEL_ADMINS, // (31.10.2026) premiile clasamentului săptămânii
 };
 function panelRolesFor(file) {
   return PANEL_ACCESS[file] || PANEL_FOUNDERS;   // orice altă pagină admin*.html = doar fondatorii
@@ -121,13 +122,19 @@ function filterPanelNav(role) {
 // de aici, ca să nu-l adăugăm în fiecare pagină admin*.html
 (function addXmasPanelLink() {
   const side = document.querySelector("aside.side");
-  if (!side || side.querySelector('a[href="admin-craciun.html"]')) return;
-  const a = document.createElement("a");
-  a.href = "admin-craciun.html";
-  a.textContent = "🎄 Crăciun";
-  if (/admin-craciun\.html$/.test(location.pathname)) a.className = "sel";
-  const vip = side.querySelector('a[href="admin-vip-shop.html"]');
-  if (vip) vip.after(a); else side.appendChild(a);
+  if (!side) return;
+  let after = side.querySelector('a[href="admin-vip-shop.html"]');
+  for (const [href, text] of [["admin-craciun.html", "🎄 Crăciun"], ["admin-clasament.html", "🏆 Clasament"]]) {
+    let a = side.querySelector(`a[href="${href}"]`);
+    if (!a) {
+      a = document.createElement("a");
+      a.href = href;
+      a.textContent = text;
+      if (location.pathname.endsWith(href)) a.className = "sel";
+      if (after) after.after(a); else side.appendChild(a);
+    }
+    after = a;
+  }
 })();
 try {
   const cachedRole = getAuth()?.user?.role;

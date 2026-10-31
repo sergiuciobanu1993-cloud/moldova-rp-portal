@@ -4659,6 +4659,106 @@ app.put("/api/admin/clasament/:id", auth, requireRole(...ADMIN_ROLES), asyncRout
 setInterval(() => weeklyFinalize().catch(err => console.error("Clasamentul săptămânii:", err.message)), 10 * 60 * 1000);
 setTimeout(() => weeklyFinalize().catch(err => console.error("Clasamentul săptămânii:", err.message)), 30 * 1000);
 
+// ---------------------------------------------------------------------------
+// (31.10.2026, cerut de Sergiu) Sondaje pe site: fondatorii pun o întrebare cu
+// variante (Admin → Sondaje), jucătorii logați votează o singură dată — doar cei
+// cu cont legat de personaj, ca să nu se voteze de pe conturi făcute pe loc.
+// Rezultatele se văd după ce ai votat sau după ce s-a închis sondajul.
+// Sondajul activ apare pe prima pagină și în Contul meu (sondaj.js).
+// ---------------------------------------------------------------------------
+let pollsReady = null;
+function pollTables() {
+  if (!pollsReady) {
+    pollsReady = pool.query(`
+      CREATE TABLE IF NOT EXISTS polls (
+        id SERIAL PRIMARY KEY, question TEXT NOT NULL, options JSONB NOT NULL,
+        ends_at TIMESTAMPTZ, closed_at TIMESTAMPTZ,
+        created_by UUID REFERENCES users(id) ON DELETE SET NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+      CREATE TABLE IF NOT EXISTS poll_votes (
+        poll_id INT NOT NULL REFERENCES polls(id) ON DELETE CASCADE, user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        option INT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), PRIMARY KEY (poll_id, user_id));`).catch(err => { pollsReady = null; throw err; });
+  }
+  return pollsReady;
+}
+const pollOpen = p => !p.closed_at && (!p.ends_at || new Date(p.ends_at) > new Date());
+const pollEndedAt = p => p.closed_at || (p.ends_at && new Date(p.ends_at) <= new Date() ? p.ends_at : null);
+async function pollView(p, userId, forceResults = false) {
+  const { rows } = await pool.query(`SELECT option, COUNT(*)::int AS n FROM poll_votes WHERE poll_id = $1 GROUP BY option`, [p.id]);
+  const counts = p.options.map((_, i) => (rows.find(r => r.option === i) || {}).n || 0);
+  let mine = null;
+  if (userId) {
+    const v = await pool.query(`SELECT option FROM poll_votes WHERE poll_id = $1 AND user_id = $2`, [p.id, userId]);
+    mine = v.rows[0] ? v.rows[0].option : null;
+  }
+  const open = pollOpen(p);
+  const showResults = forceResults || !open || mine !== null;
+  return {
+    id: p.id, question: p.question, options: p.options, open, endsAt: p.ends_at, mine,
+    total: counts.reduce((a, b) => a + b, 0), counts: showResults ? counts : null,
+  };
+}
+function optionalUser(req) {
+  const h = req.headers.authorization || "";
+  if (!h.startsWith("Bearer ")) return null;
+  try { return jwt.verify(h.slice(7), process.env.JWT_SECRET); } catch { return null; }
+}
+// sondajul curent: cel deschis cel mai nou; altfel ultimul închis în ultimele 3 zile
+app.get("/api/sondaj", asyncRoute(async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  await pollTables();
+  const { rows } = await pool.query(`SELECT * FROM polls ORDER BY created_at DESC LIMIT 10`);
+  const p = rows.find(pollOpen) || rows.find(r => pollEndedAt(r) && Date.now() - new Date(pollEndedAt(r)) < 3 * 86400000);
+  if (!p) return res.json({ poll: null });
+  const u = optionalUser(req);
+  res.json({ poll: await pollView(p, u ? u.sub : null) });
+}));
+app.post("/api/sondaj/:id/vot", auth, asyncRoute(async (req, res) => {
+  await pollTables();
+  const { rows } = await pool.query(`SELECT * FROM polls WHERE id = $1`, [Number(req.params.id)]);
+  const p = rows[0];
+  if (!p) return res.status(404).json({ error: "Sondajul nu există." });
+  if (!pollOpen(p)) return res.status(400).json({ error: "Sondajul s-a închis." });
+  const option = Number(req.body?.option);
+  if (!Number.isInteger(option) || option < 0 || option >= p.options.length) return res.status(400).json({ error: "Alege o variantă." });
+  const { rows: u } = await pool.query(`SELECT game_identifier FROM users WHERE id = $1`, [req.user.sub]);
+  if (!u[0]?.game_identifier) return res.status(400).json({ error: "Ca să votezi, leagă-ți contul de personajul din joc (din Contul meu)." });
+  const ins = await pool.query(`INSERT INTO poll_votes(poll_id, user_id, option) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`, [p.id, req.user.sub, option]);
+  if (!ins.rowCount) return res.status(400).json({ error: "Ai votat deja la sondajul ăsta." });
+  res.json({ ok: true, poll: await pollView(p, req.user.sub) });
+}));
+app.get("/api/admin/sondaje", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (_req, res) => {
+  await pollTables();
+  const { rows } = await pool.query(`SELECT p.*, u.username AS created_by_name FROM polls p LEFT JOIN users u ON u.id = p.created_by ORDER BY p.created_at DESC LIMIT 50`);
+  const out = [];
+  for (const p of rows) out.push({ ...(await pollView(p, null, true)), createdAt: p.created_at, createdBy: p.created_by_name });
+  res.json({ polls: out });
+}));
+app.post("/api/admin/sondaje", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
+  await pollTables();
+  const question = String(req.body?.question || "").trim().slice(0, 200);
+  const options = (Array.isArray(req.body?.options) ? req.body.options : []).map(o => String(o || "").trim().slice(0, 100)).filter(Boolean);
+  if (!question) return res.status(400).json({ error: "Scrie întrebarea." });
+  if (options.length < 2 || options.length > 8) return res.status(400).json({ error: "Pune între 2 și 8 variante." });
+  const endsAt = req.body?.endsAt && Number.isFinite(Date.parse(req.body.endsAt)) ? new Date(req.body.endsAt) : null;
+  if (endsAt && endsAt <= new Date()) return res.status(400).json({ error: "Data de închidere trebuie să fie în viitor." });
+  const { rows } = await pool.query(`INSERT INTO polls(question, options, ends_at, created_by) VALUES ($1,$2,$3,$4) RETURNING id`, [question, JSON.stringify(options), endsAt, req.user.sub]);
+  await logAction(req.user.sub, "poll.create", "polls", String(rows[0].id), { question, options, endsAt }, req.ip);
+  res.json({ ok: true, id: rows[0].id });
+}));
+app.post("/api/admin/sondaje/:id/inchide", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
+  await pollTables();
+  const r = await pool.query(`UPDATE polls SET closed_at = COALESCE(closed_at, NOW()) WHERE id = $1`, [Number(req.params.id)]);
+  if (!r.rowCount) return res.status(404).json({ error: "Nu există." });
+  res.json({ ok: true });
+}));
+app.delete("/api/admin/sondaje/:id", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
+  await pollTables();
+  const r = await pool.query(`DELETE FROM polls WHERE id = $1`, [Number(req.params.id)]);
+  if (!r.rowCount) return res.status(404).json({ error: "Nu există." });
+  await logAction(req.user.sub, "poll.delete", "polls", String(req.params.id), {}, req.ip);
+  res.json({ ok: true });
+}));
+
 // Notificări proprii (24.09.2026) — vezi tabela "notifications" din
 // database/schema.sql și notifyUser() mai sus pentru context. Limitat la 50
 // cele mai recente (destul pentru un clopoțel, fără paginare — dacă devine

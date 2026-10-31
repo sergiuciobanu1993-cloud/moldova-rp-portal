@@ -124,7 +124,7 @@ function filterPanelNav(role) {
   const side = document.querySelector("aside.side");
   if (!side) return;
   let after = side.querySelector('a[href="admin-vip-shop.html"]');
-  for (const [href, text] of [["admin-craciun.html", "🎄 Crăciun"], ["admin-clasament.html", "🏆 Clasament"]]) {
+  for (const [href, text] of [["admin-craciun.html", "🎄 Crăciun"], ["admin-clasament.html", "🏆 Clasament"], ["admin-sondaje.html", "🗳 Sondaje"]]) {
     let a = side.querySelector(`a[href="${href}"]`);
     if (!a) {
       a = document.createElement("a");

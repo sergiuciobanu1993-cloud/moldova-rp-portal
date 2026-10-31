@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sondaje — Admin Moldova RP</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="admin.css"><link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/assets/app/apple-touch-icon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black"><meta name="apple-mobile-web-app-title" content="Moldova RP"><script src="/pwa.js" defer></script><meta name="theme-color" content="#090a0b">
+</head>
+<body>
+<aside class="side"><a class="brand" href="index.html"><img src="assets/logo.png" alt=""><b>MOLDOVA<span>RP</span></b></a><p>ADMINISTRAȚIE</p><a href="admin.html">▦ Dashboard</a><a href="admin-utilizatori.html">👤 Utilizatori</a><a href="admin-jucatori.html">♙ Jucători</a><a href="admin-cauta.html">🔎 Caută jucător</a><a href="admin-financiar.html">◆ Facțiuni</a><a href="admin-sanctiuni.html">⚠ Sancțiuni</a><a>▤ Reclamații</a><a>⚖ CK</a><a href="admin-regulamente.html">📚 Regulamente</a><a href="admin-continut.html">📝 Conținut pagini</a><a href="admin-anunturi.html">◉ Anunțuri</a><a href="admin-actualizari.html">🆕 Actualizări</a><a href="admin-tichete.html">🎫 Tichete</a><a href="vip-shop.html">🎁 VIP Shop</a><a href="admin-vip-shop.html">🛠 Editor VIP Shop</a><a href="admin-craciun.html">🎄 Crăciun</a><a href="admin-clasament.html">🏆 Clasament</a><a class="sel" href="admin-sondaje.html">🗳 Sondaje</a><a href="admin-loguri.html">🗂 Loguri</a><a href="admin-kill-logs.html">🔪 Kill Logs</a><a>⌁ Audit Logs</a><a href="admin-txadmin.html" id="nav-txadmin">🖥 txAdmin</a><a class="back" href="dashboard.html">← Contul meu</a><a class="back" href="index.html">← Site public</a></aside>
+<main>
+<header><div><small>PANEL ADMINISTRATIV</small><h1>Sondaje</h1></div><a class="admin" href="dashboard.html" title="Înapoi la contul meu" style="text-decoration:none"><span id="admin-name">…</span> <i></i></a></header>
+<p style="color:var(--muted);margin:-14px 0 20px;line-height:1.6">Sondajul deschis apare pe prima pagină (sub facțiuni, înainte de anunțuri) și în Contul meu. Votează doar jucătorii logați cu contul legat de personaj, o singură dată. Ei văd rezultatele după ce votează; după închidere, rezultatele mai stau 3 zile pe site.</p>
+
+<section class="formbox">
+  <h2>Sondaj nou</h2>
+  <div class="formgrid">
+    <div class="field wide"><label for="q">Întrebarea</label><input id="q" maxlength="200" placeholder="ex: Ce vreți la următorul update?"></div>
+    <div class="field wide"><label>Variante (2–8)</label><div id="opts" style="display:grid;gap:8px"></div><button type="button" class="btn-ghost" id="add-opt" style="margin-top:8px">+ Încă o variantă</button></div>
+    <div class="field"><label for="ends">Se închide singur (opțional, ora Chișinăului)</label><input type="datetime-local" id="ends"></div>
+  </div>
+  <p class="formmsg" id="msg" hidden style="margin:14px 0 0;font-weight:700"></p>
+  <div class="formactions"><button type="button" class="btn-primary" id="create">Publică sondajul</button></div>
+</section>
+
+<section class="tablebox">
+  <div class="title"><h2>Sondaje</h2></div>
+  <div id="list" style="padding:0 22px 22px;display:grid;gap:14px"><p class="muted">Se încarcă…</p></div>
+</section>
+</main>
+<script src="auth-client.js"></script>
+<script>
+const esc = s => (s ?? '').toString().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+const fmt = d => d ? new Date(d).toLocaleString('ro-RO', { timeZone: 'Europe/Chisinau', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+// ora de la Chișinău din câmpul datetime-local → ISO
+function chisinauIso(v) {
+  if (!v) return null;
+  const guess = new Date(v + ':00Z');
+  const off = new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Chisinau', timeZoneName: 'shortOffset' }).formatToParts(guess).find(p => p.type === 'timeZoneName').value;
+  const m = /GMT([+-])(\d{1,2})(?::(\d{2}))?/.exec(off);
+  const mins = m ? (m[1] === '-' ? -1 : 1) * (Number(m[2]) * 60 + Number(m[3] || 0)) : 0;
+  return new Date(guess.getTime() - mins * 60000).toISOString();
+}
+const opts = document.getElementById('opts');
+function addOpt(v = '') {
+  if (opts.children.length >= 8) return;
+  const i = document.createElement('input');
+  i.maxLength = 100; i.value = v; i.placeholder = 'Varianta ' + (opts.children.length + 1);
+  opts.appendChild(i);
+}
+addOpt(); addOpt(); addOpt();
+document.getElementById('add-opt').addEventListener('click', () => addOpt());
+document.getElementById('create').addEventListener('click', async () => {
+  const msg = document.getElementById('msg');
+  const body = { question: document.getElementById('q').value.trim(), options: [...opts.querySelectorAll('input')].map(i => i.value.trim()).filter(Boolean), endsAt: chisinauIso(document.getElementById('ends').value) };
+  msg.hidden = false;
+  if (!body.question || body.options.length < 2) { msg.style.color = '#ff7a7a'; msg.textContent = 'Scrie întrebarea și cel puțin 2 variante.'; return; }
+  if (!confirm(`Publici sondajul „${body.question}”? Apare imediat pe site.`)) { msg.hidden = true; return; }
+  const r = await apiFetch('/api/admin/sondaje', { method: 'POST', body: JSON.stringify(body) });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) { msg.style.color = '#ff7a7a'; msg.textContent = d.error || 'Nu s-a putut publica.'; return; }
+  msg.style.color = 'var(--green)'; msg.textContent = 'Sondajul e publicat pe site.';
+  document.getElementById('q').value = ''; opts.innerHTML = ''; addOpt(); addOpt(); addOpt(); document.getElementById('ends').value = '';
+  load();
+});
+async function load() {
+  const r = await apiFetch('/api/admin/sondaje');
+  const list = document.getElementById('list');
+  if (!r.ok) { list.innerHTML = '<p class="muted">Nu s-au putut încărca sondajele.</p>'; return; }
+  const d = await r.json();
+  list.innerHTML = d.polls.length ? d.polls.map(p => `<article style="border:1px solid var(--line);border-radius:12px;padding:16px">
+    <div style="display:flex;justify-content:space-between;gap:12px;align-items:start;flex-wrap:wrap"><div><strong style="font-size:15px;color:var(--text)">${esc(p.question)}</strong><br><small style="color:var(--muted)">${p.open ? '<span class="pill on">DESCHIS</span>' : '<span class="pill off">ÎNCHIS</span>'} · ${p.total} voturi · pus de ${esc(p.createdBy || '—')} pe ${fmt(p.createdAt)}${p.endsAt ? ' · se închide ' + fmt(p.endsAt) : ''}</small></div>
+    <div class="rowactions">${p.open ? `<button type="button" data-close="${p.id}">Închide acum</button>` : ''}<button type="button" class="danger" data-del="${p.id}">Șterge</button></div></div>
+    <div style="display:grid;gap:6px;margin-top:12px">${p.options.map((o, i) => { const pct = p.total ? Math.round(p.counts[i] / p.total * 100) : 0; return `<div style="position:relative;padding:8px 12px;border-radius:8px;background:rgba(255,255,255,.04);overflow:hidden"><i style="position:absolute;left:0;top:0;bottom:0;width:${pct}%;background:rgba(255,138,31,.18)"></i><span style="position:relative;display:flex;justify-content:space-between;gap:10px"><span>${esc(o)}</span><b style="color:var(--text)">${pct}% · ${p.counts[i]}</b></span></div>`; }).join('')}</div></article>`).join('')
+    : '<p class="muted">Încă nu ai pus niciun sondaj.</p>';
+}
+document.getElementById('list').addEventListener('click', async e => {
+  const c = e.target.closest('[data-close]'), del = e.target.closest('[data-del]');
+  if (c) { if (!confirm('Închizi sondajul? Nu se mai poate vota.')) return; await apiFetch(`/api/admin/sondaje/${c.dataset.close}/inchide`, { method: 'POST' }); load(); }
+  if (del) { if (!confirm('Ștergi sondajul cu tot cu voturi? Nu se poate anula.')) return; await apiFetch(`/api/admin/sondaje/${del.dataset.del}`, { method: 'DELETE' }); load(); }
+});
+(async () => {
+  const me = await requireRole('co-fondator', 'owner');
+  if (!me) return;
+  document.getElementById('admin-name').textContent = me.username;
+  load();
+})();
+</script>
+</body></html>

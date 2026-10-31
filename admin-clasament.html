@@ -7,12 +7,13 @@
 <header><div><small>PANEL ADMINISTRATIV</small><h1>Clasamentul săptămânii</h1></div><a class="admin" href="dashboard.html" title="Înapoi la contul meu" style="text-decoration:none"><span id="admin-name">…</span> <i></i></a></header>
 <p style="color:var(--muted);margin:-14px 0 20px;line-height:1.6">Luni la 00:00 (ora Chișinăului) săptămâna trecută se închide singură: primii 3 jucători (ore jucate), prima facțiune și — cât țin questurile de Crăciun — primii 3 la questuri ajung aici. Jucătorii cu cont legat primesc notificare și insigna pe profil. Voi le dați premiul în joc, scrieți aici ce ați dat și apăsați „Marchează dat”. Clasamentul live: <a href="clasament.html" target="_blank" rel="noopener" style="color:var(--orange);font-weight:800">clasament.html ↗</a></p>
 <section class="tablebox">
-  <div class="title"><h2>Câștigători</h2></div>
+  <div class="title"><h2>Câștigători</h2><div style="display:flex;gap:8px;align-items:center"><select id="img-week" class="filter-select" aria-label="Săptămâna pentru imagine"></select><button type="button" id="img-btn">🖼 Imagine pentru Discord</button></div></div>
   <table><thead><tr><th>SĂPTĂMÂNA</th><th>CATEGORIE</th><th>LOC</th><th>CINE</th><th>REZULTAT</th><th>PREMIU</th><th>STARE</th><th></th></tr></thead>
   <tbody id="w-body"><tr><td colspan="8">Se încarcă…</td></tr></tbody></table>
 </section>
 </main>
 <script src="auth-client.js"></script>
+<script src="share-image.js?v=20261031a"></script>
 <script>
 const escapeHtml = s => (s ?? '').toString().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 const day = iso => new Date(iso + 'T12:00:00').toLocaleDateString('ro-RO', { day: 'numeric', month: 'short' });
@@ -23,6 +24,11 @@ async function load() {
   const r = await apiFetch('/api/admin/clasament');
   if (!r.ok) { document.getElementById('w-body').innerHTML = '<tr><td colspan="8">Nu s-au putut încărca datele.</td></tr>'; return; }
   const d = await r.json();
+  // (31.10.2026) săptămânile încheiate, pentru imaginea cu câștigătorii (share-image.js)
+  window.__winners = d.winners;
+  const weeks = [...new Set(d.winners.map(w => w.week))];
+  document.getElementById('img-week').innerHTML = weeks.map(w => `<option value="${w}">${week(w)}</option>`).join('');
+  document.getElementById('img-btn').disabled = !weeks.length;
   document.getElementById('w-body').innerHTML = d.winners.length ? d.winners.map(w => `<tr>
     <td>${week(w.week)}</td><td>${CAT[w.category] || escapeHtml(w.category)}</td><td><strong style="color:var(--text)">${w.rank}</strong></td>
     <td><strong style="color:var(--text)">${escapeHtml(w.name || '—')}</strong>${w.username ? `<br><small style="color:var(--muted)">cont: ${escapeHtml(w.username)}</small>` : (w.category === 'factiuni' ? '<br><small style="color:var(--muted)">premiul îl primește liderul</small>' : '<br><small style="color:var(--muted)">fără cont legat</small>')}</td>
@@ -32,6 +38,11 @@ async function load() {
     <td><div class="rowactions"><button type="button" data-save="${w.id}" data-given="${w.given_at ? '0' : '1'}">${w.given_at ? 'Anulează „dat”' : 'Marchează dat'}</button></div></td></tr>`).join('')
     : '<tr><td colspan="8">Încă nu s-a încheiat nicio săptămână. Primii câștigători apar luni, după prima săptămână completă.</td></tr>';
 }
+document.getElementById('img-btn').addEventListener('click', () => {
+  const wk = document.getElementById('img-week').value;
+  if (!wk || !window.MrpImage) return;
+  MrpImage.weekly(wk, (window.__winners || []).filter(w => w.week === wk)).then(cv => MrpImage.show(cv, 'topul-saptamanii-' + wk + '.png'));
+});
 document.getElementById('w-body').addEventListener('click', async e => {
   const b = e.target.closest('[data-save]');
   if (!b) return;

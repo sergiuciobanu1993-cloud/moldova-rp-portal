@@ -24,6 +24,7 @@
 </section>
 </main>
 <script src="auth-client.js"></script>
+<script src="share-image.js?v=20261031a"></script>
 <script>
 const esc = s => (s ?? '').toString().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 const fmt = d => d ? new Date(d).toLocaleString('ro-RO', { timeZone: 'Europe/Chisinau', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
@@ -63,14 +64,18 @@ async function load() {
   const list = document.getElementById('list');
   if (!r.ok) { list.innerHTML = '<p class="muted">Nu s-au putut încărca sondajele.</p>'; return; }
   const d = await r.json();
+  window.__polls = d.polls;
   list.innerHTML = d.polls.length ? d.polls.map(p => `<article style="border:1px solid var(--line);border-radius:12px;padding:16px">
     <div style="display:flex;justify-content:space-between;gap:12px;align-items:start;flex-wrap:wrap"><div><strong style="font-size:15px;color:var(--text)">${esc(p.question)}</strong><br><small style="color:var(--muted)">${p.open ? '<span class="pill on">DESCHIS</span>' : '<span class="pill off">ÎNCHIS</span>'} · ${p.total} voturi · pus de ${esc(p.createdBy || '—')} pe ${fmt(p.createdAt)}${p.endsAt ? ' · se închide ' + fmt(p.endsAt) : ''}</small></div>
-    <div class="rowactions">${p.open ? `<button type="button" data-close="${p.id}">Închide acum</button>` : ''}<button type="button" class="danger" data-del="${p.id}">Șterge</button></div></div>
+    <div class="rowactions"><button type="button" data-img="${p.id}">🖼 Imagine pentru Discord</button>${p.open ? `<button type="button" data-close="${p.id}">Închide acum</button>` : ''}<button type="button" class="danger" data-del="${p.id}">Șterge</button></div></div>
     <div style="display:grid;gap:6px;margin-top:12px">${p.options.map((o, i) => { const pct = p.total ? Math.round(p.counts[i] / p.total * 100) : 0; return `<div style="position:relative;padding:8px 12px;border-radius:8px;background:rgba(255,255,255,.04);overflow:hidden"><i style="position:absolute;left:0;top:0;bottom:0;width:${pct}%;background:rgba(255,138,31,.18)"></i><span style="position:relative;display:flex;justify-content:space-between;gap:10px"><span>${esc(o)}</span><b style="color:var(--text)">${pct}% · ${p.counts[i]}</b></span></div>`; }).join('')}</div></article>`).join('')
     : '<p class="muted">Încă nu ai pus niciun sondaj.</p>';
 }
 document.getElementById('list').addEventListener('click', async e => {
   const c = e.target.closest('[data-close]'), del = e.target.closest('[data-del]');
+  // (31.10.2026) imaginea cu rezultatele, gata de pus în #anunțuri (share-image.js)
+  const img = e.target.closest('[data-img]');
+  if (img && window.MrpImage) { const p = (window.__polls || []).find(x => String(x.id) === img.dataset.img); if (p) MrpImage.poll(p).then(cv => MrpImage.show(cv, 'sondaj-' + p.id + '.png')); return; }
   if (c) { if (!confirm('Închizi sondajul? Nu se mai poate vota.')) return; await apiFetch(`/api/admin/sondaje/${c.dataset.close}/inchide`, { method: 'POST' }); load(); }
   if (del) { if (!confirm('Ștergi sondajul cu tot cu voturi? Nu se poate anula.')) return; await apiFetch(`/api/admin/sondaje/${del.dataset.del}`, { method: 'DELETE' }); load(); }
 });

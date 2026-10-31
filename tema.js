@@ -22,7 +22,7 @@
 // (rămâne cât ții fila deschisă); ?tema=nu o oprește.
 (() => {
   if (window.MRP_TEMA) return;
-  const VER = '20261101a'; // aceeași ca în pwa.js — schimbă-le împreună când modifici tema
+  const VER = '20261101c'; // aceeași ca în pwa.js — schimbă-le împreună când modifici tema
   const root = document.documentElement;
   const ls = {
     get(k) { try { return localStorage.getItem(k); } catch { return null; } },
@@ -315,19 +315,23 @@
         return 1.05;
       },
       // bulgăre de zăpadă care lovește: o bufnitură moale + scrâșnet de zăpadă
+      // (01.11.2026) mai moale: fără tonul care cădea (suna a „măcăit"), doar zăpadă care se turtește
       splat(c, out, t) {
-        tone(c, out, t, 'sine', 140, 60, 0.18, 0.35, 0.003);
-        const n = noiseSrc(c, 'white', t, 0.35), g = gain(c, 0);
-        env(g, t, 0.004, 0.22, 0.02, 0.3);
-        n.connect(filt(c, 'lowpass', 1800)).connect(g).connect(out);
-        return 0.4;
+        const n = noiseSrc(c, 'white', t, 0.3), g = gain(c, 0);
+        env(g, t, 0.006, 0.16, 0.01, 0.24);
+        n.connect(filt(c, 'lowpass', 1100)).connect(g).connect(out);
+        const r = noiseSrc(c, 'brown', t, 0.2), rg = gain(c, 0);
+        env(rg, t, 0.004, 0.3, 0, 0.14);
+        r.connect(filt(c, 'lowpass', 250)).connect(rg).connect(out);
+        return 0.35;
       },
       // aruncarea: un „fâș" scurt prin aer
+      // (01.11.2026) fără filtrul îngust care urca de la 500 la 2200 Hz (trecea prin „vocale" și suna a rață)
       whoosh(c, out, t) {
-        const n = noiseSrc(c, 'white', t, 0.4), bp = filt(c, 'bandpass', 600, 2), g = gain(c, 0);
-        bp.frequency.setValueAtTime(500, t);
-        bp.frequency.exponentialRampToValueAtTime(2200, t + 0.35);
-        env(g, t, 0.12, 0.18, 0, 0.22);
+        const n = noiseSrc(c, 'white', t, 0.4), bp = filt(c, 'bandpass', 1400, 0.6), g = gain(c, 0);
+        bp.frequency.setValueAtTime(1200, t);
+        bp.frequency.linearRampToValueAtTime(1600, t + 0.35);
+        env(g, t, 0.1, 0.08, 0, 0.22);
         n.connect(bp).connect(g).connect(out);
         return 0.4;
       },
@@ -818,12 +822,32 @@
   const WN_SONGS = ['jbsong'];
 
   // (01.11.2026) Sergiu: din sunetele de sărbători rămân doar cele ale bulgărilor de zăpadă (zborul și
-  // lovitura, din wnThrow). Restul (sania, moș Crăciun, clopoței, cântecele, sunetele la clic și la
+  // lovitura, din wnThrow) — și doar când vizitatorul apasă pe un om de zăpadă; bulgării aruncați
+  // singuri zboară în liniște. Restul (sania, moș Crăciun, clopoței, cântecele, sunetele la clic și la
   // schimbarea paginii) nu se mai aud — se auzeau chiar dacă muzica de pe site era oprită.
   function wnSound(name, vol, bulgare) {
     if (!bulgare) return false;
     if (!wn || wn.mode !== 'all' || wn.work || document.hidden) return false;
+    // la prima apăsare browserul pornește audio cu o mică întârziere: sunetul așteaptă puțin, nu se pierde
+    if (!snd.ready) { snd.soon(name, vol, 800); return true; }
     return snd.play(name, vol) > 0;
+  }
+  // (01.11.2026) Sergiu: când apeși pe omul de zăpadă sar fulgii și se aude clinchetul, ca înainte —
+  // e joaca cu omul de zăpadă, deci se aude mereu (ca bulgării), nu doar cu muzica pornită
+  function wnPoke(ev) {
+    if (!wn || !wn.fx) return;
+    wnBurstAt(ev.clientX, ev.clientY, { n: 7 });
+    wnSound('twinkle', 0.8, true);
+  }
+  // (01.11.2026) Sergiu: sunetele mici de pe site (clic, schimbarea paginii, deschiderea unei casete,
+  // butonul cu fulg) se aud doar cât muzica din colțul din dreapta jos e pornită (site-audio.js,
+  // „mrp_audio_state”: nu e oprită și volumul nu e 0). Cu muzica oprită, se aud doar bulgării.
+  function musicOn() {
+    try { const st = JSON.parse(localStorage.getItem('mrp_audio_state') || 'null'); return !st || (!st.muted && Number(st.volume ?? 1) > 0); } catch { return true; }
+  }
+  function wnUi(name, vol, delay, k) {
+    if (!wn || wn.mode !== 'all' || document.hidden || !musicOn()) return;
+    if (delay != null) snd.soon(name, vol, delay); else if (snd.ready) snd.play(name, vol, k || 0);
   }
 
   // ninsoarea: fulgi desenați pe un singur <canvas>, cu vânt care se schimbă încet
@@ -942,15 +966,18 @@
     m.title = 'Aruncă un bulgăre!';
     m.addEventListener('pointerdown', ev => {
       ev.stopPropagation();
+      wnPoke(ev);
       const r = m.getBoundingClientRect();
       wnThrow(r.left + r.width / 2, r.top + r.height * 0.3);
+      wnBulgare();
     });
     m.addEventListener('animationend', e => { if (e.target === m) m.remove(); });
     wn.decor.appendChild(m);
     if (Math.random() < 0.6) wnSound('chime', 0.5);
   }
   // un bulgăre zboară într-un arc și se lipește de „geam", apoi se topește la vale
-  function wnThrow(fromX, fromY) {
+  // tacit = bulgăre aruncat singur, fără apăsarea vizitatorului: nu se aude
+  function wnThrow(fromX, fromY, tacit) {
     if (!wn || !wn.fx || document.hidden || !wn.top) return;
     const W = window.innerWidth, H = window.innerHeight;
     const sx = fromX != null ? fromX : (Math.random() < 0.5 ? -30 : W + 30);
@@ -962,7 +989,7 @@
     ball.style.setProperty('--dy', Math.round(ty - sy) + 'px');
     ball.style.setProperty('--arc', Math.round(-Math.min(220, Math.abs(tx - sx) * 0.35 + 60)) + 'px');
     wn.top.appendChild(ball);
-    wnSound('whoosh', 0.7, true);
+    if (!tacit) wnSound('whoosh', 0.7, true);
     ball.addEventListener('animationend', () => {
       ball.remove();
       if (!wn) return;
@@ -972,7 +999,7 @@
       sp.style.setProperty('--s', rand(0.85, 1.25).toFixed(2));
       sp.addEventListener('animationend', () => sp.remove());
       wn.top.appendChild(sp);
-      wnSound('splat', 0.9, true);
+      if (!tacit) wnSound('splat', 0.9, true);
     }, { once: true });
   }
   const SLED_SVG = '<svg class="wn-sled" viewBox="0 0 160 40" aria-hidden="true"><path d="M14 8h120c6 0 10 4 10 10v4H24z" fill="#c9303d"/><path d="M18 14h118" stroke="#ffd25a" stroke-width="2"/>'
@@ -986,7 +1013,7 @@
     m.style.setProperty('--w', Math.round(small ? rand(96, 116) : rand(140, 176)) + 'px');
     m.style.setProperty('--t', rand(8.5, 12).toFixed(1) + 's');
     m.title = 'Aruncă un bulgăre!';
-    m.addEventListener('pointerdown', ev => { ev.stopPropagation(); const r = m.getBoundingClientRect(); wnThrow(r.left + r.width / 2, r.top + r.height * 0.3); wnBulgare(); });
+    m.addEventListener('pointerdown', ev => { ev.stopPropagation(); wnPoke(ev); const r = m.getBoundingClientRect(); wnThrow(r.left + r.width / 2, r.top + r.height * 0.3); wnBulgare(); });
     m.addEventListener('animationend', e => { if (e.target === m) m.remove(); });
     wn.decor.appendChild(m);
     wnSound('whoosh', 0.5);
@@ -1001,15 +1028,15 @@
     m.style.setProperty('--y', rand(26, 62).toFixed(1) + 'vh');
     m.style.setProperty('--w', Math.round(small ? rand(70, 86) : rand(100, 128)) + 'px');
     m.title = 'Aruncă un bulgăre!';
-    const toss = () => { const r = m.getBoundingClientRect(); wnThrow(left ? r.right - 10 : r.left + 10, r.top + r.height * 0.35); };
-    m.addEventListener('pointerdown', ev => { ev.stopPropagation(); toss(); wnBulgare(); });
+    const toss = tacit => { const r = m.getBoundingClientRect(); wnThrow(left ? r.right - 10 : r.left + 10, r.top + r.height * 0.35, tacit); };
+    m.addEventListener('pointerdown', ev => { ev.stopPropagation(); wnPoke(ev); toss(); wnBulgare(); });
     m.addEventListener('animationend', e => { if (e.target === m) m.remove(); });
     wn.decor.appendChild(m);
-    if (Math.random() < 0.5) wn.timers.push(setTimeout(() => { if (wn && wn.fx && m.isConnected) toss(); }, 3000));
+    if (Math.random() < 0.5) wn.timers.push(setTimeout(() => { if (wn && wn.fx && m.isConnected) toss(true); }, 3000));
   }
   // (31.10.2026) semnal pentru sarcina „aruncă un bulgăre" din questurile de Crăciun (craciun.js)
   function wnBulgare() { document.dispatchEvent(new CustomEvent('mrp:bulgare')); }
-  function wnSpawnSnowball() { if (wn && wn.fx && !document.hidden && wn.top && wn.top.querySelectorAll('.wn-splat').length < 3) wnThrow(); }
+  function wnSpawnSnowball() { if (wn && wn.fx && !document.hidden && wn.top && wn.top.querySelectorAll('.wn-splat').length < 3) wnThrow(null, null, true); }
   function wnSpawnStar() {
     if (!wn || !wn.fx || document.hidden) return;
     const st = el('i', 'wn-star');
@@ -1041,6 +1068,7 @@
     const now = performance.now();
     if (now - wn.lastRing < 180) return;
     wn.lastRing = now;
+    wnUi('twinkle', 0.8, 400);
   }
   function wnTap(e) {
     if (!wn || !wn.fx || wn.lastPtr === 'mouse' || performance.now() - wn.lastDown > 900) return;
@@ -1106,6 +1134,7 @@
     if (/^\/(admin|mdt|api)/i.test(url.pathname) || /\.(pdf|zip|apk|png|jpe?g|mp4)$/i.test(url.pathname)) return;
     e.preventDefault();
     ss.set(WN_NAV, String(Date.now()));
+    wnUi('whoosh', 0.7, 200);
     let v = document.querySelector('.wn-veil');
     if (!v) {
       v = el('div', 'wn-veil', '<i class="wn-veil-frost"></i><i class="wn-veil-curtain"></i>'
@@ -1179,8 +1208,10 @@
       ring.addEventListener('animationend', () => ring.remove());
       wn.top.appendChild(ring);
       wnBurstAt(r.left + r.width / 2, Math.max(12, r.top), { n: Math.min(16, Math.round(r.width / 32)), w: r.width * 0.9, up: -140, spread: 180, big: true });
+      wnUi('xreveal', 0.4, null, 1);
     } else {
       wnBurstAt(r.left + Math.min(r.width, 260) / 2, r.top + 6, { n: 5, w: Math.min(r.width, 260), spread: 120 });
+      wnUi('twinkle', 0.8);
     }
   }
   function wnWatch(recs) {
@@ -1311,6 +1342,7 @@
         const next = MODES[(MODES.indexOf(wn.mode) + 1) % MODES.length];
         ls.set('mrp_tema_fx_iarna', MODE_SAVE[next]);
         wnSetMode(next, true);
+        wnUi('jingle', 0.8, 0);
       });
       document.body.appendChild(wn.btn);
     }

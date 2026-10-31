@@ -24,7 +24,7 @@
     }
   } catch { /* fără stocare (mod privat): tema.js o aplică după răspunsul serverului */ }
   const s = document.createElement('script');
-  s.src = '/tema.js?v=20261101a';
+  s.src = '/tema.js?v=20261101c';
   s.async = true;
   document.head.appendChild(s);
   // (31.10.2026) Questurile de Crăciun: doar pentru cine e logat (craciun.js

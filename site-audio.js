@@ -9,6 +9,10 @@
 //   • Noapte de vis / Silent Night (F. X. Gruber, 1818)
 //   • We Wish You a Merry Christmas (cântec popular englezesc)
 //   • Clopoțeii / Șcedrik (melodie populară ucraineană)
+//   • O, brad frumos / O Tannenbaum (melodie populară germană, E. Anschütz 1824)
+//   • Deck the Halls (melodie populară galeză)
+//   • Good King Wenceslas („Tempus adest floridum", 1582)
+//   • Auld Lang Syne (melodie populară scoțiană — cântecul de Anul Nou)
 // Pentru o melodie nouă: adaug-o în SONGS (note + bas), apare singură în listă.
 //
 // Ce ține minte (localStorage, „mrp_audio_state"): volumul, dacă e oprită,
@@ -40,7 +44,7 @@
     });
   }
   function bass(chords, beatsPerChord, split) { // tonica, apoi cvinta, pe fiecare acord
-    var R = { C: ["C3", "G3"], F: ["F3", "C3"], G: ["G2", "D3"], D: ["D3", "A3"], Am: ["A2", "E3"], Em: ["E3", "B2"], B: ["B2", "F#3"] };
+    var R = { C: ["C3", "G3"], F: ["F3", "C3"], G: ["G2", "D3"], D: ["D3", "A3"], Am: ["A2", "E3"], Em: ["E3", "B2"], B: ["B2", "F#3"], Bb: ["Bb2", "F3"], Dm: ["D3", "A3"] };
     var out = [];
     chords.split(" ").forEach(function (ch) {
       out.push([NOTE(R[ch][0]), split]);
@@ -56,6 +60,12 @@
   var SHC = "G5:1 F#5:0.5 G5:0.5 E5:1 ";    // motivul din „Șcedrik"
   var SHC_HI = "B5:1 A5:0.5 B5:0.5 G5:1 ";  // același, o terță mai sus
 
+  var TANNE_A = "F5:0.75 F5:0.25 F5:1.5 G5:0.5 A5:0.75 A5:0.25 A5:1.5 A5:0.5 G5:0.5 A5:0.5 Bb5:1 E5:1 ";
+  var DECK_A = "G5:1.5 F5:0.5 E5:1 D5:1 C5:1 D5:1 E5:1 C5:1 D5:0.5 E5:0.5 F5:0.5 D5:0.5 E5:1.5 D5:0.5 C5:1 B4:1 C5:2 ";
+  var KING_A = "G5:1 G5:1 G5:1 A5:1 G5:1 G5:1 D5:2 E5:1 D5:1 E5:1 F#5:1 G5:2 G5:2 ";
+  var AULD = "C5:1 F5:1.5 E5:0.5 F5:1 A5:1 G5:1.5 F5:0.5 G5:1 A5:1 F5:1.5 F5:0.5 A5:1 C6:1 D6:3 D6:1 " +
+    "C6:1.5 A5:0.5 A5:1 F5:1 G5:1.5 F5:0.5 G5:1 A5:0.5 G5:0.5 F5:1.5 D5:0.5 D5:1 C5:1 F5:3 ";
+
   var SONGS = [
     {
       id: "jingle", title: "Jingle Bells", q: 0.21, bells: true,
@@ -66,12 +76,26 @@
       bass: bass("C C C C F C D G C C C C F C G C", 4, 2),
     },
     {
+      id: "brad", title: "O, brad frumos", sub: "O Tannenbaum", q: 0.3, soft: true,
+      mel: seq("C5:1 " + TANNE_A + "G5:1 F5:1 C6:1 " +
+        "C6:0.75 A5:0.25 D6:1.5 C6:0.5 C6:0.75 Bb5:0.25 Bb5:1.5 Bb5:0.5 Bb5:0.75 G5:0.25 C6:1.5 Bb5:0.5 Bb5:1 A5:1 C5:1 " +
+        TANNE_A + "G5:1 F5:2"),
+      bass: [[null, 1]].concat(bass("F F C F F C C F F F C F", 3, 1)),
+    },
+    {
       id: "noapte", title: "Noapte de vis", sub: "Silent Night", q: 0.27, soft: true,
       mel: seq(
         "G5:1.5 A5:0.5 G5:1 E5:3 G5:1.5 A5:0.5 G5:1 E5:3 D6:2 D6:1 B5:3 C6:2 C6:1 G5:3 " +
         "A5:2 A5:1 C6:1.5 B5:0.5 A5:1 G5:1.5 A5:0.5 G5:1 E5:3 A5:2 A5:1 C6:1.5 B5:0.5 A5:1 G5:1.5 A5:0.5 G5:1 E5:3 " +
         "D6:2 D6:1 F6:1.5 D6:0.5 B5:1 C6:3 E6:3 C6:1.5 G5:0.5 E5:1 G5:1.5 F5:0.5 D5:1 C5:6"),
       bass: bass("C C G C F C F C G C C C", 6, 3),
+    },
+    {
+      id: "deck", title: "Deck the Halls", q: 0.22,
+      mel: seq(DECK_A + DECK_A +
+        "D5:1.5 E5:0.5 F5:1 D5:1 E5:1.5 F5:0.5 G5:1 D5:1 E5:0.5 F#5:0.5 G5:1 A5:0.5 B5:0.5 C6:1 B5:1 A5:1 G5:2 " +
+        "G5:1.5 F5:0.5 E5:1 D5:1 C5:1 D5:1 E5:1 C5:1 A5:0.5 A5:0.5 A5:0.5 A5:0.5 G5:1.5 F5:0.5 E5:1 D5:1 C5:2"),
+      bass: bass("C C G C C C G C G C D G C C F C", 4, 2),
     },
     {
       id: "wish", title: "We Wish You a Merry Christmas", q: 0.28,
@@ -84,6 +108,18 @@
       mel: seq(rep(SHC, 8) + rep(SHC_HI, 4) + rep(SHC, 3) + "E5:3"),
       mel2: seq(rep("R:3 ", 4) + rep(SHC_HI, 4) + rep(SHC, 4) + rep("R:3 ", 4)),
       bass: bass("Em D C B Em D C B Em D C B Em D C Em", 3, 3),
+    },
+    {
+      id: "king", title: "Good King Wenceslas", sub: "Colind englezesc", q: 0.3,
+      mel: seq(KING_A + KING_A +
+        "D6:1 C6:1 B5:1 A5:1 B5:1 A5:1 G5:2 E5:1 D5:1 E5:1 F#5:1 G5:2 G5:2 " +
+        "D5:1 D5:1 E5:1 F#5:1 G5:1 G5:1 A5:2 D6:1 C6:1 B5:1 A5:1 G5:2 C6:2 G5:4"),
+      bass: bass("G D C G G D C G G G C G D D G C G", 4, 2),
+    },
+    {
+      id: "auld", title: "Auld Lang Syne", sub: "Cântecul de Anul Nou", q: 0.32, soft: true,
+      mel: seq(AULD + AULD + "R:1"),
+      bass: [[null, 1]].concat(bass("F C F Bb F C Dm F F C F Bb F C Dm F", 4, 2)),
     },
   ];
   var ALL = "toate";
@@ -284,7 +320,7 @@
     ".mrp-audio-vol{width:70px;accent-color:var(--ma);cursor:pointer}" +
     ".mrp-audio-btn:focus-visible,.mrp-audio-pick:focus-visible,.mrp-audio-list button:focus-visible,.mrp-audio-vol:focus-visible{outline:2px solid var(--ma);outline-offset:2px}" +
     ".mrp-audio-list{position:absolute;right:0;bottom:calc(100% + 10px);width:270px;max-width:calc(100vw - 24px);padding:8px;border-radius:14px;box-sizing:border-box;" +
-    "background:rgba(11,14,20,.97);border:1px solid rgba(255,255,255,.12);box-shadow:0 18px 40px rgba(0,0,0,.5);display:grid;gap:2px}" +
+    "background:rgba(11,14,20,.97);border:1px solid rgba(255,255,255,.12);box-shadow:0 18px 40px rgba(0,0,0,.5);display:grid;gap:2px;max-height:calc(100vh - 110px);max-height:calc(100dvh - 110px);overflow-y:auto;overscroll-behavior:contain}" +
     ".mrp-audio-list[hidden]{display:none}" +
     ".mrp-audio-list h4{margin:2px 8px 6px;font-size:10px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:rgba(255,255,255,.5)}" +
     ".mrp-audio-list button{display:grid;grid-template-columns:22px 1fr auto;align-items:center;gap:8px;width:100%;min-height:42px;padding:6px 8px;border:0;border-radius:9px;" +

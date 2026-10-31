@@ -22,7 +22,7 @@
 // (rămâne cât ții fila deschisă); ?tema=nu o oprește.
 (() => {
   if (window.MRP_TEMA) return;
-  const VER = '20261031k'; // aceeași ca în pwa.js — schimbă-le împreună când modifici tema
+  const VER = '20261101a'; // aceeași ca în pwa.js — schimbă-le împreună când modifici tema
   const root = document.documentElement;
   const ls = {
     get(k) { try { return localStorage.getItem(k); } catch { return null; } },
@@ -817,7 +817,11 @@
   // cântecele care se aud din când în când, pe rând (colindele se adaugă aici)
   const WN_SONGS = ['jbsong'];
 
-  function wnSound(name, vol) {
+  // (01.11.2026) Sergiu: din sunetele de sărbători rămân doar cele ale bulgărilor de zăpadă (zborul și
+  // lovitura, din wnThrow). Restul (sania, moș Crăciun, clopoței, cântecele, sunetele la clic și la
+  // schimbarea paginii) nu se mai aud — se auzeau chiar dacă muzica de pe site era oprită.
+  function wnSound(name, vol, bulgare) {
+    if (!bulgare) return false;
     if (!wn || wn.mode !== 'all' || wn.work || document.hidden) return false;
     return snd.play(name, vol) > 0;
   }
@@ -958,7 +962,7 @@
     ball.style.setProperty('--dy', Math.round(ty - sy) + 'px');
     ball.style.setProperty('--arc', Math.round(-Math.min(220, Math.abs(tx - sx) * 0.35 + 60)) + 'px');
     wn.top.appendChild(ball);
-    wnSound('whoosh', 0.7);
+    wnSound('whoosh', 0.7, true);
     ball.addEventListener('animationend', () => {
       ball.remove();
       if (!wn) return;
@@ -968,7 +972,7 @@
       sp.style.setProperty('--s', rand(0.85, 1.25).toFixed(2));
       sp.addEventListener('animationend', () => sp.remove());
       wn.top.appendChild(sp);
-      wnSound('splat', 0.9);
+      wnSound('splat', 0.9, true);
     }, { once: true });
   }
   const SLED_SVG = '<svg class="wn-sled" viewBox="0 0 160 40" aria-hidden="true"><path d="M14 8h120c6 0 10 4 10 10v4H24z" fill="#c9303d"/><path d="M18 14h118" stroke="#ffd25a" stroke-width="2"/>'
@@ -1037,7 +1041,6 @@
     const now = performance.now();
     if (now - wn.lastRing < 180) return;
     wn.lastRing = now;
-    snd.soon('twinkle', 0.8, 400);
   }
   function wnTap(e) {
     if (!wn || !wn.fx || wn.lastPtr === 'mouse' || performance.now() - wn.lastDown > 900) return;
@@ -1103,7 +1106,6 @@
     if (/^\/(admin|mdt|api)/i.test(url.pathname) || /\.(pdf|zip|apk|png|jpe?g|mp4)$/i.test(url.pathname)) return;
     e.preventDefault();
     ss.set(WN_NAV, String(Date.now()));
-    if (wn.mode === 'all') snd.soon('whoosh', 0.7, 200);
     let v = document.querySelector('.wn-veil');
     if (!v) {
       v = el('div', 'wn-veil', '<i class="wn-veil-frost"></i><i class="wn-veil-curtain"></i>'
@@ -1177,10 +1179,8 @@
       ring.addEventListener('animationend', () => ring.remove());
       wn.top.appendChild(ring);
       wnBurstAt(r.left + r.width / 2, Math.max(12, r.top), { n: Math.min(16, Math.round(r.width / 32)), w: r.width * 0.9, up: -140, spread: 180, big: true });
-      if (wn.mode === 'all' && snd.ready) snd.play('xreveal', 0.4, 1);
     } else {
       wnBurstAt(r.left + Math.min(r.width, 260) / 2, r.top + 6, { n: 5, w: Math.min(r.width, 260), spread: 120 });
-      if (wn.mode === 'all' && snd.ready) snd.play('twinkle', 0.8);
     }
   }
   function wnWatch(recs) {
@@ -1311,7 +1311,6 @@
         const next = MODES[(MODES.indexOf(wn.mode) + 1) % MODES.length];
         ls.set('mrp_tema_fx_iarna', MODE_SAVE[next]);
         wnSetMode(next, true);
-        if (wn.mode === 'all') { snd.soon('jingle', 0.8); ss.set(WN_NEXT, String(Date.now() + 40000)); }
       });
       document.body.appendChild(wn.btn);
     }

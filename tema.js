@@ -22,7 +22,7 @@
 // (rămâne cât ții fila deschisă); ?tema=nu o oprește.
 (() => {
   if (window.MRP_TEMA) return;
-  const VER = '20261101f'; // aceeași ca în pwa.js — schimbă-le împreună când modifici tema
+  const VER = '20261101g'; // aceeași ca în pwa.js — schimbă-le împreună când modifici tema
   const root = document.documentElement;
   const ls = {
     get(k) { try { return localStorage.getItem(k); } catch { return null; } },
@@ -983,7 +983,7 @@
     });
     m.addEventListener('animationend', e => { if (e.target === m) m.remove(); });
     wn.decor.appendChild(m);
-    if (Math.random() < 0.6) wnSound('chime', 0.5);
+    // (01.11.2026) omul de zăpadă apare fără niciun sunet
   }
   // un bulgăre zboară într-un arc și se lipește de „geam", apoi se topește la vale
   // tacit = bulgăre aruncat singur, fără apăsarea vizitatorului: nu se aude

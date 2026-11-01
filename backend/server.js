@@ -184,7 +184,7 @@ app.get("/sitemap.xml", async (_req, res) => {
   try {
     if (!sitemapCache.xml || Date.now() - sitemapCache.at > 3600_000) {
       const base = (process.env.SITE_URL || "https://moldovarp.md").replace(/\/+$/, "");
-      const pages = ["", "incepe.html", "regulamente.html", "joburi.html", "legislatie-rutiera.html", "ghid-factiuni.html", "clasament.html", "concurs.html", "vip-shop.html", "premium.html", "craciun.html", "aplicatie.html"];
+      const pages = ["", "incepe.html", "regulamente.html", "joburi.html", "legislatie-rutiera.html", "cod-penal.html", "ghid-factiuni.html", "clasament.html", "concurs.html", "vip-shop.html", "premium.html", "craciun.html", "aplicatie.html"];
       const { rows } = await pool.query(`SELECT slug, updated_at FROM regulations WHERE is_published ORDER BY slug`);
       const esc = x => String(x).replace(/&/g, "&amp;").replace(/</g, "&lt;");
       const urls = pages.map(p => `<url><loc>${base}/${p}</loc></url>`)
@@ -8631,6 +8631,20 @@ async function requireFib(req, res, next) {
   if (await isFibMember(req.user.sub)) return next();
   res.status(403).json({ error: "Acces permis doar membrilor FIB." });
 }
+
+// (01.11.2026) Codul Penal (cod-penal.html): codul îl vede oricine; calculatorul de amenzi și sentințe
+// doar agenții — Poliție, Șerif, FIB (după jobul din joc al personajului legat, ultima dată văzut online,
+// sau facțiunea FIB de pe site) — și staff-ul. Calculul se face în browser; aici doar spunem cui îl arătăm.
+const COD_PENAL_JOBS = ["police", "sheriff", "fib"];
+app.get("/api/cod-penal/acces", auth, asyncRoute(async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  if (MOD_ROLES.includes(req.user.role)) return res.json({ calc: true, why: "staff" });
+  if (await isFibMember(req.user.sub)) return res.json({ calc: true, why: "fib" });
+  const { rows } = await pool.query(
+    `SELECT c.data->>'job' AS job FROM users u JOIN game_players_cache c ON c.identifier = u.game_identifier WHERE u.id = $1`, [req.user.sub]);
+  const job = String(rows[0]?.job || "").toLowerCase();
+  res.json({ calc: COD_PENAL_JOBS.includes(job), why: job || null });
+}));
 
 // "Am acces?" — folosit de dashboard ca să arate/ascundă linkul spre MDT,
 // fără să oblige fiecare pagină să repete verificarea de mai sus doar ca să

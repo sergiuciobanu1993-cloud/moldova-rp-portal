@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="ro">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ff8a1f">
+  <meta name="description" content="Codul Penal al serverului Moldova RP: toate articolele cu amenzile, lunile de închisoare, suspendările de permis și confiscările, cu căutare. Pentru Poliție, Șerif și FIB: calculator de amenzi și sentințe.">
+  <meta property="og:type" content="website"><meta property="og:site_name" content="Moldova RP"><meta property="og:locale" content="ro_RO">
+  <meta property="og:title" content="Codul Penal — Moldova RP"><meta property="og:description" content="Toate articolele, amenzile și pedepsele, cu căutare. Calculator de amenzi și sentințe pentru Poliție, Șerif și FIB."><meta property="og:url" content="https://moldovarp.md/cod-penal.html">
+  <meta property="og:image" content="https://moldovarp.md/assets/og/regulamente.jpg?v=1"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="Codul Penal — Moldova RP">
+  <meta name="twitter:card" content="summary_large_image">
+  <title>Codul Penal — Moldova RP</title>
+  <link rel="icon" href="assets/favicon.png">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/assets/app/apple-touch-icon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black"><meta name="apple-mobile-web-app-title" content="Moldova RP"><script>try{var wnT=+sessionStorage.getItem("mrp_wn_nav");if(wnT&&Date.now()-wnT<5000)document.documentElement.classList.add("wn-in")}catch(e){}</script><style>/* (31.10.2026) sosirea după cortina de iarnă (tema.js, wnNav): cortina se ridică */html.wn-in::after{content:"";position:fixed;left:0;right:0;top:0;height:calc(100vh + 140px);z-index:2147483000;pointer-events:none;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='-12 -12 24 24'%3E%3Cg fill='none' stroke='%23bfe6ff' stroke-width='1.6' stroke-linecap='round'%3E%3Cpath transform='rotate(0)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3Cpath transform='rotate(60)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3Cpath transform='rotate(120)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3Cpath transform='rotate(180)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3Cpath transform='rotate(240)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3Cpath transform='rotate(300)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3C/g%3E%3C/svg%3E") 50% calc(50vh - 27px)/54px 54px no-repeat,radial-gradient(circle at 30% 40%,#fff 0 1.6px,transparent 2.3px) 0 0/131px 113px,radial-gradient(circle at 70% 20%,rgba(255,255,255,.75) 0 1.1px,transparent 1.8px) 36px 28px/97px 71px,linear-gradient(180deg,#0b1830,#060a12 75%);-webkit-mask-image:linear-gradient(180deg,#000 calc(100% - 140px),transparent);mask-image:linear-gradient(180deg,#000 calc(100% - 140px),transparent);animation:wnIn 1s cubic-bezier(.65,0,.35,1) .2s forwards}@keyframes wnIn{to{transform:translateY(-100%);visibility:hidden}}@media (prefers-reduced-motion:reduce){html.wn-in::after{display:none}}</style><script src="/pwa.js" defer></script>
+<style>
+/* (01.11.2026) Codul Penal + calculatorul de amenzi și sentințe (Poliție, Șerif, FIB) */
+.cp-tools{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:0 0 14px}
+.cp-search{flex:1 1 320px;display:flex;align-items:center;gap:10px;padding:0 14px;min-height:50px;border-radius:12px;border:1px solid var(--line);background:var(--panel)}
+.cp-search:focus-within{border-color:rgba(255,138,31,.6);box-shadow:0 0 0 3px rgba(255,138,31,.12)}
+.cp-search input{flex:1;min-width:0;border:0;background:transparent;color:var(--text);font:inherit;font-size:15px;outline:0}
+.cp-count{color:var(--muted);font-size:12.5px;white-space:nowrap}
+.cp-chips{display:flex;gap:6px;overflow-x:auto;padding:2px 0 10px;margin:0 0 6px;scrollbar-width:thin}
+.cp-chip{flex:none;padding:7px 12px;border-radius:999px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:#c9cdd1;font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;white-space:nowrap}
+.cp-chip[aria-pressed="true"]{border-color:var(--orange);color:var(--orange);background:rgba(255,138,31,.1)}
+.cp-layout{display:grid;grid-template-columns:minmax(0,1fr);gap:20px;align-items:start}
+.cp-layout.calc{grid-template-columns:minmax(0,1fr) 380px}
+.cp-ch{margin:22px 0 8px;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--orange);font-weight:900}
+.cp-ch:first-child{margin-top:0}
+.cp-art{display:grid;grid-template-columns:72px minmax(0,1fr) auto;gap:14px;align-items:center;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--panel);margin-bottom:8px}
+.cp-art.sel{border-color:rgba(255,138,31,.55);background:linear-gradient(90deg,rgba(255,138,31,.08),var(--panel) 40%)}
+.cp-no{font-weight:900;font-variant-numeric:tabular-nums;color:#fff;font-size:14px}
+.cp-no small{display:block;color:var(--muted);font-size:10px;font-weight:700;letter-spacing:.06em}
+.cp-desc{font-size:14px;line-height:1.45}
+.cp-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}
+.cp-tag{display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:800;border:1px solid var(--line);background:rgba(255,255,255,.03);font-variant-numeric:tabular-nums}
+.cp-tag.fine{color:#7be0a5;border-color:rgba(61,220,132,.3)}
+.cp-tag.jail{color:#ff9a8a;border-color:rgba(255,92,92,.3)}
+.cp-tag.lic{color:#ffd27a;border-color:rgba(255,201,60,.3)}
+.cp-tag.note{color:#c9cdd1;font-weight:600}
+.cp-add{min-width:44px;height:38px;padding:0 12px;border-radius:9px;border:1px solid rgba(255,138,31,.45);background:rgba(255,138,31,.08);color:#fff;font:inherit;font-weight:900;cursor:pointer}
+.cp-add:hover{background:rgba(255,138,31,.2)}
+.cp-art.sel .cp-add{background:var(--orange);color:#0b0b0b}
+.cp-empty{padding:28px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:12px}
+.cp-calc{position:sticky;top:96px;padding:18px;border-radius:14px;border:1px solid rgba(255,138,31,.35);background:rgba(16,18,20,.96);box-shadow:0 18px 40px rgba(0,0,0,.4);max-height:calc(100vh - 120px);overflow:auto}
+.cp-calc h2{margin:0 0 4px;font-size:18px}
+.cp-calc .sub{margin:0 0 12px;color:var(--muted);font-size:12px}
+.cp-sel{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}
+.cp-it{padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:rgba(255,255,255,.03)}
+.cp-it-top{display:flex;gap:8px;align-items:flex-start;justify-content:space-between}
+.cp-it-top b{font-size:13px}
+.cp-it-top small{display:block;color:#c9cdd1;font-size:12px;line-height:1.35}
+.cp-x{flex:none;width:26px;height:26px;border-radius:7px;border:1px solid var(--line);background:transparent;color:#c9cdd1;cursor:pointer}
+.cp-x:hover{border-color:#ff6b6b;color:#ff6b6b}
+.cp-it-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px;font-size:12px;color:var(--muted)}
+.cp-it-row input[type=number]{width:110px;padding:6px 8px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--text);font:inherit;font-size:12.5px}
+.cp-it-row select{padding:6px 8px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--text);font:inherit;font-size:12.5px}
+.cp-tot{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:4px 0 10px}
+.cp-tot div{padding:10px 12px;border-radius:10px;background:rgba(255,255,255,.04);border:1px solid var(--line)}
+.cp-tot small{display:block;color:var(--muted);font-size:10.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+.cp-tot strong{font-size:20px;font-variant-numeric:tabular-nums}
+.cp-warn{margin:0 0 10px;padding:9px 11px;border-radius:9px;background:rgba(255,201,60,.08);border:1px solid rgba(255,201,60,.3);color:#ffd874;font-size:12px;line-height:1.45}
+.cp-out{width:100%;min-height:130px;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:#dfe3e6;font:12.5px/1.5 ui-monospace,Consolas,monospace;resize:vertical}
+.cp-btns{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+.cp-btns button{flex:1;min-height:40px;border-radius:9px;font:inherit;font-weight:900;cursor:pointer}
+.cp-copy{border:0;background:var(--orange);color:#0b0b0b}
+.cp-clear{border:1px solid var(--line);background:transparent;color:var(--text)}
+.cp-general{margin:0 0 18px;padding:14px 16px;border-radius:12px;border:1px solid var(--line);background:var(--panel)}
+.cp-general summary{cursor:pointer;font-weight:800}
+.cp-general ul{margin:10px 0 0;padding-left:18px;color:#c9cdd1;font-size:13.5px;line-height:1.55}
+.cp-mobile-bar{display:none}
+@media (max-width:1000px){
+  .cp-layout.calc{grid-template-columns:minmax(0,1fr)}
+  .cp-calc{position:static;max-height:none}
+  .cp-mobile-bar{position:fixed;left:12px;right:12px;bottom:12px;z-index:40;display:none;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px;border-radius:12px;background:var(--orange);color:#0b0b0b;font-weight:900;box-shadow:0 12px 30px rgba(0,0,0,.5)}
+  .cp-mobile-bar.on{display:flex}
+}
+@media (max-width:560px){.cp-art{grid-template-columns:56px minmax(0,1fr);}.cp-art .cp-add{grid-column:1/-1}}
+</style>
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="index.html" aria-label="Moldova RP - Acasă">
+      <img src="assets/logo-128.webp" alt="Moldova RP">
+      <span>MOLDOVA<span class="accent">RP</span></span>
+    </a>
+    <button class="menu-toggle" aria-label="Deschide meniul" aria-expanded="false">☰</button>
+    <nav class="nav">
+      <a href="index.html">Acasă</a>
+      <a href="regulamente.html">Regulamente</a>
+      <a href="index.html#jucatori">Jucători</a>
+      <a href="index.html#factiuni">Facțiuni</a>
+      <a href="legislatie-rutiera.html">Legislație Rutieră</a>
+      <a class="active" href="cod-penal.html">Codul Penal</a>
+      <a href="joburi.html">Joburi</a>
+      <a href="index.html#anunturi">Anunțuri</a>
+      <a class="nav-login" href="login.html">Autentificare</a>
+    </nav>
+  </header>
+
+  <main>
+    <div class="page-hero">
+      <a class="back-link" href="index.html">← Înapoi la pagina principală</a>
+      <p class="eyebrow" style="margin-top:22px">POLIȚIE · ȘERIF · FIB</p>
+      <h1>Codul Penal</h1>
+      <p class="muted" style="max-width:700px;margin-top:14px" id="cp-intro">
+        Toate faptele pedepsite pe Moldova RP, cu amenda, lunile de închisoare, suspendarea permisului și ce se confiscă. Caută după cuvânt („viteză”, „armă”, „droguri”) sau după numărul articolului.
+      </p>
+    </div>
+
+    <section class="section" style="padding-top:0">
+      <details class="cp-general" id="cp-general">
+        <summary>Reguli generale: cum se adună pedepsele</summary>
+        <ul id="cp-general-list">
+          <li>Pentru mai multe fapte din același incident, pedepsele se adună, dar fără să treacă de maximul din Art. 1.11.</li>
+        </ul>
+      </details>
+      <div class="cp-tools">
+        <label class="cp-search"><span aria-hidden="true">🔎</span><input type="search" id="cp-q" placeholder="Caută: viteză, armă, droguri, 805…" autocomplete="off" aria-label="Caută în Codul Penal"></label>
+        <span class="cp-count" id="cp-count">Se încarcă…</span>
+      </div>
+      <div class="cp-chips" id="cp-chips" role="toolbar" aria-label="Capitole"></div>
+      <div class="cp-layout" id="cp-layout">
+        <div id="cp-list"><p class="cp-empty">Se încarcă Codul Penal…</p></div>
+        <aside class="cp-calc" id="cp-calc" hidden aria-labelledby="cp-calc-title">
+          <h2 id="cp-calc-title">⚖️ Incident</h2>
+          <p class="sub">Apasă <b>+</b> la fiecare faptă. Totalul și textul pentru procesul-verbal se fac singure.</p>
+          <div class="cp-tot">
+            <div><small>Amendă</small><strong id="cp-t-fine">0$</strong></div>
+            <div><small>Închisoare</small><strong id="cp-t-jail">0 luni</strong></div>
+            <div><small>Permis</small><strong id="cp-t-lic" style="font-size:15px">—</strong></div>
+            <div><small>Puncte</small><strong id="cp-t-pts">0</strong></div>
+          </div>
+          <div id="cp-warns"></div>
+          <div class="cp-btns" style="margin:0 0 12px"><button type="button" class="cp-copy" id="cp-copy">📋 Copiază textul</button><button type="button" class="cp-clear" id="cp-clear">Golește</button></div>
+          <div class="cp-sel" id="cp-sel"><p class="cp-empty" style="padding:16px">Niciun articol ales încă.</p></div>
+          <textarea class="cp-out" id="cp-out" readonly aria-label="Textul pentru procesul-verbal"></textarea>
+        </aside>
+      </div>
+    </section>
+    <a class="cp-mobile-bar" id="cp-mobile-bar" href="#cp-calc"><span id="cp-mb-txt">0 articole</span><span>Vezi totalul ↓</span></a>
+  </main>
+
+  <footer>
+    <div class="footer-brand"><img src="assets/logo-128.webp" alt="Moldova RP"><div><strong>MOLDOVA<span class="accent">RP</span></strong><small>Portal oficial al comunității</small></div></div>
+    <p class="copyright">© 2026 Moldova RP. Toate drepturile rezervate.</p>
+  </footer>
+
+  <script src="app.js"></script>
+<script src="site-audio.js?v=20261031i"></script>
+<script>
+(() => {
+  // Sursa: Ghidul Poliției (Ghid facțiuni → Poliție, blocul politie_body), capitolele „Cod Penal — …”.
+  // Fiecare articol e un rând „Art. 101 — Fapta — pedeapsa”. Ce schimbă staff-ul acolo apare și aici.
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const money = n => Math.round(n).toLocaleString('ro-RO') + '$';
+  const num = s => Number(String(s).replace(/\./g, ''));
+  const norm = s => String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  let CAP = { months: 180, fine: 300000 }, BAIL = 20;
+  let arts = [], chapters = [], chapter = 'all', q = '';
+  const sel = new Map(); // nr → { fine, months, role }
+
+  function parsePenalty(p) {
+    const clean = p.replace(/\([^)]*\)/g, ' ');
+    const o = { raw: p };
+    let m = /(\d+)(?:\s*[–-]\s*(\d+))?\s*luni/i.exec(clean);
+    if (m) { o.mMin = +m[1]; o.mMax = m[2] ? +m[2] : +m[1]; }
+    m = /(\d{1,3}(?:\.\d{3})+|\d+)\s*\$(?:\s*[–-]\s*(\d{1,3}(?:\.\d{3})+|\d+)\s*\$)?/.exec(clean);
+    if (m) { o.fMin = num(m[1]); o.fMax = m[2] ? num(m[2]) : num(m[1]); }
+    m = /suspendare\s*(\d+)\s*h/i.exec(clean); if (m) o.susp = +m[1];
+    m = /(\d+)\s*puncte/i.exec(clean); if (m) o.pts = +m[1];
+    const conf = /(confiscare[a-zăâîșț]*[^+;,]*)/i.exec(p); if (conf) o.conf = conf[1].trim();
+    const paren = /\(([^)]*)\)/.exec(p); if (paren) o.cond = paren[1].trim();
+    if (/permanent|anulare a permisului|anularea permisului/i.test(clean)) o.lost = true;
+    return o;
+  }
+  function parse(html) {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const out = []; const chs = [];
+    doc.querySelectorAll('h2').forEach(h => {
+      const t = h.textContent.trim();
+      const gen = /^Cod Penal\s*—\s*Partea general/i.test(t);
+      const cm = /^Cod Penal\s*—\s*(Capitolul\s*(\d+)\s*:\s*(.+))$/i.exec(t);
+      if (!gen && !cm) return;
+      const chap = cm ? { id: cm[2], title: cm[3].trim() } : null;
+      if (chap) chs.push(chap);
+      for (let n = h.nextElementSibling; n && n.tagName !== 'H2'; n = n.nextElementSibling) {
+        if (gen) {
+          const txt = n.textContent;
+          const c = /cel mult\s*(\d+)\s*de luni[^0-9]*?(\d{1,3}(?:\.\d{3})+)\s*\$/i.exec(txt); if (c) CAP = { months: +c[1], fine: num(c[2]) };
+          const b = /cauțiune[^.]*?cel mult\s*(\d+)\s*de luni/i.exec(txt); if (b) BAIL = +b[1];
+          continue;
+        }
+        n.querySelectorAll('li').forEach(li => {
+          const t2 = li.textContent.replace(/\s+/g, ' ').trim();
+          const m = /^Art\.\s*(\d{3}(?:\.\d+)?)\s*[—–-]\s*(.+?)(?:\s+[—–]\s+(.+))?$/.exec(t2);
+          if (!m) return;
+          const pen = m[3] ? parsePenalty(m[3]) : { raw: '' };
+          out.push({ nr: m[1], desc: m[2].trim(), pen, ch: chap.id, key: norm(m[1] + ' ' + m[2] + ' ' + (m[3] || '')) });
+        });
+      }
+    });
+    return { arts: out, chs };
+  }
+  function tags(p) {
+    const t = [];
+    if (p.fMin != null) t.push(`<span class="cp-tag fine">💵 ${p.fMin === p.fMax ? money(p.fMin) : money(p.fMin) + '–' + money(p.fMax)}</span>`);
+    if (p.mMin != null) t.push(`<span class="cp-tag jail">⛓ ${p.mMin === p.mMax ? p.mMin : p.mMin + '–' + p.mMax} luni</span>`);
+    if (p.susp) t.push(`<span class="cp-tag lic">🚫 permis suspendat ${p.susp}h</span>`);
+    if (p.pts) t.push(`<span class="cp-tag lic">⚠ ${p.pts} puncte</span>`);
+    if (p.conf) t.push(`<span class="cp-tag note">📦 ${esc(p.conf)}</span>`);
+    if (p.cond) t.push(`<span class="cp-tag note">ℹ ${esc(p.cond)}</span>`);
+    if (!t.length && p.raw) t.push(`<span class="cp-tag note">${esc(p.raw)}</span>`);
+    return t.join('');
+  }
+  let canCalc = false;
+  function renderList() {
+    const nq = norm(q.trim());
+    const words = nq.split(/\s+/).filter(Boolean);
+    const vis = arts.filter(a => (chapter === 'all' || a.ch === chapter) && words.every(w => a.key.includes(w)));
+    document.getElementById('cp-count').textContent = `${vis.length} din ${arts.length} articole`;
+    const box = document.getElementById('cp-list');
+    if (!vis.length) { box.innerHTML = '<p class="cp-empty">Nimic găsit. Încearcă alt cuvânt sau alt capitol.</p>'; return; }
+    let last = null; const html = [];
+    for (const a of vis) {
+      if (a.ch !== last) { last = a.ch; const c = chapters.find(x => x.id === a.ch); html.push(`<h3 class="cp-ch">Capitolul ${esc(a.ch)} · ${esc(c ? c.title : '')}</h3>`); }
+      const on = sel.has(a.nr);
+      html.push(`<div class="cp-art${on ? ' sel' : ''}" data-nr="${esc(a.nr)}"><div class="cp-no">Art. ${esc(a.nr)}<small>COD PENAL</small></div><div><div class="cp-desc">${esc(a.desc)}</div><div class="cp-tags">${tags(a.pen)}</div></div>${canCalc && (a.pen.fMin != null || a.pen.mMin != null || a.pen.susp) ? `<button type="button" class="cp-add" data-add="${esc(a.nr)}" aria-pressed="${on}" title="${on ? 'Scoate din incident' : 'Adaugă la incident'}">${on ? '✓' : '+'}</button>` : ''}</div>`);
+    }
+    box.innerHTML = html.join('');
+  }
+  function renderChips() {
+    const box = document.getElementById('cp-chips');
+    box.innerHTML = [`<button type="button" class="cp-chip" data-ch="all" aria-pressed="${chapter === 'all'}">Toate</button>`].concat(chapters.map(c => `<button type="button" class="cp-chip" data-ch="${esc(c.id)}" aria-pressed="${chapter === c.id}">${esc(c.id)} · ${esc(c.title)}</button>`)).join('');
+  }
+  // ---- calculatorul ----
+  const ROLE = { autor: { k: 1, t: 'autor' }, tentativa: { k: 0.5, t: 'tentativă (½)', s: 'tentativă, ½ din pedeapsă' }, complice: { k: 2 / 3, t: 'complice (⅔)', s: 'complice, ⅔ din pedeapsă' } };
+  function calc() {
+    const items = [...sel.entries()].map(([nr, s]) => ({ a: arts.find(x => x.nr === nr), s })).filter(x => x.a);
+    let fine = 0, months = 0, susp = 0, pts = 0; const conf = [], lines = [];
+    for (const { a, s } of items) {
+      const k = ROLE[s.role].k;
+      const f = Math.round((s.fine || 0) * k), mo = Math.round((s.months || 0) * k);
+      fine += f; months += mo; susp = Math.max(susp, a.pen.susp || 0); pts += a.pen.pts || 0;
+      if (a.pen.conf) conf.push(`Art. ${a.nr}: ${a.pen.conf}`);
+      const parts = [f ? money(f) : '', mo ? mo + ' luni' : '', a.pen.susp ? `suspendare ${a.pen.susp}h` : '', a.pen.pts ? `${a.pen.pts} puncte` : ''].filter(Boolean).join(' + ');
+      lines.push(`• Art. ${a.nr} Cod Penal — ${a.desc}${s.role !== 'autor' ? ` (${ROLE[s.role].s})` : ''} — ${parts || '—'}`);
+    }
+    const warns = [];
+    const fineCapped = Math.min(fine, CAP.fine), monthsCapped = Math.min(months, CAP.months);
+    if (fine > CAP.fine) warns.push(`Amenda adunată (${money(fine)}) trece de maximul de ${money(CAP.fine)} pentru un incident (Art. 1.11) — se dă ${money(CAP.fine)}.`);
+    if (months > CAP.months) warns.push(`Închisoarea adunată (${months} luni) trece de maximul de ${CAP.months} luni (Art. 1.11) — se dau ${CAP.months} luni.`);
+    if (monthsCapped > 0 && monthsCapped <= BAIL) warns.push(`Pedeapsa e de cel mult ${BAIL} de luni: reținutul poate fi eliberat pe cauțiune (o aprobă un Comisar sau procurorul).`);
+    document.getElementById('cp-t-fine').textContent = money(fineCapped);
+    document.getElementById('cp-t-jail').textContent = monthsCapped + ' luni';
+    document.getElementById('cp-t-lic').textContent = susp ? `suspendat ${susp}h` : '—';
+    document.getElementById('cp-t-pts').textContent = pts;
+    document.getElementById('cp-warns').innerHTML = warns.map(w => `<p class="cp-warn">${esc(w)}</p>`).join('');
+    const when = new Date().toLocaleString('ro-RO', { timeZone: 'Europe/Chisinau', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    document.getElementById('cp-out').value = items.length ? [
+      `PROCES-VERBAL — ${when}`,
+      ...lines,
+      `TOTAL: ${money(fineCapped)} amendă${monthsCapped ? ` · ${monthsCapped} luni închisoare` : ''}${susp ? ` · permis suspendat ${susp}h` : ''}${pts ? ` · ${pts} puncte de penalizare` : ''}${fine > CAP.fine || months > CAP.months ? ' (limitat la maximul din Art. 1.11)' : ''}`,
+      ...(conf.length ? ['CONFISCĂRI: ' + conf.join('; ')] : []),
+    ].join('\n') : '';
+    const mb = document.getElementById('cp-mobile-bar');
+    mb.classList.toggle('on', items.length > 0);
+    document.getElementById('cp-mb-txt').textContent = `${items.length} ${items.length === 1 ? 'articol' : 'articole'} · ${money(fineCapped)}${monthsCapped ? ' · ' + monthsCapped + ' luni' : ''}`;
+  }
+  function renderSel() {
+    const box = document.getElementById('cp-sel');
+    if (!sel.size) { box.innerHTML = '<p class="cp-empty" style="padding:16px">Niciun articol ales încă.</p>'; calc(); return; }
+    box.innerHTML = [...sel.entries()].map(([nr, s]) => {
+      const a = arts.find(x => x.nr === nr); if (!a) return '';
+      const p = a.pen;
+      const fineIn = p.fMin != null ? (p.fMin !== p.fMax ? `<label>Amendă <input type="number" data-f="${esc(nr)}" min="${p.fMin}" max="${p.fMax}" step="500" value="${s.fine}"></label><span>${money(p.fMin)}–${money(p.fMax)}</span>` : `<span>Amendă: <b style="color:#fff">${money(p.fMin)}</b></span>`) : '';
+      const jailIn = p.mMin != null ? (p.mMin !== p.mMax ? `<label>Luni <input type="number" data-m="${esc(nr)}" min="${p.mMin}" max="${p.mMax}" step="1" value="${s.months}"></label><span>${p.mMin}–${p.mMax}</span>` : `<span>Închisoare: <b style="color:#fff">${p.mMin} luni</b></span>`) : '';
+      return `<div class="cp-it"><div class="cp-it-top"><div><b>Art. ${esc(nr)}</b><small>${esc(a.desc)}</small></div><button type="button" class="cp-x" data-rm="${esc(nr)}" aria-label="Scoate Art. ${esc(nr)}">✕</button></div>
+        <div class="cp-it-row">${fineIn}${jailIn}<label>Rol <select data-r="${esc(nr)}">${Object.entries(ROLE).map(([k, v]) => `<option value="${k}"${s.role === k ? ' selected' : ''}>${v.t}</option>`).join('')}</select></label></div></div>`;
+    }).join('');
+    calc();
+  }
+  function toggle(nr) {
+    if (sel.has(nr)) sel.delete(nr);
+    else { const a = arts.find(x => x.nr === nr); sel.set(nr, { fine: a.pen.fMin || 0, months: a.pen.mMin || 0, role: 'autor' }); }
+    renderSel(); renderList();
+  }
+  document.getElementById('cp-list').addEventListener('click', e => { const b = e.target.closest('[data-add]'); if (b) toggle(b.dataset.add); });
+  document.getElementById('cp-sel').addEventListener('click', e => { const b = e.target.closest('[data-rm]'); if (b) toggle(b.dataset.rm); });
+  document.getElementById('cp-sel').addEventListener('change', e => {
+    const t = e.target, clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, Number(v) || lo));
+    if (t.dataset.f) { const a = arts.find(x => x.nr === t.dataset.f); const s = sel.get(t.dataset.f); s.fine = clamp(t.value, a.pen.fMin, a.pen.fMax); t.value = s.fine; }
+    if (t.dataset.m) { const a = arts.find(x => x.nr === t.dataset.m); const s = sel.get(t.dataset.m); s.months = clamp(t.value, a.pen.mMin, a.pen.mMax); t.value = s.months; }
+    if (t.dataset.r) sel.get(t.dataset.r).role = t.value;
+    calc();
+  });
+  document.getElementById('cp-clear').addEventListener('click', () => { sel.clear(); renderSel(); renderList(); });
+  document.getElementById('cp-copy').addEventListener('click', async e => {
+    const txt = document.getElementById('cp-out').value; if (!txt) return;
+    try { await navigator.clipboard.writeText(txt); } catch { const ta = document.getElementById('cp-out'); ta.select(); document.execCommand('copy'); }
+    e.target.textContent = '✓ Copiat'; setTimeout(() => { e.target.textContent = '📋 Copiază textul'; }, 1600);
+  });
+  let qt; document.getElementById('cp-q').addEventListener('input', e => { clearTimeout(qt); qt = setTimeout(() => { q = e.target.value; renderList(); }, 120); });
+  document.getElementById('cp-chips').addEventListener('click', e => { const b = e.target.closest('[data-ch]'); if (!b) return; chapter = b.dataset.ch; renderChips(); renderList(); });
+
+  async function load() {
+    try {
+      const r = await fetch('/api/content/ghid-factiune'); if (!r.ok) throw new Error();
+      const d = await r.json(); let b = (d.blocks || d).politie_body;
+      if (typeof b === 'string') { try { b = JSON.parse(b); } catch { b = { content: b }; } }
+      const res = parse((b && (b.content || b.html)) || '');
+      arts = res.arts; chapters = res.chs;
+      if (!arts.length) throw new Error();
+      document.getElementById('cp-general-list').innerHTML = [
+        `Pedeapsa adunată pentru toate faptele dintr-un incident e de cel mult <b>${CAP.months} de luni</b> și <b>${money(CAP.fine)}</b> amendă (Art. 1.11).`,
+        'Tentativa (fapta începută, dar neterminată) se pedepsește cu <b>jumătate</b> din pedeapsă.',
+        'Complicele (cel care doar ajută) primește cel mult <b>două treimi</b> din pedeapsă. Organizatorul și instigatorul primesc cât autorul.',
+        `Cauțiune: la pedepse de cel mult <b>${BAIL} de luni</b>, aprobată de un Comisar sau de procuror.`,
+        'Amenda fără articol ori cu o sumă peste maximul din Cod nu e valabilă (Cod de Procedură, Art. 9.2).',
+        'Textul complet: <a href="ghid-factiune.html?slug=politie" style="color:var(--orange)">Ghidul Poliției</a>.',
+      ].map(x => `<li>${x}</li>`).join('');
+      renderChips(); renderList();
+    } catch {
+      document.getElementById('cp-list').innerHTML = '<p class="cp-empty">Codul Penal nu s-a putut încărca. Reîncearcă în câteva minute.</p>';
+      document.getElementById('cp-count').textContent = '';
+    }
+  }
+  async function access() {
+    let auth = null; try { auth = JSON.parse(localStorage.getItem('mrp_auth') || 'null'); } catch { auth = null; }
+    if (!auth?.token) return;
+    try {
+      const r = await fetch('/api/cod-penal/acces', { headers: { Authorization: `Bearer ${auth.token}` } });
+      if (!r.ok) return;
+      const d = await r.json();
+      if (!d.calc) return;
+      canCalc = true;
+      document.getElementById('cp-calc').hidden = false;
+      document.getElementById('cp-layout').classList.add('calc');
+      document.getElementById('cp-intro').insertAdjacentHTML('beforeend', ' <b style="color:var(--orange)">Ești agent: apasă + la fiecare faptă și calculatorul din dreapta face totalul.</b>');
+      renderList(); calc();
+    } catch { /* fără calculator */ }
+  }
+  load().then(access);
+})();
+</script>
+</body>
+</html>

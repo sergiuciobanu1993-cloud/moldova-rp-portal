@@ -7586,13 +7586,51 @@ app.get("/api/factions", asyncRoute(async (_req, res) => {
   res.json(rows);
 }));
 
-app.get("/api/announcements", asyncRoute(async (_req, res) => {
+// (01.11.2026) Viteza: pagina principală arată doar 6 anunțuri + 6 actualizări și le
+// reîmprospătează la fiecare minut. Cu "?scurt=1" primește doar acelea, cu un rezumat al
+// textului (~6 KB în loc de ~73 KB); textul complet vine din /api/announcements/:id
+// abia când cineva deschide anunțul. Lista ține minte 30 de secunde, ca să nu întrebăm
+// baza de date la fiecare vizitator; "no-cache" + ETag → dacă nu s-a schimbat nimic,
+// browserul primește un simplu „304, e la fel".
+let announcementsCache = { at: 0, rows: null };
+async function publishedAnnouncements() {
+  if (announcementsCache.rows && Date.now() - announcementsCache.at < 30_000) return announcementsCache.rows;
   const { rows } = await pool.query(
     `SELECT a.id,a.title,a.content,a.category,a.image_url,a.video_url,a.published_at,u.username author
      FROM announcements a LEFT JOIN users u ON u.id=a.author_id
      WHERE a.is_published=true ORDER BY a.published_at DESC LIMIT 30`
   );
-  res.json(rows);
+  announcementsCache = { at: Date.now(), rows };
+  return rows;
+}
+// după orice modificare din Admin → Anunțuri, lista se citește din nou imediat
+app.use("/api/admin/announcements", (req, res, next) => {
+  if (req.method !== "GET") res.on("finish", () => { announcementsCache = { at: 0, rows: null }; });
+  next();
+});
+app.get("/api/announcements", asyncRoute(async (req, res) => {
+  const rows = await publishedAnnouncements();
+  res.set("Cache-Control", "no-cache");
+  if (!req.query.scurt) return res.json(rows);
+  const isUpd = a => String(a.category || "").trim().toLowerCase() === "actualizare";
+  const pick = [...rows.filter(a => !isUpd(a)).slice(0, 6), ...rows.filter(isUpd).slice(0, 6)]
+    .sort((a, b) => new Date(b.published_at) - new Date(a.published_at));
+  res.json(pick.map(a => {
+    const c = String(a.content || "");
+    return c.length > 220 ? { ...a, content: c.slice(0, 220), full: false } : a;
+  }));
+}));
+app.get("/api/announcements/:id", asyncRoute(async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) return res.status(404).json({ error: "Anunțul nu există." });
+  const hit = (await publishedAnnouncements()).find(a => Number(a.id) === id);
+  if (hit) { res.set("Cache-Control", "no-cache"); return res.json(hit); }
+  const { rows } = await pool.query(
+    `SELECT a.id,a.title,a.content,a.category,a.image_url,a.video_url,a.published_at,u.username author
+     FROM announcements a LEFT JOIN users u ON u.id=a.author_id WHERE a.id=$1 AND a.is_published=true`, [id]);
+  if (!rows[0]) return res.status(404).json({ error: "Anunțul nu există." });
+  res.set("Cache-Control", "no-cache");
+  res.json(rows[0]);
 }));
 
 // ---- Tema de sezon a site-ului (07.10.2026) ----

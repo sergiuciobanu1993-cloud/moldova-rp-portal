@@ -341,10 +341,19 @@ if (newsList || updatesList) {
   };
   const openModal = (a) => {
     if (!modalOverlay) return;
+    // (01.11.2026) lista vine cu un rezumat; textul complet îl cerem doar acum
+    if (a.full === false) {
+      modalBody.innerHTML = '<p>Se încarcă…</p>';
+      fetch(`/api/announcements/${encodeURIComponent(a.id)}`).then(r => r.ok ? r.json() : null).then(full => {
+        if (!full) return;
+        Object.assign(a, full, { full: true });
+        if (!modalOverlay.hidden && modalTitle.textContent === a.title) modalBody.innerHTML = renderParagraphs(a.content);
+      }).catch(() => {});
+    }
     modalTag.textContent = (a.category || 'General').toUpperCase();
     modalDate.textContent = fmtNewsDate(a.published_at);
     modalTitle.textContent = a.title;
-    modalBody.innerHTML = renderParagraphs(a.content);
+    if (a.full !== false) modalBody.innerHTML = renderParagraphs(a.content);
     const embedUrl = youtubeEmbedUrl(a.video_url);
     if (embedUrl) {
       modalVideo.innerHTML = `<iframe src="${escapeHtml(embedUrl)}" title="${escapeHtml(a.title)}" loading="lazy" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
@@ -406,7 +415,8 @@ if (newsList || updatesList) {
 
   const loadNews = async () => {
     try {
-      const res = await fetch('/api/announcements');
+      if (document.hidden) return; // tabul nu se vede: nu mai cerem lista degeaba
+      const res = await fetch('/api/announcements?scurt=1');
       if (!res.ok) throw new Error();
       const items = await res.json();
       if (newsCtrl) newsCtrl.render(items.filter(a => !isUpdate(a)).slice(0, 6), 'Niciun anunț publicat momentan.');

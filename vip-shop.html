@@ -830,6 +830,24 @@ async function sellBack(btn) {
 // /api/vip-shop/log din backend, care citește direct din
 // moldovarp_case_openings prin ruta nouă a resursei Lua ("/cases/log",
 // v1.29.3+). Vizibil doar cât timp VIP Shop e restricționat la staff.
+// (01.11.2026) Premiile în bani murdari: jucătorul alege dacă îi păstrează murdari sau îi schimbă
+// în bani curați în bancă (la procentul din Editor, acum 70%). Jocul păstrează eticheta premiului
+// („$200.000 bani murdari”), dar schimbă contul și suma din rewardData — de acolo vedem ce a ales.
+function dirtyChoice(entry) {
+  const data = entry.rewardData || {};
+  if (entry.rewardType !== 'cash' || !(/murdar/i.test(entry.rewardLabel || '') || data.account === 'black_money')) return null;
+  const amount = Number(entry.convertedAmount || data.amount) || 0;
+  return data.account === 'bank' || entry.convertedAmount ? { converted: true, amount } : { converted: false, amount };
+}
+function dirtyPill(entry) {
+  const d = dirtyChoice(entry);
+  if (!d) return '';
+  return d.converted
+    ? `<span class="pill" style="background:rgba(125,178,255,.15);color:#7db2ff;flex:none" title="Jucătorul i-a schimbat în bani curați">💱 Schimbat în curați · $${d.amount.toLocaleString('ro-RO')} în bancă</span>`
+    : !entry.claimedAt
+    ? `<span class="pill" style="background:rgba(255,255,255,.06);color:#c9cdd1;flex:none" title="Încă poate alege: îi păstrează murdari sau îi schimbă în curați">💵 Murdari · încă n-a ales</span>`
+    : `<span class="pill" style="background:rgba(255,92,92,.12);color:#ff8a8a;flex:none" title="Jucătorul a păstrat banii murdari">💵 Păstrat murdari · $${d.amount.toLocaleString('ro-RO')}</span>`;
+}
 function renderLog(log) {
   const panel = document.getElementById('log-panel');
   const body = document.getElementById('log-body');
@@ -855,6 +873,7 @@ function renderLog(log) {
           </span>
           <span style="display:flex;align-items:center;gap:10px;flex:none">
             <span class="muted">🪙 ${fmtC(entry.priceCoins)}</span>
+            ${dirtyPill(entry)}
             ${claimedPill}
             <span class="muted">${fmtDate(entry.createdAt)}</span>
           </span>
@@ -920,8 +939,10 @@ function renderHistory(history) {
         const thumb = rewardThumb(entry.rewardType, data, entry.rewardLabel);
         const claimedPill = entry.soldCurrency
           ? `<span class="pill" style="background:rgba(125,178,255,.15);color:#7db2ff;flex:none">Vândut · ${entry.soldCurrency === 'coins' ? `🪙 ${fmtC(entry.soldAmount)}` : `$${Number(entry.soldAmount || 0).toLocaleString('ro-RO')}`}</span>`
-          : entry.convertedAmount
-          ? `<span class="pill" style="background:rgba(66,223,138,.15);color:var(--green);flex:none">Schimbat · $${Number(entry.convertedAmount).toLocaleString('ro-RO')} curați${entry.claimedAt ? ' · ridicat' : ''}</span>`
+          : dirtyChoice(entry)?.converted
+          ? `<span class="pill" style="background:rgba(66,223,138,.15);color:var(--green);flex:none">Schimbat · $${dirtyChoice(entry).amount.toLocaleString('ro-RO')} curați${entry.claimedAt ? ' · ridicat' : ''}</span>`
+          : dirtyChoice(entry) && entry.claimedAt
+          ? `<span class="pill" style="background:rgba(66,223,138,.15);color:var(--green);flex:none">Ridicat · bani murdari</span>`
           : entry.claimedAt
           ? `<span class="pill" style="background:rgba(66,223,138,.15);color:var(--green);flex:none">Ridicat</span>`
           : `<span class="pill warn" style="flex:none">În așteptare</span>`;

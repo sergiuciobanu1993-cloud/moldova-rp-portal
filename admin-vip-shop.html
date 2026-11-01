@@ -210,6 +210,13 @@
   <div id="nb-claims" class="case-table-scroll"><p class="muted">Se încarcă…</p></div>
 </details>
 
+<details class="formbox lx-box" id="ore-jucate">
+  <summary><h2>⏱️ Recompense pe ore (6–30 noiembrie)</h2><span class="lx-state" id="hr-state">Se încarcă…</span></summary>
+  <p class="vip-intro" style="margin:0 0 16px">Pe pagina principală, în locul mașinii pentru jucătorii noi: orele jucate între 6 și 30 noiembrie se adună pe cont (toate personajele). La <b>25 de ore</b> → $75.000 în bancă, la <b>50</b> → $150.000 în bancă, la <b>100</b> → 1.500 coins. Jucătorul cere premiul de pe site; tu i-l dai în joc și apeși <b>„✓ Am dat”</b>. Cererile se pot face până pe 7 decembrie.</p>
+  <h3 style="margin:0 0 8px;font-size:13px">Cereri</h3>
+  <div id="hr-claims" class="case-table-scroll"><p class="muted">Se încarcă…</p></div>
+</details>
+
 <div class="title" style="padding:0 0 16px"><h2>Cutii</h2><button id="new-case-btn">+ Cutie nouă</button></div>
 <div id="cases-list"><p class="muted">Se încarcă…</p></div>
 
@@ -1057,6 +1064,52 @@ document.getElementById('lx-save').addEventListener('click', async () => {
       setTimeout(() => { saved.hidden = true; }, 2500);
     } catch (err) { saved.hidden = false; saved.style.color = '#ff8a8a'; saved.textContent = err.message; }
   });
+  load();
+})();
+
+// ---- Recompense pe ore, 6–30 noiembrie (01.11.2026) ----
+(function hourRewardsAdmin() {
+  const e = x => (x ?? '').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const hm = m => m == null ? '—' : `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m`;
+  const ST = { pending: '<span class="pill warn">DE DAT</span>', given: '<span class="pill on">DAT</span>', rejected: '<span class="pill off">RESPINS</span>' };
+  let hr = null;
+  function render() {
+    const ev = hr.event, st = hr.stats || {};
+    const pend = hr.claims.filter(c => c.status === 'pending').length;
+    document.getElementById('hr-state').textContent = `${ev.ended ? 'Încheiată' : ev.started ? 'Activă' : 'Începe pe 6 noiembrie'} · ${st.players || 0} jucători cu ore · ${st.t25 || 0} la 25h, ${st.t50 || 0} la 50h, ${st.t100 || 0} la 100h · ${pend} de dat`;
+    const el = document.getElementById('hr-claims');
+    if (!hr.claims.length) { el.innerHTML = '<p class="muted" style="margin:0">Nicio cerere încă.</p>'; return; }
+    el.innerHTML = `<table class="reward-table" style="min-width:720px"><thead><tr><th>JUCĂTOR</th><th>PRAG</th><th>PREMIU</th><th>ORE LA CERERE</th><th>CERUT</th><th>STARE</th><th></th></tr></thead><tbody>${hr.claims.map(c => `
+      <tr><td><button type="button" class="player-link" style="font-size:12px;color:var(--text)" title="Deschide profilul jucătorului" data-pname="${e(c.rp_name || c.username || c.identifier || '')}" data-pid="${e(c.identifier || '')}" data-prp="${e(c.rp_name || '')}" data-puser="${e(c.user_id || '')}">${e(c.rp_name || c.username || '—')}</button>${c.static_id ? ` <span class="muted">#${e(c.static_id)}</span>` : ''}<br><small class="muted"><code>${e(c.identifier)}</code></small></td>
+        <td>${c.tier} ore</td><td><b>${e(c.prize)}</b></td><td>${hm(c.minutes)}</td>
+        <td>${new Date(c.created_at).toLocaleString('ro-RO')}</td>
+        <td>${ST[c.status] || e(c.status)}${c.handled_by_name ? `<br><small class="muted">${e(c.handled_by_name)}${c.note ? ' · ' + e(c.note) : ''}</small>` : ''}</td>
+        <td><div class="rowactions">${c.status === 'pending'
+          ? `<button data-hr="${c.id}" data-st="given">✓ Am dat</button><button class="danger" data-hr="${c.id}" data-st="rejected">Respinge</button>`
+          : `<button data-hr="${c.id}" data-st="pending">Repune</button>`}</div></td></tr>`).join('')}</tbody></table>`;
+    el.querySelectorAll('.player-link[data-pname]').forEach(b => b.addEventListener('click', () => {
+      if (typeof window.openPlayerProfile !== 'function') return;
+      window.openPlayerProfile(b.dataset.pname, { identifier: b.dataset.pid || undefined, rpName: b.dataset.prp || undefined, userId: b.dataset.puser || undefined });
+    }));
+    el.querySelectorAll('[data-hr]').forEach(b => b.addEventListener('click', async () => {
+      let note = '';
+      if (b.dataset.st === 'rejected') { note = prompt('Motivul (îl vede jucătorul):', ''); if (note === null) return; }
+      if (b.dataset.st === 'given' && !confirm('Ai dat premiul jucătorului în joc?')) return;
+      b.disabled = true;
+      const r = await apiFetch(`/api/admin/ore-jucate/${b.dataset.hr}`, { method: 'POST', body: JSON.stringify({ status: b.dataset.st, note }) });
+      if (!r.ok) { const j = await r.json().catch(() => ({})); alert(j.error || 'Nu a mers.'); b.disabled = false; return; }
+      load();
+    }));
+  }
+  async function load() {
+    try {
+      const r = await apiFetch('/api/admin/ore-jucate'); if (!r.ok) throw new Error(); hr = await r.json(); render();
+      const box = document.getElementById('ore-jucate');
+      if (location.hash === '#ore-jucate' || hr.claims.some(c => c.status === 'pending')) box.open = true;
+      if (location.hash === '#ore-jucate') box.scrollIntoView({ block: 'start' });
+    } catch { document.getElementById('hr-state').textContent = 'Nu am putut încărca.'; }
+  }
+  window.addEventListener('hashchange', () => { if (location.hash === '#ore-jucate') load(); });
   load();
 })();
 

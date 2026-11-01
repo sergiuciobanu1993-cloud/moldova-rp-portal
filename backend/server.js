@@ -949,6 +949,8 @@ async function syncPlayerSnapshots() {
     }))).catch(() => {});
     // (12.10.2026) mașina pentru jucătorii noi — orele la prima vedere după lansare
     noteNewbieSeen(detail.players).catch(err => console.error("Jucători noi (mașina 50h):", err.message));
+    // (01.11.2026) recompensele pe ore (6–30 noiembrie)
+    noteHourEventSeen(detail.players).catch(err => console.error("Recompense pe ore:", err.message));
     // (31.10.2026) clasamentul săptămânii — orele jucate în săptămâna curentă
     noteWeeklyPlaytime(detail.players).catch(err => console.error("Clasamentul săptămânii:", err.message));
 
@@ -5470,22 +5472,6 @@ function publicWinOf(e) {
   if (d.amount != null && Number.isFinite(Number(d.amount))) win.amount = Number(d.amount);
   return win;
 }
-// (01.11.2026) Pagina principală: după ce se termină oferta cu mașina pentru jucătorii noi, în locul ei
-// apare cutia pentru ganguri și familii — dar doar cât e activă în joc. Rută publică, doar numele,
-// prețul și câte premii are (fără șanse sau date de jucători); ținută 2 minute ca să nu întrebăm
-// serverul de joc la fiecare vizitator.
-const PROMO_CASE_ID = "cutie-ganguri-familii";
-let promoCaseCache = { at: 0, v: null };
-app.get("/api/vip-shop/promo", asyncRoute(async (_req, res) => {
-  res.set("Cache-Control", "public, max-age=120");
-  if (!promoCaseCache.v || Date.now() - promoCaseCache.at > 120_000) {
-    const r = await fetchCasesList();
-    const c = (r.cases || []).find(x => x && x.id === PROMO_CASE_ID && x.active !== false);
-    promoCaseCache = { at: Date.now(), v: c ? { active: true, id: c.id, name: c.name, price: Number(c.price) || 0, items: (c.pool || []).length } : { active: false } };
-  }
-  res.json(promoCaseCache.v);
-}));
-
 app.get("/api/vip-shop/ultimele", auth, asyncRoute(async (_req, res) => {
   res.set("Cache-Control", "no-store");
   if (recentWinsCache.wins && Date.now() - recentWinsCache.at < 15_000) {
@@ -6390,6 +6376,158 @@ app.post("/api/admin/jucator-nou/:id", auth, requireRole(...ADMIN_ROLES), asyncR
   await logAction(req.user.sub, `newbie_car.${status}`, "newbie_car", c.identifier, { id: c.id, note, model: c.model }, req.ip);
   if (status === "given") notifyUser(c.user_id, { type: "newbie_car", title: `🚗 Ai primit ${c.label || c.model}!`, message: "Mașina pentru cele 50 de ore e în garajul tău din joc. Drum bun!", link: "index.html", external: true }).catch(() => {});
   if (status === "rejected") notifyUser(c.user_id, { type: "newbie_car", title: "Cererea pentru mașină a fost respinsă", message: note || "Deschide un tichet dacă ai întrebări.", link: "tichete.html", external: true }).catch(() => {});
+  res.json({ ok: true, claim: c });
+}));
+
+// ---------------------------------------------------------------------------
+// (01.11.2026) Recompense pe ore — în locul mașinii pentru jucătorii noi, după ce
+// se termină oferta (5 noiembrie, 23:59). Pentru TOȚI jucătorii: orele jucate între
+// 6 și 30 noiembrie (până încep questurile de Crăciun) se adună pe cont (toate
+// personajele licenței). La 25 / 50 / 100 de ore premiul se cere de pe site, iar
+// staff-ul îl dă în joc și bifează „Am dat” în Editorul VIP Shop (ca la mașină).
+// Orele: ca la clasamentul săptămânii — la prima vedere în perioadă notăm câte ore
+// are personajul în total, apoi ce a jucat peste. Cererile se mai pot face o
+// săptămână după ce se termină perioada, pentru cine a ajuns la prag la timp.
+// ---------------------------------------------------------------------------
+const HOUR_EVENT = {
+  start: "2026-11-05T22:00:00.000Z",   // 6 noiembrie, 00:00 ora Chișinăului
+  end: "2026-11-30T21:59:59.000Z",     // 30 noiembrie, 23:59
+  claimUntil: "2026-12-07T21:59:59.000Z",
+  tiers: [
+    { hours: 25, prize: "$75.000 în bancă" },
+    { hours: 50, prize: "$150.000 în bancă" },
+    { hours: 100, prize: "1.500 coins" },
+  ],
+};
+const hourEventNow = () => {
+  const now = Date.now();
+  return { started: now >= Date.parse(HOUR_EVENT.start), ended: now > Date.parse(HOUR_EVENT.end), claimOpen: now >= Date.parse(HOUR_EVENT.start) && now <= Date.parse(HOUR_EVENT.claimUntil) };
+};
+let hourEventReady = null;
+function hourEventTables() {
+  if (!hourEventReady) {
+    hourEventReady = pool.query(`
+      CREATE TABLE IF NOT EXISTS hour_event_playtime (
+        identifier TEXT PRIMARY KEY, license TEXT, rp_name TEXT,
+        start_minutes INT NOT NULL, last_minutes INT NOT NULL, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+      CREATE INDEX IF NOT EXISTS hour_event_playtime_license ON hour_event_playtime(license);
+      CREATE TABLE IF NOT EXISTS hour_event_claims (
+        id SERIAL PRIMARY KEY, license TEXT NOT NULL, identifier TEXT, user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+        rp_name TEXT, static_id TEXT, tier INT NOT NULL, minutes INT NOT NULL, prize TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending', note TEXT, handled_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        handled_at TIMESTAMPTZ, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), UNIQUE (license, tier));`).catch(err => { hourEventReady = null; throw err; });
+  }
+  return hourEventReady;
+}
+async function noteHourEventSeen(players) {
+  const t = hourEventNow();
+  if (!t.started || t.ended) return;
+  const rows = (players || []).map(pl => ({ id: pl.license, lic: licenseOf(pl.license) || pl.license, rp: pl.serverName || null, min: playtimeOf(pl) }))
+    .filter(r => r.id && Number.isFinite(r.min));
+  if (!rows.length) return;
+  await hourEventTables();
+  const vals = [], params = [];
+  rows.forEach((r, k) => { params.push(r.id, r.lic, r.rp, Math.round(r.min)); vals.push(`($${k * 4 + 1}::text,$${k * 4 + 2}::text,$${k * 4 + 3}::text,$${k * 4 + 4}::int)`); });
+  await pool.query(
+    `INSERT INTO hour_event_playtime(identifier, license, rp_name, start_minutes, last_minutes)
+     SELECT v.id, v.lic, v.rp, v.min, v.min FROM (VALUES ${vals.join(",")}) AS v(id, lic, rp, min)
+     ON CONFLICT (identifier) DO UPDATE SET last_minutes = GREATEST(hour_event_playtime.last_minutes, EXCLUDED.last_minutes),
+       rp_name = COALESCE(EXCLUDED.rp_name, hour_event_playtime.rp_name), updated_at = NOW()`, params);
+}
+// minutele jucate în perioadă de toată licența (toate personajele) + cererile ei
+async function hourEventStatusFor(identifier) {
+  await hourEventTables();
+  const lic = licenseOf(identifier) || identifier;
+  const [pt, cl] = await Promise.all([
+    pool.query(`SELECT COALESCE(SUM(GREATEST(last_minutes - start_minutes, 0)), 0)::int AS minutes FROM hour_event_playtime WHERE license = $1`, [lic]),
+    pool.query(`SELECT tier, status, note, created_at, handled_at FROM hour_event_claims WHERE license = $1`, [lic]),
+  ]);
+  const minutes = pt.rows[0]?.minutes || 0;
+  const byTier = new Map(cl.rows.map(r => [Number(r.tier), r]));
+  const t = hourEventNow();
+  return {
+    license: lic, minutes,
+    tiers: HOUR_EVENT.tiers.map(x => {
+      const c = byTier.get(x.hours);
+      const state = c ? c.status : minutes >= x.hours * 60 ? (t.claimOpen ? "ready" : "closed") : "locked";
+      return { hours: x.hours, prize: x.prize, state, note: c?.note || null };
+    }),
+  };
+}
+app.get("/api/ore-jucate", asyncRoute(async (_req, res) => {
+  res.set("Cache-Control", "public, max-age=60");
+  const t = hourEventNow();
+  res.json({ start: HOUR_EVENT.start, end: HOUR_EVENT.end, claimUntil: HOUR_EVENT.claimUntil, tiers: HOUR_EVENT.tiers, ...t });
+}));
+app.get("/api/ore-jucate/eu", auth, asyncRoute(async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  const { rows } = await pool.query(`SELECT game_identifier, game_identifier_name FROM users WHERE id = $1`, [req.user.sub]);
+  const identifier = rows[0]?.game_identifier;
+  if (!identifier) return res.json({ linked: false });
+  const st = await hourEventStatusFor(identifier);
+  res.json({ linked: true, name: rows[0].game_identifier_name, minutes: st.minutes, tiers: st.tiers });
+}));
+app.post("/api/ore-jucate/cere", auth, asyncRoute(async (req, res) => {
+  const tier = HOUR_EVENT.tiers.find(x => x.hours === Number(req.body?.tier));
+  if (!tier) return res.status(400).json({ error: "Prag necunoscut." });
+  if (!hourEventNow().claimOpen) return res.status(400).json({ error: "Recompensele pe ore nu se mai pot cere." });
+  const { rows } = await pool.query(`SELECT game_identifier, game_identifier_name FROM users WHERE id = $1`, [req.user.sub]);
+  const identifier = rows[0]?.game_identifier;
+  if (!identifier) return res.status(400).json({ error: "Leagă-ți mai întâi contul de personajul din joc (/leagacont)." });
+  const st = await hourEventStatusFor(identifier);
+  const mine = st.tiers.find(x => x.hours === tier.hours);
+  if (mine.state !== "ready") {
+    if (mine.state === "locked") return res.status(400).json({ error: `Mai ai de jucat ${Math.ceil((tier.hours * 60 - st.minutes) / 60)} ore.` });
+    return res.status(400).json({ error: "Ai cerut deja premiul pentru acest prag." });
+  }
+  let identity = null;
+  try { identity = (await identityLookup({ identifiers: [identifier] })).byId.get(identifier) || null; } catch { /* fără nume RP */ }
+  const who = identity?.rpName || rows[0].game_identifier_name || null;
+  try {
+    await pool.query(
+      `INSERT INTO hour_event_claims(license, identifier, user_id, rp_name, static_id, tier, minutes, prize) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [st.license, identifier, req.user.sub, who, identity?.staticId || null, tier.hours, st.minutes, tier.prize]);
+  } catch (err) {
+    if (err.code === "23505") return res.status(400).json({ error: "Ai cerut deja premiul pentru acest prag." });
+    throw err;
+  }
+  await logAction(req.user.sub, "hour_event.claim", "hour_event", identifier, { tier: tier.hours, minutes: st.minutes, prize: tier.prize }, req.ip);
+  (async () => {
+    const title = `⏱️ Cerere nouă: ${tier.hours} de ore jucate`;
+    const message = `**${who || "un jucător"}**${identity?.staticId ? ` #${identity.staticId}` : ""} a cerut **${tier.prize}** (${Math.floor(st.minutes / 60)}h jucate în noiembrie). Dă-i premiul în joc, apoi bifează „Am dat”.`;
+    const link = "admin-vip-shop.html#ore-jucate";
+    await postStaffChannel({ title, message, link, color: 0x42df8a, mentionAdmins: true });
+    const a = await pool.query(`SELECT u.id FROM users u JOIN roles r ON r.id = u.role_id WHERE r.name = ANY($1::text[]) AND u.is_active`, [ADMIN_ROLES]);
+    await Promise.all(a.rows.map(r => notifyUser(r.id, { type: "hour_event_claim", title, message: message.replace(/\*\*/g, ""), link })));
+  })().catch(err => console.warn("Notificare staff (recompense pe ore) eșuată:", err.message));
+  res.json({ ok: true, ...(await hourEventStatusFor(identifier)) });
+}));
+app.get("/api/admin/ore-jucate", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (_req, res) => {
+  res.set("Cache-Control", "no-store");
+  await hourEventTables();
+  const [claims, stats] = await Promise.all([
+    pool.query(`SELECT c.*, u.username, h.username AS handled_by_name FROM hour_event_claims c
+                LEFT JOIN users u ON u.id = c.user_id LEFT JOIN users h ON h.id = c.handled_by
+                ORDER BY (c.status = 'pending') DESC, c.created_at DESC LIMIT 300`),
+    pool.query(`SELECT COUNT(*)::int AS players,
+                       COUNT(*) FILTER (WHERE m >= 25 * 60)::int AS t25, COUNT(*) FILTER (WHERE m >= 50 * 60)::int AS t50, COUNT(*) FILTER (WHERE m >= 100 * 60)::int AS t100
+                FROM (SELECT license, SUM(GREATEST(last_minutes - start_minutes, 0)) AS m FROM hour_event_playtime GROUP BY license) x WHERE m > 0`),
+  ]);
+  res.json({ event: { ...HOUR_EVENT, ...hourEventNow() }, claims: claims.rows, stats: stats.rows[0] });
+}));
+app.post("/api/admin/ore-jucate/:id", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+  const status = String(req.body?.status || "");
+  if (!["given", "rejected", "pending"].includes(status)) return res.status(400).json({ error: "Stare necunoscută." });
+  const note = String(req.body?.note || "").trim().slice(0, 300) || null;
+  await hourEventTables();
+  const { rows } = await pool.query(
+    `UPDATE hour_event_claims SET status = $2, note = $3, handled_by = $4, handled_at = NOW() WHERE id = $1 RETURNING *`,
+    [req.params.id, status, note, req.user.sub]);
+  const c = rows[0];
+  if (!c) return res.status(404).json({ error: "Cererea nu există." });
+  await logAction(req.user.sub, `hour_event.${status}`, "hour_event", c.identifier, { id: c.id, tier: c.tier, note }, req.ip);
+  if (status === "given") notifyUser(c.user_id, { type: "hour_event", title: `⏱️ Ai primit ${c.prize}!`, message: `Premiul pentru ${c.tier} de ore jucate e în joc. Mersi că joci pe Moldova RP!`, link: "index.html", external: true }).catch(() => {});
+  if (status === "rejected") notifyUser(c.user_id, { type: "hour_event", title: "Cererea pentru premiul pe ore a fost respinsă", message: note || "Deschide un tichet dacă ai întrebări.", link: "tichete.html", external: true }).catch(() => {});
   res.json({ ok: true, claim: c });
 }));
 

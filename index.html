@@ -53,16 +53,20 @@
   .hc-btn:hover{background:rgba(255,138,31,.2);border-color:var(--orange)}
   .hc-btn.solid{background:var(--orange);color:#0b0b0b;border-color:var(--orange)}
   .hc-ok{color:var(--green);font-weight:800}
-  /* (01.11.2026) cardul cutiei pentru ganguri și familii (în locul ofertei cu mașina, după ce se termină) */
-  .gc-card{border-color:rgba(61,220,90,.4)}
-  .gc-card .hc-thumb{display:block;width:150px;height:84px}
-  .gc-card .hc-thumb img{object-fit:cover;border-radius:9px;animation:none;filter:drop-shadow(0 0 14px rgba(61,220,90,.35))}
-  .gc-card .hc-eyebrow{color:#3ddc5a}
-  .gc-card .hc-eyebrow::before{background:#3ddc5a;box-shadow:0 0 10px #3ddc5a}
-  .gc-card h2 b{color:#3ddc5a}
-  .gc-card .hc-btn{border-color:rgba(61,220,90,.55);background:rgba(61,220,90,.1)}
-  .gc-card .hc-btn:hover{background:rgba(61,220,90,.2);border-color:#3ddc5a}
-  @media (max-width:560px){.gc-card .hc-thumb{width:110px;height:62px}}
+  /* (01.11.2026) recompensele pe ore (6–30 noiembrie), în locul mașinii pentru jucătorii noi */
+  .hr-card .hc-thumb{display:grid;place-items:center;width:84px;height:84px;font-size:46px;filter:drop-shadow(0 0 16px rgba(255,138,31,.45))}
+  .hr-tiers{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:12px}
+  .hr-tier{padding:9px 10px;border-radius:10px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.03);display:flex;flex-direction:column;gap:3px;min-width:0}
+  .hr-tier b{font-size:15px;font-variant-numeric:tabular-nums}
+  .hr-tier span{font-size:11.5px;color:#c9cdd1;line-height:1.3}
+  .hr-tier em{font-style:normal;font-size:10px;font-weight:900;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-top:2px}
+  .hr-tier.ready{border-color:var(--orange);background:rgba(255,138,31,.1)}
+  .hr-tier.ready em{color:var(--orange)}
+  .hr-tier.pending em,.hr-tier.given em{color:var(--green)}
+  .hr-tier.rejected em{color:#ff9b6b}
+  .hr-tier .hc-btn{margin-top:6px;min-height:32px;padding:0 10px;font-size:12px;justify-content:center}
+  @media (max-width:560px){.hr-card .hc-thumb{display:none}.hr-tiers{gap:6px}.hr-tier{padding:8px}.hr-tier b{font-size:14px}.hr-tier span{font-size:11px}.hr-tier .hc-btn{padding:0 6px;font-size:11px}}
+  @media (max-width:340px){.hr-tiers{grid-template-columns:1fr}}
   @keyframes hcIn{from{transform:translateX(120px);opacity:0;filter:blur(6px)}60%{opacity:1;filter:blur(0)}to{transform:none;opacity:1;filter:none}}
   @keyframes hcFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
   @keyframes hcShine{0%,62%{background-position:150% 0}85%,100%{background-position:-60% 0}}
@@ -312,15 +316,16 @@
             <div class="hc-me" id="hc-me"></div>
           </div>
         </div>
-        <a class="hc-card gc-card" id="gc-card" href="vip-shop.html" aria-labelledby="gc-title" hidden>
-          <div class="hc-thumb" aria-hidden="true"><img src="assets/vip-cases/banda.webp" alt="" decoding="async" loading="lazy"></div>
+        <div class="hc-card hr-card" id="hr-card" aria-labelledby="hr-title" hidden>
+          <div class="hc-thumb" aria-hidden="true">⏱️</div>
           <div class="hc-body">
-            <span class="hc-eyebrow">NOU ÎN VIP SHOP</span>
-            <h2 id="gc-title">Cutia <b>Ganguri &amp; Familii</b></h2>
-            <p id="gc-text">Bani murdari, arme VVS cu gloanțe incluse și alte premii pentru bandă. Șansele exacte le vezi în VIP Shop.</p>
-            <span class="hc-btn">Vezi cutia →</span>
+            <span class="hc-eyebrow">NOIEMBRIE · PREMII PE ORE</span>
+            <h2 id="hr-title">Joacă în noiembrie, <b>primești premii</b>.</h2>
+            <p id="hr-text">Orele jucate între 6 și 30 noiembrie se adună pe contul tău, pe toate personajele. La fiecare prag ceri premiul de aici, iar staff-ul ți-l dă în joc.</p>
+            <div class="hr-tiers" id="hr-tiers"></div>
+            <div class="hc-me" id="hr-me"></div>
           </div>
-        </a>
+        </div>
       </div>
       <!-- (12.10.2026) Mașina pentru jucătorii noi: joci 50h → e a ta (setări: Editor VIP Shop). Mașina = fundalul hero-ului; cardul e sub butoane. -->
       <div class="hero-car" id="hero-car" aria-hidden="true" hidden>
@@ -579,15 +584,48 @@
 
 
 <script>
-// (01.11.2026) După oferta cu mașina: cardul cutiei pentru ganguri și familii (doar cât e activă în joc).
-async function gangCasePromo() {
-  const card = document.getElementById('gc-card');
+// (01.11.2026) Recompense pe ore (6–30 noiembrie) — apar în locul mașinii pentru jucătorii noi,
+// după ce se termină oferta. Pragurile și premiile vin de la server (/api/ore-jucate).
+async function hourRewardsCard() {
+  const card = document.getElementById('hr-card');
   if (!card) return;
-  let c;
-  try { const r = await fetch('/api/vip-shop/promo'); if (!r.ok) return; c = await r.json(); } catch { return; }
-  if (!c || !c.active) return;
-  if (c.price) document.getElementById('gc-text').textContent = `Bani murdari, arme VVS cu gloanțe incluse și alte premii pentru bandă — ${String(c.price).replace(/\B(?=(\d{3})+(?!\d))/g, '.')} coins. Șansele exacte le vezi în VIP Shop.`;
+  const esc = x => String(x ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const hm = m => `${Math.floor(m / 60)}h ${String(Math.round(m % 60)).padStart(2, '0')}m`;
+  let ev;
+  try { const r = await fetch('/api/ore-jucate'); if (!r.ok) return; ev = await r.json(); } catch { return; }
+  if (!ev.claimOpen && ev.started) return; // s-a încheiat și a trecut și săptămâna pentru cereri
+  const day = iso => new Date(iso).toLocaleDateString('ro-RO', { timeZone: 'Europe/Chisinau', day: 'numeric', month: 'long' });
+  if (!ev.started) document.getElementById('hr-text').textContent = `Începe pe ${day(ev.start)}. Orele jucate până pe ${day(ev.end)} se adună pe contul tău, pe toate personajele; la fiecare prag ceri premiul de aici, iar staff-ul ți-l dă în joc.`;
+  else if (ev.ended) document.getElementById('hr-text').textContent = `Perioada s-a încheiat pe ${day(ev.end)}. Dacă ai ajuns la un prag, îți poți cere premiul până pe ${day(ev.claimUntil)}.`;
+  const STATE = { locked: '', ready: 'Poți cere', pending: '✓ Cerut', given: '✓ Primit', rejected: 'Respins', closed: 'Închis' };
+  const tiersHtml = tiers => tiers.map(t => `<div class="hr-tier ${t.state || ''}"><b>${t.hours} ore</b><span>${esc(t.prize)}</span>${STATE[t.state] ? `<em>${STATE[t.state]}</em>` : ''}${t.state === 'ready' ? `<button type="button" class="hc-btn solid" data-hr-claim="${t.hours}">Cere premiul</button>` : ''}</div>`).join('');
+  const box = document.getElementById('hr-tiers'), me = document.getElementById('hr-me');
+  box.innerHTML = tiersHtml(ev.tiers);
   card.hidden = false;
+  const auth = typeof getAuth === 'function' ? getAuth() : null;
+  if (!ev.started) return;
+  if (!auth?.token) { me.innerHTML = `<a class="hc-btn" href="login.html">Intră în cont ca să-ți vezi orele →</a>`; return; }
+  async function load() {
+    let d;
+    try { const r = await fetch('/api/ore-jucate/eu', { headers: { Authorization: `Bearer ${auth.token}` } }); if (!r.ok) return; d = await r.json(); } catch { return; }
+    if (!d.linked) { me.innerHTML = `Leagă-ți contul de personaj ca să-ți numărăm orele. <a class="hc-btn" href="dashboard.html">Leagă contul →</a>`; return; }
+    box.innerHTML = tiersHtml(d.tiers);
+    const next = d.tiers.find(t => t.state === 'locked');
+    const goal = next ? next.hours * 60 : d.tiers[d.tiers.length - 1].hours * 60;
+    const pct = Math.min(100, Math.round((d.minutes / goal) * 100));
+    me.innerHTML = `<b>Progresul tău</b>${d.name ? ' · ' + esc(d.name) : ''}<div class="hc-bar"><i style="width:0"></i></div><div class="hc-row"><span>${esc(hm(d.minutes))} jucate din 6 noiembrie</span><span>${next ? `următorul prag: ${next.hours} ore` : 'toate pragurile atinse'}</span></div>`;
+    requestAnimationFrame(() => { const i = me.querySelector('.hc-bar i'); if (i) i.style.width = pct + '%'; });
+    box.querySelectorAll('[data-hr-claim]').forEach(btn => btn.addEventListener('click', async () => {
+      btn.disabled = true; btn.textContent = 'Se trimite…';
+      try {
+        const r = await fetch('/api/ore-jucate/cere', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${auth.token}` }, body: JSON.stringify({ tier: Number(btn.dataset.hrClaim) }) });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(j.error || 'Nu a mers. Încearcă din nou.');
+        load();
+      } catch (e) { btn.disabled = false; btn.textContent = 'Cere premiul'; me.insertAdjacentHTML('beforeend', `<div style="color:#ff9b6b;margin-top:6px">${esc(e.message)}</div>`); }
+    }));
+  }
+  load();
 }
 </script>
 <script>
@@ -600,7 +638,7 @@ async function gangCasePromo() {
   const hrs = n => `${n} ${n === 1 ? 'oră' : 'de ore'}`;
   let cfg;
   try { const r = await fetch('/api/jucator-nou'); if (!r.ok) return; cfg = await r.json(); } catch { return; }
-  if (!cfg.enabled || cfg.ended) { gangCasePromo(); return; }
+  if (!cfg.enabled || cfg.ended) { hourRewardsCard(); return; }
   const local = `assets/vip-cars/${encodeURIComponent(cfg.model)}.webp`;
   const cdn = `https://r2.fivemanage.com/gi0w8W6O9hhBekF3oXfQ3/vehicule/${encodeURIComponent(cfg.model)}.webp`;
   const setMask = src => { const sh = box.querySelector('.hc-shine'); sh.style.webkitMaskImage = sh.style.maskImage = `url("${src}")`; sh.style.visibility = 'visible'; };

@@ -332,3 +332,37 @@ html.tema-iarna .xm-hero-slot.on{display:block;position:absolute;z-index:3;top:5
 .xm-hero-slot .xm-list small{font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .xm-hero-slot .xm-credit{margin:8px 2px 0;font-size:10px}
 @media (max-width:860px){#xm-home .xm-card{grid-template-columns:1fr}}
+/* (01.11.2026) playerul „scos”: fereastră plutitoare (mutată din bara de sus, lățimea din colțul din dreapta jos) */
+.xm-card{position:relative}
+.xm-now{min-width:0;color:#9aa6b6;font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.xm-hero-slot .xm-now{display:none}
+.xm-tools{position:absolute;top:10px;right:12px;z-index:2;display:flex;gap:4px}
+#xm-home .xm-tools{top:-48px;right:0}
+.xm-tools button{display:inline-grid;place-items:center;width:30px;height:30px;padding:0;border-radius:8px;border:1px solid rgba(150,200,255,.25);background:rgba(9,14,24,.88);color:#dfe8f5;font:700 15px/1 Inter,system-ui,sans-serif;cursor:pointer;transition:border-color .15s ease,color .15s ease}
+.xm-tools button:hover,.xm-tools button:focus-visible{border-color:var(--wn-gold,#f2b84b);color:var(--wn-gold,#f2b84b);outline:0}
+.xm-tools [data-xm=min],.xm-tools [data-xm=back]{display:none}
+#xm-card.xm-float .xm-tools{top:10px;right:10px}
+.xm-card.xm-float .xm-tools [data-xm=min],.xm-card.xm-float .xm-tools [data-xm=back]{display:inline-grid}
+.xm-card.xm-float .xm-tools [data-xm=out]{display:none}
+.xm-hero-slot.xm-float-host{transform:none!important;z-index:9990!important}
+.xm-out-note{margin:0 0 6px;color:#9aa6b6;font-size:13px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.xm-out-note[hidden]{display:none}
+.xm-card.xm-float{position:fixed!important;z-index:9990;display:block!important;margin:0!important;padding:12px;border-radius:16px;background:rgba(9,14,24,.94);border:1px solid rgba(150,200,255,.3);
+  box-shadow:0 26px 70px rgba(0,0,0,.65),0 0 0 1px rgba(242,184,75,.1);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);resize:horizontal;overflow:hidden;min-width:280px;max-width:min(960px,calc(100vw - 16px));pointer-events:auto}
+.xm-card.xm-float .xm-head{display:flex;align-items:center;gap:8px;margin:0 78px 10px 2px;font-size:14px;cursor:move;user-select:none;touch-action:none}
+.xm-card.xm-float .xm-head b{font-weight:900;flex:none}
+.xm-card.xm-float .xm-now{display:block}
+.xm-card.xm-float.xm-drag{box-shadow:0 30px 80px rgba(0,0,0,.75),0 0 0 1px rgba(242,184,75,.4);cursor:move}
+.xm-card.xm-float .xm-player{border-radius:12px}
+.xm-card.xm-float .xm-list{grid-template-columns:1fr 1fr;margin-top:10px;gap:6px}
+.xm-card.xm-float .xm-list button{grid-template-columns:56px 1fr;gap:8px;padding:5px;border-radius:9px}
+.xm-card.xm-float .xm-list img{width:56px;border-radius:6px}
+.xm-card.xm-float .xm-list b{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.xm-card.xm-float .xm-list small{font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.xm-card.xm-float .xm-credit{margin:8px 2px 0;font-size:10px}
+/* strâns: rămâne doar bara de sus; videoclipul merge mai departe (are doar înălțimea 0) */
+.xm-card.xm-float.xm-min{resize:none;width:320px!important}
+.xm-card.xm-float.xm-min .xm-head{margin-bottom:0}
+.xm-card.xm-float.xm-min .xm-player{height:0;aspect-ratio:auto;border:0}
+.xm-card.xm-float.xm-min .xm-list,.xm-card.xm-float.xm-min .xm-credit{display:none}
+@media (max-width:760px){.xm-tools{display:none}}

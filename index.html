@@ -486,9 +486,14 @@
          cântec, muzica din colțul din dreapta jos se oprește. -->
     <section class="section xm-music" id="muzica-sarbatori" hidden>
       <div class="section-head"><div><p class="eyebrow">SĂRBĂTORI PE MOLDOVA RP</p><h2>🎶 Muzica sărbătorilor</h2></div></div>
-      <div id="xm-home">
+      <div id="xm-home"><p class="xm-out-note" id="xm-out-note" hidden>Playerul e scos pe ecran. <button type="button" class="btn btn-ghost" data-xm="back">↩ Pune-l înapoi aici</button></p>
         <div class="xm-card" id="xm-card" data-alta-muzica>
-          <div class="xm-head"><span aria-hidden="true">🎶</span><b>Muzica sărbătorilor</b></div>
+          <div class="xm-head" id="xm-head"><span aria-hidden="true">🎶</span><b>Muzica sărbătorilor</b><span class="xm-now" id="xm-now"></span></div>
+          <div class="xm-tools" id="xm-tools">
+            <button type="button" data-xm="out" title="Scoate playerul: îl muți oriunde pe ecran și îi schimbi mărimea" aria-label="Scoate playerul ca fereastră plutitoare">⧉</button>
+            <button type="button" data-xm="min" title="Strânge / deschide" aria-label="Strânge sau deschide playerul">–</button>
+            <button type="button" data-xm="back" title="Pune înapoi în pagină" aria-label="Pune playerul înapoi în pagină">↩</button>
+          </div>
           <div class="xm-player" id="xm-player"><button type="button" class="xm-poster" id="xm-poster" aria-label="Pornește cântecul"><img alt="" id="xm-poster-img"><span class="xm-play" aria-hidden="true">▶</span></button></div>
           <ol class="xm-list" id="xm-list">
             <li><button type="button" data-yt="h2oesVeqn34"><img src="https://i.ytimg.com/vi/h2oesVeqn34/mqdefault.jpg" alt="" loading="lazy"><span><b>Colindăm Iarna</b><small>Irina Rimes, Raluka, Ana Baniciu, Nika</small></span></button></li>
@@ -506,7 +511,11 @@
       const poster = document.getElementById('xm-poster'), img = document.getElementById('xm-poster-img');
       const first = list.querySelector('[data-yt]');
       let current = first.dataset.yt;
-      const mark = id => list.querySelectorAll('[data-yt]').forEach(b => b.setAttribute('aria-current', String(b.dataset.yt === id)));
+      const nowEl = document.getElementById('xm-now');
+      const mark = id => {
+        list.querySelectorAll('[data-yt]').forEach(b => b.setAttribute('aria-current', String(b.dataset.yt === id)));
+        const t = list.querySelector('[data-yt="' + id + '"] b'); if (nowEl) nowEl.textContent = t ? '· ' + t.textContent : '';
+      };
       img.src = 'https://i.ytimg.com/vi/' + current + '/hqdefault.jpg';
       mark(current);
       function play(id) {
@@ -540,7 +549,9 @@
         const left = right - h.left + 24, rightPad = h.right - st.left + 24;
         return h.width - left - rightPad >= 430 ? { left, right: rightPad, bottom: h.bottom - bottom } : null;
       }
+      let floating = false;
       function place() {
+        if (floating) return; // cât e scos pe ecran, playerul nu se mută (s-ar reîncărca videoclipul)
         let inHero = wide.matches, box = null;
         if (inHero && offersShown()) {
           offers.classList.add('xm-side');           // întâi strângem cardurile, apoi măsurăm locul rămas
@@ -557,8 +568,89 @@
       }
       if (wide.addEventListener) wide.addEventListener('change', place); else wide.addListener(place);
       if (offers) new MutationObserver(() => requestAnimationFrame(place)).observe(offers, { subtree: true, attributes: true, attributeFilter: ['hidden'] });
-      let rz; window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(place, 150); });
+      let rz; window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { place(); if (floating) keepInside(); }, 150); });
       place();
+
+      // (01.11.2026, cerut de Sergiu) Playerul „scos”: o fereastră plutitoare pe care jucătorul o mută
+      // ținând de bara de sus și îi schimbă lățimea din colțul din dreapta jos. Se strânge într-o bară
+      // (muzica merge mai departe) și se pune înapoi în pagină. Poziția și mărimea se țin minte în
+      // browserul lui (localStorage). Pe telefon nu se poate scoate — ar acoperi tot ecranul.
+      const KEY = 'mrp_xm_float';
+      const mobile = window.matchMedia('(max-width: 760px)');
+      const head = document.getElementById('xm-head'), note = document.getElementById('xm-out-note');
+      const readSt = () => { try { return JSON.parse(localStorage.getItem(KEY) || 'null'); } catch { return null; } };
+      const saveSt = v => { try { v ? localStorage.setItem(KEY, JSON.stringify(v)) : localStorage.removeItem(KEY); } catch { /* fără stocare */ } };
+      let st = null;
+      // un părinte cu transform/filtru ar face ca fereastra „fixă” să stea în el, nu pe ecran
+      const trapped = el => {
+        for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+          if (p === slot) continue;
+          const c = getComputedStyle(p);
+          if (c.transform !== 'none' || c.filter !== 'none' || (c.backdropFilter && c.backdropFilter !== 'none') || c.perspective !== 'none' || /paint|layout|strict|content/.test(c.contain || '') || /transform|filter/.test(c.willChange || '')) return true;
+        }
+        return false;
+      };
+      function keepInside() {
+        const w = card.offsetWidth, h = card.offsetHeight;
+        st.x = Math.max(8, Math.min(st.x, window.innerWidth - Math.min(w, window.innerWidth - 16) - 8));
+        st.y = Math.max(86, Math.min(st.y, window.innerHeight - Math.min(h, 60) - 8));
+        card.style.left = st.x + 'px'; card.style.top = st.y + 'px';
+      }
+      function floatOn(saved) {
+        if (mobile.matches) return;
+        const r = card.getBoundingClientRect();
+        st = Object.assign({ x: Math.max(8, window.innerWidth - 460), y: Math.max(90, window.innerHeight - 420), w: 420, min: false }, saved || {});
+        floating = true;
+        slot.classList.add('xm-float-host');
+        if (card.parentNode === home) note.hidden = false;
+        card.classList.add('xm-float');
+        card.classList.toggle('xm-min', !!st.min);
+        if (trapped(card)) document.body.appendChild(card);
+        card.style.width = st.w + 'px';
+        if (!saved) { st.x = Math.min(r.left, window.innerWidth - st.w - 16); st.y = Math.max(90, Math.min(r.top, window.innerHeight - 300)); }
+        keepInside();
+        saveSt(st);
+      }
+      function floatOff() {
+        floating = false; st = null;
+        card.classList.remove('xm-float', 'xm-min');
+        ['left', 'top', 'width', 'height'].forEach(k => { card.style[k] = ''; });
+        slot.classList.remove('xm-float-host');
+        note.hidden = true;
+        saveSt(null);
+        if (card.parentNode !== slot && card.parentNode !== home) home.appendChild(card);
+        place();
+      }
+      document.addEventListener('click', e => {
+        const b = e.target.closest('[data-xm]');
+        if (!b) return;
+        const what = b.dataset.xm;
+        if (what === 'out') floatOn(null);
+        else if (what === 'back') floatOff();
+        else if (what === 'min' && floating) { st.min = !st.min; card.classList.toggle('xm-min', st.min); keepInside(); saveSt(st); }
+      });
+      // mutarea: ții de bara de sus
+      let drag = null;
+      head.addEventListener('pointerdown', e => {
+        if (!floating || e.button !== 0) return;
+        drag = { dx: e.clientX - st.x, dy: e.clientY - st.y };
+        head.setPointerCapture(e.pointerId);
+        card.classList.add('xm-drag');
+        e.preventDefault();
+      });
+      head.addEventListener('pointermove', e => { if (!drag) return; st.x = e.clientX - drag.dx; st.y = e.clientY - drag.dy; keepInside(); });
+      const endDrag = () => { if (!drag) return; drag = null; card.classList.remove('xm-drag'); saveSt(st); };
+      head.addEventListener('pointerup', endDrag); head.addEventListener('pointercancel', endDrag);
+      // mărimea: colțul din dreapta jos (resize din CSS); ținem minte lățimea
+      if (window.ResizeObserver) {
+        let t;
+        new ResizeObserver(() => {
+          if (!floating || st.min) return;
+          clearTimeout(t); t = setTimeout(() => { if (!floating || st.min) return; st.w = Math.round(card.offsetWidth); saveSt(st); }, 250);
+        }).observe(card);
+      }
+      const saved = readSt();
+      if (saved && !mobile.matches) floatOn(saved);
     })();
     </script>
 

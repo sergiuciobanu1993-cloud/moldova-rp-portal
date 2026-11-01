@@ -27,6 +27,7 @@
 .case-tier.blue{color:var(--r-uncommon)}
 .case-tier.purple{color:var(--r-rare)}
 .case-tier.orange{color:var(--orange)}
+.case-tier.green{color:#3ddc5a}
 .odds-dot{width:8px;height:8px;border-radius:50%;flex:none;display:inline-block}
 .odds-dot.common{background:var(--r-common)}
 .odds-dot.uncommon{background:var(--r-uncommon)}
@@ -673,7 +674,10 @@ function rewardDataOf(raw) {
 const TEBEX_URL = 'https://moldovaroleplay.tebex.io';
 const CASE_IMG = { rare: 'assets/vip-cases/rare.webp', epic: 'assets/vip-cases/epic.webp', legendara: 'assets/vip-cases/legendara.webp' };
 const CASE_ACCENT = { rare: 'purple', epic: 'blue', legendara: 'orange' };
-const TIER_LABEL = { purple: 'Rare', blue: 'Epic', orange: 'Legendară' };
+const TIER_LABEL = { purple: 'Rare', blue: 'Epic', orange: 'Legendară', green: 'Ganguri & Familii' };
+// (01.11.2026) Cutia pentru ganguri și familii: serverul de joc știe doar temele rare/epic/legendara
+// (o salvează ca „rare"), așa că poza și culoarea ei le alegem după id-ul cutiei.
+const CASE_BY_ID = { 'cutie-ganguri-familii': { img: 'assets/vip-cases/banda.webp', accent: 'green' } };
 
 // Culoarea buline-lor de raritate din listele de șanse — pe aceeași scală ca
 // linkul de test: cash-ul (cel mai mare procent) e "common", armele (1.5%,
@@ -1026,8 +1030,9 @@ function renderCases(cases, coins, linked) {
   grid.innerHTML = cases.map(c => {
     // "theme" vine acum din API (server.lua v1.30.0) — nu mai ghicim după
     // "id" (care poate fi orice, pentru cutii create din admin-vip-shop.html).
-    const accent = CASE_ACCENT[c.theme] || 'orange';
-    const img = CASE_IMG[c.theme];
+    const own = CASE_BY_ID[c.id] || {};
+    const accent = own.accent || CASE_ACCENT[c.theme] || 'orange';
+    const img = own.img || CASE_IMG[c.theme];
     return `
     <div class="panel case-card" data-preview="${escapeHtml(c.id)}" style="padding:18px" tabindex="0" role="button" aria-haspopup="dialog">
       ${img ? `<div class="crate-frame"><img src="${img}" alt="" loading="lazy"></div>` : ''}

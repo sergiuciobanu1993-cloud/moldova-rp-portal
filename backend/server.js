@@ -5470,6 +5470,22 @@ function publicWinOf(e) {
   if (d.amount != null && Number.isFinite(Number(d.amount))) win.amount = Number(d.amount);
   return win;
 }
+// (01.11.2026) Pagina principală: după ce se termină oferta cu mașina pentru jucătorii noi, în locul ei
+// apare cutia pentru ganguri și familii — dar doar cât e activă în joc. Rută publică, doar numele,
+// prețul și câte premii are (fără șanse sau date de jucători); ținută 2 minute ca să nu întrebăm
+// serverul de joc la fiecare vizitator.
+const PROMO_CASE_ID = "cutie-ganguri-familii";
+let promoCaseCache = { at: 0, v: null };
+app.get("/api/vip-shop/promo", asyncRoute(async (_req, res) => {
+  res.set("Cache-Control", "public, max-age=120");
+  if (!promoCaseCache.v || Date.now() - promoCaseCache.at > 120_000) {
+    const r = await fetchCasesList();
+    const c = (r.cases || []).find(x => x && x.id === PROMO_CASE_ID && x.active !== false);
+    promoCaseCache = { at: Date.now(), v: c ? { active: true, id: c.id, name: c.name, price: Number(c.price) || 0, items: (c.pool || []).length } : { active: false } };
+  }
+  res.json(promoCaseCache.v);
+}));
+
 app.get("/api/vip-shop/ultimele", auth, asyncRoute(async (_req, res) => {
   res.set("Cache-Control", "no-store");
   if (recentWinsCache.wins && Date.now() - recentWinsCache.at < 15_000) {

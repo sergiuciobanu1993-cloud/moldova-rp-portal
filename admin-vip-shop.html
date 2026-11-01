@@ -15,6 +15,7 @@
   .case-tier-badge.rare{background:rgba(163,120,255,.15);color:#b28dff;border:1px solid rgba(163,120,255,.3)}
   .case-tier-badge.epic{background:rgba(120,170,255,.15);color:#7db2ff;border:1px solid rgba(120,170,255,.3)}
   .case-tier-badge.legendara{background:rgba(255,179,71,.15);color:#ffb347;border:1px solid rgba(255,179,71,.3)}
+  .case-tier-badge.banda{background:rgba(61,220,90,.15);color:#5fe57a;border:1px solid rgba(61,220,90,.3)}
   .reward-detail{color:var(--muted);font-size:11px}
   /* (02.10.2026) Pe telefon tabelul era tăiat în dreapta și nu se putea
      derula (cutia avea overflow:hidden). Acum: tabelul se poate derula
@@ -303,6 +304,9 @@ const THEMES = {
   epic: { img: 'assets/vip-cases/epic.webp', label: 'Epic' },
   legendara: { img: 'assets/vip-cases/legendara.webp', label: 'Legendară' },
 };
+// (01.11.2026) serverul de joc salvează doar temele de mai sus; cutia pentru ganguri și familii
+// își ia poza după id (la fel ca în vip-shop.html)
+const CASE_BY_ID = { 'cutie-ganguri-familii': { img: 'assets/vip-cases/banda.webp', label: 'Ganguri & Familii', cls: 'banda' } };
 const TYPE_ICON = { cash: '💵', item: '🎒', vehicle: '🚗', coins: '🪙' };
 const ACCOUNT_LABEL = { bank: 'Bancă', black_money: 'Bani murdari' };
 
@@ -372,9 +376,9 @@ function renderCases() {
     return `
     <div class="case-block ${c.active ? '' : 'inactive'}">
       <div class="case-block-head">
-        <img class="case-thumb" src="${THEMES[theme].img}" alt="">
+        <img class="case-thumb" src="${(CASE_BY_ID[c.id] || THEMES[theme]).img}" alt="">
         <div class="case-block-titles">
-          <h3>${escapeHtml(c.name)}<span class="case-tier-badge ${theme}">${THEMES[theme].label}</span></h3>
+          <h3>${escapeHtml(c.name)}<span class="case-tier-badge ${CASE_BY_ID[c.id]?.cls || theme}">${(CASE_BY_ID[c.id] || THEMES[theme]).label}</span></h3>
           <small>id: ${escapeHtml(c.id)} · 🪙 ${c.price} coins · ${c.active ? '<span style="color:var(--green)">activă</span>' : '<span style="color:#888">dezactivată</span>'}</small>
           ${(() => { const st = cashStats(c); return st ? `<small style="display:block;margin-top:3px">💵 Bani în medie / deschidere: <b>${fmtUsd(st.avg)}</b>${st.perCoin != null ? ` (≈ ${fmtUsd(st.perCoin)} / coin)` : ''} · murdari ${st.dirtyPct}%${st.coinsBack ? ` · 🪙 înapoi în medie: ${st.coinsBack} coins` : ''}</small>` : ''; })()}
         </div>

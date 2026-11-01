@@ -53,6 +53,16 @@
   .hc-btn:hover{background:rgba(255,138,31,.2);border-color:var(--orange)}
   .hc-btn.solid{background:var(--orange);color:#0b0b0b;border-color:var(--orange)}
   .hc-ok{color:var(--green);font-weight:800}
+  /* (01.11.2026) cardul cutiei pentru ganguri și familii (în locul ofertei cu mașina, după ce se termină) */
+  .gc-card{border-color:rgba(61,220,90,.4)}
+  .gc-card .hc-thumb{display:block;width:150px;height:84px}
+  .gc-card .hc-thumb img{object-fit:cover;border-radius:9px;animation:none;filter:drop-shadow(0 0 14px rgba(61,220,90,.35))}
+  .gc-card .hc-eyebrow{color:#3ddc5a}
+  .gc-card .hc-eyebrow::before{background:#3ddc5a;box-shadow:0 0 10px #3ddc5a}
+  .gc-card h2 b{color:#3ddc5a}
+  .gc-card .hc-btn{border-color:rgba(61,220,90,.55);background:rgba(61,220,90,.1)}
+  .gc-card .hc-btn:hover{background:rgba(61,220,90,.2);border-color:#3ddc5a}
+  @media (max-width:560px){.gc-card .hc-thumb{width:110px;height:62px}}
   @keyframes hcIn{from{transform:translateX(120px);opacity:0;filter:blur(6px)}60%{opacity:1;filter:blur(0)}to{transform:none;opacity:1;filter:none}}
   @keyframes hcFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
   @keyframes hcShine{0%,62%{background-position:150% 0}85%,100%{background-position:-60% 0}}
@@ -302,6 +312,15 @@
             <div class="hc-me" id="hc-me"></div>
           </div>
         </div>
+        <a class="hc-card gc-card" id="gc-card" href="vip-shop.html" aria-labelledby="gc-title" hidden>
+          <div class="hc-thumb" aria-hidden="true"><img src="assets/vip-cases/banda.webp" alt="" decoding="async" loading="lazy"></div>
+          <div class="hc-body">
+            <span class="hc-eyebrow">NOU ÎN VIP SHOP</span>
+            <h2 id="gc-title">Cutia <b>Ganguri &amp; Familii</b></h2>
+            <p id="gc-text">Bani murdari, arme VVS cu gloanțe incluse și alte premii pentru bandă. Șansele exacte le vezi în VIP Shop.</p>
+            <span class="hc-btn">Vezi cutia →</span>
+          </div>
+        </a>
       </div>
       <!-- (12.10.2026) Mașina pentru jucătorii noi: joci 50h → e a ta (setări: Editor VIP Shop). Mașina = fundalul hero-ului; cardul e sub butoane. -->
       <div class="hero-car" id="hero-car" aria-hidden="true" hidden>
@@ -560,6 +579,18 @@
 
 
 <script>
+// (01.11.2026) După oferta cu mașina: cardul cutiei pentru ganguri și familii (doar cât e activă în joc).
+async function gangCasePromo() {
+  const card = document.getElementById('gc-card');
+  if (!card) return;
+  let c;
+  try { const r = await fetch('/api/vip-shop/promo'); if (!r.ok) return; c = await r.json(); } catch { return; }
+  if (!c || !c.active) return;
+  if (c.price) document.getElementById('gc-text').textContent = `Bani murdari, arme VVS cu gloanțe incluse și alte premii pentru bandă — ${String(c.price).replace(/\B(?=(\d{3})+(?!\d))/g, '.')} coins. Șansele exacte le vezi în VIP Shop.`;
+  card.hidden = false;
+}
+</script>
+<script>
 // (12.10.2026) Mașina pentru jucătorii noi — oferta + progresul celui logat.
 (async () => {
   const box = document.getElementById('hero-car');
@@ -569,7 +600,7 @@
   const hrs = n => `${n} ${n === 1 ? 'oră' : 'de ore'}`;
   let cfg;
   try { const r = await fetch('/api/jucator-nou'); if (!r.ok) return; cfg = await r.json(); } catch { return; }
-  if (!cfg.enabled || cfg.ended) return;
+  if (!cfg.enabled || cfg.ended) { gangCasePromo(); return; }
   const local = `assets/vip-cars/${encodeURIComponent(cfg.model)}.webp`;
   const cdn = `https://r2.fivemanage.com/gi0w8W6O9hhBekF3oXfQ3/vehicule/${encodeURIComponent(cfg.model)}.webp`;
   const setMask = src => { const sh = box.querySelector('.hc-shine'); sh.style.webkitMaskImage = sh.style.maskImage = `url("${src}")`; sh.style.visibility = 'visible'; };

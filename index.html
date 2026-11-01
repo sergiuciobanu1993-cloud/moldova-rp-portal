@@ -73,6 +73,14 @@
   .hr-cd-u b{font-size:16px;font-variant-numeric:tabular-nums;line-height:1.1}
   .hr-cd-u small{font-size:8.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
   .hr-card.soon .hr-tier{opacity:.85}
+  /* (01.11.2026) pe ecrane late: oferta cu mașina și premiile pe ore una lângă alta, pe același rând cu
+     caseta din dreapta (server online, VIP Shop, tichet); pe ecrane mai înguste rămân una sub alta */
+  @media (min-width:1500px){
+    .hero-offers{display:flex;align-items:stretch;gap:18px;width:calc(84vw - 450px);margin-top:26px}
+    .hero-offers .hc-card{flex:1 1 0;min-width:0;max-width:640px;margin-top:0}
+    .hero-offers .hc-card .hc-thumb{width:110px;height:62px}
+    .hero-offers .hr-card .hc-thumb{display:none}
+  }
   @media (max-width:560px){.hr-card .hc-thumb{display:none}.hr-tiers{gap:6px}.hr-tier{padding:8px}.hr-tier b{font-size:14px}.hr-tier span{font-size:11px}.hr-tier .hc-btn{padding:0 6px;font-size:11px}}
   @media (max-width:340px){.hr-tiers{grid-template-columns:1fr}}
   @keyframes hcIn{from{transform:translateX(120px);opacity:0;filter:blur(6px)}60%{opacity:1;filter:blur(0)}to{transform:none;opacity:1;filter:none}}
@@ -314,6 +322,7 @@
         </div>
         <!-- (31.10.2026) sondajul activ, sus în hero, ca să se vadă din prima (sondaj.js; se pune din Admin → Sondaje) -->
         <div id="sondaj" data-sondaj data-compact hidden></div>
+        <div class="hero-offers">
         <div class="hc-card" id="hc-card" aria-labelledby="hc-title" hidden>
           <span class="hc-web" aria-hidden="true"></span>
           <div class="hc-thumb" aria-hidden="true"><img class="hc-img" src="assets/vip-cars/m3e46.webp" alt="" decoding="async"></div>
@@ -333,6 +342,7 @@
             <div class="hr-tiers" id="hr-tiers"></div>
             <div class="hc-me" id="hr-me"></div>
           </div>
+        </div>
         </div>
       </div>
       <!-- (12.10.2026) Mașina pentru jucătorii noi: joci 50h → e a ta (setări: Editor VIP Shop). Mașina = fundalul hero-ului; cardul e sub butoane. -->

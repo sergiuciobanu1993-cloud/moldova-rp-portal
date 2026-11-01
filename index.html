@@ -81,6 +81,9 @@
     .hero-offers .hc-card .hc-thumb{width:110px;height:62px}
     .hero-offers .hr-card .hc-thumb{display:none}
   }
+  /* (01.11.2026) pe ecranele foarte late cardurile se strâng puțin, ca playerul „Muzica sărbătorilor”
+     să încapă între ele și caseta din dreapta (vezi place() mai jos) */
+  @media (min-width:1760px){.hero-offers.xm-side{width:clamp(800px,calc(84vw - 950px),1060px)}}
   @media (max-width:560px){.hr-card .hc-thumb{display:none}.hr-tiers{gap:6px}.hr-tier{padding:8px}.hr-tier b{font-size:14px}.hr-tier span{font-size:11px}.hr-tier .hc-btn{padding:0 6px;font-size:11px}}
   @media (max-width:340px){.hr-tiers{grid-template-columns:1fr}}
   @keyframes hcIn{from{transform:translateX(120px);opacity:0;filter:blur(6px)}60%{opacity:1;filter:blur(0)}to{transform:none;opacity:1;filter:none}}
@@ -523,15 +526,38 @@
       // ore), ele ocupă locul din mijloc — atunci playerul rămâne jos, în secțiunea lui, ca să nu se suprapună.
       const offers = document.querySelector('.hero-offers');
       const offersShown = () => !!offers && [...offers.querySelectorAll('.hc-card')].some(c => !c.hidden);
+      // (01.11.2026, Sergiu: „reîntoarce playerul”) Pe ecranele foarte late, lângă carduri rămâne loc liber
+      // până la caseta din dreapta — playerul se pune acolo, aliniat jos cu cardurile. Doar dacă nu încape
+      // (ecrane Full HD) rămâne în secțiunea de mai jos.
+      const hero = slot.closest('.hero'), status = hero && hero.querySelector('.hero-status');
+      function gapBox() {
+        if (!hero || !status) return null;
+        const vis = [...offers.querySelectorAll('.hc-card')].filter(c => !c.hidden);
+        if (!vis.length) return null;
+        const h = hero.getBoundingClientRect(), st = status.getBoundingClientRect();
+        const right = Math.max(...vis.map(c => c.getBoundingClientRect().right));
+        const bottom = Math.max(...vis.map(c => c.getBoundingClientRect().bottom));
+        const left = right - h.left + 24, rightPad = h.right - st.left + 24;
+        return h.width - left - rightPad >= 430 ? { left, right: rightPad, bottom: h.bottom - bottom } : null;
+      }
       function place() {
-        const inHero = wide.matches && !offersShown();
+        let inHero = wide.matches, box = null;
+        if (inHero && offersShown()) {
+          offers.classList.add('xm-side');           // întâi strângem cardurile, apoi măsurăm locul rămas
+          box = gapBox(); inHero = !!box;
+          if (!box) offers.classList.remove('xm-side');
+        } else if (offers) offers.classList.remove('xm-side');
         const target = inHero ? slot : home;
         if (card.parentNode !== target) target.appendChild(card);
         sec.classList.toggle('xm-moved', inHero);
         slot.classList.toggle('on', inHero);
+        Object.assign(slot.style, box
+          ? { left: box.left + 'px', right: box.right + 'px', bottom: box.bottom + 'px', top: 'auto', transform: 'none' }
+          : { left: '', right: '', bottom: '', top: '', transform: '' });
       }
       if (wide.addEventListener) wide.addEventListener('change', place); else wide.addListener(place);
-      if (offers) new MutationObserver(place).observe(offers, { subtree: true, attributes: true, attributeFilter: ['hidden'] });
+      if (offers) new MutationObserver(() => requestAnimationFrame(place)).observe(offers, { subtree: true, attributes: true, attributeFilter: ['hidden'] });
+      let rz; window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(place, 150); });
       place();
     })();
     </script>

@@ -344,11 +344,12 @@ if (newsList || updatesList) {
     // (01.11.2026) lista vine cu un rezumat; textul complet îl cerem doar acum
     if (a.full === false) {
       modalBody.innerHTML = '<p>Se încarcă…</p>';
+      const show = () => { if (!modalOverlay.hidden && modalTitle.textContent === a.title) modalBody.innerHTML = renderParagraphs(a.content); };
       fetch(`/api/announcements/${encodeURIComponent(a.id)}`).then(r => r.ok ? r.json() : null).then(full => {
-        if (!full) return;
-        Object.assign(a, full, { full: true });
-        if (!modalOverlay.hidden && modalTitle.textContent === a.title) modalBody.innerHTML = renderParagraphs(a.content);
-      }).catch(() => {});
+        if (full && full.content) Object.assign(a, full, { full: true });
+        else { a.content += '…'; a.full = true; } // nu l-am primit: arătăm măcar rezumatul
+        show();
+      }).catch(() => { a.content += '…'; a.full = true; show(); });
     }
     modalTag.textContent = (a.category || 'General').toUpperCase();
     modalDate.textContent = fmtNewsDate(a.published_at);

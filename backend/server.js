@@ -7621,13 +7621,13 @@ app.get("/api/announcements", asyncRoute(async (req, res) => {
   }));
 }));
 app.get("/api/announcements/:id", asyncRoute(async (req, res) => {
-  const id = Number(req.params.id);
-  if (!Number.isInteger(id) || id <= 0) return res.status(404).json({ error: "Anunțul nu există." });
-  const hit = (await publishedAnnouncements()).find(a => Number(a.id) === id);
+  const id = String(req.params.id || "").toLowerCase(); // id-urile sunt UUID
+  if (!/^[0-9a-f-]{1,64}$/.test(id)) return res.status(404).json({ error: "Anunțul nu există." });
+  const hit = (await publishedAnnouncements()).find(a => String(a.id).toLowerCase() === id);
   if (hit) { res.set("Cache-Control", "no-cache"); return res.json(hit); }
   const { rows } = await pool.query(
     `SELECT a.id,a.title,a.content,a.category,a.image_url,a.video_url,a.published_at,u.username author
-     FROM announcements a LEFT JOIN users u ON u.id=a.author_id WHERE a.id=$1 AND a.is_published=true`, [id]);
+     FROM announcements a LEFT JOIN users u ON u.id=a.author_id WHERE a.id::text=$1 AND a.is_published=true`, [id]);
   if (!rows[0]) return res.status(404).json({ error: "Anunțul nu există." });
   res.set("Cache-Control", "no-cache");
   res.json(rows[0]);

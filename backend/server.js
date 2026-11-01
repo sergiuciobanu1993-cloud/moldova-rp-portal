@@ -3862,6 +3862,33 @@ async function buildPlayerProfile(name, opts = {}) {
       if (!effIdentifier) effIdentifier = wantIdentifier;
     }
   }
+  // (01.11.2026) Tot fără cont? Mulți jucători s-au logat pe site cu Discord, dar n-au folosit
+  // /leagacont. Căutăm contul de site care are același Discord ca personajul (din joc sau din
+  // ultima fișă salvată a personajului).
+  let accountByDiscord = false;
+  if (!account && wantIdentifier) {
+    let disc = normDiscordId(live?.discord || gameHit?.discord || "");
+    if (!/^\d{15,22}$/.test(disc)) {
+      const c = await pool.query(`SELECT discord FROM game_players_cache WHERE identifier = $1 OR ($2::text IS NOT NULL AND split_part(identifier, ':', 2) = $2)
+        ORDER BY (identifier = $1) DESC, updated_at DESC LIMIT 1`, [wantIdentifier, wantLicense]).catch(() => ({ rows: [] }));
+      disc = normDiscordId(c.rows[0]?.discord);
+    }
+    if (/^\d{15,22}$/.test(disc)) {
+      const u = (await pool.query(`SELECT id FROM users WHERE discord_id = $1 LIMIT 1`, [disc]).catch(() => ({ rows: [] }))).rows[0];
+      if (u) {
+        const full = (await pool.query(`${PROFILE_ACCOUNT_SQL} WHERE u.id = $1 LIMIT 1`, [u.id]).catch(() => ({ rows: [] }))).rows[0];
+        account = full || (await pool.query(
+          `SELECT NULL::uuid AS id, NULL AS game_id, NULL AS display_name, NULL::int AS playtime_minutes, NULL AS status, u.created_at,
+                  u.id AS user_id, u.username, u.email, u.game_identifier, u.game_identifier_name, u.discord_id, NULL AS faction_name, NULL AS rank_name
+           FROM users u WHERE u.id = $1`, [u.id]).catch(() => ({ rows: [] }))).rows[0] || null;
+        if (account) {
+          accountByDiscord = true;
+          if (account.game_identifier && account.game_identifier !== wantIdentifier) accountOtherCharacter = true;
+          if (!effIdentifier) effIdentifier = wantIdentifier;
+        }
+      }
+    }
+  }
   // în jurnal, ca să știm de ce un profil rămâne fără cont de site
   if (wantIdentifier && (!account || accountOtherCharacter)) {
     const short = String(wantIdentifier).slice(0, 16);
@@ -4093,6 +4120,7 @@ async function buildPlayerProfile(name, opts = {}) {
       username: account.username, faction_name: account.faction_name, rank_name: account.rank_name,
       game_linked: !!account.game_identifier, game_name: account.game_identifier_name || null,
       other_character: accountOtherCharacter,
+      by_discord: accountByDiscord,
     } : null,
     punishments: punishmentResult.rows,
     moderation,

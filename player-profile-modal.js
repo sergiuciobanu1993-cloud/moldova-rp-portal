@@ -310,14 +310,16 @@ window.openPlayerProfile = (function () {
         ${escapeHtml(p.account.username)} ${p.account.game_id ? `<span class="muted">(ID #${escapeHtml(p.account.game_id)})</span>` : ''}
         ${p.account.faction_name ? ` · ${escapeHtml(p.account.faction_name)}${p.account.rank_name ? ' — ' + escapeHtml(p.account.rank_name) : ''}` : ''}
         ${p.account.playtime_minutes != null ? ` · ${Math.round(p.account.playtime_minutes / 60)}h jucate` : ''}
-        <br>${p.account.other_character
+        <br>${p.account.by_discord && !p.account.game_linked
+          ? `<span class="pill info">GĂSIT DUPĂ DISCORD</span> <span class="muted">— contul de site are același Discord ca acest personaj, dar n-a folosit încă /leagacont, deci nu e legat de el.</span>`
+          : p.account.other_character
           ? `<span class="pill warn">ALT PERSONAJ</span> <span class="muted">contul de site e al aceluiași jucător, dar e legat de alt personaj: <b>${escapeHtml(p.account.game_name || '—')}</b>. Banii și orele se salvează doar pentru personajul legat.</span>`
           : p.account.game_linked
           ? `<span class="pill on">LEGAT DE JOC</span> <span class="muted">personaj: ${escapeHtml(p.account.game_name || '—')}</span>`
           : (p.discordCharacters || []).length
             ? `<span class="pill info">GĂSIT DUPĂ DISCORD</span> <span class="muted">— n-a folosit /leagacont, dar personajele cu același Discord sunt: ${p.discordCharacters.map(c => `<b>${escapeHtml(c.rpName || c.identifier)}</b>${c.staticId ? ` #${escapeHtml(c.staticId)}` : ''}${c.online ? ' (online)' : ''}`).join(', ')}. Mai sus sunt datele ${p.discordCharacters.length > 1 ? 'primului' : 'lui'}.</span>`
             : `<span class="pill warn">NELEGAT DE JOC</span> <span class="muted">— n-a folosit încă /leagacont</span>`}
-      </p>${loginHtml(p.login)}` : `<p class="muted" style="margin:0 0 18px">Jucătorul nu are (încă) cont pe site.</p>`;
+      </p>${loginHtml(p.login)}` : `<p class="muted" style="margin:0 0 18px">Jucătorul nu are (încă) cont pe site. Am căutat după acest personaj, după celelalte personaje ale lui și după Discord.</p>`;
     const premium = premiumHtml(p.premium);
 
     const punishments = p.punishments.length ? `<table><thead><tr><th>TIP</th><th>MOTIV</th><th>DE CINE</th><th>CÂND</th></tr></thead><tbody>${

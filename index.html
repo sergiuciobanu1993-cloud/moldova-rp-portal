@@ -519,13 +519,19 @@
       const card = document.getElementById('xm-card'), slot = document.getElementById('xm-hero-slot');
       const home = document.getElementById('xm-home'), sec = document.getElementById('muzica-sarbatori');
       const wide = window.matchMedia('(min-width: 1760px)');
+      // (01.11.2026) Cât timp în hero se văd cardurile cu oferte (mașina pentru jucătorii noi, premiile pe
+      // ore), ele ocupă locul din mijloc — atunci playerul rămâne jos, în secțiunea lui, ca să nu se suprapună.
+      const offers = document.querySelector('.hero-offers');
+      const offersShown = () => !!offers && [...offers.querySelectorAll('.hc-card')].some(c => !c.hidden);
       function place() {
-        const target = wide.matches ? slot : home;
+        const inHero = wide.matches && !offersShown();
+        const target = inHero ? slot : home;
         if (card.parentNode !== target) target.appendChild(card);
-        sec.classList.toggle('xm-moved', wide.matches);
-        slot.classList.toggle('on', wide.matches);
+        sec.classList.toggle('xm-moved', inHero);
+        slot.classList.toggle('on', inHero);
       }
       if (wide.addEventListener) wide.addEventListener('change', place); else wide.addListener(place);
+      if (offers) new MutationObserver(place).observe(offers, { subtree: true, attributes: true, attributeFilter: ['hidden'] });
       place();
     })();
     </script>

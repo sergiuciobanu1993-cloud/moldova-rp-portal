@@ -37,6 +37,7 @@
 /* Buton "acasă" din antetul paginii — dus la pagina principală publică. */
 .home-btn{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);padding:10px 15px;border-radius:8px;color:var(--text);font-weight:800;font-size:12.5px;white-space:nowrap;transition:.15s ease}
 .home-btn:hover{border-color:var(--orange);color:var(--orange)}
+.home-btns{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
 
 /* Buton personalizat Moldova RP pentru "Vezi conținut & șanse" — înlocuiește
    btn-primary generic cu un stil propriu brand-ului (accent portocaliu în
@@ -389,7 +390,7 @@ button.win-chip:focus-visible{outline:2px solid var(--orange);outline-offset:2px
 <body>
 <header><a class="brand" href="index.html"><img src="assets/logo-128.webp" alt="">MOLDOVA<span>RP</span></a><nav id="dash-nav"><a href="index.html">Acasă</a><a href="dashboard.html">Dashboard</a><a href="tichete.html">Tichete</a><a href="vip-shop.html" style="color:var(--orange)">VIP Shop</a><a href="premium.html" id="premium-nav-link" hidden>Premium</a></nav><button class="menu-toggle" id="dash-menu-toggle" type="button" aria-label="Deschide meniul" aria-expanded="false">☰</button><a class="logout" href="login.html" id="logout-link">Deconectare</a></header>
 <main>
-<section class="welcome"><div><p>MAGAZIN COINS</p><h1>VIP Shop</h1><small>Cheltuiește coins-urile deja cumpărate pe o recompensă cu șansă — se ridică din joc.</small></div><a class="home-btn" href="index.html">← Pagina principală</a></section>
+<section class="welcome"><div><p>MAGAZIN COINS</p><h1>VIP Shop</h1><small>Cheltuiește coins-urile deja cumpărate pe o recompensă cu șansă — se ridică din joc.</small></div><div class="home-btns"><a class="home-btn" href="dashboard.html">👤 Contul meu</a><a class="home-btn" href="index.html">← Pagina principală</a></div></section>
 
 <p class="muted" style="margin:18px 0 24px">
   Coins-urile se cumpără exact ca până acum: din joc, apasă <strong>„Cumpără coins"</strong> în meniul VIP, plătește pe Tebex,

@@ -53,6 +53,9 @@
   .hc-btn:hover{background:rgba(255,138,31,.2);border-color:var(--orange)}
   .hc-btn.solid{background:var(--orange);color:#0b0b0b;border-color:var(--orange)}
   .hc-ok{color:var(--green);font-weight:800}
+  .hero-actions{flex-wrap:wrap}
+  .xm-open{color:#fff;font:inherit;font-weight:900;cursor:pointer}
+  .xm-open[hidden]{display:none}
   /* (01.11.2026) recompensele pe ore (6–30 noiembrie), în locul mașinii pentru jucătorii noi */
   .hr-card .hc-thumb{display:grid;place-items:center;width:84px;height:84px;font-size:46px;filter:drop-shadow(0 0 16px rgba(255,138,31,.45))}
   .hr-tiers{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:12px}
@@ -322,6 +325,7 @@
           <a class="btn btn-primary" href="#regulamente">Vezi regulamentele</a>
           <a class="btn btn-ghost" href="#jucatori">Explorează comunitatea</a>
           <a class="btn btn-ghost" href="incepe.html">🎮 Începe să joci</a>
+          <button type="button" class="btn btn-ghost xm-open" id="xm-open" data-xm="out" hidden>🎶 Muzica sărbătorilor</button>
         </div>
         <!-- (31.10.2026) sondajul activ, sus în hero, ca să se vadă din prima (sondaj.js; se pune din Admin → Sondaje) -->
         <div id="sondaj" data-sondaj data-compact hidden></div>
@@ -547,7 +551,24 @@
         const right = Math.max(...vis.map(c => c.getBoundingClientRect().right));
         const bottom = Math.max(...vis.map(c => c.getBoundingClientRect().bottom));
         const left = right - h.left + 24, rightPad = h.right - st.left + 24;
-        return h.width - left - rightPad >= 430 ? { left, right: rightPad, bottom: h.bottom - bottom } : null;
+        if (h.width - left - rightPad >= 430) return { left, right: rightPad, bottom: h.bottom - bottom };
+        return null;
+      }
+      function gapAbove() {
+        const vis = [...offers.querySelectorAll('.hc-card')].filter(c => !c.hidden);
+        if (!hero || !vis.length) return null;
+        const h = hero.getBoundingClientRect();
+        // (01.11.2026) Full HD (1920px): lângă carduri nu încape — încercăm deasupra lor, în dreapta
+        // titlului (unde e steagul), până la sondaj / mașina mare / caseta „Server online”
+        const top = Math.min(...vis.map(c => c.getBoundingClientRect().top));
+        const textRight = Math.max(...['.hero h1', '.hero-text', '.hero-actions'].map(q => document.querySelector(q)).filter(Boolean).map(e => e.getBoundingClientRect().right));
+        const blockers = ['#hero-sondaj-slot.on', '.hero-car:not([hidden])', '.hero-status'].map(q => hero.querySelector(q)).filter(Boolean)
+          .map(e => e.getBoundingClientRect()).filter(r => r.width && r.height && r.top < top && r.bottom > h.top);
+        const edge = blockers.length ? Math.min(...blockers.map(r => r.left)) : h.right;
+        const bLeft = textRight - h.left + 24, bRight = h.right - edge + 24, w = h.width - bLeft - bRight;
+        const cw = Math.min(470, w), need = (cw - 28) * 0.5625 + 180;   // playerul 16:9 + titlul + lista + textul de jos
+        if (w >= 360 && top - 16 - need >= h.top + 12) return { left: bLeft, right: bRight, bottom: h.bottom - (top - 16) };
+        return null;
       }
       let floating = false;
       function place() {
@@ -555,13 +576,15 @@
         let inHero = wide.matches, box = null;
         if (inHero && offersShown()) {
           offers.classList.add('xm-side');           // întâi strângem cardurile, apoi măsurăm locul rămas
-          box = gapBox(); inHero = !!box;
-          if (!box) offers.classList.remove('xm-side');
+          box = gapBox();
+          if (!box) { offers.classList.remove('xm-side'); box = gapAbove(); }  // altfel: deasupra lor, cu cardurile late
+          inHero = !!box;
         } else if (offers) offers.classList.remove('xm-side');
         const target = inHero ? slot : home;
         if (card.parentNode !== target) target.appendChild(card);
         sec.classList.toggle('xm-moved', inHero);
         slot.classList.toggle('on', inHero);
+        if (typeof syncOpener === 'function') syncOpener();
         Object.assign(slot.style, box
           ? { left: box.left + 'px', right: box.right + 'px', bottom: box.bottom + 'px', top: 'auto', transform: 'none' }
           : { left: '', right: '', bottom: '', top: '', transform: '' });
@@ -607,9 +630,10 @@
         card.classList.toggle('xm-min', !!st.min);
         if (trapped(card)) document.body.appendChild(card);
         card.style.width = st.w + 'px';
-        if (!saved) { st.x = Math.min(r.left, window.innerWidth - st.w - 16); st.y = Math.max(90, Math.min(r.top, window.innerHeight - 300)); }
+        if (!saved) { st.x = Math.max(8, Math.min(r.left, window.innerWidth - st.w - 16)); st.y = Math.max(90, Math.min(r.top, window.innerHeight - card.offsetHeight - 16)); }
         keepInside();
         saveSt(st);
+        syncOpener();
       }
       function floatOff() {
         floating = false; st = null;
@@ -651,6 +675,20 @@
       }
       const saved = readSt();
       if (saved && !mobile.matches) floatOn(saved);
+      // (01.11.2026) butonul de sus „🎶 Muzica sărbătorilor”: scoate playerul direct pe ecran (sau îl
+      // deschide, dacă e deja scos și strâns) — fără să mai cauți secțiunea de jos
+      const opener = document.getElementById('xm-open');
+      // se vede doar când playerul nu e deja la vedere sus (adică stă jos, în secțiunea lui) sau e scos pe ecran
+      function syncOpener() { const o = document.getElementById('xm-open'); if (o) o.hidden = window.matchMedia('(max-width: 760px)').matches || !document.documentElement.classList.contains('tema-iarna') || (!floating && slot.contains(card)); }
+      syncOpener();
+      new MutationObserver(syncOpener).observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+      if (mobile.addEventListener) mobile.addEventListener('change', syncOpener);
+      opener.addEventListener('click', e => {
+        if (!floating) return; // nescos: îl scoate handlerul comun (data-xm="out")
+        e.stopPropagation();
+        st.min = false; card.classList.remove('xm-min'); keepInside(); saveSt(st);
+        card.animate([{ boxShadow: '0 0 0 3px rgba(242,184,75,.9)' }, { boxShadow: '0 26px 70px rgba(0,0,0,.65)' }], { duration: 900 });
+      }, true);
     })();
     </script>
 

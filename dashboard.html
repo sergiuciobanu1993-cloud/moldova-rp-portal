@@ -31,6 +31,11 @@
 <div id="activity"><div class="event"><b>…</b><div><strong>Se încarcă…</strong><small>&nbsp;</small></div></div></div></section>
 <aside class="panel" id="profil"><div class="head"><h2>Profil</h2><span>Public</span></div><div class="profile"><div class="avatar" id="profile-avatar">--</div><div><strong id="profile-name">…</strong> <a href="premium.html" id="premium-badge" class="pill on" style="margin-left:4px;vertical-align:2px" hidden>⭐ PREMIUM</a><small id="profile-id">—</small><span id="xmas-badges" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px" hidden></span></div></div><div class="pp" id="pp-box" hidden><label class="pp-row"><input type="checkbox" id="pp-on"> <span><b>Profil public</b><small id="pp-hint">Arată altora orele jucate, facțiunea și insignele tale. Banii, mașinile și sancțiunile nu apar.</small></span></label><div class="pp-link" id="pp-link" hidden><a id="pp-url" href="#" target="_blank" rel="noopener">—</a><button type="button" class="btn-ghost" id="pp-copy">Copiază</button></div><p class="pp-msg" id="pp-msg" hidden></p></div><a class="wide" href="index.html">Vezi comunitatea →</a></aside>
 </div>
+<!-- (01.11.2026) locul jucătorului în clasamentul săptămânii (clasament.html) -->
+<section class="panel lb-me" id="lb-me" style="margin-top:20px" hidden>
+  <div class="head"><h2>🏆 Clasamentul săptămânii</h2><span id="lb-me-week">—</span></div>
+  <div class="lb-me-body" id="lb-me-body"></div>
+</section>
 <section class="panel" id="set-password-panel" style="margin-top:20px;border-color:var(--warn,#b45309)" hidden>
   <div class="head"><h2>⚠ Contul tău de staff nu are parolă</h2></div>
   <div style="padding:0 0 4px">
@@ -618,6 +623,27 @@ async function loadStreamerIngameLog() {
         b.hidden = false;
         b.title = 'Premium activ până pe ' + new Date(pr.status.until).toLocaleString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
       }
+    }).catch(() => {});
+
+    // (01.11.2026) „Locul tău” în clasamentul săptămânii
+    apiFetch('/api/clasament/eu').then(r => r.ok ? r.json() : null).then(c => {
+      if (!c) return;
+      const box = document.getElementById('lb-me'), body = document.getElementById('lb-me-body');
+      const day = iso => new Date(iso + 'T12:00:00').toLocaleDateString('ro-RO', { day: 'numeric', month: 'long' });
+      const hrs = m => { const h = Math.floor(m / 60), r = m % 60; return h ? `${h} h ${String(r).padStart(2, '0')} min` : `${r} min`; };
+      document.getElementById('lb-me-week').textContent = `${day(c.week.start)} – ${day(c.week.end)}`;
+      const link = '<a class="lb-me-link" href="clasament.html">Vezi tot clasamentul →</a>';
+      if (!c.linked) body.innerHTML = `<p class="lb-me-note">Leagă-ți contul de personajul din joc ca să apari în clasament și să-ți vezi locul aici.</p>${link}`;
+      else if (!c.playing) body.innerHTML = `<p class="lb-me-note">Încă n-ai jucat săptămâna asta. Intră pe server — orele se numără singure, iar clasamentul o ia de la zero în fiecare luni.</p>${link}`;
+      else {
+        const MED = ['🥇', '🥈', '🥉'];
+        const msg = c.rank === 1 ? 'Ești pe <b>primul loc</b>! Ține-te așa până duminică seara.'
+          : c.rank <= 3 ? `Ești pe podium! Încă <b>${hrs(c.toNext)}</b> și urci pe locul ${c.rank - 1}.`
+          : `Încă <b>${hrs(c.toNext)}</b> ca să urci pe locul ${c.rank - 1}${c.toPodium != null ? ` · <b>${hrs(c.toPodium)}</b> până la podium (top 3)` : ''}.`;
+        body.innerHTML = `<div class="lb-me-row"><div class="lb-me-rank">${MED[c.rank - 1] || '#' + c.rank}<small>locul ${c.rank} din ${c.total}</small></div>`
+          + `<div class="lb-me-info"><strong>${hrs(c.minutes)} jucate săptămâna asta</strong><p>${msg}</p><small>Primii 3 primesc luni insigna „Top al săptămânii” și un premiu în joc.</small></div></div>${link}`;
+      }
+      box.hidden = false;
     }).catch(() => {});
 
     // (31.10.2026) Insignele de la questurile de Crăciun, sub nume

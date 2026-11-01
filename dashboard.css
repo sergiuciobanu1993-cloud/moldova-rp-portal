@@ -74,3 +74,5 @@
 .ticket-actions{display:flex;gap:10px;margin:14px 0}
 .ticket-actions .danger{border-color:rgba(255,80,80,.4);color:#ff8a8a}
 .ticket-actions .danger:hover{border-color:#ff5c5c;color:#ff5c5c}
+/* (01.11.2026) locul tău în clasamentul săptămânii */
+.lb-me-row{display:flex;align-items:center;gap:20px}.lb-me-rank{flex:none;min-width:96px;padding:12px 14px;border-radius:12px;background:rgba(255,138,31,.1);border:1px solid rgba(255,138,31,.35);text-align:center;font-size:30px;font-weight:950;color:var(--orange);font-variant-numeric:tabular-nums}.lb-me-rank small{display:block;margin-top:4px;font-size:10px;font-weight:800;letter-spacing:.06em;color:var(--muted)}.lb-me-info{min-width:0}.lb-me-info strong{font-size:16px}.lb-me-info p{margin:6px 0;color:#c9cdd1;font-size:13px;line-height:1.5}.lb-me-info b{color:#fff}.lb-me-info small{color:var(--muted);font-size:11px}.lb-me-note{margin:0;color:#c9cdd1;font-size:13px;line-height:1.5}.lb-me-link{display:inline-block;margin-top:14px;color:var(--orange);font-weight:800;font-size:13px}@media (max-width:560px){.lb-me-row{flex-direction:column;align-items:flex-start;gap:12px}}

@@ -4669,6 +4669,30 @@ app.get("/api/admin/clasament-id", auth, requireRole(...MOD_ROLES), asyncRoute(a
   res.json({ ids: list });
 }));
 // insignele „Top al săptămânii" ale contului (pentru Contul meu)
+// (01.11.2026) „Locul tău” în clasamentul săptămânii, pentru Contul meu (dashboard.html):
+// locul personajului legat, orele lui, câți jucători sunt în clasament și cât îi lipsește până la
+// locul de deasupra și până la podium (locul 3). Ca în tabelul public: doar cine a jucat săptămâna asta.
+app.get("/api/clasament/eu", auth, asyncRoute(async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  await weeklyTables();
+  const { rows: u } = await pool.query(`SELECT game_identifier FROM users WHERE id = $1`, [req.user.sub]);
+  const identifier = u[0]?.game_identifier;
+  const week = weekStartOf();
+  const base = { week: { start: week, end: weekShift(week, 6) } };
+  if (!identifier) return res.json({ ...base, linked: false });
+  const { rows } = await pool.query(
+    `WITH b AS (SELECT identifier, last_minutes - start_minutes AS m FROM weekly_playtime WHERE week = $1 AND last_minutes > start_minutes),
+          me AS (SELECT m FROM b WHERE identifier = $2)
+     SELECT (SELECT m FROM me)::int AS minutes,
+            (SELECT COUNT(*) FROM b)::int AS total,
+            (SELECT COUNT(*) FROM b WHERE m > (SELECT m FROM me))::int AS ahead,
+            (SELECT MIN(m) FROM b WHERE m > (SELECT m FROM me))::int AS above,
+            (SELECT m FROM b ORDER BY m DESC OFFSET 2 LIMIT 1)::int AS third`, [week, identifier]);
+  const r = rows[0] || {};
+  if (r.minutes == null) return res.json({ ...base, linked: true, playing: false, total: r.total || 0, third: r.third ?? null });
+  res.json({ ...base, linked: true, playing: true, rank: r.ahead + 1, total: r.total, minutes: r.minutes,
+    toNext: r.above != null ? r.above - r.minutes + 1 : null, toPodium: r.ahead >= 3 && r.third != null ? r.third - r.minutes + 1 : null });
+}));
 app.get("/api/clasament/insigne", auth, asyncRoute(async (req, res) => {
   await weeklyTables();
   const { rows } = await pool.query(`SELECT week::text AS week, category, rank FROM weekly_winners WHERE user_id = $1 ORDER BY week DESC`, [req.user.sub]);

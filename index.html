@@ -65,6 +65,14 @@
   .hr-tier.pending em,.hr-tier.given em{color:var(--green)}
   .hr-tier.rejected em{color:#ff9b6b}
   .hr-tier .hc-btn{margin-top:6px;min-height:32px;padding:0 10px;font-size:12px;justify-content:center}
+  .hr-cd{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 14px;padding:10px 12px;border-radius:10px;background:rgba(255,138,31,.08);border:1px dashed rgba(255,138,31,.45)}
+  .hr-cd-l{font-size:12.5px;color:#d5d8db}
+  .hr-cd-l b{color:var(--orange)}
+  .hr-cd-n{display:flex;gap:6px}
+  .hr-cd-u{display:flex;flex-direction:column;align-items:center;min-width:42px;padding:4px 6px;border-radius:8px;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.08)}
+  .hr-cd-u b{font-size:16px;font-variant-numeric:tabular-nums;line-height:1.1}
+  .hr-cd-u small{font-size:8.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+  .hr-card.soon .hr-tier{opacity:.85}
   @media (max-width:560px){.hr-card .hc-thumb{display:none}.hr-tiers{gap:6px}.hr-tier{padding:8px}.hr-tier b{font-size:14px}.hr-tier span{font-size:11px}.hr-tier .hc-btn{padding:0 6px;font-size:11px}}
   @media (max-width:340px){.hr-tiers{grid-template-columns:1fr}}
   @keyframes hcIn{from{transform:translateX(120px);opacity:0;filter:blur(6px)}60%{opacity:1;filter:blur(0)}to{transform:none;opacity:1;filter:none}}
@@ -595,7 +603,22 @@ async function hourRewardsCard() {
   try { const r = await fetch('/api/ore-jucate'); if (!r.ok) return; ev = await r.json(); } catch { return; }
   if (!ev.claimOpen && ev.started) return; // s-a încheiat și a trecut și săptămâna pentru cereri
   const day = iso => new Date(iso).toLocaleDateString('ro-RO', { timeZone: 'Europe/Chisinau', day: 'numeric', month: 'long' });
-  if (!ev.started) document.getElementById('hr-text').textContent = `Începe pe ${day(ev.start)}. Orele jucate până pe ${day(ev.end)} se adună pe contul tău, pe toate personajele; la fiecare prag ceri premiul de aici, iar staff-ul ți-l dă în joc.`;
+  if (!ev.started) {
+    // (01.11.2026) Sergiu: cardul se vede de acum, cu „În curând” și ceasul până la start
+    card.classList.add('soon');
+    document.querySelector('#hr-card .hc-eyebrow').textContent = 'ÎN CURÂND · PREMII PE ORE';
+    document.getElementById('hr-text').textContent = `Din ${day(ev.start)} până pe ${day(ev.end)}, orele jucate se adună pe contul tău, pe toate personajele. La fiecare prag îți ceri premiul de aici, iar staff-ul ți-l dă în joc.`;
+    const me0 = document.getElementById('hr-me');
+    const startAt = Date.parse(ev.start);
+    const tick = () => {
+      const left = startAt - Date.now();
+      if (left <= 0) { clearInterval(timer); location.reload(); return; }
+      const d = Math.floor(left / 864e5), h = Math.floor(left / 36e5) % 24, m = Math.floor(left / 6e4) % 60, sec = Math.floor(left / 1e3) % 60;
+      const u = (n, l) => `<span class="hr-cd-u"><b>${String(n).padStart(2, '0')}</b><small>${l}</small></span>`;
+      me0.innerHTML = `<div class="hr-cd"><span class="hr-cd-l">Pornește pe <b>${day(ev.start)}</b>, la 00:00</span><span class="hr-cd-n">${u(d, 'zile')}${u(h, 'ore')}${u(m, 'min')}${u(sec, 'sec')}</span></div>`;
+    };
+    const timer = setInterval(tick, 1000); tick();
+  }
   else if (ev.ended) document.getElementById('hr-text').textContent = `Perioada s-a încheiat pe ${day(ev.end)}. Dacă ai ajuns la un prag, îți poți cere premiul până pe ${day(ev.claimUntil)}.`;
   const STATE = { locked: '', ready: 'Poți cere', pending: '✓ Cerut', given: '✓ Primit', rejected: 'Respins', closed: 'Închis' };
   const tiersHtml = tiers => tiers.map(t => `<div class="hr-tier ${t.state || ''}"><b>${t.hours} ore</b><span>${esc(t.prize)}</span>${STATE[t.state] ? `<em>${STATE[t.state]}</em>` : ''}${t.state === 'ready' ? `<button type="button" class="hc-btn solid" data-hr-claim="${t.hours}">Cere premiul</button>` : ''}</div>`).join('');
@@ -628,6 +651,7 @@ async function hourRewardsCard() {
   load();
 }
 </script>
+<script>hourRewardsCard();</script>
 <script>
 // (12.10.2026) Mașina pentru jucătorii noi — oferta + progresul celui logat.
 (async () => {
@@ -638,7 +662,7 @@ async function hourRewardsCard() {
   const hrs = n => `${n} ${n === 1 ? 'oră' : 'de ore'}`;
   let cfg;
   try { const r = await fetch('/api/jucator-nou'); if (!r.ok) return; cfg = await r.json(); } catch { return; }
-  if (!cfg.enabled || cfg.ended) { hourRewardsCard(); return; }
+  if (!cfg.enabled || cfg.ended) return;
   const local = `assets/vip-cars/${encodeURIComponent(cfg.model)}.webp`;
   const cdn = `https://r2.fivemanage.com/gi0w8W6O9hhBekF3oXfQ3/vehicule/${encodeURIComponent(cfg.model)}.webp`;
   const setMask = src => { const sh = box.querySelector('.hc-shine'); sh.style.webkitMaskImage = sh.style.maskImage = `url("${src}")`; sh.style.visibility = 'visible'; };

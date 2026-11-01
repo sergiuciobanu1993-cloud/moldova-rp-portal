@@ -73,6 +73,12 @@
 #theme-next-fields[hidden]{display:none}
 @media (max-width:760px){.theme-fields{grid-template-columns:1fr}}
 </style>
+<!-- (01.11.2026) Erorile apărute în paginile site-ului la jucători (trimise singure de pagini). -->
+<section class="tablebox" id="err-box"><div class="title"><h2>Erori pe site</h2>
+  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span id="err-sum" class="muted" style="font-size:12px"></span><button type="button" id="err-all" class="btn-ghost" hidden>Am rezolvat tot</button></div></div>
+  <p class="muted" style="margin:0 22px 12px;font-size:12.5px">Când o pagină crapă la un jucător, eroarea apare aici singură, cu pagina și de câte ori s-a întâmplat. „Am rezolvat" o scoate din listă; dacă mai apare, revine.</p>
+  <div style="overflow-x:auto"><table><thead><tr><th>EROAREA</th><th>PAGINA</th><th>DE CÂTE ORI</th><th>ULTIMA DATĂ</th><th></th></tr></thead><tbody id="err-body"><tr><td colspan="5">Se încarcă…</td></tr></tbody></table></div>
+</section>
 <section class="tablebox"><div class="title"><h2>Activitate administrativă</h2>
   <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
     <select id="audit-scope" class="filter-select"><option value="staff">Doar staff</option><option value="all">Toată lumea (și jucători)</option></select>
@@ -322,7 +328,32 @@ themeUi.save.addEventListener('click', async () => {
   } catch {}
   loadAudit();
   loadCarTodo();
+  loadErrors();
 })();
+async function loadErrors() {
+  const body = document.getElementById('err-body'), sum = document.getElementById('err-sum'), all = document.getElementById('err-all');
+  try {
+    const r = await apiFetch('/api/admin/erori-client');
+    if (!r.ok) throw new Error();
+    const list = (await r.json()).errors || [];
+    const total = list.reduce((a, x) => a + (x.count || 0), 0);
+    sum.textContent = list.length ? `${list.length} ${list.length === 1 ? 'eroare' : 'erori'} · ${total} apariții` : '';
+    all.hidden = !list.length;
+    body.innerHTML = list.length ? list.map(x => `<tr>
+      <td style="max-width:420px"><b style="color:#ff9b9b">${esc(x.message)}</b><br><span class="muted" style="font-size:11.5px">${esc((x.source || '').split('?')[0] || 'în pagină')}${x.line ? ':' + x.line : ''}</span>${x.stack ? `<details style="margin-top:4px"><summary class="muted" style="font-size:11.5px;cursor:pointer">detalii</summary><pre style="white-space:pre-wrap;font-size:11px;margin:6px 0 0;max-height:180px;overflow:auto">${esc(x.stack)}</pre><div class="muted" style="font-size:11px">${esc(x.ua || '')}</div></details>` : ''}</td>
+      <td>${esc(x.page || '—')}</td>
+      <td><b>${x.count}</b></td>
+      <td>${new Date(x.last_at).toLocaleString('ro-RO')}</td>
+      <td><button type="button" class="btn-ghost" data-err="${esc(x.key)}">Am rezolvat</button></td></tr>`).join('')
+      : '<tr><td colspan="5">✓ Nicio eroare raportată. Paginile merg fără probleme la jucători.</td></tr>';
+  } catch { body.innerHTML = '<tr><td colspan="5">Lista nu s-a putut încărca.</td></tr>'; }
+}
+async function errResolved(key) {
+  try { await apiFetch('/api/admin/erori-client/rezolvat', { method: 'POST', body: JSON.stringify({ key }) }); } catch {}
+  loadErrors();
+}
+document.getElementById('err-body').addEventListener('click', e => { const b = e.target.closest('[data-err]'); if (b) errResolved(b.dataset.err); });
+document.getElementById('err-all').addEventListener('click', () => { if (confirm('Scoți toate erorile din listă?')) errResolved('toate'); });
 async function loadCarTodo() {
   try {
     const r = await apiFetch('/api/admin/jucator-nou');

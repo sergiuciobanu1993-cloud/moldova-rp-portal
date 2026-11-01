@@ -3,6 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- (01.11.2026) Datele publice ale paginii vin dintr-o singură cerere (/api/acasa) în loc de ~10.
+       Le folosim doar la prima încărcare; orice lipsește sau orice cerere cu cont merge normal. -->
+  <script>(function(){if(!window.fetch||!window.Response)return;var L=['/api/content/index','/api/regulations','/api/tema','/api/announcements?scurt=1','/api/health','/api/server-status','/api/live/players','/api/live/factions','/api/jucator-nou','/api/ore-jucate'];var B=window.fetch('/api/acasa').then(function(r){return r.ok?r.json():null}).catch(function(){return null});var of=window.fetch;setTimeout(function(){B=null},20000);window.fetch=function(i,o){try{var u=typeof i==='string'?i:(i&&i.url)||'';var p=u.indexOf(location.origin)===0?u.slice(location.origin.length):u;var m=((o&&o.method)||(typeof i!=='string'&&i&&i.method)||'GET').toUpperCase();var h=o&&o.headers;var a=h&&(h.Authorization||h.authorization||(h.get&&h.get('Authorization')));if(B&&m==='GET'&&!a&&L.indexOf(p)>=0){var args=arguments;return B.then(function(b){var e=b&&b[p];if(!e||e.status<200||e.status>=300)return of.apply(window,args);delete b[p];return new Response(e.body,{status:e.status,headers:{'Content-Type':e.type}})})}}catch(x){}return of.apply(window,arguments)}})();</script>
   <meta name="theme-color" content="#ff8a1f">
   <meta name="description" content="Moldova RP — portal oficial al comunității. Regulamente, jucători, facțiuni și anunțuri.">
   <!-- (31.10.2026) cardul care apare când cineva pune linkul pe Discord / Facebook (imaginea: assets/og/) -->

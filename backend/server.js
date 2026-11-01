@@ -241,12 +241,81 @@ app.use((req, res, next) => {
       const h = insideSite(f) && !PRIVATE_PATHS.test("/" + path.relative(SITE_ROOT, f).split(path.sep).join("/")) ? assetHash(f) : null;
       return h ? `${attr}="${slash}${file}?v=${h}"` : all;
     });
-    hit = { m: st.mtimeMs, at: Date.now(), html };
+    hit = { m: st.mtimeMs, at: Date.now(), html: html.replace(/<head[^>]*>/i, m => m + CLIENT_ERROR_SNIPPET) };
     htmlVersioned.set(abs, hit);
     if (htmlVersioned.size > 200) htmlVersioned.clear();
   }
   res.set("Cache-Control", "no-cache");
+  if (path.basename(abs) === "regulament.html" && req.query.slug) {
+    return regulationPreview(String(req.query.slug)).then(r => res.type("html").send(r ? withRegulationMeta(hit.html, r) : hit.html))
+      .catch(() => res.type("html").send(hit.html));
+  }
   res.type("html").send(hit.html);
+});
+// (01.11.2026) Raportul de erori: un mic script pus singur la începutul fiecărei pagini. Când o
+// pagină crapă la un jucător, trimite eroarea la /api/erori-client (cel mult 5 pe pagină, doar din
+// scripturile noastre, nu din extensiile browserului). Le vezi în Admin → Dashboard → Erori pe site.
+const CLIENT_ERROR_SNIPPET = `<script>(function(){var n=0,s={};function f(m,src,l,c,st){try{m=String(m||'').slice(0,300);if(!m||n>=5||/ResizeObserver loop|^Script error|Failed to fetch|NetworkError|Load failed|AbortError|aborted/i.test(m))return;src=String(src||'');st=String(st||'');var o=location.origin;if(src&&src.indexOf(o)!==0)return;if(/-extension:\\/\\//.test(src+st))return;var k=m+'|'+src+'|'+l;if(s[k])return;s[k]=1;n++;var b=JSON.stringify({message:m,source:src.split(o).join(''),line:l|0,col:c|0,stack:st.slice(0,1500).split(o).join(''),page:location.pathname});if(navigator.sendBeacon)navigator.sendBeacon('/api/erori-client',b)}catch(e){}}addEventListener('error',function(e){if(e.target&&e.target!==window)return;f(e.message,e.filename,e.lineno,e.colno,e.error&&e.error.stack)},true);addEventListener('unhandledrejection',function(e){var r=e.reason||{};f(r.message||String(e.reason),'',0,0,r.stack)})})();</script>`;
+// (01.11.2026) Linkul unui regulament anume (regulament.html?slug=…) pus pe Discord / Facebook
+// arată titlul și începutul lui, nu doar „Regulament — Moldova RP". Lista se ține 5 minute.
+let regulationPreviews = { at: 0, map: null };
+async function regulationPreview(slug) {
+  if (!regulationPreviews.map || Date.now() - regulationPreviews.at > 5 * 60_000) {
+    const { rows } = await pool.query(`SELECT slug, title, content FROM regulations WHERE is_published = true`);
+    const map = new Map();
+    for (const r of rows) {
+      const title = String(r.title || "").trim();
+      const lines = regulationPlainText(r.content).split("\n").map(l => l.replace(/[*#>_`]+/g, "").trim())
+        .filter(l => l.length > 25 && !/^[━─—-]+$/.test(l) && l.toLowerCase() !== title.toLowerCase() && !/^\W*moldova role ?play\W*$/i.test(l));
+      const d = (lines[0] || "").replace(/\s+/g, " ");
+      map.set(String(r.slug).toLowerCase(), { title, desc: d.length > 180 ? d.slice(0, 177).trim() + "…" : d });
+    }
+    regulationPreviews = { at: Date.now(), map };
+  }
+  return regulationPreviews.map.get(slug.toLowerCase().slice(0, 120)) || null;
+}
+function withRegulationMeta(html, r) {
+  const e = v => String(v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  const nice = r.title.replace(/^REGULAMENT(UL)? (OFICIAL|GENERAL)( AL)?\s*[–—-]?\s*/i, "").trim() || r.title;
+  const t = /regulament/i.test(nice) ? `${nice} — Moldova RP` : `${nice} — Regulament Moldova RP`;
+  const meta = `<meta property="og:type" content="article"><meta property="og:site_name" content="Moldova RP"><meta property="og:title" content="${e(t)}">`
+    + (r.desc ? `<meta property="og:description" content="${e(r.desc)}">` : "")
+    + `<meta property="og:image" content="https://moldovarp.md/assets/og/regulamente.jpg?v=1"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta name="twitter:card" content="summary_large_image">`;
+  return html.replace(/<title>[^<]*<\/title>/i, `<title>${e(t)}</title>`)
+    .replace(/<meta name="description" content="[^"]*">/i, r.desc ? `<meta name="description" content="${e(r.desc)}">` : "$&")
+    .replace(/<\/head>/i, meta + "</head>");
+}
+// (01.11.2026) Scripturile și stilurile se trimit „comprimate" (fără spații și comentarii — cam
+// 25% mai puțin de descărcat). Fișierele din proiect rămân neatinse; dacă ceva nu merge,
+// se trimite fișierul original. Folosește esbuild (dependință opțională în package.json).
+let esbuild = null;
+try { esbuild = require("esbuild"); } catch { console.log("esbuild lipsește — JS/CSS se trimit necomprimate."); }
+const minified = new Map(); // cale → { m, code }
+app.use((req, res, next) => {
+  if (!esbuild || (req.method !== "GET" && req.method !== "HEAD")) return next();
+  const ext = path.extname(req.path).toLowerCase();
+  if (ext !== ".js" && ext !== ".css") return next();
+  let p = req.path;
+  try { p = decodeURIComponent(p); } catch { return next(); }
+  if (path.posix.basename(p) === "sw.js" || PRIVATE_PATHS.test(p.replace(/\/{2,}/g, "/"))) return next();
+  const abs = path.join(SITE_ROOT, path.normalize(p).replace(/^[\\/]+/, ""));
+  if (!insideSite(abs)) return next();
+  let st;
+  try { st = siteFs.statSync(abs); } catch { return next(); }
+  if (!st.isFile()) return next();
+  let hit = minified.get(abs);
+  if (!hit || hit.m !== st.mtimeMs) {
+    try {
+      const src = siteFs.readFileSync(abs, "utf8");
+      const code = esbuild.transformSync(src, { loader: ext === ".css" ? "css" : "js", minifyWhitespace: true, minifySyntax: true, legalComments: "none", logLevel: "silent" }).code;
+      hit = { m: st.mtimeMs, code: code.length < src.length ? code : src };
+    } catch { hit = { m: st.mtimeMs, code: null }; }
+    minified.set(abs, hit);
+    if (minified.size > 300) minified.clear();
+  }
+  if (hit.code == null) return next();
+  res.set("Cache-Control", req.query.v && req.query.v === assetHash(abs) ? "public, max-age=31536000, immutable" : "public, max-age=0");
+  res.type(ext === ".css" ? "text/css" : "application/javascript").send(hit.code);
 });
 const WEBP_TWIN = /^\/assets\/(?:[\w-]+\/)*(?:anunt|actualizare)[\w.-]*\.png$/i;
 app.get(WEBP_TWIN, (req, res, next) => {
@@ -7603,6 +7672,85 @@ async function publishedAnnouncements() {
   announcementsCache = { at: Date.now(), rows };
   return rows;
 }
+// (01.11.2026) Erorile din paginile site-ului (vezi CLIENT_ERROR_SNIPPET mai sus). Le grupăm după
+// mesaj + fișier + linie și numărăm de câte ori apar; păstrăm cel mult 300 de feluri de erori.
+let clientErrorsReady = null;
+function clientErrorTables() {
+  if (!clientErrorsReady) clientErrorsReady = pool.query(`CREATE TABLE IF NOT EXISTS client_errors(
+    key TEXT PRIMARY KEY, message TEXT NOT NULL, source TEXT, line INT, col INT, stack TEXT, page TEXT, ua TEXT,
+    count INT NOT NULL DEFAULT 1, first_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), last_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`)
+    .catch(err => { clientErrorsReady = null; throw err; });
+  return clientErrorsReady;
+}
+const clientErrorHits = new Map();
+let clientErrorInserts = 0;
+app.post("/api/erori-client", express.text({ type: () => true, limit: "8kb" }), asyncRoute(async (req, res) => {
+  res.status(204).end();
+  const now = Date.now(), ip = String(req.headers["x-forwarded-for"] || req.ip || "").split(",")[0].trim(), recent = (clientErrorHits.get(ip) || []).filter(t => now - t < 60_000);
+  if (recent.length >= 20) return;
+  recent.push(now); clientErrorHits.set(ip, recent);
+  if (clientErrorHits.size > 5000) clientErrorHits.clear();
+  let b;
+  try { b = typeof req.body === "string" ? JSON.parse(req.body) : req.body; } catch { return; }
+  if (!b || typeof b !== "object") return;
+  const clip = (v, n) => String(v ?? "").slice(0, n);
+  const message = clip(b.message, 300).trim();
+  if (!message) return;
+  const source = clip(b.source, 200), line = Math.max(0, Math.min(1e7, parseInt(b.line, 10) || 0)), col = Math.max(0, Math.min(1e7, parseInt(b.col, 10) || 0));
+  const key = require("crypto").createHash("sha1").update(`${message}|${source.split("?")[0]}|${line}`).digest("hex").slice(0, 24);
+  await clientErrorTables();
+  await pool.query(
+    `INSERT INTO client_errors(key, message, source, line, col, stack, page, ua) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+     ON CONFLICT (key) DO UPDATE SET count = client_errors.count + 1, last_at = NOW(), page = EXCLUDED.page, ua = EXCLUDED.ua,
+       stack = COALESCE(NULLIF(EXCLUDED.stack, ''), client_errors.stack), source = EXCLUDED.source`,
+    [key, message, source, line, col, clip(b.stack, 1500), clip(b.page, 200), clip(req.headers["user-agent"], 200)]);
+  if (++clientErrorInserts % 50 === 0)
+    pool.query(`DELETE FROM client_errors WHERE key NOT IN (SELECT key FROM client_errors ORDER BY last_at DESC LIMIT 300)`).catch(() => {});
+}));
+app.get("/api/admin/erori-client", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (_req, res) => {
+  res.set("Cache-Control", "no-store");
+  await clientErrorTables();
+  const { rows } = await pool.query(`SELECT key, message, source, line, col, stack, page, ua, count, first_at, last_at FROM client_errors ORDER BY last_at DESC LIMIT 100`);
+  res.json({ errors: rows });
+}));
+// „Am rezolvat" — scoate din listă eroarea (sau toate); dacă mai apare, revine singură
+app.post("/api/admin/erori-client/rezolvat", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
+  await clientErrorTables();
+  const key = String(req.body?.key || "");
+  if (key === "toate") await pool.query(`DELETE FROM client_errors`);
+  else if (/^[0-9a-f]{24}$/.test(key)) await pool.query(`DELETE FROM client_errors WHERE key = $1`, [key]);
+  else return res.status(400).json({ error: "Eroare necunoscută." });
+  await logAction(req.user.sub, "client_errors.resolve", "client_errors", key, null, req.ip);
+  res.json({ ok: true });
+}));
+
+// (01.11.2026) Pagina principală: datele publice de care are nevoie (conținut, regulamente, anunțuri,
+// jucători online, evenimente etc.) într-o singură cerere în loc de ~10. Se strâng intern și se țin
+// 10 secunde, deci la mulți vizitatori serverul și baza de date lucrează mult mai puțin.
+// index.html le folosește doar la prima încărcare; reîmprospătările merg normal, direct.
+const HOME_BUNDLE_PATHS = ["/api/content/index", "/api/regulations", "/api/tema", "/api/announcements?scurt=1", "/api/health",
+  "/api/server-status", "/api/live/players", "/api/live/factions", "/api/jucator-nou", "/api/ore-jucate"];
+let homeBundle = { at: 0, data: null, pending: null };
+app.get("/api/acasa", asyncRoute(async (_req, res) => {
+  res.set("Cache-Control", "no-store");
+  if (homeBundle.data && Date.now() - homeBundle.at < 10_000) return res.json(homeBundle.data);
+  if (!homeBundle.pending) {
+    homeBundle.pending = (async () => {
+      const out = {};
+      await Promise.all(HOME_BUNDLE_PATHS.map(async p => {
+        try {
+          const r = await fetch(`http://127.0.0.1:${port}${p}`, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(6000) });
+          if (r.status >= 500) return;
+          out[p] = { status: r.status, type: r.headers.get("content-type") || "application/json", body: await r.text() };
+        } catch { /* lipsește din pachet: pagina o cere singură */ }
+      }));
+      homeBundle = { at: Date.now(), data: out, pending: null };
+      return out;
+    })().catch(err => { homeBundle.pending = null; throw err; });
+  }
+  res.json(await homeBundle.pending);
+}));
+
 // după orice modificare din Admin → Anunțuri, lista se citește din nou imediat
 app.use("/api/admin/announcements", (req, res, next) => {
   if (req.method !== "GET") res.on("finish", () => { announcementsCache = { at: 0, rows: null }; });

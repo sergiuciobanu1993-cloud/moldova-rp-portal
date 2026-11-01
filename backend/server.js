@@ -8636,14 +8636,69 @@ async function requireFib(req, res, next) {
 // doar agenții — Poliție, Șerif, FIB (după jobul din joc al personajului legat, ultima dată văzut online,
 // sau facțiunea FIB de pe site) — și staff-ul. Calculul se face în browser; aici doar spunem cui îl arătăm.
 const COD_PENAL_JOBS = ["police", "sheriff", "fib"];
+const COD_PENAL_DEPTS = { police: "Poliție", sheriff: "Departamentul Șerifului", fib: "FIB" };
+// (01.11.2026) Agentul e recunoscut singur: personajul legat de cont (codul /leagacont din joc
+// sau Discord) → jobul, gradul și ID-ul static, întâi din jucătorii online, altfel din ultima
+// fișă salvată. Nu acceptăm un ID scris de mână: oricine ar putea scrie ID-ul unui polițist.
+async function codPenalAccess(req) {
+  const staff = MOD_ROLES.includes(req.user.role);
+  const [u, fib] = await Promise.all([
+    pool.query(`SELECT game_identifier, game_identifier_name FROM users WHERE id = $1`, [req.user.sub]).then(x => x.rows[0] || {}),
+    isFibMember(req.user.sub).catch(() => false),
+  ]);
+  const id = u.game_identifier || null;
+  let agent = null;
+  if (id) {
+    const [detail, cached] = await Promise.all([
+      getPlayersDetail().catch(() => ({ online: false, players: [] })),
+      pool.query(`SELECT rp_name, static_id, data, updated_at FROM game_players_cache WHERE identifier = $1`, [id]).then(x => x.rows[0] || null).catch(() => null),
+    ]);
+    const live = detail.online ? (detail.players || []).find(p => p.license === id) || null : null;
+    const d = cached?.data || {};
+    const src = live || d;
+    const job = String(src.job || "").toLowerCase() || null;
+    const grade = src.gradeLabel || (src.grade != null && src.grade !== "" ? `grad ${src.grade}` : null);
+    agent = {
+      name: live?.serverName || cached?.rp_name || u.game_identifier_name || null,
+      staticId: (live && staticIdOf(live)) || cached?.static_id || d.staticId || null,
+      job, jobLabel: src.jobLabel || null,
+      dept: COD_PENAL_DEPTS[job] || (fib ? "FIB" : null),
+      grade: COD_PENAL_DEPTS[job] ? grade : null,
+      online: !!live,
+      seen: live ? null : (d.lastSeen || cached?.updated_at || null),
+    };
+  }
+  const isAgent = !!(agent && (COD_PENAL_JOBS.includes(agent.job) || fib));
+  return { calc: staff || isAgent || fib, why: staff ? "staff" : isAgent ? (agent.job || "fib") : (fib ? "fib" : agent?.job || null), staff, linked: !!id, agent };
+}
 app.get("/api/cod-penal/acces", auth, asyncRoute(async (req, res) => {
   res.set("Cache-Control", "no-store");
-  if (MOD_ROLES.includes(req.user.role)) return res.json({ calc: true, why: "staff" });
-  if (await isFibMember(req.user.sub)) return res.json({ calc: true, why: "fib" });
-  const { rows } = await pool.query(
-    `SELECT c.data->>'job' AS job FROM users u JOIN game_players_cache c ON c.identifier = u.game_identifier WHERE u.id = $1`, [req.user.sub]);
-  const job = String(rows[0]?.job || "").toLowerCase();
-  res.json({ calc: COD_PENAL_JOBS.includes(job), why: job || null });
+  res.json(await codPenalAccess(req));
+}));
+
+// (01.11.2026) Suspectul din procesul-verbal: agentul scrie ID-ul static, noi îi dăm numele RP.
+// Doar pentru cine are calculatorul (agenți + staff); întoarcem numai numele, ID-ul și dacă e în joc.
+const codPenalSuspectHits = new Map();
+app.get("/api/cod-penal/suspect", auth, asyncRoute(async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  const sid = String(req.query.id || "").replace(/\D/g, "").slice(0, 7);
+  if (!sid) return res.status(400).json({ error: "Scrie ID-ul din joc al suspectului (doar cifre)." });
+  const now = Date.now(), k = req.user.sub, hit = codPenalSuspectHits.get(k) || [];
+  const recent = hit.filter(t => now - t < 60_000);
+  if (recent.length >= 30) return res.status(429).json({ error: "Prea multe căutări. Mai încearcă peste un minut." });
+  recent.push(now); codPenalSuspectHits.set(k, recent);
+  if (codPenalSuspectHits.size > 2000) codPenalSuspectHits.clear();
+  if (!(await codPenalAccess(req)).calc) return res.status(403).json({ error: "Doar agenții (Poliție, Șerif, FIB) pot căuta suspecți." });
+  const detail = await getPlayersDetail().catch(() => ({ online: false, players: [] }));
+  const live = detail.online ? (detail.players || []).find(p => staticIdOf(p) === sid) : null;
+  if (live) return res.json({ found: true, name: live.serverName || null, staticId: sid, online: true });
+  const q1 = await pool.query(`SELECT rp_name FROM game_players_cache WHERE static_id = $1 AND rp_name IS NOT NULL ORDER BY updated_at DESC LIMIT 1`, [sid]).catch(() => ({ rows: [] }));
+  let name = q1.rows[0]?.rp_name || null;
+  if (!name) name = (await pool.query(`SELECT rp_name FROM game_identities WHERE static_id = $1 AND rp_name IS NOT NULL ORDER BY updated_at DESC LIMIT 1`, [sid]).catch(() => ({ rows: [] }))).rows[0]?.rp_name || null;
+  if (!name) name = (await pool.query(`SELECT last_rp_name FROM players WHERE last_static_id = $1 AND last_rp_name IS NOT NULL ORDER BY last_synced_at DESC NULLS LAST LIMIT 1`, [sid]).catch(() => ({ rows: [] }))).rows[0]?.last_rp_name || null;
+  if (!name && FIVEM_API_SECRET) name = (await fetchGamePlayerSearch(sid).catch(() => [])).find(p => String(p.staticId ?? "") === sid)?.rpName || null;
+  if (!name) return res.json({ found: false, staticId: sid });
+  res.json({ found: true, name, staticId: sid, online: false });
 }));
 
 // "Am acces?" — folosit de dashboard ca să arate/ascundă linkul spre MDT,

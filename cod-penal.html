@@ -69,13 +69,54 @@
 .cp-general summary{cursor:pointer;font-weight:800}
 .cp-general ul{margin:10px 0 0;padding-left:18px;color:#c9cdd1;font-size:13.5px;line-height:1.55}
 .cp-mobile-bar{display:none}
+.cp-agent{display:flex;gap:12px;align-items:center;margin:0 0 12px;padding:11px 12px;border-radius:11px;border:1px solid rgba(90,170,255,.35);background:linear-gradient(135deg,rgba(40,90,170,.22),rgba(40,90,170,.06))}
+.cp-agent .ico{flex:none;width:40px;height:40px;border-radius:10px;display:grid;place-items:center;font-size:21px;background:rgba(90,170,255,.16)}
+.cp-agent b{display:block;font-size:14.5px;line-height:1.25}
+.cp-agent small{display:block;color:#c9d6e6;font-size:12px;line-height:1.4}
+.cp-agent .st{color:var(--muted);font-size:11px}
+.cp-agent .st.on{color:#5fd38d}
+.cp-sus{margin:0 0 12px;padding:11px 12px;border-radius:11px;border:1px solid var(--line);background:rgba(255,255,255,.03)}
+.cp-sus>small{display:block;color:var(--muted);font-size:10.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;margin-bottom:7px}
+.cp-sus-row{display:flex;gap:6px}
+.cp-sus input{min-width:0;padding:8px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--text);font:inherit;font-size:13px}
+.cp-sus #cp-sus-id{width:110px;font-variant-numeric:tabular-nums}
+.cp-sus #cp-sus-name{flex:1}
+.cp-sus button{flex:none;padding:0 12px;border-radius:8px;border:1px solid rgba(255,138,31,.45);background:rgba(255,138,31,.1);color:var(--text);font:inherit;font-weight:800;cursor:pointer}
+.cp-sus .msg{margin:6px 0 0;font-size:11.5px;color:var(--muted)}
+.cp-sus .msg.ok{color:#5fd38d}.cp-sus .msg.err{color:#ffb37a}
+.cp-link{max-width:700px;margin-top:16px;padding:14px 16px;border-radius:12px;border:1px solid rgba(255,138,31,.35);background:rgba(255,138,31,.06);font-size:13.5px;line-height:1.5}
+.cp-link form{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.cp-link input{width:150px;padding:9px 11px;border-radius:9px;border:1px solid var(--line);background:var(--bg);color:var(--text);font:inherit;font-size:15px;letter-spacing:.2em;font-variant-numeric:tabular-nums}
+.cp-link button{padding:9px 16px;border:0;border-radius:9px;background:var(--orange);color:#0b0b0b;font:inherit;font-weight:900;cursor:pointer}
+.cp-link button:disabled{opacity:.6;cursor:wait}
+.cp-link .msg{margin:8px 0 0;font-size:12.5px}
+.cp-link .msg.err{color:#ff8a8a}
+.cp-calc-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.cp-close{display:none;width:38px;height:38px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--text);font-size:18px;cursor:pointer}
+.cp-sheet-bg{display:none}
+/* (01.11.2026) Telefon: calculatorul e un panou care urcă de jos, deschis din bara portocalie */
 @media (max-width:1000px){
   .cp-layout.calc{grid-template-columns:minmax(0,1fr)}
-  .cp-calc{position:static;max-height:none}
-  .cp-mobile-bar{position:fixed;left:12px;right:12px;bottom:12px;z-index:40;display:none;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px;border-radius:12px;background:var(--orange);color:#0b0b0b;font-weight:900;box-shadow:0 12px 30px rgba(0,0,0,.5)}
+  .cp-calc{position:fixed;left:0;right:0;bottom:0;top:auto;z-index:1200;max-height:88vh;max-height:88dvh;overflow:auto;overscroll-behavior:contain;border-radius:18px 18px 0 0;padding:14px 16px calc(18px + env(safe-area-inset-bottom));transform:translateY(105%);transition:transform .25s ease;visibility:hidden}
+  .cp-calc.open{transform:none;visibility:visible}
+  .cp-close{display:grid;place-items:center}
+  .cp-sheet-bg{position:fixed;inset:0;z-index:1190;background:rgba(0,0,0,.6)}
+  .cp-sheet-bg.on{display:block}
+  .cp-mobile-bar{position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:1100;display:none;align-items:center;justify-content:space-between;gap:10px;min-height:52px;padding:10px 16px;border-radius:14px;background:var(--orange);color:#0b0b0b;font-weight:900;text-decoration:none;box-shadow:0 12px 30px rgba(0,0,0,.5)}
   .cp-mobile-bar.on{display:flex}
+  .cp-mobile-bar.bump{animation:cpBump .35s ease}
+  body.cp-agent-mode .mrp-audio-widget{display:none!important}
+  body.cp-agent-mode main{padding-bottom:80px}
+  .cp-sus input,.cp-it-row input[type=number],.cp-it-row select,.cp-search input,.cp-link input{font-size:16px}
 }
-@media (max-width:560px){.cp-art{grid-template-columns:56px minmax(0,1fr);}.cp-art .cp-add{grid-column:1/-1}}
+@keyframes cpBump{50%{transform:scale(1.04)}}
+@media (prefers-reduced-motion:reduce){.cp-calc{transition:none}.cp-mobile-bar.bump{animation:none}}
+@media (max-width:560px){
+  .cp-art{grid-template-columns:50px minmax(0,1fr) auto;gap:10px;padding:10px 11px}
+  .cp-no{font-size:12.5px}.cp-no small{display:none}
+  .cp-desc{font-size:14px}
+  .cp-add{min-width:46px;height:46px;padding:0;font-size:18px}
+}
 </style>
 </head>
 <body>
@@ -106,6 +147,7 @@
       <p class="muted" style="max-width:700px;margin-top:14px" id="cp-intro">
         Toate faptele pedepsite pe Moldova RP, cu amenda, lunile de închisoare, suspendarea permisului și ce se confiscă. Caută după cuvânt („viteză”, „armă”, „droguri”) sau după numărul articolului.
       </p>
+      <div class="cp-link" id="cp-link" hidden></div>
     </div>
 
     <section class="section" style="padding-top:0">
@@ -123,8 +165,15 @@
       <div class="cp-layout" id="cp-layout">
         <div id="cp-list"><p class="cp-empty">Se încarcă Codul Penal…</p></div>
         <aside class="cp-calc" id="cp-calc" hidden aria-labelledby="cp-calc-title">
-          <h2 id="cp-calc-title">⚖️ Incident</h2>
+          <div class="cp-calc-head"><h2 id="cp-calc-title">⚖️ Incident</h2><button type="button" class="cp-close" id="cp-close" aria-label="Închide calculatorul">✕</button></div>
           <p class="sub">Apasă <b>+</b> la fiecare faptă. Totalul și textul pentru procesul-verbal se fac singure.</p>
+          <div class="cp-agent" id="cp-agent" hidden></div>
+          <div class="cp-sus">
+            <small>Suspect</small>
+            <form class="cp-sus-row" id="cp-sus-f"><input id="cp-sus-id" inputmode="numeric" maxlength="7" placeholder="ID din joc" aria-label="ID-ul suspectului" autocomplete="off"><button type="submit">Caută</button></form>
+            <div class="cp-sus-row" style="margin-top:6px"><input id="cp-sus-name" maxlength="60" placeholder="Numele suspectului" aria-label="Numele suspectului" autocomplete="off"></div>
+            <p class="msg" id="cp-sus-msg">Scrie ID-ul și numele se completează singur.</p>
+          </div>
           <div class="cp-tot">
             <div><small>Amendă</small><strong id="cp-t-fine">0$</strong></div>
             <div><small>Închisoare</small><strong id="cp-t-jail">0 luni</strong></div>
@@ -138,7 +187,8 @@
         </aside>
       </div>
     </section>
-    <a class="cp-mobile-bar" id="cp-mobile-bar" href="#cp-calc"><span id="cp-mb-txt">0 articole</span><span>Vezi totalul ↓</span></a>
+    <div class="cp-sheet-bg" id="cp-sheet-bg"></div>
+    <a class="cp-mobile-bar" id="cp-mobile-bar" href="#cp-calc" aria-controls="cp-calc"><span id="cp-mb-txt">⚖️ Niciun articol încă</span><span>Deschide ↑</span></a>
   </main>
 
   <footer>
@@ -157,7 +207,7 @@
   const num = s => Number(String(s).replace(/\./g, ''));
   const norm = s => String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   let CAP = { months: 180, fine: 300000 }, BAIL = 20;
-  let arts = [], chapters = [], chapter = 'all', q = '';
+  let arts = [], chapters = [], chapter = 'all', q = '', agentLine = '';
   const sel = new Map(); // nr → { fine, months, role }
 
   function parsePenalty(p) {
@@ -259,13 +309,17 @@
     const when = new Date().toLocaleString('ro-RO', { timeZone: 'Europe/Chisinau', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
     document.getElementById('cp-out').value = items.length ? [
       `PROCES-VERBAL — ${when}`,
+      ...(agentLine ? [agentLine] : []),
+      ...(suspectLine() ? [suspectLine()] : []),
       ...lines,
       `TOTAL: ${money(fineCapped)} amendă${monthsCapped ? ` · ${monthsCapped} luni închisoare` : ''}${susp ? ` · permis suspendat ${susp}h` : ''}${pts ? ` · ${pts} puncte de penalizare` : ''}${fine > CAP.fine || months > CAP.months ? ' (limitat la maximul din Art. 1.11)' : ''}`,
       ...(conf.length ? ['CONFISCĂRI: ' + conf.join('; ')] : []),
     ].join('\n') : '';
     const mb = document.getElementById('cp-mobile-bar');
-    mb.classList.toggle('on', items.length > 0);
-    document.getElementById('cp-mb-txt').textContent = `${items.length} ${items.length === 1 ? 'articol' : 'articole'} · ${money(fineCapped)}${monthsCapped ? ' · ' + monthsCapped + ' luni' : ''}`;
+    mb.classList.toggle('on', canCalc);
+    const mbTxt = items.length ? `⚖️ ${items.length} ${items.length === 1 ? 'articol' : 'articole'} · ${money(fineCapped)}${monthsCapped ? ' · ' + monthsCapped + ' luni' : ''}` : '⚖️ Niciun articol încă';
+    const mbEl = document.getElementById('cp-mb-txt');
+    if (mbEl.textContent !== mbTxt) { mbEl.textContent = mbTxt; if (items.length) { mb.classList.remove('bump'); void mb.offsetWidth; mb.classList.add('bump'); } }
   }
   function renderSel() {
     const box = document.getElementById('cp-sel');
@@ -294,7 +348,35 @@
     if (t.dataset.r) sel.get(t.dataset.r).role = t.value;
     calc();
   });
-  document.getElementById('cp-clear').addEventListener('click', () => { sel.clear(); renderSel(); renderList(); });
+  document.getElementById('cp-clear').addEventListener('click', () => {
+    sel.clear(); document.getElementById('cp-sus-id').value = ''; document.getElementById('cp-sus-name').value = '';
+    susMsg('Scrie ID-ul și numele se completează singur.'); renderSel(); renderList();
+  });
+  function suspectLine() {
+    const id = document.getElementById('cp-sus-id').value.replace(/\D/g, ''), name = document.getElementById('cp-sus-name').value.trim();
+    return id || name ? `SUSPECT: ${name || 'nume necunoscut'}${id ? ` (ID ${id})` : ''}` : '';
+  }
+  function susMsg(t, cls) { const m = document.getElementById('cp-sus-msg'); m.textContent = t; m.className = 'msg' + (cls ? ' ' + cls : ''); }
+  let susSeq = 0, susT, susAuto = false;
+  async function findSuspect() {
+    const id = document.getElementById('cp-sus-id').value.replace(/\D/g, '');
+    if (!id) { calc(); return; }
+    const my = ++susSeq; susMsg('Caut…');
+    let auth = null; try { auth = JSON.parse(localStorage.getItem('mrp_auth') || 'null'); } catch { auth = null; }
+    try {
+      const r = await fetch('/api/cod-penal/suspect?id=' + encodeURIComponent(id), { headers: { Authorization: `Bearer ${auth?.token || ''}` } });
+      const d = await r.json().catch(() => ({}));
+      if (my !== susSeq) return;
+      if (!r.ok) throw new Error(d.error || 'Nu am putut căuta acum.');
+      if (d.found) { document.getElementById('cp-sus-name').value = d.name || ''; susMsg(`✓ Găsit${d.online ? ' · e în joc acum' : ''}`, 'ok'); }
+      else { if (susAuto) document.getElementById('cp-sus-name').value = ''; susMsg('Nu știm încă acest ID. Scrie numele de mână.', 'err'); }
+      susAuto = !!d.found;
+    } catch (err) { if (my === susSeq) susMsg(err.message, 'err'); }
+    calc();
+  }
+  document.getElementById('cp-sus-f').addEventListener('submit', e => { e.preventDefault(); clearTimeout(susT); findSuspect(); });
+  document.getElementById('cp-sus-id').addEventListener('input', () => { clearTimeout(susT); susT = setTimeout(findSuspect, 600); calc(); });
+  document.getElementById('cp-sus-name').addEventListener('input', () => { susAuto = false; calc(); });
   document.getElementById('cp-copy').addEventListener('click', async e => {
     const txt = document.getElementById('cp-out').value; if (!txt) return;
     try { await navigator.clipboard.writeText(txt); } catch { const ta = document.getElementById('cp-out'); ta.select(); document.execCommand('copy'); }
@@ -325,6 +407,59 @@
       document.getElementById('cp-count').textContent = '';
     }
   }
+  const DEPT_ICO = { 'Poliție': '👮', 'Departamentul Șerifului': '⭐', 'FIB': '🕵️' };
+  function showAgent(d) {
+    const a = d.agent, box = document.getElementById('cp-agent');
+    if (!a || !a.name) { box.hidden = true; agentLine = ''; return; }
+    const id = a.staticId ? ` · ID ${esc(a.staticId)}` : '';
+    const role = a.dept ? [a.dept, a.grade].filter(Boolean).join(' · ') : (d.staff ? 'Staff Moldova RP' : (a.jobLabel || ''));
+    const seen = a.online ? '<span class="st on">● în joc acum</span>'
+      : a.seen ? `<span class="st">gradul de la ultima intrare în joc (${esc(new Date(a.seen).toLocaleDateString('ro-RO', { timeZone: 'Europe/Chisinau' }))})</span>` : '';
+    box.innerHTML = `<span class="ico" aria-hidden="true">${DEPT_ICO[a.dept] || '🛡️'}</span><div><b>${esc(a.name)}${id}</b><small>${esc(role)}</small>${seen}</div>`;
+    box.hidden = false;
+    agentLine = `AGENT: ${a.name}${a.staticId ? ` (ID ${a.staticId})` : ''}${role ? ` — ${role}` : ''}`;
+  }
+  function showLink(d, token) {
+    const box = document.getElementById('cp-link');
+    if (d.calc) { box.hidden = true; return; }
+    if (d.linked) {
+      const a = d.agent || {};
+      box.innerHTML = `Personajul legat de contul tău${a.name ? `, <b>${esc(a.name)}</b>,` : ''} nu e în Poliție, Șerif sau FIB${a.jobLabel ? ` (acum: ${esc(a.jobLabel)})` : ''}. Calculatorul apare singur după ce intri în joc cu jobul de agent.`;
+      box.hidden = false; return;
+    }
+    box.innerHTML = `<b>Ești agent?</b> Leagă-ți personajul ca să îți apară calculatorul, cu numele, gradul și departamentul tău. Scrie <b>/leagacont</b> în joc și introdu aici codul de 6 cifre.
+      <form id="cp-link-f"><input id="cp-link-code" inputmode="numeric" maxlength="6" placeholder="123456" aria-label="Codul din joc" autocomplete="one-time-code"><button type="submit">Leagă personajul</button></form><p class="msg" id="cp-link-msg" hidden></p>`;
+    box.hidden = false;
+    document.getElementById('cp-link-f').addEventListener('submit', async e => {
+      e.preventDefault();
+      const code = document.getElementById('cp-link-code').value.replace(/\D/g, ''), msg = document.getElementById('cp-link-msg'), btn = e.target.querySelector('button');
+      msg.hidden = true;
+      if (code.length !== 6) { msg.textContent = 'Codul are 6 cifre.'; msg.className = 'msg err'; msg.hidden = false; return; }
+      btn.disabled = true;
+      try {
+        const r = await fetch('/api/cont/leaga-joc', { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ code }) });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(j.error || 'Nu am putut lega personajul.');
+        msg.textContent = `✓ Legat${j.name ? `: ${j.name}` : ''}. Verific jobul…`; msg.className = 'msg'; msg.hidden = false;
+        access();
+      } catch (err) { msg.textContent = err.message; msg.className = 'msg err'; msg.hidden = false; }
+      finally { btn.disabled = false; }
+    });
+  }
+  const sheetMq = matchMedia('(max-width:1000px)');
+  function sheet(open) {
+    const c = document.getElementById('cp-calc');
+    open = open && sheetMq.matches;
+    c.classList.toggle('open', open);
+    document.getElementById('cp-sheet-bg').classList.toggle('on', open);
+    document.body.style.overflow = open ? 'hidden' : '';
+  }
+  document.getElementById('cp-mobile-bar').addEventListener('click', e => { if (!sheetMq.matches) return; e.preventDefault(); sheet(true); });
+  document.getElementById('cp-close').addEventListener('click', () => sheet(false));
+  document.getElementById('cp-sheet-bg').addEventListener('click', () => sheet(false));
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') sheet(false); });
+  sheetMq.addEventListener?.('change', () => sheet(false));
+  let introDone = false;
   async function access() {
     let auth = null; try { auth = JSON.parse(localStorage.getItem('mrp_auth') || 'null'); } catch { auth = null; }
     if (!auth?.token) return;
@@ -332,11 +467,14 @@
       const r = await fetch('/api/cod-penal/acces', { headers: { Authorization: `Bearer ${auth.token}` } });
       if (!r.ok) return;
       const d = await r.json();
+      showLink(d, auth.token);
       if (!d.calc) return;
       canCalc = true;
+      showAgent(d);
       document.getElementById('cp-calc').hidden = false;
+      document.body.classList.add('cp-agent-mode');
       document.getElementById('cp-layout').classList.add('calc');
-      document.getElementById('cp-intro').insertAdjacentHTML('beforeend', ' <b style="color:var(--orange)">Ești agent: apasă + la fiecare faptă și calculatorul din dreapta face totalul.</b>');
+      if (!introDone) { introDone = true; document.getElementById('cp-intro').insertAdjacentHTML('beforeend', ' <b style="color:var(--orange)">Ești agent: apasă + la fiecare faptă și ' + (sheetMq.matches ? 'deschide totalul din bara portocalie de jos' : 'calculatorul din dreapta face totalul') + '.</b>'); }
       renderList(); calc();
     } catch { /* fără calculator */ }
   }

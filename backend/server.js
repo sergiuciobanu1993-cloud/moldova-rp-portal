@@ -4701,7 +4701,12 @@ function weeklyTables() {
         id SERIAL PRIMARY KEY, week DATE NOT NULL, category TEXT NOT NULL, rank INT NOT NULL,
         identifier TEXT, user_id UUID REFERENCES users(id) ON DELETE SET NULL, name TEXT, value INT NOT NULL DEFAULT 0,
         prize TEXT, given_at TIMESTAMPTZ, given_by UUID REFERENCES users(id) ON DELETE SET NULL,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), UNIQUE (week, category, rank));`).catch(err => { weeklyReady = null; throw err; });
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), UNIQUE (week, category, rank));
+      ALTER TABLE weekly_winners ADD COLUMN IF NOT EXISTS grant_status TEXT;
+      ALTER TABLE weekly_winners ADD COLUMN IF NOT EXISTS grant_to TEXT;
+      ALTER TABLE weekly_winners ADD COLUMN IF NOT EXISTS grant_to_name TEXT;
+      ALTER TABLE weekly_winners ADD COLUMN IF NOT EXISTS grant_error TEXT;
+      ALTER TABLE weekly_winners ADD COLUMN IF NOT EXISTS granted_at TIMESTAMPTZ;`).catch(err => { weeklyReady = null; throw err; });
   }
   return weeklyReady;
 }
@@ -4792,7 +4797,7 @@ async function weeklyFinalize() {
                         ON CONFLICT (week, category, rank) DO NOTHING`, [week, w.category, w.rank, w.identifier, userId, w.name, w.value]);
       if (userId) {
         const what = w.category === "jucatori" ? `locul ${w.rank} la orele jucate (${Math.round(w.value / 60)} ore)` : `locul ${w.rank} la questurile de Crăciun (${w.value} puncte)`;
-        await notifyUser(userId, { type: "clasament", title: "🏆 Ești în topul săptămânii!", message: `Ai ieșit pe ${what}. Ai primit insigna pe profil, iar staff-ul îți dă premiul în joc în curând.`, link: "/clasament.html" });
+        await notifyUser(userId, { type: "clasament", title: "🏆 Ești în topul săptămânii!", message: `Ai ieșit pe ${what}. Ai primit insigna pe profil, iar premiul îl primești în joc, la /recompense.`, link: "/clasament.html" });
       }
     }
     console.log(`Clasamentul săptămânii ${week}: închis (${winners.length} câștigători).`);
@@ -5113,12 +5118,13 @@ app.get("/api/admin/clasament", auth, requireRole(...ADMIN_ROLES), asyncRoute(as
   await weeklyTables();
   const { rows } = await pool.query(
     `SELECT w.id, w.week::text AS week, w.category, w.rank, w.name, w.value, w.prize, w.given_at, g.username AS given_by_name,
-            u.username, w.identifier
+            u.username, w.identifier, w.grant_status, w.grant_to_name, w.grant_error, w.granted_at
        FROM weekly_winners w LEFT JOIN users u ON u.id = w.user_id LEFT JOIN users g ON g.id = w.given_by
       ORDER BY w.week DESC, w.category, w.rank LIMIT 200`);
-  res.json({ currentWeek: weekStartOf(), winners: rows, factionJobs: WEEK_FACTION_JOBS });
+  res.json({ currentWeek: weekStartOf(), winners: rows, factionJobs: WEEK_FACTION_JOBS, prizes: await loadWeeklyPrizes() });
 }));
-app.put("/api/admin/clasament/:id", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res) => {
+app.put("/api/admin/clasament/:id", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res, next) => {
+  if (!/^\d+$/.test(req.params.id)) return next(); // ex. /premii — ruta ei e mai jos
   await weeklyTables();
   const id = Number(req.params.id);
   const prize = req.body?.prize === undefined ? undefined : String(req.body.prize || "").trim().slice(0, 200) || null;
@@ -5132,8 +5138,166 @@ app.put("/api/admin/clasament/:id", auth, requireRole(...ADMIN_ROLES), asyncRout
   if (!r.rowCount) return res.status(404).json({ error: "Nu există." });
   res.json({ ok: true });
 }));
-setInterval(() => weeklyFinalize().catch(err => console.error("Clasamentul săptămânii:", err.message)), 10 * 60 * 1000);
-setTimeout(() => weeklyFinalize().catch(err => console.error("Clasamentul săptămânii:", err.message)), 30 * 1000);
+const weeklyTick = () => weeklyFinalize().then(() => grantWeeklyPrizes()).catch(err => console.error("Clasamentul săptămânii:", err.message));
+setInterval(weeklyTick, 10 * 60 * 1000);
+setTimeout(weeklyTick, 30 * 1000);
+
+// ---------------------------------------------------------------------------
+// (01.11.2026, cerut de Sergiu) Premiile clasamentului se dau singure, prin /recompense în joc:
+// locurile 1–3 la jucători (și la questuri) primesc coins, iar facțiunea săptămânii primește bani,
+// la lider. Site-ul le trimite la ruta jocului POST /rewards/grant (cu „ref" unic, ca jocul să nu dea
+// de două ori). Până există ruta în joc, câștigătorii rămân „așteaptă jocul" și se trimit singuri imediat
+// ce apare; ce nu se poate trimite (lider negăsit, eroare) îl dă staff-ul ca până acum.
+// Sumele se schimbă din Admin → Clasament.
+// prima rundă (scurtă, 31.10–01.11) are premiu simbolic dat de staff — premiile automate încep cu săptămâna din 02.11
+const WEEKLY_PRIZES_FROM = "2026-11-02";
+// (01.11.2026) Fiecare loc are premiul lui, ales din Admin → Clasament: coins, bani în bancă, bani cash,
+// un obiect (cu cantitate) sau o mașină. (Varianta veche, doar cu sume, e citită la fel.)
+const WEEKLY_PRIZE_TYPES = ["coins", "bank", "cash", "item", "vehicle"];
+const WEEKLY_PRIZES_DEFAULT = {
+  auto: true,
+  jucatori: [{ type: "coins", amount: 1500 }, { type: "coins", amount: 1000 }, { type: "coins", amount: 500 }],
+  questuri: [{ type: "coins", amount: 1500 }, { type: "coins", amount: 1000 }, { type: "coins", amount: 500 }],
+  factiune: { type: "bank", amount: 500000 },
+};
+async function loadWeeklyPrizes() {
+  const { rows } = await pool.query(`SELECT value FROM vip_settings WHERE key = 'weekly_prizes'`).catch(() => ({ rows: [] }));
+  let v = rows[0]?.value;
+  if (typeof v === "string") { try { v = JSON.parse(v); } catch { v = null; } }
+  return normalizeWeeklyPrizes(v || {});
+}
+function normalizeWeeklySlot(x, def, numberType) {
+  if (x == null) return { ...def };
+  if (typeof x === "number" || /^\d+$/.test(String(x))) x = { type: numberType, amount: Number(x) };
+  if (typeof x !== "object") return { ...def };
+  const type = WEEKLY_PRIZE_TYPES.includes(x.type) ? x.type : def.type;
+  const n = (v, max) => { const k = Math.floor(Number(v)); return Number.isFinite(k) && k >= 0 ? Math.min(k, max) : 0; };
+  const clean = v => String(v ?? "").trim().replace(/[^\w.\-]/g, "").slice(0, 60);
+  if (type === "item") return { type, item: clean(x.item), amount: Math.max(1, n(x.amount, 100000) || 1) };
+  if (type === "vehicle") return { type, model: clean(x.model), label: String(x.label ?? "").trim().slice(0, 60) };
+  return { type, amount: n(x.amount, type === "coins" ? 1000000 : 1000000000) };
+}
+function normalizeWeeklyPrizes(v) {
+  const list = (a, d) => [0, 1, 2].map(i => normalizeWeeklySlot(Array.isArray(a) ? a[i] : undefined, d[i], "coins"));
+  return {
+    auto: v.auto !== false,
+    jucatori: list(v.jucatori, WEEKLY_PRIZES_DEFAULT.jucatori),
+    questuri: list(v.questuri, WEEKLY_PRIZES_DEFAULT.questuri),
+    factiune: normalizeWeeklySlot(v.factiune, WEEKLY_PRIZES_DEFAULT.factiune, "bank"),
+  };
+}
+// textul premiului (pentru site) și ce se trimite jocului; null = fără premiu la locul ăsta
+function weeklySlotGrant(slot) {
+  if (!slot) return null;
+  const f = n => Number(n).toLocaleString("ro-RO");
+  switch (slot.type) {
+    case "coins": return slot.amount > 0 ? { grant: { type: "coins", amount: slot.amount }, text: `${f(slot.amount)} coins` } : null;
+    case "bank": return slot.amount > 0 ? { grant: { type: "cash", account: "bank", amount: slot.amount }, text: `${f(slot.amount)} $ în bancă` } : null;
+    case "cash": return slot.amount > 0 ? { grant: { type: "cash", account: "money", amount: slot.amount }, text: `${f(slot.amount)} $ cash` } : null;
+    case "item": return slot.item ? { grant: { type: "item", item: slot.item, amount: slot.amount || 1 }, text: `${slot.amount > 1 ? f(slot.amount) + "× " : ""}${slot.item}` } : null;
+    case "vehicle": return slot.model ? { grant: { type: "vehicle", model: slot.model }, text: `mașina ${slot.label || slot.model}` } : null;
+    default: return null;
+  }
+}
+function weeklyPrizeFor(cfg, w) {
+  if (w.category === "factiuni") {
+    const g = w.rank === 1 ? weeklySlotGrant(cfg.factiune) : null;
+    return g ? { ...g.grant, text: `${g.text} (pentru lider)` } : null;
+  }
+  const g = weeklySlotGrant((cfg[w.category] || [])[w.rank - 1]);
+  return g ? { ...g.grant, text: g.text } : null;
+}
+// liderul facțiunii: la bande/familii — cel marcat lider în joc; la facțiunile de stat — gradul cel mai mare
+// dintre membrii văzuți în ultimele 14 zile
+async function weeklyFactionLeader(org) {
+  const job = Object.keys(WEEK_FACTION_JOBS).find(k => WEEK_FACTION_JOBS[k] === org);
+  if (job) {
+    const { rows } = await pool.query(
+      `SELECT identifier, rp_name FROM game_players_cache
+        WHERE LOWER(data->>'job') = $1 AND updated_at > NOW() - INTERVAL '14 days'
+        ORDER BY CASE WHEN (data->>'grade') ~ '^[0-9]+$' THEN (data->>'grade')::int ELSE -1 END DESC, updated_at DESC LIMIT 1`, [job]).catch(() => ({ rows: [] }));
+    return rows[0] ? { identifier: rows[0].identifier, name: rows[0].rp_name } : null;
+  }
+  const a = await fetchAssets({}).catch(() => null);
+  const lead = (a?.gangs || []).find(g => g && g.identifier && String(g.label || "").slice(0, 60) === org
+    && (g.isLeader || g.isOwner || /^lider/i.test(String(g.gradeLabel || g.grade || ""))));
+  return lead ? { identifier: String(lead.identifier), name: lead.rpName || lead.name || null } : null;
+}
+let weeklyGrantRunning = false;
+async function grantWeeklyPrizes() {
+  if (weeklyGrantRunning) return;
+  weeklyGrantRunning = true;
+  try {
+    await weeklyTables();
+    const cfg = await loadWeeklyPrizes();
+    const { rows } = await pool.query(
+      `SELECT id, week::text AS week, category, rank, identifier, user_id, name, prize, grant_status FROM weekly_winners
+        WHERE given_at IS NULL AND granted_at IS NULL AND week >= $1 AND week >= $2 ORDER BY week, category, rank`, [weekShift(weekStartOf(), -21), WEEKLY_PRIZES_FROM]);
+    let blocked = null; // ruta lipsește / serverul e oprit: nu mai întrebăm jocul în turul ăsta
+    for (const w of rows) {
+      const prize = weeklyPrizeFor(cfg, w);
+      if (!prize) continue;
+      if (!w.prize) await pool.query(`UPDATE weekly_winners SET prize = $2 WHERE id = $1`, [w.id, prize.text]);
+      if (!cfg.auto) continue;
+      let to = w.category === "factiuni" ? await weeklyFactionLeader(w.name) : (w.identifier ? { identifier: w.identifier, name: w.name } : null);
+      if (!to?.identifier) {
+        await pool.query(`UPDATE weekly_winners SET grant_status = $2 WHERE id = $1`, [w.id, w.category === "factiuni" ? "fara_lider" : "fara_personaj"]);
+        continue;
+      }
+      if (blocked) {
+        await pool.query(`UPDATE weekly_winners SET grant_status = $2, grant_to = $3, grant_to_name = $4 WHERE id = $1`, [w.id, blocked, to.identifier, to.name || null]);
+        continue;
+      }
+      const label = w.category === "factiuni" ? `Facțiunea săptămânii (${w.name}) — săptămâna ${w.week}` : `Top ${w.rank} clasament (${w.category === "questuri" ? "questuri" : "ore jucate"}) — săptămâna ${w.week}`;
+      const r = await vipShopAdminRequest("POST", "/rewards/grant", {
+        identifier: to.identifier, type: prize.type,
+        ...(prize.account ? { account: prize.account } : {}), ...(prize.amount != null ? { amount: prize.amount } : {}),
+        ...(prize.item ? { item: prize.item } : {}), ...(prize.model ? { model: prize.model } : {}),
+        label, source: "clasament", ref: `clasament-${w.week}-${w.category}-${w.rank}`,
+      });
+      if (r.status === 404 || r.status === 503) {
+        // ruta lipsește încă în joc sau serverul e oprit: încercăm din nou la următorul tur (10 minute)
+        await pool.query(`UPDATE weekly_winners SET grant_status = $2, grant_to = $3, grant_to_name = $4 WHERE id = $1`,
+          [w.id, r.status === 404 ? "asteapta_joc" : "joc_oprit", to.identifier, to.name || null]);
+        if (r.status === 404 && w.grant_status !== "asteapta_joc") console.log("Clasament: ruta /rewards/grant lipsește în joc — premiile așteaptă.");
+        blocked = r.status === 404 ? "asteapta_joc" : "joc_oprit";
+        continue;
+      }
+      if (!r.ok) {
+        await pool.query(`UPDATE weekly_winners SET grant_status = 'eroare', grant_error = $2, grant_to = $3, grant_to_name = $4 WHERE id = $1`,
+          [w.id, `HTTP ${r.status}: ${JSON.stringify(r.data || {}).slice(0, 200)}`, to.identifier, to.name || null]);
+        continue;
+      }
+      await pool.query(`UPDATE weekly_winners SET grant_status = 'trimis', granted_at = NOW(), given_at = NOW(), grant_error = NULL, grant_to = $2, grant_to_name = $3 WHERE id = $1`,
+        [w.id, to.identifier, to.name || null]);
+      const { rows: u } = await pool.query(`SELECT id FROM users WHERE game_identifier = $1 LIMIT 1`, [to.identifier]).catch(() => ({ rows: [] }));
+      const uid = u[0]?.id || w.user_id;
+      if (uid) await notifyUser(uid, { type: "clasament", title: "🎁 Premiul te așteaptă la /recompense",
+        message: `${w.category === "factiuni" ? `Facțiunea ta (${w.name}) a ieșit prima săptămâna trecută.` : `Ai ieșit pe locul ${w.rank} săptămâna trecută.`} Premiul (${prize.text}) e la /recompense în joc.`, link: "/clasament.html" }).catch(() => {});
+      console.log(`Clasament: premiu trimis la /recompense — ${w.category} locul ${w.rank} (${prize.text}).`);
+    }
+  } finally {
+    weeklyGrantRunning = false;
+  }
+}
+app.get("/api/admin/clasament/premii", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (_req, res) => {
+  res.json(await loadWeeklyPrizes());
+}));
+app.put("/api/admin/clasament/premii", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
+  const v = normalizeWeeklyPrizes(req.body || {});
+  await pool.query(`INSERT INTO vip_settings(key, value, updated_at) VALUES ('weekly_prizes', $1, NOW())
+                    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`, [JSON.stringify(v)]);
+  await logAction(req.user.sub, "clasament.prizes", "vip_settings", "weekly_prizes", v, req.ip);
+  grantWeeklyPrizes().catch(() => {});
+  res.json({ ok: true, prizes: v });
+}));
+// premiile, pentru pagina publică
+app.get("/api/clasament/premii", asyncRoute(async (_req, res) => {
+  res.set("Cache-Control", "public, max-age=300");
+  const p = await loadWeeklyPrizes();
+  const t = slot => weeklySlotGrant(slot)?.text || null;
+  res.json({ jucatori: p.jucatori.map(t), questuri: p.questuri.map(t), factiune: t(p.factiune), auto: p.auto });
+}));
 
 // ---------------------------------------------------------------------------
 // (31.10.2026, cerut de Sergiu) Sondaje pe site: fondatorii pun o întrebare cu

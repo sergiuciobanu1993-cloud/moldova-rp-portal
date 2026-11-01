@@ -5,7 +5,21 @@
 <aside class="side"><a class="brand" href="index.html"><img src="assets/logo-128.webp" alt=""><b>MOLDOVA<span>RP</span></b></a><p>ADMINISTRAȚIE</p><a href="admin.html">▦ Dashboard</a><a href="admin-utilizatori.html">👤 Utilizatori</a><a href="admin-jucatori.html">♙ Jucători</a><a href="admin-cauta.html">🔎 Caută jucător</a><a href="admin-financiar.html">◆ Facțiuni</a><a href="admin-sanctiuni.html">⚠ Sancțiuni</a><a>▤ Reclamații</a><a>⚖ CK</a><a href="admin-regulamente.html">📚 Regulamente</a><a href="admin-continut.html">📝 Conținut pagini</a><a href="admin-anunturi.html">◉ Anunțuri</a><a href="admin-actualizari.html">🆕 Actualizări</a><a href="admin-tichete.html">🎫 Tichete</a><a href="vip-shop.html">🎁 VIP Shop</a><a href="admin-vip-shop.html">🛠 Editor VIP Shop</a><a href="admin-craciun.html">🎄 Crăciun</a><a class="sel" href="admin-clasament.html">🏆 Clasament</a><a href="admin-loguri.html">🗂 Loguri</a><a href="admin-kill-logs.html">🔪 Kill Logs</a><a>⌁ Audit Logs</a><a href="admin-txadmin.html" id="nav-txadmin">🖥 txAdmin</a><a class="back" href="dashboard.html">← Contul meu</a><a class="back" href="index.html">← Site public</a></aside>
 <main>
 <header><div><small>PANEL ADMINISTRATIV</small><h1>Clasamentul săptămânii</h1></div><a class="admin" href="dashboard.html" title="Înapoi la contul meu" style="text-decoration:none"><span id="admin-name">…</span> <i></i></a></header>
-<p style="color:var(--muted);margin:-14px 0 20px;line-height:1.6">Luni la 00:00 (ora Chișinăului) săptămâna trecută se închide singură: primii 3 jucători (ore jucate), prima facțiune și — cât țin questurile de Crăciun — primii 3 la questuri ajung aici. Jucătorii cu cont legat primesc notificare și insigna pe profil. Voi le dați premiul în joc, scrieți aici ce ați dat și apăsați „Marchează dat”. Clasamentul live: <a href="clasament.html" target="_blank" rel="noopener" style="color:var(--orange);font-weight:800">clasament.html ↗</a></p>
+<p style="color:var(--muted);margin:-14px 0 20px;line-height:1.6">Luni la 00:00 (ora Chișinăului) săptămâna trecută se închide singură: primii 3 jucători (ore jucate), prima facțiune și — cât țin questurile de Crăciun — primii 3 la questuri ajung aici. Jucătorii cu cont legat primesc notificare și insigna pe profil. Premiile de mai jos se trimit singure la <b>/recompense</b> în joc (facțiunii — liderului ei). Ce nu se poate trimite automat îl dați voi în joc și apăsați „Marchează dat”. Clasamentul live: <a href="clasament.html" target="_blank" rel="noopener" style="color:var(--orange);font-weight:800">clasament.html ↗</a></p>
+<section class="tablebox" id="pz-box" style="padding:18px 22px">
+  <h2 style="margin:0 0 4px;font-size:17px">🎁 Premiile săptămânii</h2>
+  <p style="color:var(--muted);margin:0 0 14px;font-size:13px">Se trimit luni, la închiderea clasamentului. Schimbările se aplică de la următoarea săptămână închisă (și la cele care încă n-au primit premiul).</p>
+  <div class="pz-grid">
+    <fieldset><legend>🎮 Jucători (ore jucate)</legend><div id="pz-jucatori"></div></fieldset>
+    <fieldset><legend>🎄 Questuri</legend><div id="pz-questuri"></div></fieldset>
+    <fieldset><legend>🛡 Facțiunea săptămânii (la lider)</legend><div id="pz-factiune"></div></fieldset>
+  </div>
+  <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:12px">
+    <label style="display:flex;gap:8px;align-items:center;font-size:13px"><input type="checkbox" id="pz-auto"> Trimite automat la /recompense</label>
+    <button type="button" id="pz-save" style="padding:9px 16px;border:0;border-radius:10px;background:var(--orange);color:#0b0b0b;font:inherit;font-weight:800;cursor:pointer">Salvează premiile</button><span id="pz-msg" style="font-size:12.5px;color:var(--muted)"></span>
+  </div>
+</section>
+<style>.pz-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.pz-grid fieldset{border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:8px;margin:0}.pz-grid legend{font-size:12.5px;font-weight:800;padding:0 4px}.pz-slot{display:grid;grid-template-columns:62px 1fr;gap:6px 8px;align-items:center;padding:8px 0;border-bottom:1px dashed var(--line)}.pz-slot:last-child{border-bottom:0}.pz-slot b{font-size:12.5px}.pz-slot .pz-in{display:flex;gap:6px;flex-wrap:wrap}.pz-slot select,.pz-slot input{padding:7px 9px;border:1px solid var(--line);background:var(--bg);color:var(--text);border-radius:8px;font:inherit;font-size:13px;min-width:0}.pz-slot select{width:100%}.pz-slot input{flex:1 1 90px}.pz-slot .pz-sum{grid-column:2;font-size:11.5px;color:var(--muted)}@media(max-width:900px){.pz-grid{grid-template-columns:1fr}}</style>
 <section class="tablebox">
   <div class="title"><h2>Câștigători</h2><div style="display:flex;gap:8px;align-items:center"><select id="img-week" class="filter-select" aria-label="Săptămâna pentru imagine"></select><button type="button" id="img-btn">🖼 Imagine pentru Discord</button></div></div>
   <table><thead><tr><th>SĂPTĂMÂNA</th><th>CATEGORIE</th><th>LOC</th><th>CINE</th><th>REZULTAT</th><th>PREMIU</th><th>STARE</th><th></th></tr></thead>
@@ -20,10 +34,72 @@ const day = iso => new Date(iso + 'T12:00:00').toLocaleDateString('ro-RO', { day
 const week = iso => { const e = new Date(iso + 'T12:00:00'); e.setDate(e.getDate() + 6); return `${day(iso)} – ${e.toLocaleDateString('ro-RO', { day: 'numeric', month: 'short' })}`; };
 const hours = m => `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')} min`;
 const CAT = { jucatori: '🎮 Jucători', factiuni: '🛡 Facțiuni', questuri: '🎄 Questuri' };
+const STATUS = {
+  asteapta_joc: ['warn', 'AȘTEAPTĂ JOCUL', 'Ruta /recompense pentru premii nu e încă în joc. Se trimite singur când apare.'],
+  joc_oprit: ['warn', 'SERVER OPRIT', 'Se încearcă din nou la 10 minute.'],
+  fara_lider: ['warn', 'LIDER NEGĂSIT', 'Dați premiul liderului de mână.'],
+  fara_personaj: ['warn', 'FĂRĂ PERSONAJ', 'Nu știm personajul. Dați premiul de mână.'],
+  eroare: ['warn', 'EROARE', ''],
+};
+function statusCell(w) {
+  if (w.granted_at) return `<span class="pill on">TRIMIS LA /recompense</span><br><small style="color:var(--muted)">${escapeHtml(w.grant_to_name || '')}${w.grant_to_name ? ' · ' : ''}${new Date(w.granted_at).toLocaleString('ro-RO')}</small>`;
+  if (w.given_at) return `<span class="pill on">DAT</span><br><small style="color:var(--muted)">${escapeHtml(w.given_by_name || '')}</small>`;
+  const st = STATUS[w.grant_status];
+  if (st) return `<span class="pill ${st[0]}">${st[1]}</span><br><small style="color:var(--muted)">${escapeHtml(w.grant_to_name ? 'pentru ' + w.grant_to_name + '. ' : '')}${escapeHtml(st[2] || w.grant_error || '')}</small>`;
+  return '<span class="pill warn">DE DAT</span>';
+}
+const PZ_TYPES = { coins: 'Coins', bank: 'Bani în bancă ($)', cash: 'Bani cash ($)', item: 'Obiect din joc', vehicle: 'Mașină', none: 'Fără premiu' };
+function pzSlotHtml(key, label, slot) {
+  const t = slot && (slot.type === 'item' ? slot.item : slot.type === 'vehicle' ? slot.model : slot.amount > 0) ? slot.type : 'none';
+  return `<div class="pz-slot" data-slot="${key}"><b>${label}</b>
+    <select data-k="type">${Object.entries(PZ_TYPES).map(([k, v]) => `<option value="${k}"${k === t ? ' selected' : ''}>${v}</option>`).join('')}</select>
+    <span></span><div class="pz-in">
+      <input data-k="amount" type="number" min="0" placeholder="suma / cantitatea" value="${escapeHtml(slot?.amount ?? '')}">
+      <input data-k="item" placeholder="nume obiect, ex: WEAPON_PISTOL" value="${escapeHtml(slot?.item || '')}">
+      <input data-k="model" placeholder="model mașină, ex: m3e46" value="${escapeHtml(slot?.model || '')}">
+      <input data-k="label" placeholder="nume afișat, ex: BMW M3" value="${escapeHtml(slot?.label || '')}">
+    </div></div>`;
+}
+function pzSync(row) {
+  const t = row.querySelector('[data-k="type"]').value;
+  const show = { amount: ['coins', 'bank', 'cash', 'item'].includes(t), item: t === 'item', model: t === 'vehicle', label: t === 'vehicle' };
+  row.querySelectorAll('.pz-in [data-k]').forEach(i => { i.hidden = !show[i.dataset.k]; });
+  const a = row.querySelector('[data-k="amount"]'); a.placeholder = t === 'item' ? 'cantitatea' : 'suma';
+}
+function fillPrizes(p) {
+  if (!p) return;
+  const places = ['Locul 1', 'Locul 2', 'Locul 3'];
+  document.getElementById('pz-jucatori').innerHTML = (p.jucatori || []).map((x, i) => pzSlotHtml('jucatori.' + i, places[i], x)).join('');
+  document.getElementById('pz-questuri').innerHTML = (p.questuri || []).map((x, i) => pzSlotHtml('questuri.' + i, places[i], x)).join('');
+  document.getElementById('pz-factiune').innerHTML = pzSlotHtml('factiune', 'Locul 1', p.factiune);
+  document.querySelectorAll('.pz-slot').forEach(pzSync);
+  document.getElementById('pz-auto').checked = p.auto !== false;
+}
+document.getElementById('pz-box').addEventListener('change', e => { const row = e.target.closest('.pz-slot'); if (row && e.target.dataset.k === 'type') pzSync(row); });
+document.getElementById('pz-save').addEventListener('click', async e => {
+  const body = { auto: document.getElementById('pz-auto').checked, jucatori: [], questuri: [], factiune: null };
+  document.querySelectorAll('.pz-slot').forEach(row => {
+    const v = k => row.querySelector(`[data-k="${k}"]`).value.trim();
+    const type = v('type');
+    const slot = type === 'none' ? { type: 'coins', amount: 0 } : { type, amount: Math.max(0, Math.floor(Number(v('amount')) || 0)), item: v('item'), model: v('model'), label: v('label') };
+    const [k, n] = row.dataset.slot.split('.');
+    if (n == null) body[k] = slot; else body[k][Number(n)] = slot;
+  });
+  const msg = document.getElementById('pz-msg'); e.target.disabled = true;
+  try {
+    const r = await apiFetch('/api/admin/clasament/premii', { method: 'PUT', body: JSON.stringify(body) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || 'Nu s-a putut salva.');
+    fillPrizes(d.prizes); msg.style.color = '#5fd38d'; msg.textContent = '✓ Salvat';
+    setTimeout(load, 1500);
+  } catch (err) { msg.style.color = '#ff8a8a'; msg.textContent = err.message; }
+  e.target.disabled = false;
+});
 async function load() {
   const r = await apiFetch('/api/admin/clasament');
   if (!r.ok) { document.getElementById('w-body').innerHTML = '<tr><td colspan="8">Nu s-au putut încărca datele.</td></tr>'; return; }
   const d = await r.json();
+  if (!load.filled) { fillPrizes(d.prizes); load.filled = true; }
   // (31.10.2026) săptămânile încheiate, pentru imaginea cu câștigătorii (share-image.js)
   window.__winners = d.winners;
   const weeks = [...new Set(d.winners.map(w => w.week))];
@@ -34,8 +110,8 @@ async function load() {
     <td><strong style="color:var(--text)">${escapeHtml(w.name || '—')}</strong>${w.username ? `<br><small style="color:var(--muted)">cont: ${escapeHtml(w.username)}</small>` : (w.category === 'factiuni' ? '<br><small style="color:var(--muted)">premiul îl primește liderul</small>' : '<br><small style="color:var(--muted)">fără cont legat</small>')}</td>
     <td>${w.category === 'questuri' ? w.value + ' puncte' : hours(w.value)}</td>
     <td><input data-prize="${w.id}" value="${escapeHtml(w.prize || '')}" placeholder="ex: 50.000 $ în joc" style="width:100%;min-width:150px;padding:8px 10px;border:1px solid var(--line);background:var(--bg);color:var(--text);border-radius:8px;font:inherit"></td>
-    <td>${w.given_at ? `<span class="pill on">DAT</span><br><small style="color:var(--muted)">${escapeHtml(w.given_by_name || '')}</small>` : '<span class="pill warn">DE DAT</span>'}</td>
-    <td><div class="rowactions"><button type="button" data-save="${w.id}" data-given="${w.given_at ? '0' : '1'}">${w.given_at ? 'Anulează „dat”' : 'Marchează dat'}</button></div></td></tr>`).join('')
+    <td>${statusCell(w)}</td>
+    <td>${w.granted_at ? '' : `<div class="rowactions"><button type="button" data-save="${w.id}" data-given="${w.given_at ? '0' : '1'}">${w.given_at ? 'Anulează „dat”' : 'Marchează dat'}</button></div>`}</td></tr>`).join('')
     : '<tr><td colspan="8">Încă nu s-a încheiat nicio săptămână. Primii câștigători apar luni, după prima săptămână completă.</td></tr>';
 }
 document.getElementById('img-btn').addEventListener('click', () => {

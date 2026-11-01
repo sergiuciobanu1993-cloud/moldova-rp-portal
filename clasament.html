@@ -75,7 +75,7 @@
       <a class="back-link" href="index.html">← Înapoi la pagina principală</a>
       <p class="eyebrow" style="margin-top:22px">TOPUL SĂPTĂMÂNII</p>
       <h1>Clasament</h1>
-      <p class="muted" style="max-width:640px;margin-top:14px">Cei mai activi jucători și facțiuni de pe server în săptămâna asta. Clasamentul pornește de la zero în fiecare luni la 00:00. Primii 3 jucători și prima facțiune primesc o insignă pe profil și un premiu în joc de la staff.</p>
+      <p class="muted" style="max-width:640px;margin-top:14px">Cei mai activi jucători și facțiuni de pe server în săptămâna asta. Clasamentul pornește de la zero în fiecare luni la 00:00. Primii 3 jucători și prima facțiune primesc o insignă pe profil și un premiu în joc, la <b>/recompense</b><span id="pz-pub"></span>.</p>
       <div class="lb-meta"><span class="lb-chip">📅 <span id="lb-week">…</span></span><span class="lb-chip">⏱ Se actualizează la câteva minute</span></div>
     </div>
 
@@ -102,7 +102,7 @@
           <li><b>Jucători</b> — se numără orele jucate pe server de luni 00:00 până duminică 23:59 (ora Chișinăului).</li>
           <li><b>Facțiuni</b> — se adună orele tuturor membrilor din săptămâna asta: structurile de stat și bandele/familiile.</li>
           <li id="lb-rule-quests" hidden><b>Questuri</b> — cât țin questurile de Crăciun: punctele strânse pe site (cadou 5, căsuța din calendar 2, zi cu toate sarcinile 3, răspuns corect din regulament 1).</li>
-          <li>Luni dimineață, primii 3 jucători și prima facțiune primesc <b>insigna „Top al săptămânii”</b> pe profil (cei cu cont legat de personaj) și un <b>premiu în joc</b> de la staff.</li>
+          <li>Luni dimineață, primii 3 jucători și prima facțiune primesc <b>insigna „Top al săptămânii”</b> pe profil (cei cu cont legat de personaj) și un <b>premiu în joc</b>, pe care îl ridică cu <b>/recompense</b> (premiul facțiunii îl primește liderul).</li>
         </ul>
       </section>
     </div>
@@ -195,6 +195,16 @@
   load();
   setInterval(load, 3 * 60 * 1000);
 })();
+
+// (01.11.2026) premiile curente, în textul de sus
+fetch('/api/clasament/premii').then(r => r.ok ? r.json() : null).then(p => {
+  if (!p) return;
+  const j = (p.jucatori || []).filter(Boolean);
+  const parts = [];
+  if (j.length) parts.push(`locurile 1–${j.length}: ${j.join(' / ')}`);
+  if (p.factiune) parts.push(`facțiunea: ${p.factiune} (la lider)`);
+  if (parts.length) document.getElementById('pz-pub').textContent = ' (' + parts.join(', ') + ')';
+}).catch(() => {});
 </script>
 </body>
 </html>

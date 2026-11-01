@@ -4657,6 +4657,17 @@ app.get("/api/clasament", asyncRoute(async (_req, res) => {
   weeklyCache = { at: Date.now(), data };
   res.json(data);
 }));
+// (01.11.2026) Pentru staff, pe pagina Clasament: identificatorul din joc al fiecărui nume, ca numele să
+// ducă la profilul complet al jucătorului din panou. Lista publică (/api/clasament) nu-l conține.
+app.get("/api/admin/clasament-id", auth, requireRole(...MOD_ROLES), asyncRoute(async (_req, res) => {
+  res.set("Cache-Control", "no-store");
+  const week = weekStartOf();
+  const board = await weeklyBoard(week);
+  const { rows } = await pool.query(`SELECT name, identifier FROM weekly_winners WHERE week = $1 AND identifier IS NOT NULL`, [weekShift(week, -7)]);
+  const list = [...board.players, ...(board.quests || []), ...rows]
+    .filter(r => r && r.identifier && (r.name || r.rp_name)).map(r => ({ name: r.name || r.rp_name, identifier: r.identifier }));
+  res.json({ ids: list });
+}));
 // insignele „Top al săptămânii" ale contului (pentru Contul meu)
 app.get("/api/clasament/insigne", auth, asyncRoute(async (req, res) => {
   await weeklyTables();

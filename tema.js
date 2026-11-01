@@ -22,7 +22,7 @@
 // (rămâne cât ții fila deschisă); ?tema=nu o oprește.
 (() => {
   if (window.MRP_TEMA) return;
-  const VER = '20261101h'; // aceeași ca în pwa.js — schimbă-le împreună când modifici tema
+  const VER = '20261101i'; // aceeași ca în pwa.js — schimbă-le împreună când modifici tema
   const root = document.documentElement;
   const ls = {
     get(k) { try { return localStorage.getItem(k); } catch { return null; } },
@@ -855,13 +855,17 @@
   // ninsoarea: fulgi desenați pe un singur <canvas>, cu vânt care se schimbă încet
   function wnSnowSize() {
     if (!wn || !wn.cv) return;
-    const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
     const w = window.innerWidth, h = window.innerHeight;
+    // (01.11.2026) telefoanele și calculatoarele slabe: ninsoarea consuma cam 2/3 din procesor
+    // pe un telefon mediu (pagina mergea sacadat, telefonul se încălzea). Acolo desenăm mai
+    // puțini fulgi, la rezoluție normală, de 30 de ori pe secundă și deloc cât se derulează.
+    wn.lite = w < 760 || (navigator.hardwareConcurrency || 8) <= 4 || !!(navigator.connection && navigator.connection.saveData);
+    const dpr = wn.lite ? 1 : Math.min(window.devicePixelRatio || 1, 1.5);
     wn.cv.width = Math.round(w * dpr); wn.cv.height = Math.round(h * dpr);
     wn.cv.style.width = w + 'px'; wn.cv.style.height = h + 'px';
     wn.cx.setTransform(dpr, 0, 0, dpr, 0, 0);
     wn.W = w; wn.H = h;
-    const want = Math.round(Math.min(w < 600 ? 70 : 160, (w * h) / 11000));
+    const want = Math.round(Math.min(wn.lite ? (w < 600 ? 40 : 90) : 160, (w * h) / 11000));
     while (wn.flakes.length < want) wn.flakes.push(wnFlake(true));
     wn.flakes.length = want;
   }
@@ -874,6 +878,11 @@
     if (!wn) return;
     wn.raf = 0;
     if (!wn.fx || document.hidden) return;
+    if (wn.lite && wn.last && (now - wn.last < 31 || now - (wn.scrollAt || 0) < 180)) {
+      if (now - (wn.scrollAt || 0) < 180) wn.last = now; // cât se derulează: fulgii stau, nu sar după
+      wn.raf = requestAnimationFrame(wnSnowFrame);
+      return;
+    }
     const dt = wn.last ? Math.min(now - wn.last, 60) / 16.7 : 1;
     wn.last = now;
     const cx = wn.cx, W = wn.W, H = wn.H, wind = Math.sin(now / 9000) * 0.45 + Math.sin(now / 3100) * 0.12;
@@ -1337,6 +1346,8 @@
     wn.onResize = () => { clearTimeout(wn.rz); wn.rz = setTimeout(wnSnowSize, 150); };
     window.addEventListener('resize', wn.onResize);
     document.addEventListener('visibilitychange', wnVisibility);
+    wn.onScroll = () => { wn.scrollAt = performance.now(); };
+    window.addEventListener('scroll', wn.onScroll, { passive: true, capture: true });
     wn.top = el('div', 'wn-top');
     wn.top.setAttribute('aria-hidden', 'true');
     document.body.appendChild(wn.top);
@@ -1365,6 +1376,7 @@
     if (wn.raf) cancelAnimationFrame(wn.raf);
     if (wn.onResize) window.removeEventListener('resize', wn.onResize);
     document.removeEventListener('visibilitychange', wnVisibility);
+    if (wn.onScroll) window.removeEventListener('scroll', wn.onScroll, { capture: true });
     document.removeEventListener('pointerdown', wnClick);
     document.removeEventListener('click', wnTap);
     wnPopStop();

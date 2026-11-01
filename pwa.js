@@ -10,7 +10,10 @@
 // din normal în Halloween), apoi tema.js întreabă serverul dacă mai e pornită
 // și adaugă decorul. Se pornește / oprește din Admin → Dashboard.
 (() => {
-  const TEME = { halloween: '/tema-halloween.css?v=20261031k', iarna: '/tema-iarna.css?v=20261031k' };
+  // (01.11.2026) O singură versiune pentru tema.js și CSS-ul temei, aceeași ca VER din tema.js.
+  // Înainte CSS-ul de aici rămăsese pe o versiune veche, deci tema se descărca de 2 ori la fiecare pagină.
+  const TV = '20261101i';
+  const TEME = { halloween: '/tema-halloween.css?v=' + TV, iarna: '/tema-iarna.css?v=' + TV };
   try {
     let tema = null;
     const q = /[?&]tema=([a-z-]*)/i.exec(location.search);
@@ -24,7 +27,7 @@
     }
   } catch { /* fără stocare (mod privat): tema.js o aplică după răspunsul serverului */ }
   const s = document.createElement('script');
-  s.src = '/tema.js?v=20261101h';
+  s.src = '/tema.js?v=' + TV;
   s.async = true;
   document.head.appendChild(s);
   // (31.10.2026) Questurile de Crăciun: doar pentru cine e logat (craciun.js

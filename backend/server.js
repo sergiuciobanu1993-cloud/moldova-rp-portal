@@ -196,6 +196,72 @@ app.get("/sitemap.xml", async (_req, res) => {
     res.status(500).type("text/plain").send("sitemap indisponibil");
   }
 });
+// (01.11.2026) Viteza site-ului — 2 lucruri, fără să schimbăm cum se lucrează la el:
+// 1) Versiunea fișierelor JS/CSS se pune singură. Fiecare pagină .html e trimisă cu
+//    "?v=<amprenta conținutului>" la scripturile și stilurile ei locale, deci telefonul
+//    le poate ține minte un an (nu mai întreabă serverul de ~10 fișiere la fiecare
+//    pagină) și ia singur versiunea nouă imediat ce fișierul se schimbă — chiar dacă
+//    cineva uită să schimbe "?v=" de mână. Un "?v=" care nu e amprenta curentă
+//    (ex. scris de mână în JS) e verificat ca până acum, deci nu rămâne nimeni pe cod vechi.
+// 2) Pozele din anunțuri (.png) au alături o copie .webp de ~6 ori mai mică: o trimitem
+//    pe aceea browserelor care o știu citi (toate cele noi); restul primesc .png-ul.
+const SITE_ROOT = path.join(__dirname, "..");
+const siteFs = require("fs");
+const assetHashes = new Map(); // cale → { m: mtimeMs, h }
+function assetHash(abs) {
+  try {
+    const st = siteFs.statSync(abs);
+    if (!st.isFile()) return null;
+    const hit = assetHashes.get(abs);
+    if (hit && hit.m === st.mtimeMs) return hit.h;
+    const h = require("crypto").createHash("sha1").update(siteFs.readFileSync(abs)).digest("hex").slice(0, 10);
+    assetHashes.set(abs, { m: st.mtimeMs, h });
+    return h;
+  } catch { return null; }
+}
+const insideSite = abs => abs === SITE_ROOT || abs.startsWith(SITE_ROOT + path.sep);
+const htmlVersioned = new Map(); // cale → { m, html }
+const ASSET_REF = /\b(src|href)="(\/?)((?:[\w-]+\/)*[\w.-]+\.(?:js|css))(?:\?v=[\w.-]*)?"/g;
+app.use((req, res, next) => {
+  if (req.method !== "GET" && req.method !== "HEAD") return next();
+  let p = req.path;
+  try { p = decodeURIComponent(p); } catch { return next(); }
+  if (p.endsWith("/")) p += "index.html";
+  if (!p.endsWith(".html") || PANEL_FILE.test(path.posix.basename(p))) return next();
+  const abs = path.join(SITE_ROOT, path.normalize(p).replace(/^[\\/]+/, ""));
+  if (!insideSite(abs)) return next();
+  let st;
+  try { st = siteFs.statSync(abs); } catch { return next(); }
+  if (!st.isFile()) return next();
+  let hit = htmlVersioned.get(abs);
+  if (!hit || hit.m !== st.mtimeMs || Date.now() - hit.at > 60_000) {
+    const dir = path.dirname(abs);
+    const html = siteFs.readFileSync(abs, "utf8").replace(ASSET_REF, (all, attr, slash, file) => {
+      const f = path.join(slash ? SITE_ROOT : dir, file);
+      const h = insideSite(f) && !PRIVATE_PATHS.test("/" + path.relative(SITE_ROOT, f).split(path.sep).join("/")) ? assetHash(f) : null;
+      return h ? `${attr}="${slash}${file}?v=${h}"` : all;
+    });
+    hit = { m: st.mtimeMs, at: Date.now(), html };
+    htmlVersioned.set(abs, hit);
+    if (htmlVersioned.size > 200) htmlVersioned.clear();
+  }
+  res.set("Cache-Control", "no-cache");
+  res.type("html").send(hit.html);
+});
+const WEBP_TWIN = /^\/assets\/(?:[\w-]+\/)*(?:anunt|actualizare)[\w.-]*\.png$/i;
+app.get(WEBP_TWIN, (req, res, next) => {
+  res.vary("Accept");
+  if (!/image\/webp/i.test(String(req.headers.accept || ""))) return next();
+  let p = req.path;
+  try { p = decodeURIComponent(p); } catch { return next(); }
+  const abs = path.join(SITE_ROOT, path.normalize(p).replace(/^[\\/]+/, "")).replace(/\.png$/i, ".webp");
+  if (!insideSite(abs)) return next();
+  siteFs.stat(abs, (err, st) => {
+    if (err || !st.isFile()) return next();
+    res.set("Cache-Control", "public, max-age=86400, stale-while-revalidate=604800");
+    res.type("image/webp").sendFile(abs);
+  });
+});
 app.use(express.static(path.join(__dirname, ".."), {
   setHeaders: (res, filePath) => {
     // sw.js și manifestul aplicației trebuie verificate mereu, ca telefoanele
@@ -206,6 +272,8 @@ app.use(express.static(path.join(__dirname, ".."), {
     // (31.10.2026) viteza: pozele, sunetele și fonturile se țin minte o zi (și se mai folosesc încă o săptămână
     // cât se verifică în fundal), în loc să fie cerute din nou la fiecare pagină
     if (/\.(png|jpe?g|webp|gif|svg|ico|mp3|ogg|woff2?)$/i.test(filePath)) res.set("Cache-Control", "public, max-age=86400, stale-while-revalidate=604800");
+    // (01.11.2026) JS/CSS cerute cu amprenta lor curentă (pusă de serverul de pagini, mai sus): un an
+    if (/\.(js|css)$/i.test(filePath) && res.req?.query?.v && res.req.query.v === assetHash(filePath)) res.set("Cache-Control", "public, max-age=31536000, immutable");
     if (filePath.endsWith(".webmanifest")) res.type("application/manifest+json");
     if (filePath.endsWith(".apk")) {
       res.type("application/vnd.android.package-archive");

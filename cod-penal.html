@@ -64,6 +64,16 @@
 .cp-btns{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
 .cp-btns button{flex:1;min-height:40px;border-radius:9px;font:inherit;font-weight:900;cursor:pointer}
 .cp-copy{border:0;background:var(--orange);color:#0b0b0b}
+.cp-save{border:1px solid rgba(95,211,141,.5);background:rgba(95,211,141,.12);color:#c9f5da}
+.cp-save:disabled{opacity:.5;cursor:not-allowed}
+.cp-savemsg{margin:-4px 0 12px;font-size:12px;color:var(--muted)}.cp-savemsg.ok{color:#5fd38d}.cp-savemsg.err{color:#ff8a8a}
+.cp-caz{margin-top:8px;padding:9px 10px;border-radius:9px;background:rgba(255,255,255,.03);border:1px solid var(--line);font-size:12.5px;line-height:1.45}
+.cp-caz b{color:#fff}.cp-caz.bad{border-color:rgba(255,107,107,.45);background:rgba(255,107,107,.06)}
+.cp-caz button,.cp-mine-btn{margin-top:6px;padding:5px 10px;border-radius:8px;border:1px solid var(--line);background:transparent;color:var(--text);font:inherit;font-size:12px;font-weight:800;cursor:pointer}
+.cp-rec{margin-top:8px;padding:8px 9px;border-radius:8px;border:1px solid var(--line);background:var(--bg);font-size:12px;line-height:1.45}
+.cp-rec.annul{opacity:.55}.cp-rec .meta{color:var(--muted);font-size:11.5px}.cp-rec .arts{margin-top:3px}
+.cp-rec .x{margin-top:5px;padding:3px 8px;border-radius:7px;border:1px solid rgba(255,107,107,.45);background:transparent;color:#ff9b9b;font:inherit;font-size:11.5px;cursor:pointer}
+
 .cp-clear{border:1px solid var(--line);background:transparent;color:var(--text)}
 .cp-general{margin:0 0 18px;padding:14px 16px;border-radius:12px;border:1px solid var(--line);background:var(--panel)}
 .cp-general summary{cursor:pointer;font-weight:800}
@@ -173,6 +183,7 @@
             <form class="cp-sus-row" id="cp-sus-f"><input id="cp-sus-id" inputmode="numeric" maxlength="7" placeholder="ID din joc" aria-label="ID-ul suspectului" autocomplete="off"><button type="submit">Caută</button></form>
             <div class="cp-sus-row" style="margin-top:6px"><input id="cp-sus-name" maxlength="60" placeholder="Numele suspectului" aria-label="Numele suspectului" autocomplete="off"></div>
             <p class="msg" id="cp-sus-msg">Scrie ID-ul și numele se completează singur.</p>
+            <div class="cp-caz" id="cp-caz" hidden></div>
           </div>
           <div class="cp-tot">
             <div><small>Amendă</small><strong id="cp-t-fine">0$</strong></div>
@@ -181,9 +192,12 @@
             <div><small>Puncte</small><strong id="cp-t-pts">0</strong></div>
           </div>
           <div id="cp-warns"></div>
-          <div class="cp-btns" style="margin:0 0 12px"><button type="button" class="cp-copy" id="cp-copy">📋 Copiază textul</button><button type="button" class="cp-clear" id="cp-clear">Golește</button></div>
+          <div class="cp-btns" style="margin:0 0 12px"><button type="button" class="cp-copy" id="cp-copy">📋 Copiază textul</button><button type="button" class="cp-save" id="cp-save" disabled title="Adaugă articole și ID-ul suspectului">💾 Salvează în cazier</button><button type="button" class="cp-clear" id="cp-clear">Golește</button></div>
+          <p class="cp-savemsg" id="cp-savemsg" hidden></p>
           <div class="cp-sel" id="cp-sel"><p class="cp-empty" style="padding:16px">Niciun articol ales încă.</p></div>
           <textarea class="cp-out" id="cp-out" readonly aria-label="Textul pentru procesul-verbal"></textarea>
+          <button type="button" class="cp-mine-btn" id="cp-mine-btn">📄 Procesele-verbale scrise de mine</button>
+          <div id="cp-mine" hidden></div>
         </aside>
       </div>
     </section>
@@ -207,7 +221,7 @@
   const num = s => Number(String(s).replace(/\./g, ''));
   const norm = s => String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   let CAP = { months: 180, fine: 300000 }, BAIL = 20;
-  let arts = [], chapters = [], chapter = 'all', q = '', agentLine = '';
+  let arts = [], chapters = [], chapter = 'all', q = '', agentLine = '', lastCalc = null;
   const sel = new Map(); // nr → { fine, months, role }
 
   function parsePenalty(p) {
@@ -307,6 +321,12 @@
     document.getElementById('cp-t-pts').textContent = pts;
     document.getElementById('cp-warns').innerHTML = warns.map(w => `<p class="cp-warn">${esc(w)}</p>`).join('');
     const when = new Date().toLocaleString('ro-RO', { timeZone: 'Europe/Chisinau', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    lastCalc = {
+      articles: items.map(({ a, s }) => { const k = ROLE[s.role].k; return { nr: a.nr, desc: a.desc, role: s.role, fine: Math.round((s.fine || 0) * k), months: Math.round((s.months || 0) * k), susp: a.pen.susp || 0, pts: a.pen.pts || 0 }; }),
+      fine: fineCapped, months: monthsCapped, suspHours: susp, points: pts, confiscari: conf.join('; '),
+    };
+    const sv = document.getElementById('cp-save');
+    if (sv) sv.disabled = !items.length || !document.getElementById('cp-sus-id').value.replace(/\D/g, '');
     document.getElementById('cp-out').value = items.length ? [
       `PROCES-VERBAL — ${when}`,
       ...(agentLine ? [agentLine] : []),
@@ -350,6 +370,7 @@
   });
   document.getElementById('cp-clear').addEventListener('click', () => {
     sel.clear(); document.getElementById('cp-sus-id').value = ''; document.getElementById('cp-sus-name').value = '';
+    document.getElementById('cp-caz').hidden = true; document.getElementById('cp-savemsg').hidden = true;
     susMsg('Scrie ID-ul și numele se completează singur.'); renderSel(); renderList();
   });
   function suspectLine() {
@@ -371,12 +392,74 @@
       if (d.found) { document.getElementById('cp-sus-name').value = d.name || ''; susMsg(`✓ Găsit${d.online ? ' · e în joc acum' : ''}`, 'ok'); }
       else { if (susAuto) document.getElementById('cp-sus-name').value = ''; susMsg('Nu știm încă acest ID. Scrie numele de mână.', 'err'); }
       susAuto = !!d.found;
+      loadCazier(id);
     } catch (err) { if (my === susSeq) susMsg(err.message, 'err'); }
     calc();
   }
   document.getElementById('cp-sus-f').addEventListener('submit', e => { e.preventDefault(); clearTimeout(susT); findSuspect(); });
   document.getElementById('cp-sus-id').addEventListener('input', () => { clearTimeout(susT); susT = setTimeout(findSuspect, 600); calc(); });
   document.getElementById('cp-sus-name').addEventListener('input', () => { susAuto = false; calc(); });
+  // (02.11.2026) Cazierul: procesele-verbale salvate pe site
+  const tok = () => { try { return (JSON.parse(localStorage.getItem('mrp_auth') || 'null') || {}).token || ''; } catch { return ''; } };
+  const api = (url, opt = {}) => fetch(url, { ...opt, headers: { Authorization: `Bearer ${tok()}`, ...(opt.body ? { 'Content-Type': 'application/json' } : {}) } })
+    .then(async r => { const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.error || 'Nu am putut încărca.'); return d; });
+  const fmtAt = x => new Date(x).toLocaleString('ro-RO', { timeZone: 'Europe/Chisinau', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const ROLE_SHORT = { tentativa: ' (tentativă)', complice: ' (complice)' };
+  function recHtml(r, withSuspect) {
+    const tot = [r.fine ? money(r.fine) : '', r.months ? r.months + ' luni' : '', r.suspHours ? `permis ${r.suspHours}h` : ''].filter(Boolean).join(' · ') || '—';
+    const who = [r.agent.name, r.agent.dept, r.agent.grade].filter(Boolean).join(' · ');
+    return `<div class="cp-rec${r.annulled ? ' annul' : ''}"><div class="meta">#${r.id} · ${esc(fmtAt(r.at))}${withSuspect ? ` · suspect: <b>${esc(r.suspect.name || '—')}</b> (ID ${esc(r.suspect.staticId)})` : ''}${who ? ` · ${esc(who)}` : ''}</div>
+      <div class="arts">${(r.articles || []).map(a => `<b>Art. ${esc(a.nr)}</b> ${esc(a.desc)}${ROLE_SHORT[a.role] || ''}`).join('; ')}</div>
+      <div><b>${esc(tot)}</b>${r.annulled ? ` · <span style="color:#ff9b9b">ANULAT: ${esc(r.annulled.reason || '')}</span>` : ''}</div>
+      ${r.canAnnul ? `<button type="button" class="x" data-annul="${r.id}">Anulează</button>` : ''}</div>`;
+  }
+  let cazSeq = 0, cazOpen = false;
+  async function loadCazier(id) {
+    const box = document.getElementById('cp-caz'), my = ++cazSeq;
+    if (!id) { box.hidden = true; return; }
+    try {
+      const d = await api('/api/cod-penal/cazier?id=' + encodeURIComponent(id));
+      if (my !== cazSeq) return;
+      box.className = 'cp-caz' + (d.last30.n >= 3 ? ' bad' : '');
+      box.innerHTML = d.total
+        ? `📁 Cazier: <b>${d.total}</b> ${d.total === 1 ? 'proces-verbal' : 'procese-verbale'}${d.last30.n ? ` · în ultimele 30 de zile: <b>${d.last30.n}</b> (${money(d.last30.fine)}${d.last30.months ? ', ' + d.last30.months + ' luni' : ''})` : ''}${d.last30.n >= 3 ? '<br><b style="color:#ff9b9b">⚠ Recidivist</b>' : ''}
+           <br><button type="button" data-caz-toggle>${cazOpen ? 'Ascunde' : 'Vezi procesele-verbale'}</button><div id="cp-caz-list" ${cazOpen ? '' : 'hidden'}>${d.records.map(r => recHtml(r)).join('')}</div>`
+        : '📁 Cazier curat: niciun proces-verbal salvat pe site.';
+      box.hidden = false;
+    } catch (err) { if (my === cazSeq) { box.textContent = err.message; box.hidden = false; } }
+  }
+  document.getElementById('cp-caz').addEventListener('click', e => {
+    if (e.target.closest('[data-caz-toggle]')) { cazOpen = !cazOpen; const l = document.getElementById('cp-caz-list'); if (l) l.hidden = !cazOpen; e.target.textContent = cazOpen ? 'Ascunde' : 'Vezi procesele-verbale'; }
+  });
+  async function annul(id) {
+    const reason = prompt('De ce anulezi procesul-verbal #' + id + '?');
+    if (!reason || !reason.trim()) return;
+    try { await api(`/api/cod-penal/pv/${id}/anuleaza`, { method: 'POST', body: JSON.stringify({ reason }) }); } catch (err) { alert(err.message); return; }
+    loadCazier(document.getElementById('cp-sus-id').value.replace(/\D/g, ''));
+    if (!document.getElementById('cp-mine').hidden) loadMine();
+  }
+  document.getElementById('cp-calc').addEventListener('click', e => { const b = e.target.closest('[data-annul]'); if (b) annul(b.dataset.annul); });
+  document.getElementById('cp-save').addEventListener('click', async e => {
+    const id = document.getElementById('cp-sus-id').value.replace(/\D/g, ''), msg = document.getElementById('cp-savemsg');
+    if (!lastCalc || !lastCalc.articles.length || !id) return;
+    e.target.disabled = true; msg.hidden = false; msg.className = 'cp-savemsg'; msg.textContent = 'Se salvează…';
+    try {
+      const d = await api('/api/cod-penal/pv', { method: 'POST', body: JSON.stringify({ ...lastCalc, suspectId: id, suspectName: document.getElementById('cp-sus-name').value.trim(), text: document.getElementById('cp-out').value }) });
+      msg.className = 'cp-savemsg ok'; msg.textContent = `✓ Salvat în cazierul suspectului (proces-verbal #${d.id}).`;
+      loadCazier(id);
+      if (!document.getElementById('cp-mine').hidden) loadMine();
+    } catch (err) { msg.className = 'cp-savemsg err'; msg.textContent = err.message; }
+    e.target.disabled = false;
+  });
+  async function loadMine() {
+    const box = document.getElementById('cp-mine');
+    box.hidden = false; box.innerHTML = '<p class="cp-savemsg">Se încarcă…</p>';
+    try {
+      const d = await api('/api/cod-penal/ale-mele');
+      box.innerHTML = d.records.length ? d.records.map(r => recHtml(r, true)).join('') : '<p class="cp-savemsg">Încă n-ai salvat niciun proces-verbal.</p>';
+    } catch (err) { box.innerHTML = `<p class="cp-savemsg err">${esc(err.message)}</p>`; }
+  }
+  document.getElementById('cp-mine-btn').addEventListener('click', () => { const b = document.getElementById('cp-mine'); if (!b.hidden) { b.hidden = true; return; } loadMine(); });
   document.getElementById('cp-copy').addEventListener('click', async e => {
     const txt = document.getElementById('cp-out').value; if (!txt) return;
     try { await navigator.clipboard.writeText(txt); } catch { const ta = document.getElementById('cp-out'); ta.select(); document.execCommand('copy'); }

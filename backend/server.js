@@ -9193,6 +9193,107 @@ app.get("/api/cod-penal/suspect", auth, asyncRoute(async (req, res) => {
   res.json({ found: true, name, staticId: sid, online: false });
 }));
 
+// ---------------------------------------------------------------------------
+// (02.11.2026) Codul Penal, etapa 2: procesele-verbale se salvează pe site. Din ele iese cazierul fiecărui
+// jucător, după ID-ul lui din joc, vizibil doar agenților (Poliție, Șerif, FIB) și staff-ului. Agentul
+// (nume, departament, grad) îl pune serverul, nu browserul. Un proces-verbal greșit îl anulează autorul
+// în primele 15 minute sau staff-ul oricând (rămâne în istoric, marcat „anulat").
+// ---------------------------------------------------------------------------
+let codPenalPvReady = null;
+function codPenalPvTables() {
+  if (!codPenalPvReady) codPenalPvReady = pool.query(`
+    CREATE TABLE IF NOT EXISTS cod_penal_pv (
+      id SERIAL PRIMARY KEY, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      agent_user_id UUID REFERENCES users(id) ON DELETE SET NULL, agent_name TEXT, agent_static_id TEXT, agent_dept TEXT, agent_grade TEXT,
+      suspect_static_id TEXT NOT NULL, suspect_name TEXT, articles JSONB NOT NULL,
+      fine INT NOT NULL DEFAULT 0, months INT NOT NULL DEFAULT 0, susp_hours INT NOT NULL DEFAULT 0, points INT NOT NULL DEFAULT 0,
+      confiscari TEXT, text TEXT,
+      annulled_at TIMESTAMPTZ, annulled_by UUID REFERENCES users(id) ON DELETE SET NULL, annul_reason TEXT);
+    CREATE INDEX IF NOT EXISTS cod_penal_pv_suspect ON cod_penal_pv(suspect_static_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS cod_penal_pv_agent ON cod_penal_pv(agent_user_id, created_at DESC);`)
+    .catch(err => { codPenalPvReady = null; throw err; });
+  return codPenalPvReady;
+}
+const codPenalPvHits = new Map();
+const PV_ROLES = ["autor", "tentativa", "complice"];
+function pvRow(r, viewer) {
+  return {
+    id: r.id, at: r.created_at, agent: { name: r.agent_name, staticId: r.agent_static_id, dept: r.agent_dept, grade: r.agent_grade },
+    suspect: { staticId: r.suspect_static_id, name: r.suspect_name },
+    articles: r.articles, fine: r.fine, months: r.months, suspHours: r.susp_hours, points: r.points, confiscari: r.confiscari, text: r.text,
+    annulled: r.annulled_at ? { at: r.annulled_at, reason: r.annul_reason } : null,
+    canAnnul: !r.annulled_at && !!viewer && (MOD_ROLES.includes(viewer.role) || (r.agent_user_id === viewer.sub && Date.now() - new Date(r.created_at) < 15 * 60_000)),
+  };
+}
+app.post("/api/cod-penal/pv", auth, asyncRoute(async (req, res) => {
+  const now = Date.now(), recent = (codPenalPvHits.get(req.user.sub) || []).filter(t => now - t < 60_000);
+  if (recent.length >= 10) return res.status(429).json({ error: "Prea multe procese-verbale într-un minut. Mai încearcă puțin mai târziu." });
+  recent.push(now); codPenalPvHits.set(req.user.sub, recent);
+  const acc = await codPenalAccess(req);
+  if (!acc.calc) return res.status(403).json({ error: "Doar agenții (Poliție, Șerif, FIB) pot salva procese-verbale." });
+  const b = req.body || {};
+  const sid = String(b.suspectId || "").replace(/\D/g, "").slice(0, 7);
+  if (!sid) return res.status(400).json({ error: "Scrie ID-ul din joc al suspectului ca să salvezi procesul-verbal." });
+  const int = (v, max) => Math.max(0, Math.min(max, Math.floor(Number(v)) || 0));
+  const clip = (v, n) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, n);
+  const articles = (Array.isArray(b.articles) ? b.articles : []).slice(0, 40).map(a => ({
+    nr: clip(a?.nr, 12), desc: clip(a?.desc, 200), role: PV_ROLES.includes(a?.role) ? a.role : "autor",
+    fine: int(a?.fine, 10_000_000), months: int(a?.months, 1000), susp: int(a?.susp, 1000), pts: int(a?.pts, 100),
+  })).filter(a => a.nr);
+  if (!articles.length) return res.status(400).json({ error: "Adaugă cel puțin un articol." });
+  await codPenalPvTables();
+  const text = String(b.text ?? "").slice(0, 4000);
+  // același proces-verbal trimis de două ori (dublu click) → îl întoarcem pe cel salvat
+  const dup = await pool.query(`SELECT id FROM cod_penal_pv WHERE agent_user_id = $1 AND suspect_static_id = $2 AND text = $3 AND created_at > NOW() - INTERVAL '2 minutes' LIMIT 1`, [req.user.sub, sid, text]);
+  if (dup.rows[0]) return res.json({ ok: true, id: dup.rows[0].id, duplicate: true });
+  const a = acc.agent || {};
+  const { rows } = await pool.query(
+    `INSERT INTO cod_penal_pv(agent_user_id, agent_name, agent_static_id, agent_dept, agent_grade, suspect_static_id, suspect_name, articles, fine, months, susp_hours, points, confiscari, text)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id`,
+    [req.user.sub, a.name || req.user.username || null, a.staticId || null, a.dept || (acc.staff ? "Staff" : null), a.grade || null,
+     sid, clip(b.suspectName, 60) || null, JSON.stringify(articles), int(b.fine, 10_000_000), int(b.months, 1000), int(b.suspHours, 1000), int(b.points, 1000),
+     clip(b.confiscari, 500) || null, text]);
+  await logAction(req.user.sub, "cod_penal.pv", "cod_penal_pv", String(rows[0].id), { suspect: sid, articles: articles.map(x => x.nr), fine: int(b.fine, 10_000_000), months: int(b.months, 1000) }, req.ip);
+  res.json({ ok: true, id: rows[0].id });
+}));
+app.get("/api/cod-penal/cazier", auth, asyncRoute(async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  const acc = await codPenalAccess(req);
+  if (!acc.calc) return res.status(403).json({ error: "Cazierul îl văd doar agenții și staff-ul." });
+  const sid = String(req.query.id || "").replace(/\D/g, "").slice(0, 7);
+  if (!sid) return res.status(400).json({ error: "ID invalid." });
+  await codPenalPvTables();
+  const { rows } = await pool.query(`SELECT * FROM cod_penal_pv WHERE suspect_static_id = $1 ORDER BY created_at DESC LIMIT 50`, [sid]);
+  const active = rows.filter(r => !r.annulled_at);
+  const since = Date.now() - 30 * 86400_000;
+  const last30 = active.filter(r => new Date(r.created_at) > since);
+  res.json({
+    staticId: sid,
+    total: active.length,
+    last30: { n: last30.length, fine: last30.reduce((x, r) => x + r.fine, 0), months: last30.reduce((x, r) => x + r.months, 0) },
+    records: rows.map(r => pvRow(r, req.user)),
+  });
+}));
+app.get("/api/cod-penal/ale-mele", auth, asyncRoute(async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  await codPenalPvTables();
+  const { rows } = await pool.query(`SELECT * FROM cod_penal_pv WHERE agent_user_id = $1 ORDER BY created_at DESC LIMIT 30`, [req.user.sub]);
+  res.json({ records: rows.map(r => pvRow(r, req.user)) });
+}));
+app.post("/api/cod-penal/pv/:id/anuleaza", auth, asyncRoute(async (req, res) => {
+  await codPenalPvTables();
+  const id = parseInt(req.params.id, 10);
+  const reason = String(req.body?.reason || "").replace(/\s+/g, " ").trim().slice(0, 200);
+  if (!reason) return res.status(400).json({ error: "Scrie de ce anulezi procesul-verbal." });
+  const { rows } = await pool.query(`SELECT * FROM cod_penal_pv WHERE id = $1`, [id]);
+  const r = rows[0];
+  if (!r) return res.status(404).json({ error: "Procesul-verbal nu există." });
+  if (!pvRow(r, req.user).canAnnul) return res.status(403).json({ error: "Îl poate anula doar agentul care l-a scris (în primele 15 minute) sau staff-ul." });
+  await pool.query(`UPDATE cod_penal_pv SET annulled_at = NOW(), annulled_by = $2, annul_reason = $3 WHERE id = $1`, [id, req.user.sub, reason]);
+  await logAction(req.user.sub, "cod_penal.pv_annul", "cod_penal_pv", String(id), { reason }, req.ip);
+  res.json({ ok: true });
+}));
+
 // "Am acces?" — folosit de dashboard ca să arate/ascundă linkul spre MDT,
 // fără să oblige fiecare pagină să repete verificarea de mai sus doar ca să
 // decidă dacă afișează un buton.

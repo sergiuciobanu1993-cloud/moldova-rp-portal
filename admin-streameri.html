@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Streameri — Admin Moldova RP</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="admin.css"><link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/assets/app/apple-touch-icon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black"><meta name="apple-mobile-web-app-title" content="Moldova RP"><script src="/pwa.js" defer></script><meta name="theme-color" content="#090a0b">
+</head>
+<body>
+<aside class="side"><a class="brand" href="index.html"><img src="assets/logo-128.webp" alt=""><b>MOLDOVA<span>RP</span></b></a><p>ADMINISTRAȚIE</p><a href="admin.html">▦ Dashboard</a><a href="admin-utilizatori.html">👤 Utilizatori</a><a href="admin-jucatori.html">♙ Jucători</a><a href="admin-cauta.html">🔎 Caută jucător</a><a href="admin-financiar.html">◆ Facțiuni</a><a href="admin-sanctiuni.html">⚠ Sancțiuni</a><a>▤ Reclamații</a><a>⚖ CK</a><a href="admin-regulamente.html">📚 Regulamente</a><a href="admin-continut.html">📝 Conținut pagini</a><a href="admin-anunturi.html">◉ Anunțuri</a><a href="admin-actualizari.html">🆕 Actualizări</a><a href="admin-tichete.html">🎫 Tichete</a><a href="vip-shop.html">🎁 VIP Shop</a><a href="admin-vip-shop.html">🛠 Editor VIP Shop</a><a href="admin-craciun.html">🎄 Crăciun</a><a href="admin-clasament.html">🏆 Clasament</a><a class="sel" href="admin-streameri.html">🎥 Streameri</a><a href="admin-loguri.html">🗂 Loguri</a><a href="admin-kill-logs.html">🔪 Kill Logs</a><a>⌁ Audit Logs</a><a href="admin-txadmin.html" id="nav-txadmin">🖥 txAdmin</a><a class="back" href="dashboard.html">← Contul meu</a><a class="back" href="index.html">← Site public</a></aside>
+<main>
+<header><div><small>PANEL ADMINISTRATIV</small><h1>Studio de streaming</h1></div><a class="admin" href="dashboard.html" title="Înapoi la contul meu" style="text-decoration:none"><span id="admin-name">…</span> <i></i></a></header>
+<p style="color:var(--muted);margin:-14px 0 20px;line-height:1.6;max-width:820px">Aici aprobați streamerii care primesc acces gratuit la <a href="streamer.html" style="color:var(--orange)">Studio</a>: alerte, voce, obiective, roata norocului și overlay-uri pentru TikTok LIVE. Conturile cu rangul <b>Streamer</b> au acces direct. Când opriți accesul cuiva, linkurile overlay-urilor lui se schimbă imediat.</p>
+<p id="lib" style="margin:-8px 0 16px;font-size:13px"></p>
+<section class="tablebox">
+  <div class="title"><h2>Cereri și streameri</h2><select id="flt" class="filter-select" aria-label="Filtru"><option value="">Toate</option><option value="pending" selected>În așteptare</option><option value="approved">Aprobați</option><option value="rejected">Respinși</option><option value="revoked">Acces oprit</option></select></div>
+  <table><thead><tr><th>CONT</th><th>TIKTOK</th><th>DESPRE</th><th>CERUT</th><th>STARE</th><th></th></tr></thead>
+  <tbody id="rows"><tr><td colspan="6">Se încarcă…</td></tr></tbody></table>
+</section>
+</main>
+<script src="auth-client.js"></script>
+<script>
+const escapeHtml = s => (s ?? '').toString().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+const ST = { pending: ['warn', 'ÎN AȘTEPTARE'], approved: ['on', 'APROBAT'], rejected: ['off', 'RESPINS'], revoked: ['off', 'ACCES OPRIT'] };
+const LIVE = { live: '🔴 live acum', connecting: 'se conectează', waiting: 'așteaptă live-ul', error: 'eroare', off: '' };
+let ALL = [];
+async function load() {
+  const r = await apiFetch('/api/admin/streameri');
+  const d = await r.json();
+  if (!r.ok) { document.getElementById('rows').innerHTML = `<tr><td colspan="6">${escapeHtml(d.error || 'Eroare')}</td></tr>`; return; }
+  ALL = d.streamers || [];
+  document.getElementById('lib').innerHTML = d.lib === false ? `<span class="pill warn">TIKTOK LIVE INDISPONIBIL</span> <span style="color:var(--muted)">Pachetul de conectare nu s-a instalat pe server (${escapeHtml(d.libError || '')}). Testele și overlay-urile merg.</span>` : d.lib ? '<span class="pill on">CONECTAREA LA TIKTOK LIVE E PREGĂTITĂ</span>' : '';
+  draw();
+}
+function draw() {
+  const f = document.getElementById('flt').value, list = ALL.filter(x => !f || x.status === f);
+  document.getElementById('rows').innerHTML = list.length ? list.map(x => {
+    const st = ST[x.status] || ['', x.status];
+    const live = x.live && LIVE[x.live.status] ? `<br><small style="color:var(--muted)">${LIVE[x.live.status]}${x.live.overlays ? ` · ${x.live.overlays} overlay-uri deschise` : ''}</small>` : '';
+    const btn = (s, t, cls = '') => `<button type="button" class="${cls}" data-uid="${x.user_id}" data-st="${s}" style="padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:${s === 'approved' ? 'var(--orange)' : 'transparent'};color:${s === 'approved' ? '#0b0b0b' : 'inherit'};font:inherit;font-weight:800;font-size:12px;cursor:pointer">${t}</button>`;
+    const acts = x.status === 'pending' ? btn('approved', 'Aprobă') + ' ' + btn('rejected', 'Respinge')
+      : x.status === 'approved' ? btn('revoked', 'Oprește accesul')
+      : btn('approved', 'Aprobă');
+    return `<tr><td><strong style="color:var(--text);font-size:13px">${escapeHtml(x.discord_username || x.username)}</strong>${x.discord_username || x.role === 'streamer' ? `<br><small style="color:var(--muted)">${x.discord_username ? escapeHtml(x.username) : ''}${x.discord_username && x.role === 'streamer' ? ' · ' : ''}${x.role === 'streamer' ? 'rang Streamer' : ''}</small>` : ''}</td>
+      <td><a href="https://www.tiktok.com/@${encodeURIComponent(x.tiktok)}" target="_blank" rel="noopener" style="color:var(--orange)">@${escapeHtml(x.tiktok)}</a></td>
+      <td style="max-width:320px;white-space:pre-wrap;font-size:13px">${escapeHtml(x.motiv || '—')}${x.note ? `<br><small style="color:var(--muted)">Notă: ${escapeHtml(x.note)}</small>` : ''}</td>
+      <td style="white-space:nowrap;font-size:13px">${new Date(x.created_at).toLocaleString('ro-RO', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}${x.decided_by_name ? `<br><small style="color:var(--muted)">de ${escapeHtml(x.decided_by_name)}</small>` : ''}</td>
+      <td><span class="pill ${st[0]}">${st[1]}</span>${live}</td>
+      <td style="white-space:nowrap">${acts}</td></tr>`;
+  }).join('') : '<tr><td colspan="6" style="color:var(--muted)">Nimic aici.</td></tr>';
+}
+document.getElementById('flt').onchange = draw;
+document.getElementById('rows').addEventListener('click', async e => {
+  const b = e.target.closest('[data-st]'); if (!b) return;
+  const st = b.dataset.st;
+  let note = '';
+  if (st === 'rejected' || st === 'revoked') { note = prompt(st === 'rejected' ? 'Motivul respingerii (îl vede streamerul, opțional):' : 'De ce oprești accesul? (îl vede streamerul, opțional)') ; if (note === null) return; }
+  b.disabled = true;
+  const r = await apiFetch(`/api/admin/streameri/${b.dataset.uid}`, { method: 'PUT', body: JSON.stringify({ status: st, note }) });
+  if (!r.ok) { const d = await r.json().catch(() => ({})); alert(d.error || 'Eroare'); b.disabled = false; return; }
+  load();
+});
+(async () => {
+  const me = await requireRole('admin', 'co-fondator', 'owner');
+  if (!me) return;
+  document.getElementById('admin-name').textContent = me.username;
+  load();
+})();
+</script>
+</body></html>

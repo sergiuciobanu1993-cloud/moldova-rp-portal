@@ -1,0 +1,614 @@
+<!doctype html>
+<html lang="ro">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ff8a1f">
+  <meta name="description" content="Studio de streaming gratuit pentru streamerii Moldova RP: alerte, TTS, obiective, roata norocului, subathon și overlay-uri pentru TikTok LIVE.">
+  <meta property="og:type" content="website"><meta property="og:site_name" content="Moldova RP"><meta property="og:locale" content="ro_RO">
+  <meta property="og:title" content="Studio de streaming — Moldova RP"><meta property="og:description" content="Alerte, voce, obiective, roata norocului și subathon pentru live-urile tale pe TikTok. Gratuit pentru streamerii comunității.">
+  <title>Studio de streaming — Moldova RP</title>
+  <link rel="icon" href="assets/favicon.png">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <script src="/pwa.js" defer></script>
+  <style>
+  /* (03.11.2026) Studio de streaming — backend: backend/stream-studio.js, overlay-uri: stream-overlay.html */
+  .st{max-width:1240px;margin:0 auto;padding:0 5vw 90px}
+  .st-box{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:22px}
+  .st-box h2{margin:0 0 6px;font-size:20px;letter-spacing:-.01em}
+  .st-box h3{margin:18px 0 8px;font-size:14px;letter-spacing:.02em}
+  .st-muted{color:var(--muted);font-size:13px;line-height:1.6}
+  .st-gate{max-width:640px}
+  .st-form{display:grid;gap:12px;margin-top:14px}
+  .st label.f{display:grid;gap:6px;font-size:12px;font-weight:800;letter-spacing:.04em;color:#cfd3d7}
+  .st input[type=text],.st input[type=number],.st select,.st textarea{width:100%;min-height:40px;padding:9px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:#0b0c0e;color:var(--text);font:500 14px Inter,system-ui,sans-serif}
+  .st textarea{min-height:96px;resize:vertical;line-height:1.5}
+  .st input:focus-visible,.st select:focus-visible,.st textarea:focus-visible,.st button:focus-visible{outline:2px solid var(--orange);outline-offset:2px}
+  .st input[type=color]{width:48px;height:40px;padding:2px;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:#0b0c0e}
+  .st input[type=range]{accent-color:var(--orange);width:100%}
+  .st input[type=checkbox]{accent-color:var(--orange);width:18px;height:18px}
+  .b{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:40px;padding:0 16px;border-radius:10px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);color:var(--text);font:800 13px Inter,system-ui,sans-serif;cursor:pointer;transition:.15s ease;white-space:nowrap}
+  .b:hover{border-color:rgba(255,138,31,.5);color:var(--orange)}
+  .b.pri{background:var(--orange);border-color:var(--orange);color:#0b0b0b}
+  .b.pri:hover{background:#ff9b3b;color:#0b0b0b}
+  .b.red{border-color:rgba(242,95,95,.45);color:#ff8b8b}
+  .b.sm{min-height:32px;padding:0 11px;font-size:12px}
+  .b[disabled]{opacity:.45;cursor:not-allowed}
+  .st-msg{font-size:13px;margin:0;min-height:18px}
+  .st-msg.err{color:#ff8b8b}.st-msg.ok{color:var(--green)}
+
+  .st-app{display:grid;grid-template-columns:minmax(0,400px) minmax(0,1fr);gap:20px;align-items:start}
+  .st-side{display:grid;gap:16px;position:sticky;top:96px}
+  .st-live{display:grid;gap:12px}
+  .st-conn{display:flex;gap:8px}
+  .st-conn input{flex:1;min-width:0}
+  .pill{display:inline-flex;align-items:center;gap:7px;padding:5px 11px;border-radius:99px;font-size:11px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--muted)}
+  .pill i{width:8px;height:8px;border-radius:50%;background:currentColor}
+  .pill.live{color:#ff4d6a;border-color:rgba(255,77,106,.45);background:rgba(255,77,106,.1)}
+  .pill.live i{animation:blink 1.2s infinite}
+  .pill.wait{color:#ffc24b;border-color:rgba(255,194,75,.4)}
+  .pill.err{color:#ff8b8b;border-color:rgba(255,139,139,.4)}
+  @keyframes blink{50%{opacity:.25}}
+  .kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+  .kpi{padding:10px 4px;border-radius:12px;background:var(--panel2);border:1px solid var(--line);text-align:center}
+  .kpi b{display:block;font-size:18px;font-variant-numeric:tabular-nums}
+  .kpi small{color:var(--muted);font-size:10.5px;font-weight:700;white-space:nowrap}
+  .tests{display:flex;flex-wrap:wrap;gap:6px}
+  .feed{height:330px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;padding-right:4px}
+  .fi{display:flex;gap:9px;align-items:flex-start;padding:8px 10px;border-radius:10px;background:var(--panel2);border:1px solid var(--line);font-size:13px;line-height:1.45}
+  .fi .ic{flex:none;width:22px;text-align:center}
+  .fi b{color:var(--orange)}
+  .fi.gift{border-color:rgba(255,138,31,.35)}
+  .fi.sys{color:var(--muted)}
+  .fi small{color:var(--muted);margin-left:auto;padding-left:8px;font-size:11px;flex:none}
+  .ttsbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;font-size:13px}
+
+  .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px}
+  .tabs button{min-height:38px;padding:0 14px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--text);font:800 13px Inter,system-ui,sans-serif;cursor:pointer}
+  .tabs button[aria-selected=true]{background:rgba(255,138,31,.14);border-color:var(--orange);color:var(--orange)}
+  .pane[hidden]{display:none}
+  .grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+  .grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+  .card2{border:1px solid var(--line);border-radius:12px;padding:14px;background:var(--panel2);display:grid;gap:10px;align-content:start}
+  .card2 .hd{display:flex;align-items:center;gap:10px;justify-content:space-between}
+  .card2 .hd b{font-size:14px}
+  .tog{display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:700;cursor:pointer}
+  .hint{color:var(--muted);font-size:12px;line-height:1.5;margin:0}
+  .hint code{background:rgba(255,255,255,.06);padding:1px 6px;border-radius:5px;color:#ffd0a3}
+  .goal-row{display:grid;grid-template-columns:130px minmax(0,1fr) 120px auto;gap:8px;align-items:center}
+  .savebar{position:sticky;bottom:12px;margin-top:18px;display:flex;gap:12px;align-items:center;justify-content:flex-end;padding:12px 14px;border-radius:14px;background:rgba(16,18,20,.92);border:1px solid var(--line);backdrop-filter:blur(10px);z-index:5}
+  .savebar.dirty{border-color:rgba(255,138,31,.6)}
+  .savebar span{margin-right:auto;font-size:13px;color:var(--muted)}
+  .savebar.dirty span{color:var(--orange)}
+
+  .ovs{display:grid;gap:10px}
+  .ov{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 12px;align-items:center;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--panel2)}
+  .ov b{font-size:14px}
+  .ov .sz{color:var(--muted);font-size:11.5px;font-weight:700;margin-left:6px}
+  .ov p{grid-column:1/-1;margin:0;color:var(--muted);font-size:12.5px}
+  .ov .acts{display:flex;gap:6px}
+  .ov input{grid-column:1/-1;font:12px ui-monospace,Consolas,monospace!important;min-height:34px!important;color:#cfd3d7!important}
+  .prev{margin-top:14px;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#1d232b;background-image:linear-gradient(45deg,#232a33 25%,transparent 25%),linear-gradient(-45deg,#232a33 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#232a33 75%),linear-gradient(-45deg,transparent 75%,#232a33 75%);background-size:28px 28px;background-position:0 0,0 14px,14px -14px,-14px 0}
+  .prev iframe{display:block;width:100%;height:420px;border:0}
+  .prev .bar{display:flex;gap:8px;align-items:center;padding:8px 10px;background:rgba(0,0,0,.55);font-size:12px;color:#cfd3d7}
+  .steps{margin:8px 0 0;padding-left:20px;color:#cfd3d7;font-size:13px;line-height:1.75}
+  .steps b{color:var(--text)}
+  .warn{border:1px solid rgba(255,194,75,.35);background:rgba(255,194,75,.07);border-radius:12px;padding:12px 14px;font-size:13px;line-height:1.55;color:#f2d9a6}
+  @media (max-width:980px){.st-app{grid-template-columns:1fr}.st-side{position:static}}
+  @media (max-width:640px){.st{padding:0 16px 70px}.st-box{padding:16px}.grid2,.grid3{grid-template-columns:1fr}.goal-row{grid-template-columns:1fr 1fr}.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.prev iframe{height:300px}}
+  </style>
+</head>
+<body data-content-page="streamer">
+  <header class="site-header">
+    <a class="brand" href="index.html" aria-label="Moldova RP - Acasă">
+      <img src="assets/logo-128.webp" alt="Moldova RP">
+      <span>MOLDOVA<span class="accent">RP</span></span>
+    </a>
+    <button class="menu-toggle" aria-label="Deschide meniul" aria-expanded="false">☰</button>
+    <nav class="nav">
+      <a href="index.html">Acasă</a>
+      <a href="regulamente.html">Regulamente</a>
+      <a href="clasament.html">Clasament</a>
+      <a class="active" href="streamer.html">Studio streaming</a>
+      <a href="index.html#anunturi">Anunțuri</a>
+      <a class="nav-login" href="login.html">Autentificare</a>
+    </nav>
+  </header>
+
+  <main>
+    <div class="page-hero">
+      <a class="back-link" href="dashboard.html">← Contul meu</a>
+      <p class="eyebrow" style="margin-top:22px">PENTRU STREAMERII COMUNITĂȚII · GRATUIT</p>
+      <h1>Studio de streaming</h1>
+      <p class="muted" style="max-width:680px;margin-top:14px">Alerte cu sunet pentru cadouri și urmăritori, mesaje citite cu voce, obiective, top susținători, roata norocului, subathon și puncte pentru spectatori. Totul pentru live-urile tale pe TikTok, fără abonament.</p>
+    </div>
+
+    <div class="st">
+      <!-- acces: neautentificat / cerere / în așteptare / respins -->
+      <section class="st-box st-gate" id="gate" aria-live="polite"><p class="st-muted">Se încarcă…</p></section>
+
+      <!-- Studio-ul propriu-zis -->
+      <div class="st-app" id="app" hidden>
+        <aside class="st-side">
+          <section class="st-box st-live" aria-labelledby="live-title">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+              <h2 id="live-title" style="margin:0">Live</h2>
+              <span class="pill" id="live-pill"><i></i><span>Deconectat</span></span>
+            </div>
+            <div class="st-conn">
+              <input type="text" id="tiktok" aria-label="Numele tău de TikTok" placeholder="@numele_tau" autocomplete="off" spellcheck="false">
+              <button type="button" class="b pri" id="btn-conn">Conectează</button>
+            </div>
+            <p class="st-msg" id="live-msg"></p>
+            <div class="kpis">
+              <div class="kpi"><b id="k-viewers">0</b><small>👁 acum</small></div>
+              <div class="kpi"><b id="k-likes">0</b><small>❤️ like-uri</small></div>
+              <div class="kpi"><b id="k-diamonds">0</b><small>💎 diamante</small></div>
+              <div class="kpi"><b id="k-follows">0</b><small>👤 follow</small></div>
+            </div>
+            <div>
+              <p class="hint" style="margin-bottom:6px">Testează alertele și overlay-urile fără să fii live:</p>
+              <div class="tests">
+                <button type="button" class="b sm" data-test="gift">🎁 Cadou mic</button>
+                <button type="button" class="b sm" data-test="gift" data-gift="5">🦁 Cadou mare</button>
+                <button type="button" class="b sm" data-test="follow">💖 Follow</button>
+                <button type="button" class="b sm" data-test="share">📣 Share</button>
+                <button type="button" class="b sm" data-test="chat">💬 Mesaj</button>
+                <button type="button" class="b sm" data-test="like">❤️ 50 like-uri</button>
+                <button type="button" class="b sm" data-act="wheel">🎡 Învârte roata</button>
+              </div>
+            </div>
+            <div class="ttsbar">
+              <label class="tog"><input type="checkbox" id="tts-here"> 🔊 Citește cu voce pe acest calculator</label>
+            </div>
+            <p class="hint" id="tts-hint">Vocea se aude din pagina asta: ține Studio-ul deschis în timpul live-ului (TikTok LIVE Studio prinde sunetul calculatorului). Pentru o voce românească naturală, deschide Studio-ul în Microsoft Edge.</p>
+            <div class="feed" id="feed" aria-live="off"></div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button type="button" class="b sm" data-act="session-new">↺ Sesiune nouă</button>
+              <button type="button" class="b sm" id="btn-clear-feed">Golește lista</button>
+            </div>
+          </section>
+        </aside>
+
+        <section class="st-box" aria-label="Setări">
+          <div class="tabs" role="tablist" aria-label="Setări Studio">
+            <button type="button" role="tab" aria-selected="true" data-tab="alerte">🔔 Alerte</button>
+            <button type="button" role="tab" aria-selected="false" data-tab="voce">🗣 Voce</button>
+            <button type="button" role="tab" aria-selected="false" data-tab="obiective">🎯 Obiective</button>
+            <button type="button" role="tab" aria-selected="false" data-tab="jocuri">🎡 Jocuri</button>
+            <button type="button" role="tab" aria-selected="false" data-tab="aspect">🎨 Aspect</button>
+            <button type="button" role="tab" aria-selected="false" data-tab="overlay">🧩 Overlay-uri</button>
+          </div>
+
+          <!-- ALERTE -->
+          <div class="pane" data-pane="alerte" role="tabpanel">
+            <p class="st-muted" style="margin-top:0">Ce apare pe ecran când primești ceva pe live. În texte poți folosi <code>{user}</code>, <code>{gift}</code>, <code>{count}</code>, <code>{diamonds}</code> și, la like-uri, <code>{total}</code>.</p>
+            <div class="grid2">
+              <div class="card2" data-alert="gift"><div class="hd"><b>🎁 Cadouri</b><label class="tog"><input type="checkbox" data-s="alerts.gift.on"> Pornit</label></div>
+                <label class="f">Text<input type="text" data-s="alerts.gift.text" maxlength="120"></label>
+                <div class="grid2"><label class="f">Sunet<select data-s="alerts.gift.sound" data-sounds></select></label><label class="f">De la (💎)<input type="number" min="1" data-s="alerts.gift.min"></label></div>
+                <label class="tog"><input type="checkbox" data-s="alerts.gift.tts"> Citește alerta cu voce</label></div>
+              <div class="card2"><div class="hd"><b>💖 Urmăritori noi</b><label class="tog"><input type="checkbox" data-s="alerts.follow.on"> Pornit</label></div>
+                <label class="f">Text<input type="text" data-s="alerts.follow.text" maxlength="120"></label>
+                <label class="f">Sunet<select data-s="alerts.follow.sound" data-sounds></select></label>
+                <label class="tog"><input type="checkbox" data-s="alerts.follow.tts"> Citește alerta cu voce</label></div>
+              <div class="card2"><div class="hd"><b>📣 Distribuiri</b><label class="tog"><input type="checkbox" data-s="alerts.share.on"> Pornit</label></div>
+                <label class="f">Text<input type="text" data-s="alerts.share.text" maxlength="120"></label>
+                <label class="f">Sunet<select data-s="alerts.share.sound" data-sounds></select></label>
+                <label class="tog"><input type="checkbox" data-s="alerts.share.tts"> Citește alerta cu voce</label></div>
+              <div class="card2"><div class="hd"><b>❤️ Like-uri (praguri)</b><label class="tog"><input type="checkbox" data-s="alerts.likes.on"> Pornit</label></div>
+                <label class="f">Text<input type="text" data-s="alerts.likes.text" maxlength="120"></label>
+                <div class="grid2"><label class="f">Sunet<select data-s="alerts.likes.sound" data-sounds></select></label><label class="f">La fiecare<input type="number" min="50" step="50" data-s="alerts.likes.every"></label></div>
+                <label class="tog"><input type="checkbox" data-s="alerts.likes.tts"> Citește alerta cu voce</label></div>
+              <div class="card2"><div class="hd"><b>👋 Spectator nou intrat</b><label class="tog"><input type="checkbox" data-s="alerts.member.on"> Pornit</label></div>
+                <label class="f">Text<input type="text" data-s="alerts.member.text" maxlength="120"></label>
+                <label class="f">Sunet<select data-s="alerts.member.sound" data-sounds></select></label>
+                <p class="hint">Pe live-urile mari intră oameni foarte des, așa că e oprit de obicei.</p></div>
+              <div class="card2"><div class="hd"><b>⚙️ General</b></div>
+                <label class="f"><span>Cât stă o alertă pe ecran: <span data-show="alerts.duration"></span> s</span><input type="range" min="2" max="20" data-s="alerts.duration"></label>
+                <label class="f"><span>Volumul sunetelor: <span data-show="alerts.volume"></span>%</span><input type="range" min="0" max="100" data-s="alerts.volume"></label>
+                <button type="button" class="b sm" id="btn-sound-test">▶ Ascultă sunetele</button></div>
+            </div>
+          </div>
+
+          <!-- VOCE -->
+          <div class="pane" data-pane="voce" role="tabpanel" hidden>
+            <div class="card2">
+              <div class="hd"><b>🗣 Mesajele din chat citite cu voce</b><label class="tog"><input type="checkbox" data-s="tts.on"> Pornit</label></div>
+              <div class="grid2">
+                <label class="f">Ce se citește<select data-s="tts.mode">
+                  <option value="command">Doar mesajele care încep cu !tts</option>
+                  <option value="gifters">Mesajele celor care au trimis un cadou</option>
+                  <option value="all">Toate mesajele</option></select></label>
+                <label class="f">Vocea<select data-s="tts.voice" id="voice-list"><option value="">Automat (română, dacă există)</option></select></label>
+              </div>
+              <div class="grid3">
+                <label class="f"><span>Viteză: <span data-show="tts.rate"></span></span><input type="range" min="0.5" max="2" step="0.1" data-s="tts.rate"></label>
+                <label class="f"><span>Ton: <span data-show="tts.pitch"></span></span><input type="range" min="0.5" max="2" step="0.1" data-s="tts.pitch"></label>
+                <label class="f"><span>Volum: <span data-show="tts.volume"></span>%</span><input type="range" min="0" max="100" data-s="tts.volume"></label>
+              </div>
+              <div class="grid3">
+                <label class="f">Lungime maximă<input type="number" min="20" max="300" data-s="tts.maxLen"></label>
+                <label class="f">Pauză per spectator (s)<input type="number" min="0" max="120" data-s="tts.cooldown"></label>
+                <label class="tog" style="align-self:end;min-height:40px"><input type="checkbox" data-s="tts.readName"> Spune și numele</label>
+              </div>
+              <label class="f">Cuvinte interzise (despărțite prin virgulă). Mesajele cu ele nu se citesc.<textarea data-s="tts.banned" placeholder="de exemplu: cuvânt1, cuvânt2"></textarea></label>
+              <p class="hint">Linkurile sunt scoase din mesaje înainte de citire. Comenzile acceptate: <code>!tts mesaj</code>, <code>!spune mesaj</code>.</p>
+              <div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="b sm" id="btn-voice-test">▶ Ascultă vocea</button><button type="button" class="b sm" id="btn-voice-stop">■ Oprește vocea</button></div>
+            </div>
+          </div>
+
+          <!-- OBIECTIVE -->
+          <div class="pane" data-pane="obiective" role="tabpanel" hidden>
+            <div class="card2">
+              <div class="hd"><b>🎯 Obiective (cel mult 4)</b><button type="button" class="b sm" id="btn-goal-add">+ Adaugă</button></div>
+              <div id="goals" style="display:grid;gap:8px"></div>
+              <p class="hint">Fiecare obiectiv are overlay-ul lui, în tabul Overlay-uri. Se pornesc de la zero cu „Sesiune nouă”.</p>
+            </div>
+            <div class="grid2" style="margin-top:12px">
+              <div class="card2"><div class="hd"><b>🏆 Top susținători</b></div>
+                <label class="f">Titlu<input type="text" data-s="top.title" maxlength="60"></label>
+                <label class="f">Câți apar<input type="number" min="3" max="10" data-s="top.count"></label></div>
+              <div class="card2"><div class="hd"><b>🎁 Contor de cadouri</b></div>
+                <label class="f">Titlu<input type="text" data-s="counter.title" maxlength="60"></label>
+                <p class="hint">Arată diamantele, cadourile și like-urile din sesiunea de acum.</p></div>
+              <div class="card2"><div class="hd"><b>💬 Chat pe ecran</b></div>
+                <div class="grid2"><label class="f">Mesaje vizibile<input type="number" min="3" max="20" data-s="chat.max"></label><label class="f">Dispar după (s, 0 = niciodată)<input type="number" min="0" max="300" data-s="chat.fade"></label></div>
+                <label class="tog"><input type="checkbox" data-s="chat.showGifts"> Arată și cadourile în chat</label>
+                <label class="tog"><input type="checkbox" data-s="chat.hideCommands"> Ascunde comenzile (!…)</label></div>
+              <div class="card2"><div class="hd"><b>🔁 Texte care se rotesc</b></div>
+                <label class="f">Câte un text pe rând<textarea id="rot-lines" rows="4"></textarea></label>
+                <label class="f">Schimbă la fiecare (s)<input type="number" min="3" max="120" data-s="rotator.every"></label></div>
+            </div>
+          </div>
+
+          <!-- JOCURI -->
+          <div class="pane" data-pane="jocuri" role="tabpanel" hidden>
+            <div class="grid2">
+              <div class="card2"><div class="hd"><b>🎡 Roata norocului</b><button type="button" class="b sm" data-act="wheel">Învârte acum</button></div>
+                <label class="f">Titlu<input type="text" data-s="wheel.title" maxlength="60"></label>
+                <div class="grid2"><label class="f">Pornește<select data-s="wheel.trigger"><option value="gift">La un cadou</option><option value="manual">Doar de mine</option></select></label>
+                  <label class="f">Cadou de la (💎)<input type="number" min="1" data-s="wheel.minDiamonds"></label></div>
+                <label class="f">Variantele roții, câte una pe rând (2–16)<textarea id="wheel-segs" rows="6"></textarea></label></div>
+              <div class="card2"><div class="hd"><b>⏱ Subathon</b><span id="timer-now" class="pill">--:--:--</span></div>
+                <label class="f">Titlu<input type="text" data-s="timer.title" maxlength="60"></label>
+                <div class="grid3"><label class="f">Pornește cu (min)<input type="number" min="1" data-s="timer.startMin"></label><label class="f">Sec. per 💎<input type="number" min="0" data-s="timer.perDiamond"></label><label class="f">Sec. per follow<input type="number" min="0" data-s="timer.perFollow"></label></div>
+                <div class="grid3"><label class="f">Sec. per share<input type="number" min="0" data-s="timer.perShare"></label><label class="f">Sec. la 100 like<input type="number" min="0" data-s="timer.perLikes100"></label><label class="f">Maxim (ore)<input type="number" min="1" max="168" data-s="timer.maxHours"></label></div>
+                <div style="display:flex;gap:6px;flex-wrap:wrap">
+                  <button type="button" class="b sm pri" data-act="timer-start">▶ Pornește</button>
+                  <button type="button" class="b sm" data-act="timer-pause">⏸ Pauză</button>
+                  <button type="button" class="b sm" data-act="timer-resume">⏵ Continuă</button>
+                  <button type="button" class="b sm" data-act="timer-add" data-min="5">+5 min</button>
+                  <button type="button" class="b sm" data-act="timer-add" data-min="-5">−5 min</button>
+                  <button type="button" class="b sm red" data-act="timer-reset">Oprește</button>
+                </div></div>
+              <div class="card2"><div class="hd"><b>⭐ Puncte pentru spectatori</b><label class="tog"><input type="checkbox" data-s="points.on"> Pornit</label></div>
+                <label class="f">Titlu<input type="text" data-s="points.title" maxlength="60"></label>
+                <div class="grid3"><label class="f">Per mesaj<input type="number" min="0" data-s="points.perChat"></label><label class="f">La 100 like<input type="number" min="0" data-s="points.perLikes100"></label><label class="f">Per 💎<input type="number" min="0" data-s="points.perDiamond"></label></div>
+                <div class="grid3"><label class="f">Per follow<input type="number" min="0" data-s="points.perFollow"></label><label class="f">Per share<input type="number" min="0" data-s="points.perShare"></label><label class="f">Câți apar<input type="number" min="3" max="10" data-s="points.count"></label></div>
+                <p class="hint">Punctele rămân de la un live la altul. Mesajele dau puncte cel mult o dată la 10 secunde de spectator.</p>
+                <div id="points-top" class="st-muted"></div>
+                <div><button type="button" class="b sm red" data-act="points-reset">Șterge toate punctele</button></div></div>
+              <div class="card2"><div class="hd"><b>🎆 Artificii din cadouri</b><label class="tog"><input type="checkbox" data-s="fireworks.on"> Pornit</label></div>
+                <label class="f"><span>Câte iconițe cel mult: <span data-show="fireworks.maxIcons"></span></span><input type="range" min="5" max="80" data-s="fireworks.maxIcons"></label>
+                <p class="hint">Cadourile sar de jos pe tot ecranul, cu poza cadoului. Overlay-ul se pune pe tot ecranul live-ului.</p></div>
+            </div>
+          </div>
+
+          <!-- ASPECT -->
+          <div class="pane" data-pane="aspect" role="tabpanel" hidden>
+            <div class="grid3">
+              <label class="f">Stil<select data-s="theme.style"><option value="neon">Neon (întunecat, cu strălucire)</option><option value="glass">Sticlă (transparent)</option><option value="minimal">Minimal (doar text)</option><option value="arcade">Arcade (pixeli)</option></select></label>
+              <label class="f">Culoarea principală<span style="display:flex;gap:8px;align-items:center"><input type="color" data-s="theme.accent"><span class="hint">Se vede pe bare, titluri și nume.</span></span></label>
+              <label class="f"><span>Mărime: <span data-show="theme.scale"></span>×</span><input type="range" min="0.6" max="2" step="0.1" data-s="theme.scale"></label>
+            </div>
+            <div class="prev" style="margin-top:16px"><div class="bar">Previzualizare: alertele, cu date de probă</div><iframe id="aspect-prev" title="Previzualizare aspect" loading="lazy"></iframe></div>
+          </div>
+
+          <!-- OVERLAY-URI -->
+          <div class="pane" data-pane="overlay" role="tabpanel" hidden>
+            <div class="warn" style="margin-bottom:14px">🔒 Linkurile de mai jos sunt doar ale tale. Nu le arăta pe ecran și nu le da nimănui. Dacă ți-a scăpat unul, apasă „Schimbă linkurile” și pune-le din nou.</div>
+            <h3 style="margin-top:0">Cum pui un overlay în TikTok LIVE Studio</h3>
+            <ol class="steps">
+              <li>Copiază linkul overlay-ului dorit de mai jos.</li>
+              <li>În TikTok LIVE Studio apasă <b>Adaugă sursă</b> → <b>Link</b> (în OBS: <b>Sursă nouă</b> → <b>Browser</b>).</li>
+              <li>Lipește linkul și pune mărimea scrisă lângă overlay. Fundalul e transparent.</li>
+              <li>Ca să se audă sunetele alertelor în OBS, bifează <b>Control audio via OBS</b>.</li>
+            </ol>
+            <div class="ovs" id="ovs" style="margin-top:14px"></div>
+            <div class="prev" id="ov-prev" hidden><div class="bar"><span id="ov-prev-name"></span><label class="tog" style="margin-left:auto;font-size:12px"><input type="checkbox" id="ov-demo"> Date de probă</label><button type="button" class="b sm" id="ov-prev-close">Închide</button></div><iframe id="ov-frame" title="Previzualizare overlay"></iframe></div>
+            <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button type="button" class="b sm red" id="btn-newkey">🔑 Schimbă linkurile</button><span class="hint">Linkurile vechi se opresc imediat.</span></div>
+          </div>
+
+          <div class="savebar" id="savebar"><span id="save-state">Totul e salvat.</span><button type="button" class="b" id="btn-reset" disabled>Anulează</button><button type="button" class="b pri" id="btn-save" disabled>Salvează setările</button></div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <div class="footer-brand"><img src="assets/logo-128.webp" alt="Moldova RP"><div><strong>MOLDOVA<span class="accent">RP</span></strong><small>Portal oficial al comunității</small></div></div>
+    <p class="copyright">© 2026 Moldova RP. Studio-ul nu e un produs TikTok și nu e afiliat cu TikTok.</p>
+  </footer>
+
+  <script src="app.js"></script>
+<script src="stream-sounds.js"></script>
+<script>
+(() => {
+  const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const fmt = n => Number(n || 0).toLocaleString('ro-RO');
+  let auth = null; try { auth = JSON.parse(localStorage.getItem('mrp_auth') || 'null'); } catch { auth = null; }
+  const token = auth?.token;
+  async function api(path, body, method) {
+    const r = await fetch(path, { method: method || (body ? 'POST' : 'GET'), headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: body ? JSON.stringify(body) : undefined });
+    const d = await r.json().catch(() => ({}));
+    if (r.status === 401) { location.href = 'login.html'; throw new Error('Te rugăm să te autentifici din nou.'); }
+    if (!r.ok) throw new Error(d.error || 'Ceva n-a mers. Încearcă din nou.');
+    return d;
+  }
+  const gate = $('#gate');
+  let ME = null, S = null, SAVED = '', KEY = '', DEF = null;
+
+  // ------------------------------------------------------------ acces
+  function gateForm(title, intro, tiktok = '', motiv = '') {
+    gate.innerHTML = `<h2>${title}</h2><p class="st-muted">${intro}</p>
+      <form class="st-form" id="req-form">
+        <label class="f">Contul tău de TikTok<input type="text" id="req-tt" required placeholder="@numele_tau" value="${esc(tiktok)}" autocomplete="off" spellcheck="false"></label>
+        <label class="f">Câteva cuvinte despre live-urile tale (opțional)<textarea id="req-motiv" maxlength="600" placeholder="Cât de des faci live, ce joci, câți urmăritori ai…">${esc(motiv)}</textarea></label>
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap"><button class="b pri" type="submit">Trimite cererea</button><p class="st-msg" id="req-msg" role="status"></p></div>
+      </form>`;
+    $('#req-form').addEventListener('submit', async e => {
+      e.preventDefault();
+      const m = $('#req-msg'); m.className = 'st-msg'; m.textContent = 'Se trimite…';
+      try { const d = await api('/api/stream/cerere', { tiktok: $('#req-tt').value, motiv: $('#req-motiv').value }); m.className = 'st-msg ok'; m.textContent = d.status === 'approved' ? 'Gata, ai acces!' : 'Cererea a fost trimisă.'; setTimeout(load, 700); }
+      catch (err) { m.className = 'st-msg err'; m.textContent = err.message; }
+    });
+  }
+  async function load() {
+    if (!token) {
+      gate.innerHTML = `<h2>Intră în cont</h2><p class="st-muted">Studio-ul e gratuit pentru streamerii comunității. Autentifică-te ca să ceri acces sau să intri în Studio.</p><p style="margin-top:14px"><a class="b pri" href="login.html">Autentificare</a></p>`;
+      return;
+    }
+    try { ME = await api('/api/stream/me'); }
+    catch (err) { gate.innerHTML = `<h2>Studio-ul nu s-a putut încărca</h2><p class="st-msg err">${esc(err.message)}</p>`; return; }
+    if (ME.status === 'none') return gateForm('Cere acces la Studio', ME.autoApprove ? 'Ai rangul Streamer, așa că primești acces imediat. Scrie doar contul tău de TikTok.' : 'Scrie contul tău de TikTok. Un admin îți verifică cererea și primești notificare pe site și pe Discord când e aprobată.');
+    if (ME.status === 'pending') { gate.innerHTML = `<h2>⏳ Cererea ta e în așteptare</h2><p class="st-muted">Ai cerut acces pentru <b>@${esc(ME.tiktok)}</b>. Un admin o verifică în curând și primești notificare când e gata.</p><p style="margin-top:12px"><button type="button" class="b sm" id="req-edit">Schimbă cererea</button></p>`; $('#req-edit').onclick = () => gateForm('Schimbă cererea', 'Cererea rămâne în așteptare.', ME.tiktok); return; }
+    if (ME.status === 'rejected') return gateForm('Cererea a fost respinsă', ME.note ? `Motivul: ${esc(ME.note)}. Poți trimite o cerere nouă.` : 'Poți trimite o cerere nouă.', ME.tiktok);
+    if (ME.status === 'revoked') { gate.innerHTML = `<h2>Accesul la Studio a fost oprit</h2><p class="st-muted">${ME.note ? 'Motivul: ' + esc(ME.note) + '. ' : ''}Dacă crezi că e o greșeală, scrie-ne la <a href="tichete.html" style="color:var(--orange)">Tichete</a>.</p>`; return; }
+    gate.hidden = true; $('#app').hidden = false;
+    KEY = ME.key; DEF = ME.defaults;
+    S = ME.settings; SAVED = JSON.stringify(S);
+    $('#tiktok').value = '@' + ME.tiktok;
+    fill(); renderOverlays(); drawState(ME.state); drawLive(ME.live); drawPoints(ME.points);
+    if (ME.lib === false) note('Legătura cu TikTok LIVE nu e încă instalată pe server. Testele și overlay-urile merg deja.', 'sys');
+    connectSse();
+    $('#aspect-prev').src = ovUrl('alerts') + '&demo=1';
+  }
+
+  // ------------------------------------------------------------ setări ↔ formular
+  const getP = (o, p) => p.split('.').reduce((x, k) => x?.[k], o);
+  const setP = (o, p, v) => { const ks = p.split('.'); let x = o; ks.slice(0, -1).forEach(k => { x = x[k] ||= {}; }); x[ks[ks.length - 1]] = v; };
+  const SOUNDS = [['coin', 'Monede'], ['pop', 'Pop'], ['whoosh', 'Vâjâit'], ['fanfare', 'Fanfară'], ['laser', 'Laser'], ['bell', 'Clopoțel'], ['drum', 'Tobă'], ['magic', 'Magie'], ['none', 'Fără sunet']];
+  $$('[data-sounds]').forEach(sel => { sel.innerHTML = SOUNDS.map(([v, l]) => `<option value="${v}">${l}</option>`).join(''); });
+  function fill() {
+    $$('[data-s]').forEach(el => {
+      const v = getP(S, el.dataset.s);
+      if (el.type === 'checkbox') el.checked = !!v; else if (v != null) el.value = v;
+    });
+    $('#rot-lines').value = (S.rotator.lines || []).join('\n');
+    $('#wheel-segs').value = S.wheel.segments.map(x => x.label).join('\n');
+    drawGoals(); shows(); markDirty();
+  }
+  function shows() { $$('[data-show]').forEach(el => { el.textContent = getP(S, el.dataset.show); }); }
+  function read() {
+    $$('[data-s]').forEach(el => {
+      let v = el.type === 'checkbox' ? el.checked : el.value;
+      if (el.type === 'number' || el.type === 'range') v = Number(v);
+      setP(S, el.dataset.s, v);
+    });
+    S.rotator.lines = $('#rot-lines').value.split('\n').map(x => x.trim()).filter(Boolean);
+    const old = S.wheel.segments, COLORS = ['#ff8a1f', '#3ddc84', '#4aa3ff', '#f25f8b', '#b57bff', '#ffd23f', '#2ee6d6', '#ff5a4e'];
+    S.wheel.segments = $('#wheel-segs').value.split('\n').map(x => x.trim()).filter(Boolean).slice(0, 16).map((label, i) => ({ label, color: old[i]?.color || COLORS[i % 8] }));
+    S.goals = $$('#goals .goal-row').map(r => ({ id: r.dataset.id, type: r.querySelector('select').value, title: r.querySelector('[data-g=title]').value, target: Number(r.querySelector('[data-g=target]').value) }));
+  }
+  function markDirty() {
+    const now = JSON.stringify(S) !== SAVED;
+    $('#savebar').classList.toggle('dirty', now);
+    $('#save-state').textContent = now ? 'Ai modificări nesalvate.' : 'Totul e salvat.';
+    $('#btn-save').disabled = !now; $('#btn-reset').disabled = !now;
+  }
+  $('#app').addEventListener('input', e => { if (!e.target.closest('.pane') || e.target.id === 'ov-demo') return; read(); shows(); markDirty(); });
+  $('#app').addEventListener('change', e => { if (!e.target.closest('.pane') || e.target.id === 'ov-demo') return; read(); shows(); markDirty(); if (e.target.closest('#goals')) renderOverlays(); });
+  $('#btn-reset').onclick = () => { S = JSON.parse(SAVED); fill(); };
+  $('#btn-save').onclick = async () => {
+    const b = $('#btn-save'); b.disabled = true; $('#save-state').textContent = 'Se salvează…';
+    try { read(); const d = await api('/api/stream/setari', { settings: S }, 'PUT'); S = d.settings; SAVED = JSON.stringify(S); fill(); renderOverlays(); $('#save-state').textContent = 'Salvat. Overlay-urile s-au actualizat singure.'; }
+    catch (err) { $('#save-state').textContent = err.message; b.disabled = false; }
+  };
+  addEventListener('beforeunload', e => { if (S && JSON.stringify(S) !== SAVED) { e.preventDefault(); e.returnValue = ''; } });
+
+  // obiective
+  const GT = [['likes', '❤️ Like-uri'], ['follows', '👤 Urmăritori'], ['diamonds', '💎 Diamante'], ['gifts', '🎁 Cadouri'], ['shares', '📣 Distribuiri']];
+  function drawGoals() {
+    $('#goals').innerHTML = (S.goals || []).map(g => `<div class="goal-row" data-id="${esc(g.id)}">
+      <select aria-label="Tipul obiectivului">${GT.map(([v, l]) => `<option value="${v}"${v === g.type ? ' selected' : ''}>${l}</option>`).join('')}</select>
+      <input type="text" data-g="title" maxlength="60" value="${esc(g.title)}" aria-label="Titlul obiectivului">
+      <input type="number" data-g="target" min="1" value="${esc(g.target)}" aria-label="Ținta">
+      <button type="button" class="b sm red" data-goal-del aria-label="Șterge obiectivul">✕</button></div>`).join('') || '<p class="hint">Niciun obiectiv. Apasă „Adaugă”.</p>';
+    $('#btn-goal-add').disabled = (S.goals || []).length >= 4;
+  }
+  $('#btn-goal-add').onclick = () => { read(); const used = new Set(S.goals.map(g => g.id)); let n = 1; while (used.has('g' + n)) n++; S.goals.push({ id: 'g' + n, type: 'likes', title: 'Obiectiv nou', target: 1000 }); drawGoals(); markDirty(); renderOverlays(); };
+  $('#goals').addEventListener('click', e => { if (!e.target.closest('[data-goal-del]')) return; e.target.closest('.goal-row').remove(); read(); drawGoals(); markDirty(); renderOverlays(); });
+
+  // taburi
+  $$('.tabs button').forEach(b => b.addEventListener('click', () => {
+    $$('.tabs button').forEach(x => x.setAttribute('aria-selected', String(x === b)));
+    $$('.pane').forEach(p => { p.hidden = p.dataset.pane !== b.dataset.tab; });
+  }));
+
+  // ------------------------------------------------------------ overlay-uri
+  const ovUrl = (w, extra = '') => `${location.origin}/stream-overlay.html?k=${encodeURIComponent(KEY)}&w=${w}${extra}`;
+  function renderOverlays() {
+    const list = [
+      ['alerts', '🔔 Alerte', '800 × 300', 'Cadouri, urmăritori, distribuiri și praguri de like-uri, cu sunet.'],
+      ['alerts', '🔔 Alerte + voce', '800 × 300', 'Ca mai sus, iar alertele bifate sunt citite și cu voce (merge doar unde programul de live redă vocea paginilor).', '&tts=1'],
+      ['chat', '💬 Chat', '420 × 600', 'Ultimele mesaje de pe live, cu cadourile.'],
+      ...(S.goals || []).map(g => ['goal', `🎯 ${g.title}`, '600 × 110', 'Bară de progres pentru obiectiv.', `&id=${encodeURIComponent(g.id)}`]),
+      ['top', '🏆 Top susținători', '380 × 420', 'Cine a trimis cele mai multe diamante în sesiunea asta.'],
+      ['counter', '🎁 Contor cadouri', '460 × 130', 'Diamante, cadouri și like-uri pe sesiune.'],
+      ['viewers', '👁 Spectatori', '260 × 100', 'Câți oameni se uită acum.'],
+      ['wheel', '🎡 Roata norocului', '520 × 620', 'Se învârte la cadouri sau când apeși tu.'],
+      ['timer', '⏱ Subathon', '520 × 180', 'Cronometru care crește cu fiecare cadou, follow și like.'],
+      ['points', '⭐ Puncte spectatori', '380 × 420', 'Cei mai fideli spectatori, de la un live la altul.'],
+      ['fireworks', '🎆 Artificii din cadouri', '1080 × 1920', 'Pe tot ecranul live-ului.'],
+      ['rotator', '🔁 Texte care se rotesc', '700 × 90', 'Mesajele tale, pe rând.'],
+    ];
+    $('#ovs').innerHTML = list.map(([w, name, size, desc, extra = '']) => `<div class="ov"><div><b>${esc(name)}</b><span class="sz">${size}</span></div>
+      <div class="acts"><button type="button" class="b sm" data-copy="${esc(ovUrl(w, extra))}">Copiază</button><button type="button" class="b sm" data-prev="${esc(ovUrl(w, extra))}" data-name="${esc(name)}">Vezi</button></div>
+      <p>${esc(desc)}</p><input type="text" readonly value="${esc(ovUrl(w, extra))}" aria-label="Linkul overlay-ului ${esc(name)}" onclick="this.select()"></div>`).join('');
+  }
+  $('#ovs').addEventListener('click', async e => {
+    const c = e.target.closest('[data-copy]'), p = e.target.closest('[data-prev]');
+    if (c) { try { await navigator.clipboard.writeText(c.dataset.copy); c.textContent = 'Copiat ✓'; } catch { c.closest('.ov').querySelector('input').select(); c.textContent = 'Apasă Ctrl+C'; } setTimeout(() => { c.textContent = 'Copiază'; }, 1800); }
+    if (p) { $('#ov-prev').hidden = false; $('#ov-prev-name').textContent = p.dataset.name; $('#ov-frame').dataset.src = p.dataset.prev; setPrev(); $('#ov-prev').scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
+  });
+  function setPrev() { const f = $('#ov-frame'); f.src = f.dataset.src + ($('#ov-demo').checked ? '&demo=1' : ''); }
+  $('#ov-demo').onchange = setPrev;
+  $('#ov-prev-close').onclick = () => { $('#ov-prev').hidden = true; $('#ov-frame').src = 'about:blank'; };
+  $('#btn-newkey').onclick = async () => {
+    if (!confirm('Toate linkurile de overlay se schimbă, iar cele vechi nu mai merg. Va trebui să le pui din nou în TikTok LIVE Studio. Continui?')) return;
+    try { const d = await api('/api/stream/cheie-noua', {}); KEY = d.key; renderOverlays(); $('#ov-prev').hidden = true; $('#aspect-prev').src = ovUrl('alerts') + '&demo=1'; connectSse(); note('Linkurile overlay-urilor au fost schimbate.', 'sys'); }
+    catch (err) { alert(err.message); }
+  };
+
+  // ------------------------------------------------------------ live: conectare, evenimente, voce
+  const PILL = { off: ['', 'Deconectat'], connecting: ['wait', 'Se conectează'], waiting: ['wait', 'Așteaptă live-ul'], live: ['live', 'Live'], error: ['err', 'Eroare'] };
+  let LIVE = null;
+  function drawLive(l) {
+    LIVE = l || LIVE || {};
+    const [cls, txt] = PILL[LIVE.status] || PILL.off;
+    $('#live-pill').className = 'pill ' + cls; $('#live-pill span').textContent = txt;
+    $('#live-msg').textContent = LIVE.msg || (LIVE.status === 'off' ? 'Pornește live-ul pe TikTok și apasă Conectează. Te conectăm singuri și dacă intri live mai târziu.' : '');
+    $('#live-msg').className = 'st-msg' + (LIVE.status === 'error' ? ' err' : '');
+    const on = LIVE.wanted || LIVE.status === 'live' || LIVE.status === 'connecting';
+    $('#btn-conn').textContent = on ? 'Deconectează' : 'Conectează';
+    $('#btn-conn').classList.toggle('pri', !on); $('#btn-conn').classList.toggle('red', on);
+  }
+  $('#btn-conn').onclick = async () => {
+    const b = $('#btn-conn'); b.disabled = true;
+    try {
+      const on = LIVE?.wanted || LIVE?.status === 'live' || LIVE?.status === 'connecting';
+      if (!on) {
+        const tt = $('#tiktok').value.trim().replace(/^@/, '');
+        if (tt && tt !== ME.tiktok) { read(); const d = await api('/api/stream/setari', { settings: S, tiktok: tt }, 'PUT'); ME.tiktok = d.tiktok; S = d.settings; SAVED = JSON.stringify(S); markDirty(); }
+        const d = await api('/api/stream/conectare', {});
+        if (es?.readyState !== 1) drawLive(d.live);   // altfel starea vine (și mai proaspătă) pe canalul live
+      } else { const d = await api('/api/stream/deconectare', {}); if (es?.readyState !== 1) drawLive(d.live); }
+    } catch (err) { $('#live-msg').className = 'st-msg err'; $('#live-msg').textContent = err.message; }
+    b.disabled = false;
+  };
+  let timerLeft = 0, timerRun = false, timerAt = 0;
+  function drawState(st) {
+    if (!st) return;
+    $('#k-viewers').textContent = fmt(st.viewers); $('#k-likes').textContent = fmt(st.likes);
+    $('#k-diamonds').textContent = fmt(st.diamonds); $('#k-follows').textContent = fmt(st.follows);
+    if (st.timer) setTimer(st.timer);
+  }
+  function setTimer(t) { timerRun = !!t.running; timerLeft = Number(t.left) || 0; timerAt = Date.now(); }
+  setInterval(() => {
+    const ms = Math.max(0, timerRun ? timerLeft - (Date.now() - timerAt) : timerLeft), s = Math.ceil(ms / 1000);
+    $('#timer-now').textContent = ms || timerRun ? `${timerRun ? '▶' : '⏸'} ${String(Math.floor(s / 3600)).padStart(2, '0')}:${String(Math.floor(s % 3600 / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}` : 'oprit';
+  }, 500);
+  function drawPoints(list) {
+    $('#points-top').innerHTML = list?.length ? 'Acum: ' + list.slice(0, 5).map((x, i) => `${i + 1}. ${esc(x.name)} <b>${fmt(x.points)}</b>`).join(' · ') : 'Încă nu are nimeni puncte.';
+  }
+  const feed = $('#feed');
+  function note(html, cls = '', ic = 'ℹ️') {
+    const el = document.createElement('div');
+    el.className = 'fi ' + cls;
+    el.innerHTML = `<span class="ic">${ic}</span><span>${html}</span><small>${new Date().toLocaleTimeString('ro-RO', { hour: '2-digit', minute: '2-digit' })}</small>`;
+    feed.prepend(el);
+    while (feed.children.length > 120) feed.lastChild.remove();
+  }
+  $('#btn-clear-feed').onclick = () => { feed.innerHTML = ''; };
+  const who = u => `<b>${esc(u?.name || '')}</b>`;
+  let likeAgg = null;
+  function onEv(e) {
+    if (e.t === 'hello') { drawState(e.state); drawLive(e.live); drawPoints(e.points); return; }
+    if (e.t === 'state') return drawState(e.state);
+    if (e.t === 'status') { drawLive(e); if (e.msg) note(esc(e.msg), 'sys', e.status === 'live' ? '🔴' : 'ℹ️'); return; }
+    if (e.t === 'points') return drawPoints(e.list);
+    if (e.t === 'timer') return setTimer(e.timer);
+    if (e.t === 'revoked') return;
+    if (e.t === 'chat') { note(`${who(e.user)} ${esc(e.text)}`, '', '💬'); speak(e.tts); return; }
+    if (e.t === 'gift') { note(`${who(e.user)} a trimis ${e.count > 1 ? e.count + '× ' : ''}${esc(e.gift)} <span style="color:var(--muted)">(${fmt(e.diamonds)} 💎)</span>`, 'gift', '🎁'); speak(e.alert?.tts); return; }
+    if (e.t === 'follow') { note(`${who(e.user)} te urmărește acum`, '', '💖'); speak(e.alert?.tts); return; }
+    if (e.t === 'share') { note(`${who(e.user)} a distribuit live-ul`, '', '📣'); speak(e.alert?.tts); return; }
+    if (e.t === 'milestone') { note(`Ați ajuns la <b>${fmt(e.total)}</b> de like-uri!`, 'gift', '❤️'); speak(e.alert?.tts); return; }
+    if (e.t === 'wheel') { note(`Roata s-a oprit la <b>${esc(e.label)}</b>${e.by ? ' · ' + esc(e.by) : ''}`, 'gift', '🎡'); return; }
+    if (e.t === 'like') {
+      // like-urile vin des: le adunăm într-un singur rând la câteva secunde
+      if (!likeAgg) { likeAgg = { n: 0, users: new Set() }; setTimeout(() => { note(`${fmt(likeAgg.n)} like-uri de la ${likeAgg.users.size} ${likeAgg.users.size === 1 ? 'spectator' : 'spectatori'}`, 'sys', '❤️'); likeAgg = null; }, 5000); }
+      likeAgg.n += e.count; likeAgg.users.add(e.user?.id); return;
+    }
+    if (e.t === 'reset') note('Sesiune nouă: contoarele, topul și obiectivele au pornit de la zero.', 'sys', '↺');
+  }
+  let es = null;
+  function connectSse() {
+    es?.close();
+    es = new EventSource('/api/stream/live/' + encodeURIComponent(KEY));
+    es.onmessage = m => { try { onEv(JSON.parse(m.data)); } catch { /* */ } };
+  }
+
+  // voce (TTS) — din pagina asta
+  const hasTTS = 'speechSynthesis' in window;
+  let voices = [];
+  function loadVoices() {
+    if (!hasTTS) return;
+    voices = speechSynthesis.getVoices();
+    const sel = $('#voice-list'), cur = S?.tts?.voice || sel.value;
+    const sorted = [...voices].sort((a, b) => (/^ro/i.test(b.lang) - /^ro/i.test(a.lang)) || a.name.localeCompare(b.name));
+    sel.innerHTML = '<option value="">Automat (română, dacă există)</option>' + sorted.map(v => `<option value="${esc(v.name)}">${esc(v.name)} — ${esc(v.lang)}</option>`).join('');
+    sel.value = cur && voices.some(v => v.name === cur) ? cur : '';
+    const ro = voices.some(v => /^ro/i.test(v.lang));
+    $('#tts-hint').textContent = ro ? 'Vocea se aude din pagina asta: ține Studio-ul deschis în timpul live-ului. TikTok LIVE Studio prinde sunetul calculatorului.' : 'Pe acest calculator nu am găsit o voce românească. Deschide Studio-ul în Microsoft Edge (are voci românești naturale) sau instalează limba română din Setările Windows → Ora și limba → Vorbire.';
+  }
+  if (hasTTS) { loadVoices(); speechSynthesis.onvoiceschanged = loadVoices; } else { $('#tts-here').disabled = true; $('#tts-hint').textContent = 'Browserul tău nu poate citi cu voce. Folosește Chrome sau Edge.'; }
+  function speak(text, force) {
+    if (!text || !hasTTS || (!force && !$('#tts-here').checked)) return;
+    const c = S?.tts || {}, u = new SpeechSynthesisUtterance(text);
+    u.voice = voices.find(v => v.name === c.voice) || voices.find(v => /^ro/i.test(v.lang)) || null;
+    u.lang = u.voice?.lang || 'ro-RO'; u.rate = c.rate || 1; u.pitch = c.pitch || 1; u.volume = (c.volume ?? 80) / 100;
+    if (speechSynthesis.pending && !force) { /* coada rămâne scurtă */ }
+    speechSynthesis.speak(u);
+  }
+  $('#btn-voice-test').onclick = () => { read(); speechSynthesis.cancel(); speak('Salut! Așa sună vocea care citește mesajele de pe live-ul tău.', true); };
+  $('#btn-voice-stop').onclick = () => { if (hasTTS) speechSynthesis.cancel(); };
+  $('#tts-here').onchange = e => { if (e.target.checked) speak('Vocea e pornită.', true); else if (hasTTS) speechSynthesis.cancel(); };
+
+  // ascultă sunetele (aceleași ca în overlay)
+  $('#btn-sound-test').onclick = () => { read(); ['gift', 'follow', 'share', 'likes'].map(k => S.alerts[k].sound).filter((x, i, a) => x !== 'none' && a.indexOf(x) === i).forEach((snd, i) => setTimeout(() => window.MRPSound?.play(snd, S.alerts.volume), i * 1100)); };
+  $$('[data-sounds]').forEach(sel => sel.addEventListener('change', () => window.MRPSound?.play(sel.value, S?.alerts?.volume)));
+
+  // teste și acțiuni
+  document.addEventListener('click', async e => {
+    const t = e.target.closest('[data-test]'), a = e.target.closest('[data-act]');
+    if (!t && !a) return;
+    const btn = t || a;
+    if (a && /reset$/.test(a.dataset.act) && a.dataset.act !== 'timer-reset' && !confirm(a.dataset.act === 'points-reset' ? 'Ștergi toate punctele spectatorilor? Nu se poate anula.' : 'Pornești o sesiune nouă? Contoarele, topul și obiectivele încep de la zero.')) return;
+    if (a?.dataset.act === 'session-new' && !confirm('Pornești o sesiune nouă? Contoarele, topul și obiectivele încep de la zero.')) return;
+    btn.disabled = true;
+    try {
+      if (t) await api('/api/stream/test', { type: t.dataset.test, gift: t.dataset.gift != null ? Number(t.dataset.gift) : undefined, count: t.dataset.test === 'like' ? 50 : undefined });
+      else { const d = await api('/api/stream/actiune', { action: a.dataset.act, minutes: a.dataset.min != null ? Number(a.dataset.min) : undefined }); if (d.state) drawState(d.state); }
+    } catch (err) { note(esc(err.message), 'sys', '⚠️'); }
+    setTimeout(() => { btn.disabled = false; }, 400);
+  });
+
+  load();
+})();
+</script>
+</body>
+</html>

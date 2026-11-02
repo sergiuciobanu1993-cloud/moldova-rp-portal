@@ -1,0 +1,447 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Overlay — Studio Moldova RP</title>
+<!-- (03.11.2026) Overlay-urile Studio-ului de streaming: se pun în TikTok LIVE Studio („Link") sau OBS („Browser").
+     ?k=CHEIA (din Studio) &w=alerts|chat|goal|top|counter|wheel|timer|fireworks|points|rotator|viewers
+     &id=g1 (la goal) · &tts=1 (alertele citite cu voce) · &demo=1 (evenimente de probă, fără live) -->
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=Inter:wght@500;700;900&family=Press+Start+2P&display=swap">
+<style>
+:root{--accent:#ff8a1f;--ink:#fff;--sub:rgba(255,255,255,.72);--panel:rgba(12,14,20,.78);--edge:rgba(255,255,255,.12);--font:'Chakra Petch','Inter',system-ui,sans-serif;--r:16px}
+html,body{margin:0;background:transparent!important;color:var(--ink);font-family:var(--font);overflow:hidden;-webkit-font-smoothing:antialiased}
+body.t-glass{--panel:rgba(255,255,255,.16);--edge:rgba(255,255,255,.35);--font:'Inter',system-ui,sans-serif}
+body.t-minimal{--panel:transparent;--edge:transparent;--font:'Inter',system-ui,sans-serif}
+body.t-arcade{--panel:#14102a;--edge:var(--accent);--font:'Press Start 2P',monospace;--r:0}
+.card{background:var(--panel);border:1px solid var(--edge);border-radius:var(--r);box-shadow:0 0 0 1px rgba(0,0,0,.25),0 0 24px -6px color-mix(in srgb,var(--accent) 70%,transparent)}
+body.t-glass .card{backdrop-filter:blur(14px) saturate(1.3);-webkit-backdrop-filter:blur(14px) saturate(1.3);box-shadow:0 10px 30px rgba(0,0,0,.25)}
+body.t-glass *{text-shadow:0 1px 3px rgba(0,0,0,.55)}
+body.t-minimal .card{box-shadow:none}
+body.t-minimal *{text-shadow:0 2px 3px rgba(0,0,0,.85),0 0 1px #000}
+body.t-arcade .card{border-width:3px;box-shadow:6px 6px 0 #000}
+body.t-arcade{font-size:12px}
+#root{position:relative;transform-origin:0 0}
+.hide{display:none!important}
+.ttl{font-weight:700;letter-spacing:.06em;text-transform:uppercase;font-size:13px;color:var(--accent);margin:0 0 8px}
+body.t-arcade .ttl{font-size:10px;line-height:1.6}
+.av{width:44px;height:44px;border-radius:50%;object-fit:cover;flex:none;background:color-mix(in srgb,var(--accent) 35%,#222);display:grid;place-items:center;font-weight:900;font-size:18px;color:#fff;overflow:hidden}
+body.t-arcade .av{border-radius:0}
+.num{font-variant-numeric:tabular-nums}
+
+/* alerte */
+#alerts{position:fixed;left:50%;top:24px;transform:translateX(-50%);width:min(760px,94vw)}
+.al{display:flex;align-items:center;gap:18px;padding:18px 22px;animation:alIn .55s cubic-bezier(.2,1.4,.4,1) both}
+.al.out{animation:alOut .45s ease-in both}
+.al .pic{width:84px;height:84px;flex:none;display:grid;place-items:center;font-size:52px;filter:drop-shadow(0 0 14px color-mix(in srgb,var(--accent) 70%,transparent))}
+.al .pic img{width:84px;height:84px;object-fit:contain}
+.al .pic img.round{border-radius:50%;object-fit:cover}
+.al .tx{font-size:26px;font-weight:700;line-height:1.2}
+.al .tx b{color:var(--accent)}
+.al .kind{display:block;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--sub);margin-bottom:4px}
+body.t-arcade .al .tx{font-size:15px;line-height:1.6}
+@keyframes alIn{from{opacity:0;transform:translateY(-30px) scale(.85)}to{opacity:1;transform:none}}
+@keyframes alOut{to{opacity:0;transform:translateY(-20px) scale(.95)}}
+
+/* chat */
+#chat{position:fixed;left:0;bottom:0;width:100%;display:flex;flex-direction:column;justify-content:flex-end;gap:8px;padding:10px;box-sizing:border-box}
+.msg{display:flex;gap:10px;align-items:flex-start;padding:9px 12px;animation:msgIn .35s ease-out both;transition:opacity 1s}
+.msg .av{width:30px;height:30px;font-size:13px}
+.msg b{color:var(--accent);margin-right:6px}
+.msg .gi{width:22px;height:22px;vertical-align:-5px;margin:0 2px}
+.msg.gift{border-color:var(--accent)}
+.msg.fade{opacity:0}
+body.t-arcade .msg{font-size:10px;line-height:1.7}
+@keyframes msgIn{from{opacity:0;transform:translateX(-24px)}to{opacity:1;transform:none}}
+
+/* obiectiv */
+#goal{padding:14px 18px;margin:8px}
+.bar{position:relative;height:30px;border-radius:99px;background:rgba(255,255,255,.12);overflow:hidden}
+body.t-arcade .bar{border-radius:0}
+.bar i{position:absolute;inset:0 auto 0 0;width:0;background:linear-gradient(90deg,color-mix(in srgb,var(--accent) 70%,#fff0),var(--accent));transition:width .8s cubic-bezier(.2,.9,.3,1);box-shadow:0 0 18px var(--accent)}
+.bar span{position:absolute;inset:0;display:grid;place-items:center;font-weight:700;font-size:15px;text-shadow:0 1px 2px rgba(0,0,0,.6)}
+#goal.done .bar i{animation:pulse 1.2s ease-in-out infinite}
+@keyframes pulse{50%{filter:brightness(1.5)}}
+
+/* liste: top, puncte */
+.list{padding:14px 16px;margin:8px}
+.row{display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px solid rgba(255,255,255,.08)}
+.row:first-of-type{border-top:0}
+.row .pos{width:26px;font-weight:900;color:var(--accent);text-align:center}
+.row .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700}
+.row .v{font-weight:900}
+.row .av{width:34px;height:34px;font-size:14px}
+.empty{color:var(--sub);font-size:13px;padding:6px 0}
+
+/* contor, spectatori */
+.stats{display:flex;gap:22px;padding:14px 20px;margin:8px;align-items:center}
+.stat b{display:block;font-size:30px;line-height:1.1}
+.stat small{color:var(--sub);font-size:12px;letter-spacing:.08em;text-transform:uppercase}
+body.t-arcade .stat b{font-size:18px}
+
+/* cronometru */
+#timer{padding:16px 22px;margin:8px;text-align:center;position:relative}
+#timer .clock{font-size:64px;font-weight:700;letter-spacing:.04em;line-height:1}
+body.t-arcade #timer .clock{font-size:36px}
+#timer.paused .clock{opacity:.55}
+.plus{position:absolute;right:18px;top:10px;font-weight:900;color:var(--accent);font-size:22px;animation:plus 1.6s ease-out forwards}
+@keyframes plus{from{opacity:1;transform:none}to{opacity:0;transform:translateY(-34px)}}
+
+/* roata */
+#wheel{display:flex;flex-direction:column;align-items:center;gap:8px;padding:10px}
+#wheel .wrap{position:relative}
+#wheel canvas{display:block;filter:drop-shadow(0 8px 18px rgba(0,0,0,.45))}
+#wheel .ptr{position:absolute;left:50%;top:-6px;transform:translateX(-50%);width:0;height:0;border-left:16px solid transparent;border-right:16px solid transparent;border-top:30px solid var(--accent);filter:drop-shadow(0 2px 3px rgba(0,0,0,.6))}
+#wheel .res{padding:10px 18px;font-size:22px;font-weight:700;text-align:center;max-width:90%}
+#wheel .res b{color:var(--accent)}
+#wheel .q{color:var(--sub);font-size:13px}
+
+/* rotator */
+#rotator{padding:14px 22px;margin:8px;font-size:24px;font-weight:700;text-align:center;transition:opacity .5s}
+#rotator.fade{opacity:0}
+
+/* artificii */
+#fw{position:fixed;inset:0;width:100vw;height:100vh;pointer-events:none}
+
+#err{position:fixed;left:8px;bottom:8px;background:#300;color:#fbb;font:12px Inter,sans-serif;padding:6px 10px;border-radius:6px}
+@media (prefers-reduced-motion:reduce){.al,.msg{animation:none}}
+</style>
+</head>
+<body class="t-neon">
+<div id="root"></div>
+<canvas id="fw" class="hide"></canvas>
+<div id="err" class="hide"></div>
+<script src="stream-sounds.js"></script>
+<script>
+(() => {
+  const P = new URLSearchParams(location.search);
+  const KEY = P.get('k') || '', W = (P.get('w') || 'alerts').toLowerCase(), DEMO = P.get('demo') === '1';
+  const root = document.getElementById('root');
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const fmt = n => Number(n || 0).toLocaleString('ro-RO');
+  const safeUrl = u => /^https:\/\//.test(u || '') ? u : '';
+  const avatar = (u, cls = 'av') => safeUrl(u?.avatar) ? `<img class="${cls}" src="${esc(u.avatar)}" alt="" referrerpolicy="no-referrer">` : `<span class="${cls}">${esc((u?.name || '?').trim().charAt(0).toUpperCase() || '?')}</span>`;
+  let S = null, ST = null, POINTS = [];
+
+  // ----------------------------------------------------------- aspect
+  function applyTheme() {
+    if (!S) return;
+    document.body.className = 't-' + (S.theme?.style || 'neon');
+    document.documentElement.style.setProperty('--accent', S.theme?.accent || '#ff8a1f');
+    const sc = Number(P.get('scale')) || S.theme?.scale || 1;
+    root.style.transform = sc !== 1 ? `scale(${sc})` : '';
+    root.style.width = sc !== 1 ? `${100 / sc}%` : '';
+  }
+
+  // sunetele alertelor: stream-sounds.js (aceleași și în Studio)
+  const play = (name, vol) => window.MRPSound?.play(name, vol);
+
+  // ----------------------------------------------------------- TTS (opțional, &tts=1)
+  const TTS = P.get('tts') === '1' && 'speechSynthesis' in window;
+  function say(text) {
+    if (!TTS || !text) return;
+    const u = new SpeechSynthesisUtterance(text), c = S?.tts || {};
+    const vs = speechSynthesis.getVoices();
+    u.voice = vs.find(v => v.name === c.voice) || vs.find(v => /^ro/i.test(v.lang)) || null;
+    u.lang = u.voice?.lang || 'ro-RO'; u.rate = c.rate || 1; u.pitch = c.pitch || 1; u.volume = (c.volume ?? 80) / 100;
+    speechSynthesis.speak(u);
+  }
+
+  // ----------------------------------------------------------- widgeturi
+  const widgets = {};
+
+  widgets.alerts = (() => {
+    root.innerHTML = '<div id="alerts"></div>';
+    const box = document.getElementById('alerts'), q = [];
+    let busy = false;
+    const KIND = { gift: 'Cadou', follow: 'Urmăritor nou', share: 'Distribuire', member: 'Bun venit', likes: 'Like-uri' };
+    const PIC = { follow: '💖', share: '📣', member: '👋', likes: '❤️', gift: '🎁' };
+    function next() {
+      if (busy || !q.length) return;
+      busy = true;
+      const a = q.shift(), dur = (a.duration || 5) * 1000;
+      const name = a.user ? esc(a.user) : '';
+      let html = esc(a.text);
+      if (name) html = html.split(name).join(`<b>${name}</b>`);
+      const pic = a.kind === 'gift' && safeUrl(a.img) ? `<img src="${esc(a.img)}" alt="" referrerpolicy="no-referrer">`
+        : (a.kind === 'follow' || a.kind === 'member') && safeUrl(a.avatar) ? `<img class="round" src="${esc(a.avatar)}" alt="" referrerpolicy="no-referrer">`
+        : PIC[a.kind] || '✨';
+      box.innerHTML = `<div class="al card"><div class="pic">${pic}</div><div class="tx"><span class="kind">${KIND[a.kind] || ''}</span>${html}</div></div>`;
+      play(a.sound, a.volume);
+      say(a.tts);
+      setTimeout(() => { box.firstChild?.classList.add('out'); }, dur - 450);
+      setTimeout(() => { box.innerHTML = ''; busy = false; setTimeout(next, 250); }, dur);
+    }
+    return {
+      ev(e) {
+        if (e.t === 'clear') { q.length = 0; return; }
+        if (e.alert && q.length < 50) { q.push(e.alert); next(); }
+      },
+    };
+  });
+
+  widgets.chat = (() => {
+    root.innerHTML = '<div id="chat"></div>';
+    const box = document.getElementById('chat');
+    function add(html, cls = '') {
+      const c = S?.chat || {};
+      const el = document.createElement('div');
+      el.className = 'msg card ' + cls; el.innerHTML = html;
+      box.appendChild(el);
+      while (box.children.length > (c.max || 8)) box.firstChild.remove();
+      if (c.fade) setTimeout(() => { el.classList.add('fade'); setTimeout(() => el.remove(), 1100); }, c.fade * 1000);
+    }
+    return {
+      ev(e) {
+        const c = S?.chat || {};
+        if (e.t === 'chat') {
+          if (c.hideCommands && /^\s*!/.test(e.text) && !/^\s*!(tts|spune|zi)\s/i.test(e.text)) return;
+          add(`${avatar(e.user)}<div><b>${esc(e.user.name)}</b>${esc(e.text)}</div>`);
+        } else if (e.t === 'gift' && c.showGifts) {
+          add(`${avatar(e.user)}<div><b>${esc(e.user.name)}</b>a trimis ${e.count > 1 ? e.count + '× ' : ''}${safeUrl(e.img) ? `<img class="gi" src="${esc(e.img)}" alt="" referrerpolicy="no-referrer">` : '🎁'} ${esc(e.gift)}</div>`, 'gift');
+        }
+      },
+    };
+  });
+
+  const GOAL_VAL = { likes: 'likes', diamonds: 'diamonds', follows: 'follows', shares: 'shares', gifts: 'gifts' };
+  const GOAL_UNIT = { likes: '❤️', diamonds: '💎', follows: '👤', shares: '📣', gifts: '🎁' };
+  widgets.goal = (() => {
+    root.innerHTML = '<div id="goal" class="card"><p class="ttl"></p><div class="bar"><i></i><span class="num"></span></div></div>';
+    const el = document.getElementById('goal');
+    function draw() {
+      const goals = S?.goals || [];
+      const g = goals.find(x => x.id === P.get('id')) || goals[Number(P.get('i')) || 0];
+      if (!g) { el.classList.add('hide'); return; }
+      el.classList.remove('hide');
+      const v = ST?.[GOAL_VAL[g.type]] || 0, pct = Math.min(100, v / g.target * 100);
+      el.querySelector('.ttl').textContent = g.title;
+      el.querySelector('i').style.width = pct + '%';
+      el.querySelector('span').textContent = `${GOAL_UNIT[g.type]} ${fmt(Math.min(v, g.target))} / ${fmt(g.target)}`;
+      el.classList.toggle('done', v >= g.target);
+    }
+    return { draw };
+  });
+
+  widgets.top = (() => {
+    root.innerHTML = '<div class="list card"><p class="ttl"></p><div class="rows"></div></div>';
+    const draw = () => {
+      root.querySelector('.ttl').textContent = S?.top?.title || 'Top susținători';
+      const n = S?.top?.count || 5, list = (ST?.top || []).slice(0, n);
+      root.querySelector('.rows').innerHTML = list.length ? list.map((x, i) => `<div class="row"><span class="pos">${['🥇', '🥈', '🥉'][i] || i + 1}</span>${avatar(x)}<span class="nm">${esc(x.name)}</span><span class="v num">💎 ${fmt(x.diamonds)}</span></div>`).join('') : '<div class="empty">Primul cadou te pune aici!</div>';
+    };
+    return { draw };
+  });
+
+  widgets.points = (() => {
+    root.innerHTML = '<div class="list card"><p class="ttl"></p><div class="rows"></div></div>';
+    const draw = () => {
+      root.querySelector('.ttl').textContent = S?.points?.title || 'Puncte';
+      const n = S?.points?.count || 5, list = POINTS.slice(0, n);
+      root.querySelector('.rows').innerHTML = list.length ? list.map((x, i) => `<div class="row"><span class="pos">${i + 1}</span><span class="nm">${esc(x.name)}</span><span class="v num">⭐ ${fmt(x.points)}</span></div>`).join('') : '<div class="empty">Scrie în chat și dă like ca să strângi puncte!</div>';
+    };
+    return { draw };
+  });
+
+  widgets.counter = (() => {
+    root.innerHTML = '<div class="card" style="margin:8px"><p class="ttl" style="padding:12px 20px 0;margin:0"></p><div class="stats" style="margin:0;padding-top:6px"><div class="stat"><b class="num" data-k="diamonds">0</b><small>💎 diamante</small></div><div class="stat"><b class="num" data-k="gifts">0</b><small>🎁 cadouri</small></div><div class="stat"><b class="num" data-k="likes">0</b><small>❤️ like-uri</small></div></div></div>';
+    const draw = () => { root.querySelector('.ttl').textContent = S?.counter?.title || ''; root.querySelectorAll('[data-k]').forEach(b => { b.textContent = fmt(ST?.[b.dataset.k]); }); };
+    return { draw };
+  });
+
+  widgets.viewers = (() => {
+    root.innerHTML = '<div class="stats card"><div class="stat"><b class="num" data-k="viewers">0</b><small>👁 spectatori</small></div></div>';
+    return { draw: () => { root.querySelector('[data-k]').textContent = fmt(ST?.viewers); } };
+  });
+
+  widgets.timer = (() => {
+    root.innerHTML = '<div id="timer" class="card"><p class="ttl"></p><div class="clock num">--:--:--</div></div>';
+    const el = document.getElementById('timer'), clock = el.querySelector('.clock');
+    let endsAt = 0, left = 0, running = false;
+    const set = t => { running = !!t?.running; left = Number(t?.left) || 0; endsAt = Date.now() + left; };
+    const hms = ms => { const s = Math.max(0, Math.ceil(ms / 1000)), h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60); return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`; };
+    setInterval(() => { clock.textContent = hms(running ? endsAt - Date.now() : left); el.classList.toggle('paused', !running); }, 250);
+    return {
+      draw() { el.querySelector('.ttl').textContent = S?.timer?.title || 'Subathon'; if (ST?.timer) set(ST.timer); },
+      ev(e) {
+        if (e.t !== 'timer') return;
+        set(e.timer);
+        if (e.added > 0) { const p = document.createElement('div'); p.className = 'plus'; p.textContent = `+${e.added >= 60 ? Math.round(e.added / 6) / 10 + ' min' : e.added + 's'}`; el.appendChild(p); setTimeout(() => p.remove(), 1700); }
+      },
+    };
+  });
+
+  widgets.rotator = (() => {
+    root.innerHTML = '<div id="rotator" class="card"></div>';
+    const el = document.getElementById('rotator');
+    let i = 0, t = null;
+    function draw() {
+      clearInterval(t);
+      const lines = S?.rotator?.lines || [];
+      if (!lines.length) { el.classList.add('hide'); return; }
+      el.classList.remove('hide'); el.textContent = lines[i % lines.length];
+      t = setInterval(() => { el.classList.add('fade'); setTimeout(() => { i++; el.textContent = lines[i % lines.length]; el.classList.remove('fade'); }, 500); }, (S.rotator.every || 8) * 1000);
+    }
+    let last = '';
+    return { draw() { const k = JSON.stringify(S?.rotator); if (k !== last) { last = k; draw(); } } };
+  });
+
+  widgets.wheel = (() => {
+    const SIZE = 440;
+    root.innerHTML = `<div id="wheel"><p class="ttl" style="margin:0"></p><div class="wrap"><canvas width="${SIZE * 2}" height="${SIZE * 2}" style="width:${SIZE}px;height:${SIZE}px"></canvas><span class="ptr"></span></div><div class="res card hide"></div><div class="q"></div></div>`;
+    const cv = root.querySelector('canvas'), cx = cv.getContext('2d'), res = root.querySelector('.res'), qEl = root.querySelector('.q');
+    let rot = 0, anim = null, lastKey = '';
+    function paint() {
+      const segs = S?.wheel?.segments || [], n = segs.length || 1, a = Math.PI * 2 / n, R = SIZE - 8, C = SIZE;
+      cx.clearRect(0, 0, SIZE * 2, SIZE * 2);
+      segs.forEach((s, i) => {
+        const a0 = rot + i * a - Math.PI / 2;
+        cx.beginPath(); cx.moveTo(C, C); cx.arc(C, C, R, a0, a0 + a); cx.closePath();
+        cx.fillStyle = s.color; cx.fill();
+        cx.lineWidth = 4; cx.strokeStyle = 'rgba(0,0,0,.35)'; cx.stroke();
+        cx.save(); cx.translate(C, C); cx.rotate(a0 + a / 2);
+        cx.textAlign = 'right'; cx.textBaseline = 'middle'; cx.fillStyle = '#fff';
+        cx.font = `700 ${n > 10 ? 24 : 30}px ${getComputedStyle(document.body).fontFamily}`;
+        cx.shadowColor = 'rgba(0,0,0,.7)'; cx.shadowBlur = 6;
+        let label = s.label; while (cx.measureText(label).width > R - 90 && label.length > 3) label = label.slice(0, -2) + '…';
+        cx.fillText(label, R - 28, 0); cx.restore();
+      });
+      cx.beginPath(); cx.arc(C, C, 46, 0, Math.PI * 2); cx.fillStyle = '#111'; cx.fill();
+      cx.lineWidth = 8; cx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--accent'); cx.stroke();
+    }
+    function spin(e) {
+      const segs = S?.wheel?.segments || [], n = segs.length;
+      if (!n || e.idx >= n) return;
+      const a = Math.PI * 2 / n, TAU = Math.PI * 2;
+      const jitter = (Math.random() - .5) * a * .6;
+      let target = -(e.idx + .5) * a + jitter;
+      while (target < rot + 6 * TAU) target += TAU;
+      const from = rot, t0 = performance.now(), dur = e.spinMs || 6500;
+      res.classList.add('hide');
+      qEl.textContent = e.by ? `Învârte: ${e.by}${e.queue ? ` · încă ${e.queue} la rând` : ''}` : '';
+      play('drum', S?.alerts?.volume);
+      cancelAnimationFrame(anim);
+      const step = now => {
+        const k = Math.min(1, (now - t0) / dur), ease = 1 - Math.pow(1 - k, 4);
+        rot = from + (target - from) * ease; paint();
+        if (k < 1) anim = requestAnimationFrame(step);
+        else {
+          rot = target % TAU;
+          res.innerHTML = `🎯 <b>${esc(segs[e.idx].label)}</b>`; res.classList.remove('hide');
+          play('fanfare', S?.alerts?.volume);
+          setTimeout(() => { res.classList.add('hide'); qEl.textContent = ''; }, e.holdMs || 3500);
+        }
+      };
+      anim = requestAnimationFrame(step);
+    }
+    return {
+      draw() { root.querySelector('.ttl').textContent = S?.wheel?.title || ''; const k = JSON.stringify(S?.wheel?.segments) + (S?.theme?.style || ''); if (k !== lastKey) { lastKey = k; paint(); } },
+      ev(e) { if (e.t === 'wheel') spin(e); },
+    };
+  });
+
+  widgets.fireworks = (() => {
+    const cv = document.getElementById('fw'); cv.classList.remove('hide');
+    const cx = cv.getContext('2d'), parts = [], imgs = new Map();
+    let running = false;
+    const fit = () => { cv.width = innerWidth * devicePixelRatio; cv.height = innerHeight * devicePixelRatio; };
+    fit(); addEventListener('resize', fit);
+    function imgOf(url) {
+      if (!safeUrl(url)) return null;
+      if (!imgs.has(url)) { const im = new Image(); im.referrerPolicy = 'no-referrer'; im.src = url; imgs.set(url, im); if (imgs.size > 60) imgs.delete(imgs.keys().next().value); }
+      const im = imgs.get(url); return im.complete && im.naturalWidth ? im : null;
+    }
+    function burst(e, n) {
+      const W0 = cv.width, H0 = cv.height, d = devicePixelRatio, x0 = W0 * (.2 + Math.random() * .6);
+      imgOf(e.img);
+      for (let i = 0; i < n && parts.length < 400; i++) {
+        const ang = -Math.PI / 2 + (Math.random() - .5) * 1.4, sp = (9 + Math.random() * 9) * d;
+        parts.push({ x: x0, y: H0 + 40 * d, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp * 1.25, r: (Math.random() - .5) * .2, a: 0, s: (34 + Math.random() * 26) * d, img: e.img, life: 0, emoji: e.diamonds >= 100 ? '💎' : '🎁' });
+      }
+      if (!running) { running = true; requestAnimationFrame(tick); }
+    }
+    function tick() {
+      cx.clearRect(0, 0, cv.width, cv.height);
+      const g = .32 * devicePixelRatio;
+      for (let i = parts.length - 1; i >= 0; i--) {
+        const p = parts[i]; p.vy += g; p.x += p.vx; p.y += p.vy; p.a += p.r; p.life++;
+        if (p.y > cv.height + 80 * devicePixelRatio && p.vy > 0) { parts.splice(i, 1); continue; }
+        cx.save(); cx.translate(p.x, p.y); cx.rotate(p.a); cx.globalAlpha = Math.min(1, p.life / 6);
+        const im = imgOf(p.img);
+        if (im) cx.drawImage(im, -p.s / 2, -p.s / 2, p.s, p.s);
+        else { cx.font = `${p.s}px serif`; cx.textAlign = 'center'; cx.textBaseline = 'middle'; cx.fillText(p.emoji, 0, 0); }
+        cx.restore();
+      }
+      if (parts.length) requestAnimationFrame(tick); else { running = false; cx.clearRect(0, 0, cv.width, cv.height); }
+    }
+    return {
+      ev(e) {
+        if (S?.fireworks?.on === false) return;
+        const max = S?.fireworks?.maxIcons || 30;
+        if (e.t === 'gift') burst(e, Math.min(max, Math.max(3, Math.round(e.count * 2 + Math.log2(1 + e.diamonds) * 2))));
+        else if (e.t === 'giftcombo') burst(e, Math.min(6, max));
+      },
+    };
+  });
+
+  // ----------------------------------------------------------- pornire
+  const factory = widgets[W] || widgets.alerts;
+  const w = factory();
+  const redraw = () => { applyTheme(); w.draw?.(); };
+
+  function onEvent(e) {
+    if (e.t === 'hello') { S = e.settings; ST = e.state; POINTS = e.points || []; redraw(); return; }
+    if (e.t === 'settings') { S = e.settings; redraw(); return; }
+    if (e.t === 'state') { ST = e.state; w.draw?.(); return; }
+    if (e.t === 'points') { POINTS = e.list || []; w.draw?.(); return; }
+    if (e.t === 'reset') { ST = { ...(ST || {}), likes: 0, diamonds: 0, gifts: 0, follows: 0, shares: 0, top: [] }; w.draw?.(); }
+    if (e.t === 'revoked') { showErr('Linkul acestui overlay a fost schimbat. Ia linkul nou din Studio.'); src?.close(); return; }
+    w.ev?.(e);
+  }
+  function showErr(m) { const el = document.getElementById('err'); el.textContent = m; el.classList.toggle('hide', !(P.get('debug') === '1' || window.top !== window)); }
+
+  let src = null;
+  if (KEY && 'EventSource' in window) {
+    src = new EventSource('/api/stream/live/' + encodeURIComponent(KEY));
+    src.onmessage = m => { try { onEvent(JSON.parse(m.data)); } catch { /* */ } };
+    src.onopen = () => document.getElementById('err').classList.add('hide');
+    src.onerror = () => showErr('Overlay-ul nu se poate conecta. Verifică linkul din Studio.');
+  }
+
+  // ----------------------------------------------------------- date demo (previzualizare fără live)
+  if (DEMO) {
+    if (!KEY) { S = DEMO_SETTINGS(); ST = { likes: 0, diamonds: 0, gifts: 0, follows: 0, shares: 0, viewers: 128, top: [], timer: { running: true, left: 3600_000 } }; redraw(); }
+    const names = ['Andrei_md', 'Cristina.22', 'Vlad', 'Mihaela', 'Dorin', 'Ionela', 'Sasha_77'];
+    const gifts = [['Trandafir', 1], ['Gogoașă', 30], ['Confetti', 100], ['Leu', 29999]];
+    let i = 0;
+    setInterval(() => {
+      if (!S) return;
+      const u = { id: 'd' + (i % 7), name: names[i % 7], avatar: '' }, k = i++ % 6;
+      ST = ST || {};
+      if (k === 0 || k === 3) {
+        const g = gifts[(i / 3 | 0) % gifts.length], c = 1 + (i % 3), tot = g[1] * c;
+        ST.diamonds = (ST.diamonds || 0) + tot; ST.gifts = (ST.gifts || 0) + c;
+        const top = new Map((ST.top || []).map(x => [x.id, x])); const t = top.get(u.id) || { ...u, diamonds: 0 }; t.diamonds += tot; top.set(u.id, t);
+        ST.top = [...top.values()].sort((a, b) => b.diamonds - a.diamonds);
+        onEvent({ t: 'gift', user: u, gift: g[0], img: '', count: c, diamonds: tot, alert: { kind: 'gift', text: `${u.name} a trimis ${c}× ${g[0]}!`, user: u.name, sound: 'coin', duration: 4, volume: 40 } });
+        if (W === 'timer') onEvent({ t: 'timer', timer: { running: true, left: 3600_000 }, added: 30 });
+      } else if (k === 1) { ST.follows = (ST.follows || 0) + 1; onEvent({ t: 'follow', user: u, alert: { kind: 'follow', text: `${u.name} te urmărește acum!`, user: u.name, sound: 'pop', duration: 4, volume: 40 } }); }
+      else if (k === 2) onEvent({ t: 'chat', user: u, text: ['Salut! 👋', 'Bravo, live super', '!tts ce faci azi?', 'De unde ești?'][i % 4] });
+      else if (k === 4) { ST.likes = (ST.likes || 0) + 337; }
+      else if (k === 5 && W === 'wheel') { const n = S.wheel.segments.length; onEvent({ t: 'wheel', idx: i % n, by: u.name, spinMs: 4000, holdMs: 2500, n }); }
+      POINTS = (ST.top || []).map(x => ({ name: x.name, points: x.diamonds * 10 }));
+      w.draw?.();
+    }, 2600);
+  }
+  function DEMO_SETTINGS() {
+    return { theme: { style: P.get('theme') || 'neon', accent: '#ff8a1f', scale: 1 }, alerts: { volume: 40 }, chat: { max: 8, showGifts: true, hideCommands: true, fade: 0 },
+      goals: [{ id: 'g1', type: 'likes', title: 'Obiectiv like-uri', target: 5000 }], top: { title: 'Top susținători', count: 5 }, counter: { title: 'Cadouri pe live' },
+      wheel: { title: 'Roata norocului', segments: ['10 flotări', 'Shoutout', 'Cântă', 'Încă o tură', 'Glumă', 'Bonus'].map((label, i) => ({ label, color: ['#ff8a1f', '#3ddc84', '#4aa3ff', '#f25f8b', '#b57bff', '#ffd23f'][i] })) },
+      timer: { title: 'Subathon' }, points: { title: 'Puncte', count: 5 }, fireworks: { on: true, maxIcons: 30 }, rotator: { lines: ['Dă follow!', 'Trimite un cadou și învârte roata!'], every: 4 } };
+  }
+})();
+</script>
+</body>
+</html>

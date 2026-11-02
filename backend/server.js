@@ -9215,6 +9215,15 @@ function codPenalPvTables() {
   return codPenalPvReady;
 }
 const codPenalPvHits = new Map();
+// contul de site al jucătorului cu ID-ul static dat (personajul legat de cont)
+async function pvSuspectUser(sid) {
+  const { rows } = await pool.query(
+    `SELECT u.id FROM users u WHERE u.game_identifier IN (
+       SELECT identifier FROM game_players_cache WHERE static_id = $1 UNION SELECT identifier FROM game_identities WHERE static_id = $1)
+     UNION SELECT p.user_id FROM players p WHERE p.last_static_id = $1 AND p.user_id IS NOT NULL
+     LIMIT 1`, [sid]).catch(() => ({ rows: [] }));
+  return rows[0]?.id || null;
+}
 const PV_ROLES = ["autor", "tentativa", "complice"];
 function pvRow(r, viewer) {
   return {
@@ -9254,6 +9263,14 @@ app.post("/api/cod-penal/pv", auth, asyncRoute(async (req, res) => {
      sid, clip(b.suspectName, 60) || null, JSON.stringify(articles), int(b.fine, 10_000_000), int(b.months, 1000), int(b.suspHours, 1000), int(b.points, 1000),
      clip(b.confiscari, 500) || null, text]);
   await logAction(req.user.sub, "cod_penal.pv", "cod_penal_pv", String(rows[0].id), { suspect: sid, articles: articles.map(x => x.nr), fine: int(b.fine, 10_000_000), months: int(b.months, 1000) }, req.ip);
+  // (02.11.2026) jucătorul amendat (dacă are cont pe site) primește notificare, pe site și în privat pe Discord
+  const sus = await pvSuspectUser(sid);
+  if (sus) {
+    const parts = [int(b.fine, 10_000_000) ? `${int(b.fine, 10_000_000).toLocaleString("ro-RO")}$ amendă` : "", int(b.months, 1000) ? `${int(b.months, 1000)} luni închisoare` : "", int(b.suspHours, 1000) ? `permis suspendat ${int(b.suspHours, 1000)}h` : ""].filter(Boolean).join(", ");
+    notifyUser(sus, { type: "amenda", title: "⚖️ Ai primit un proces-verbal",
+      message: `${[a.dept, a.grade, a.name].filter(Boolean).join(" ") || "Un agent"}: ${articles.map(x => `Art. ${x.nr} (${x.desc})`).join("; ").slice(0, 400)}${parts ? ` — ${parts}` : ""}. Dacă nu ești de acord, poți face reclamație pe site, la Tichete.`,
+      link: "/cod-penal.html", external: true, emailFallback: false, dedupeKey: `pv-${rows[0].id}` }).catch(() => {});
+  }
   res.json({ ok: true, id: rows[0].id });
 }));
 app.get("/api/cod-penal/cazier", auth, asyncRoute(async (req, res) => {
@@ -9291,6 +9308,8 @@ app.post("/api/cod-penal/pv/:id/anuleaza", auth, asyncRoute(async (req, res) => 
   if (!pvRow(r, req.user).canAnnul) return res.status(403).json({ error: "Îl poate anula doar agentul care l-a scris (în primele 15 minute) sau staff-ul." });
   await pool.query(`UPDATE cod_penal_pv SET annulled_at = NOW(), annulled_by = $2, annul_reason = $3 WHERE id = $1`, [id, req.user.sub, reason]);
   await logAction(req.user.sub, "cod_penal.pv_annul", "cod_penal_pv", String(id), { reason }, req.ip);
+  const sus = await pvSuspectUser(r.suspect_static_id);
+  if (sus) notifyUser(sus, { type: "amenda", title: "✓ Un proces-verbal a fost anulat", message: `Procesul-verbal #${id} din ${new Date(r.created_at).toLocaleDateString("ro-RO", { timeZone: "Europe/Chisinau" })} a fost anulat. Motiv: ${reason}`, link: "/cod-penal.html" }).catch(() => {});
   res.json({ ok: true });
 }));
 

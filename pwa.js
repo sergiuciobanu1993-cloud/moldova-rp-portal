@@ -187,3 +187,39 @@
     if (blocked) { e.preventDefault(); e.stopPropagation(); }
   }, true);
 })();
+
+// (02.11.2026) Bandă sus când serverul de joc nu răspunde (restart / mentenanță), pe toate paginile,
+// ca jucătorii să nu creadă că e ceva stricat pe site. O arătăm doar după 2 verificări la rând
+// (să nu clipească la o singură cerere pierdută) și o scoatem singuri când serverul revine.
+(() => {
+  if (/\/(offline|auth-callback)\.html$/.test(location.pathname)) return;
+  const KEY = 'mrp_srv_banner_closed';
+  let bar = null, misses = 0;
+  const show = () => {
+    try { if (sessionStorage.getItem(KEY)) return; } catch { /* fără stocare */ }
+    if (bar || !document.body) return;
+    bar = document.createElement('div');
+    bar.setAttribute('role', 'status');
+    // plutește sub bara de sus a site-ului (nu o acoperă și nu mută pagina)
+    const hdr = document.querySelector('body > header, .site-header, header');
+    const top = Math.max(8, Math.min(140, (hdr ? hdr.getBoundingClientRect().bottom : 0) + 8));
+    bar.style.cssText = 'position:fixed;z-index:2000;left:50%;transform:translateX(-50%);top:' + top + 'px;width:max-content;max-width:calc(100% - 24px);box-sizing:border-box;padding:10px 44px 10px 14px;border-radius:12px;background:#7a2d12;color:#ffe7d6;border:1px solid rgba(255,180,140,.35);box-shadow:0 12px 30px rgba(0,0,0,.45);font:600 13.5px/1.4 Inter,system-ui,sans-serif;text-align:center';
+    bar.innerHTML = '<span>🔧 Serverul de joc e în restart sau în mentenanță. Revine în câteva minute. Site-ul merge normal.</span>'
+      + '<button type="button" aria-label="Închide" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);width:28px;height:28px;border:0;border-radius:7px;background:rgba(255,255,255,.12);color:inherit;font-size:15px;cursor:pointer">✕</button>';
+    bar.querySelector('button').addEventListener('click', () => { try { sessionStorage.setItem(KEY, '1'); } catch { /* */ } bar.remove(); bar = null; });
+    document.body.appendChild(bar);
+  };
+  const hide = () => { if (bar) { bar.remove(); bar = null; } };
+  const check = () => {
+    if (document.hidden) return;
+    fetch('/api/server-status', { headers: { Accept: 'application/json' } })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (!d) return;
+        if (d.online === false) { if (++misses >= 2) show(); else setTimeout(check, 20000); }
+        else { misses = 0; hide(); }
+      }).catch(() => { /* fără internet: nu e vina serverului de joc */ });
+  };
+  const start = () => { setTimeout(check, 1500); setInterval(check, 90000); };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
+})();

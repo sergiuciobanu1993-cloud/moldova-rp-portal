@@ -220,7 +220,7 @@
   const money = n => Math.round(n).toLocaleString('ro-RO') + '$';
   const num = s => Number(String(s).replace(/\./g, ''));
   const norm = s => String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  let CAP = { months: 180, fine: 300000 }, BAIL = 20;
+  let CAP = { months: 120, fine: 300000 }, BAIL = 20;
   let arts = [], chapters = [], chapter = 'all', q = '', agentLine = '', lastCalc = null;
   // (02.11.2026) cât poate da fiecare: Poliția și Șerifii cel mult 50 de minute, FIB cel mult 120 (staff: maximul general)
   const DEPT_JAIL_CAP = { 'Poliție': 50, 'Departamentul Șerifului': 50, 'FIB': 120 };
@@ -245,6 +245,12 @@
   function parse(html) {
     const doc = new DOMParser().parseFromString(html, 'text/html');
     const out = []; const chs = [];
+    // Art. 1.11 (maximul) și cauțiunea stau în Codul de Procedură, nu în Partea generală → le căutăm în tot textul
+    doc.querySelectorAll('li, p').forEach(n => {
+      const txt = n.textContent;
+      if (/Art\.\s*1\.11\b/.test(txt)) { const c = /cel mult\s*(\d+)\s*de (?:luni|minute)[^0-9]*?(\d{1,3}(?:\.\d{3})+)\s*\$/i.exec(txt); if (c) CAP = { months: +c[1], fine: num(c[2]) }; }
+      const b = /cauțiune[^.]*?cel mult\s*(\d+)\s*de (?:luni|minute)/i.exec(txt); if (b) BAIL = +b[1];
+    });
     doc.querySelectorAll('h2').forEach(h => {
       const t = h.textContent.trim();
       const gen = /^Cod Penal\s*—\s*Partea general/i.test(t);

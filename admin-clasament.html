@@ -8,6 +8,7 @@
 <p style="color:var(--muted);margin:-14px 0 20px;line-height:1.6">Luni la 00:00 (ora Chișinăului) săptămâna trecută se închide singură: primii 3 jucători (ore jucate), prima facțiune și — cât țin questurile de Crăciun — primii 3 la questuri ajung aici. Jucătorii cu cont legat primesc notificare și insigna pe profil. Premiile de mai jos se trimit singure la <b>/recompense</b> în joc (facțiunii — liderului ei). Ce nu se poate trimite automat îl dați voi în joc și apăsați „Marchează dat”. Clasamentul live: <a href="clasament.html" target="_blank" rel="noopener" style="color:var(--orange);font-weight:800">clasament.html ↗</a></p>
 <section class="tablebox" id="pz-box" style="padding:18px 22px">
   <h2 style="margin:0 0 4px;font-size:17px">🎁 Premiile săptămânii</h2>
+  <p id="pz-route" style="margin:0 0 8px;font-size:13px"></p>
   <p style="color:var(--muted);margin:0 0 14px;font-size:13px">Se trimit luni, la închiderea clasamentului. Schimbările se aplică de la următoarea săptămână închisă (și la cele care încă n-au primit premiul).</p>
   <div class="pz-grid">
     <fieldset><legend>🎮 Jucători (ore jucate)</legend><div id="pz-jucatori"></div></fieldset>
@@ -100,6 +101,9 @@ async function load() {
   if (!r.ok) { document.getElementById('w-body').innerHTML = '<tr><td colspan="8">Nu s-au putut încărca datele.</td></tr>'; return; }
   const d = await r.json();
   if (!load.filled) { fillPrizes(d.prizes); load.filled = true; }
+  document.getElementById('pz-route').innerHTML = d.rewardsRoute === true ? '<span class="pill on">RUTA DIN JOC E GATA</span> premiile pleacă singure la /recompense.'
+    : d.rewardsRoute === false ? '<span class="pill warn">RUTA DIN JOC LIPSEȘTE</span> colegul n-a făcut încă /rewards/grant. Premiile așteaptă și pleacă singure când apare.'
+    : '<span class="pill warn">NEVERIFICAT</span> serverul de joc e oprit acum.';
   // (31.10.2026) săptămânile încheiate, pentru imaginea cu câștigătorii (share-image.js)
   window.__winners = d.winners;
   const weeks = [...new Set(d.winners.map(w => w.week))];

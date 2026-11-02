@@ -1005,7 +1005,7 @@ document.getElementById('lx-save').addEventListener('click', async () => {
     const s = pm.settings;
     document.getElementById('pm-public').checked = !!s.public;
     document.getElementById('pm-state').textContent = s.public ? 'Deschisă jucătorilor' : 'Doar staff (previzualizare)';
-    document.getElementById('pm-routes').innerHTML = routeChip('Abonament', pm.ready.premium) + routeChip('Pachete de start', pm.ready.starter);
+    document.getElementById('pm-routes').innerHTML = routeChip('Abonament', pm.ready.premium) + routeChip('Pachete de start', pm.ready.starter) + routeChip('Premii la /recompense', pm.ready.rewards);
     document.getElementById('pm-plans').innerHTML = s.plans.map(p => `
       <div class="pm-card" data-plan="${pmEsc(p.id)}"><h3>${PLAN_NAMES[p.id] || p.id}</h3>
         <div class="pm-row"><div class="field"><label>Zile</label><input type="number" min="1" max="365" data-k="days" value="${p.days}"></div>
@@ -1018,6 +1018,7 @@ document.getElementById('lx-save').addEventListener('click', async () => {
       return `<div class="pm-card" data-pack="${pmEsc(p.id)}"><h3>${pmEsc(p.name)}</h3>
         <ul>${p.lines.map(l => `<li>${pmEsc(l)}</li>`).join('')}${(p.soonLines || []).map(l => `<li style="opacity:.6">${pmEsc(l)} — în curând (jocul încă nu-l dă)</li>`).join('')}${(p.offLines || []).map(l => `<li style="opacity:.6"><s>${pmEsc(l)}</s> — oprit deocamdată (se trimite 0)</li>`).join('')}</ul>
         <div class="field" style="margin:0"><label>Preț (coins)</label><input type="number" min="1" max="100000" data-k="price" value="${v.price}"></div>
+        <div class="field" style="margin:0"><label>Mașini în pachet (una pe rând: model | nume)</label><textarea data-k="cars" rows="${Math.max(2, (v.cars || []).length)}" placeholder="m3e46 | BMW M3 E46" style="font:12.5px/1.5 ui-monospace,Consolas,monospace">${pmEsc((v.cars || []).map(c => c.model + ' | ' + (c.label || '')).join('\n'))}</textarea></div>
         <div class="field checkbox" style="margin:0"><input type="checkbox" data-k="on" id="pm-pk-${pmEsc(p.id)}" ${v.on ? 'checked' : ''}><label for="pm-pk-${pmEsc(p.id)}">Se vinde</label></div>
         ${gameCheck('pack', p.id, v.price, p.premiumDays, p.skillPct)}
       </div>`;
@@ -1053,7 +1054,10 @@ document.getElementById('lx-save').addEventListener('click', async () => {
     const num = (el, k) => Number(el.querySelector(`[data-k="${k}"]`).value);
     const plans = [...document.querySelectorAll('#pm-plans [data-plan]')].map(el => ({ id: el.dataset.plan, days: num(el, 'days'), price: num(el, 'price'), on: el.querySelector('[data-k="on"]').checked }));
     const packs = {};
-    document.querySelectorAll('#pm-packs [data-pack]').forEach(el => { packs[el.dataset.pack] = { price: num(el, 'price'), on: el.querySelector('[data-k="on"]').checked }; });
+    document.querySelectorAll('#pm-packs [data-pack]').forEach(el => {
+      const cars = el.querySelector('[data-k="cars"]').value.split('\n').map(l => l.trim()).filter(Boolean).map(l => { const [model, ...rest] = l.split('|'); return { model: model.trim(), label: rest.join('|').trim() }; }).filter(c => c.model);
+      packs[el.dataset.pack] = { price: num(el, 'price'), on: el.querySelector('[data-k="on"]').checked, cars };
+    });
     if ([...plans.map(p => p.price), ...plans.map(p => p.days), ...Object.values(packs).map(p => p.price)].some(n => !(n >= 1))) { saved.hidden = false; saved.style.color = '#ff8a8a'; saved.textContent = 'Zilele și prețurile trebuie să fie cel puțin 1.'; return; }
     try {
       const res = await apiFetch('/api/admin/premium', { method: 'PUT', body: JSON.stringify({ public: document.getElementById('pm-public').checked, plans, packs }) });

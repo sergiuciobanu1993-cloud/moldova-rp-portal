@@ -241,7 +241,7 @@ app.use((req, res, next) => {
       const h = insideSite(f) && !PRIVATE_PATHS.test("/" + path.relative(SITE_ROOT, f).split(path.sep).join("/")) ? assetHash(f) : null;
       return h ? `${attr}="${slash}${file}?v=${h}"` : all;
     });
-    hit = { m: st.mtimeMs, at: Date.now(), html: html.replace(/<head[^>]*>/i, m => m + CLIENT_ERROR_SNIPPET) };
+    hit = { m: st.mtimeMs, at: Date.now(), html: lowerInlineScripts(html).replace(/<head[^>]*>/i, m => m + CLIENT_ERROR_SNIPPET) };
     htmlVersioned.set(abs, hit);
     if (htmlVersioned.size > 200) htmlVersioned.clear();
   }
@@ -252,6 +252,22 @@ app.use((req, res, next) => {
   }
   res.type("html").send(hit.html);
 });
+// (02.11.2026) Același lucru pentru scripturile scrise direct în pagini (<script> fără src): „?." și „??"
+// devin JavaScript mai vechi, ca pagina să meargă și pe telefoanele vechi. Dacă ceva nu se poate traduce,
+// scriptul rămâne exact cum era.
+function lowerInlineScripts(html) {
+  if (!esbuild) return html;
+  return html.replace(/<script(\s[^>]*)?>([\s\S]*?)<\/script>/gi, (all, attrs = "", code) => {
+    if (/\ssrc\s*=/i.test(attrs) || !code.trim()) return all;
+    const type = /\stype\s*=\s*["']?([^"'\s>]+)/i.exec(attrs)?.[1]?.toLowerCase();
+    if (type && !/^(text|application)\/(javascript|ecmascript)$/.test(type)) return all; // module, json, ld+json etc.
+    if (!/\?\.|\?\?|\.\.\.\s*[\w({[]|\bcatch\s*\{|\*\*/.test(code)) return all; // nimic modern de tradus
+    try {
+      const out = esbuild.transformSync(code, { loader: "js", target: "es2019", logLevel: "silent" }).code;
+      return `<script${attrs}>${out.replace(/<\/script/gi, "<\\/script")}</script>`;
+    } catch { return all; }
+  });
+}
 // (01.11.2026) Raportul de erori: un mic script pus singur la începutul fiecărei pagini. Când o
 // pagină crapă la un jucător, trimite eroarea la /api/erori-client (cel mult 5 pe pagină, doar din
 // scripturile noastre, nu din extensiile browserului). Le vezi în Admin → Dashboard → Erori pe site.
@@ -307,7 +323,9 @@ app.use((req, res, next) => {
   if (!hit || hit.m !== st.mtimeMs) {
     try {
       const src = siteFs.readFileSync(abs, "utf8");
-      const code = esbuild.transformSync(src, { loader: ext === ".css" ? "css" : "js", minifyWhitespace: true, minifySyntax: true, legalComments: "none", logLevel: "silent" }).code;
+      // (02.11.2026) target: telefoanele vechi (ex. Android 9 cu WebView vechi) nu înțeleg „?." și „??" —
+      // tot site-ul crăpa la ei. Le traducem în JavaScript mai vechi (ES2019), înțeles de orice browser din ultimii ani.
+      const code = esbuild.transformSync(src, { loader: ext === ".css" ? "css" : "js", minifyWhitespace: true, minifySyntax: true, legalComments: "none", logLevel: "silent", ...(ext === ".js" ? { target: "es2019" } : {}) }).code;
       hit = { m: st.mtimeMs, code: code.length < src.length ? code : src };
     } catch { hit = { m: st.mtimeMs, code: null }; }
     minified.set(abs, hit);
@@ -1868,10 +1886,10 @@ async function canExchangeDirty(identifier, settings) {
 // (răspund 404), NU mai arătăm butoanele jucătorilor — altfel apasă și
 // primesc doar „nu e încă activ". Verificăm singuri la pornire și la 15 min;
 // cererea de verificare n-are identificator, deci nu poate face nimic în joc.
-const gameRouteReady = { sell: null, convert: null, premium: null, starter: null };
+const gameRouteReady = { sell: null, convert: null, premium: null, starter: null, rewards: null };
 let gameRoutesCheckedAt = null;
 async function probeGameRoutes() {
-  for (const [key, path] of [["sell", "/cases/sell"], ["convert", "/cases/convert"], ["premium", "/premium/buy"], ["starter", "/starter/buy"]]) {
+  for (const [key, path] of [["sell", "/cases/sell"], ["convert", "/cases/convert"], ["premium", "/premium/buy"], ["starter", "/starter/buy"], ["rewards", "/rewards/grant"]]) {
     const r = await vipShopAdminRequest("POST", path, {});
     if (r.status === 503) continue; // server oprit — nu știm, păstrăm ce aveam
     const ready = r.status !== 404;
@@ -5121,7 +5139,8 @@ app.get("/api/admin/clasament", auth, requireRole(...ADMIN_ROLES), asyncRoute(as
             u.username, w.identifier, w.grant_status, w.grant_to_name, w.grant_error, w.granted_at
        FROM weekly_winners w LEFT JOIN users u ON u.id = w.user_id LEFT JOIN users g ON g.id = w.given_by
       ORDER BY w.week DESC, w.category, w.rank LIMIT 200`);
-  res.json({ currentWeek: weekStartOf(), winners: rows, factionJobs: WEEK_FACTION_JOBS, prizes: await loadWeeklyPrizes() });
+  if (!gameRoutesCheckedAt || Date.now() - new Date(gameRoutesCheckedAt) > 60_000) await probeGameRoutes().catch(() => {});
+  res.json({ currentWeek: weekStartOf(), winners: rows, factionJobs: WEEK_FACTION_JOBS, prizes: await loadWeeklyPrizes(), rewardsRoute: gameRouteReady.rewards });
 }));
 app.put("/api/admin/clasament/:id", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (req, res, next) => {
   if (!/^\d+$/.test(req.params.id)) return next(); // ex. /premii — ruta ei e mai jos
@@ -6276,6 +6295,12 @@ const STARTER_EXTRAS = {
   // „În curând" până când catalogul are la pachet garageSlots > 0; atunci
   // trimitem garageSlots cu numărul din catalog.
   garage: { label: p => `+${p.garageSlots} ${p.garageSlots === 1 ? "loc" : "locuri"} în garaj, pe personaj`, flag: "garageSlots", value: (p, g) => Math.floor(Number(g?.garageSlots) || p.garageSlots), test: g => Number(g?.garageSlots) > 0 },
+  // (02.11.2026, cerut de Sergiu) mașini în pachet, alese după clasa cutiilor (Start/Bronz din Rare,
+  // Aur din Epic, Platină din Legendară); lista se schimbă din Editorul VIP Shop → Premium. „În curând"
+  // până când catalogul din joc are la pachet vehicles: true (sau o listă); atunci trimitem modelele.
+  cars: { label: p => `${p.cars.length} ${p.cars.length === 1 ? "mașină" : "mașini"} pe ${p.premiumDays}${p.premiumDays >= 20 ? " de" : ""} zile (cât ține pachetul): ${p.cars.map(c => c.label || c.model).join(", ")}`, flag: "vehicles",
+    value: p => p.cars.map(c => c.model),
+    test: g => g?.vehicles === true || (Array.isArray(g?.vehicles) && g.vehicles.length > 0) || g?.vehiclesEnabled === true },
   skills2: { label: p => `Plămâni și condus urcate la ${p.skillPct}%`, flag: "skillsExtra", send: false, test: g => {
     const sk = Array.isArray(g?.skills) ? g.skills.map(String) : [];
     return sk.some(x => /lung|plam|pl\u0103m|swim/i.test(x)) && sk.some(x => /driv|condus|car/i.test(x));
@@ -6291,6 +6316,11 @@ function starterExtrasNow(cat, pack) {
     out[k] = (e.test ? e.test(g) : lic.some(l => e.match.test(l))) || g?.[e.flag] === true || (e.extra ? e.extra(g) : false);
   }
   return out;
+}
+// pachetul cu mașinile din setări (dacă are), ca să apară ca orice alt bonus
+function packWithCars(pack, settings) {
+  const cars = settings?.packs?.[pack.id]?.cars || [];
+  return cars.length ? { ...pack, cars, extras: [...(pack.extras || []), "cars"] } : pack;
 }
 function starterPackView(cat, pack) {
   const cash = starterCashNow(cat, pack);
@@ -6323,6 +6353,16 @@ const PREMIUM_DEFAULT = {
     { id: "p90", days: 90, price: 25000, on: true },
   ],
   packs: { start: { price: 1000, on: true }, bronz: { price: 4000, on: true }, aur: { price: 8000, on: true }, platina: { price: 15000, on: true } },
+  // (02.11.2026) mașinile din pachete — temporare: jocul le ia înapoi când expiră pachetul (zilele lui de Premium).
+  // Echilibrate cu cutiile: legendarele rămân în principal în cutii (și acolo sunt pe viață), pachetele dau mai ales
+  // Rare/Epic. Start 2 + Bronz 3 din Rare, Aur 2 Epic + 2 Rare, Platină 1 Legendară + 2 Epic + 2 Rare.
+  cars: {
+    start: [{ model: "xc90", label: "Volvo XC90" }, { model: "m3e36", label: "BMW M3 E36" }],
+    bronz: [{ model: "e53", label: "BMW X5 E53" }, { model: "dl20rs3", label: "Audi RS3 2020" }, { model: "cls19", label: "Mercedes-Benz CLS 2019" }],
+    aur: [{ model: "m4cc", label: "BMW M4 Competition (G82)" }, { model: "g63", label: "Mercedes-AMG G63" }, { model: "dlsq7tow", label: "Audi SQ7" }, { model: "dlevo9", label: "Mitsubishi Lancer Evo IX" }],
+    platina: [{ model: "dlgls600mb", label: "Mercedes-Maybach GLS 600" }, { model: "dl20rs6", label: "Audi RS6 2020" }, { model: "escaladeprime", label: "Cadillac Escalade" }, { model: "rrab", label: "Range Rover" }, { model: "r34h", label: "Nissan Skyline GT-R R34" }],
+  },
+
 };
 function normalizePremiumSettings(v) {
   const src = v && typeof v === "object" ? v : {};
@@ -6336,7 +6376,11 @@ function normalizePremiumSettings(v) {
   for (const sp of STARTER_PACKS) {
     const d = PREMIUM_DEFAULT.packs[sp.id];
     const p = (src.packs && src.packs[sp.id]) || d;
-    packs[sp.id] = { price: int(p.price, 1, 100000, d.price), on: p.on !== false };
+    const carsIn = Array.isArray(p.cars) ? p.cars : PREMIUM_DEFAULT.cars[sp.id];
+    const cars = (Array.isArray(carsIn) ? carsIn : PREMIUM_DEFAULT.cars[sp.id] || [])
+      .map(c => ({ model: String(c?.model || "").trim().replace(/[^\w.\-]/g, "").slice(0, 40), label: String(c?.label || "").trim().slice(0, 60) }))
+      .filter(c => c.model).slice(0, 10);
+    packs[sp.id] = { price: int(p.price, 1, 100000, d.price), on: p.on !== false, cars };
   }
   return { public: src.public === true, plans, packs };
 }
@@ -6450,7 +6494,7 @@ app.get("/api/premium", auth, asyncRoute(async (req, res) => {
     plans: settings.plans.filter(p => p.on),
     perksStart: perksView(PREMIUM_PERKS_START, catalog),
     perksTime: perksView(PREMIUM_PERKS_TIME, catalog),
-    packs: STARTER_PACKS.filter(p => settings.packs[p.id].on).map(p => ({
+    packs: STARTER_PACKS.filter(p => settings.packs[p.id].on).map(p0 => packWithCars(p0, settings)).map(p => ({
       ...starterPackView(catalog, p), price: settings.packs[p.id].price,
       note: p.clean ? STARTER_CLEAN_NOTE : p.newbie ? STARTER_NEWBIE_NOTE : null,
       ...(p.newbie ? { newbie: true, eligible: newbie.eligible, bought: newbie.bought, until: newbie.until, soon: !catalogPack(catalog, p.id) } : {}),
@@ -6499,8 +6543,9 @@ app.post("/api/premium/pachet", auth, asyncRoute(async (req, res) => {
   if (!premiumVisibleTo(settings, req.user.role)) return res.status(403).json({ error: "Pachetele de start nu sunt încă disponibile." });
   const me = await premiumBuyer(req);
   if (!me.identifier) return res.status(400).json({ error: "Leagă-ți mai întâi contul de personajul din joc (din VIP Shop)." });
-  const pack = STARTER_PACKS.find(p => p.id === String(req.body?.packId || "") && settings.packs[p.id].on);
-  if (!pack) return res.status(400).json({ error: "Pachetul nu mai e disponibil." });
+  const pack0 = STARTER_PACKS.find(p => p.id === String(req.body?.packId || "") && settings.packs[p.id].on);
+  if (!pack0) return res.status(400).json({ error: "Pachetul nu mai e disponibil." });
+  const pack = packWithCars(pack0, settings);
   const price = settings.packs[pack.id].price;
   const cat = await getPremiumCatalog();
   if (pack.newbie) {
@@ -6541,11 +6586,12 @@ app.get("/api/admin/premium", auth, requireRole(...FOUNDER_ROLES), asyncRoute(as
   // Editorul VIP Shop dacă prețurile și zilele noastre se potrivesc cu ale lor
   // (prețul trimis: între jumătate și prețul din joc; zilele: exact aceleași).
   const catalog = await getPremiumCatalog(true);
+  const settings = await loadPremiumSettings();
   res.json({
-    settings: await loadPremiumSettings(),
-    packs: STARTER_PACKS.map(p => { const v = starterPackView(catalog, p); return { id: p.id, name: p.name, lines: v.lines, soonLines: v.soonLines, offLines: v.offLines, premiumDays: p.premiumDays, cash: v.cash, skillPct: p.skillPct }; }),
+    settings,
+    packs: STARTER_PACKS.map(p => { const v = starterPackView(catalog, packWithCars(p, settings)); return { id: p.id, name: p.name, lines: v.lines, soonLines: v.soonLines, offLines: v.offLines, premiumDays: p.premiumDays, cash: v.cash, skillPct: p.skillPct }; }),
     catalog,
-    ready: { premium: gameRouteReady.premium, starter: gameRouteReady.starter, checkedAt: gameRoutesCheckedAt },
+    ready: { premium: gameRouteReady.premium, starter: gameRouteReady.starter, rewards: gameRouteReady.rewards, checkedAt: gameRoutesCheckedAt },
     sales,
   });
 }));

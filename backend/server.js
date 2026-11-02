@@ -9256,6 +9256,9 @@ app.post("/api/cod-penal/pv", auth, asyncRoute(async (req, res) => {
   const dup = await pool.query(`SELECT id FROM cod_penal_pv WHERE agent_user_id = $1 AND suspect_static_id = $2 AND text = $3 AND created_at > NOW() - INTERVAL '2 minutes' LIMIT 1`, [req.user.sub, sid, text]);
   if (dup.rows[0]) return res.json({ ok: true, id: dup.rows[0].id, duplicate: true });
   const a = acc.agent || {};
+  // (03.11.2026) 1 lună = 1 minut; Poliția și Șerifii dau cel mult 50 de minute, FIB cel mult 120
+  const jailCap = a.dept === "FIB" ? 120 : (a.dept === "Poliție" || a.dept === "Departamentul Șerifului") ? 50 : 1000;
+  b.months = Math.min(int(b.months, 1000), jailCap);
   const { rows } = await pool.query(
     `INSERT INTO cod_penal_pv(agent_user_id, agent_name, agent_static_id, agent_dept, agent_grade, suspect_static_id, suspect_name, articles, fine, months, susp_hours, points, confiscari, text)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id`,
@@ -9266,7 +9269,7 @@ app.post("/api/cod-penal/pv", auth, asyncRoute(async (req, res) => {
   // (02.11.2026) jucătorul amendat (dacă are cont pe site) primește notificare, pe site și în privat pe Discord
   const sus = await pvSuspectUser(sid);
   if (sus) {
-    const parts = [int(b.fine, 10_000_000) ? `${int(b.fine, 10_000_000).toLocaleString("ro-RO")}$ amendă` : "", int(b.months, 1000) ? `${int(b.months, 1000)} luni închisoare` : "", int(b.suspHours, 1000) ? `permis suspendat ${int(b.suspHours, 1000)}h` : ""].filter(Boolean).join(", ");
+    const parts = [int(b.fine, 10_000_000) ? `${int(b.fine, 10_000_000).toLocaleString("ro-RO")}$ amendă` : "", int(b.months, 1000) ? `${int(b.months, 1000)} minute de închisoare` : "", int(b.suspHours, 1000) ? `permis suspendat ${int(b.suspHours, 1000)}h` : ""].filter(Boolean).join(", ");
     notifyUser(sus, { type: "amenda", title: "⚖️ Ai primit un proces-verbal",
       message: `${[a.dept, a.grade, a.name].filter(Boolean).join(" ") || "Un agent"}: ${articles.map(x => `Art. ${x.nr} (${x.desc})`).join("; ").slice(0, 400)}${parts ? ` — ${parts}` : ""}. Dacă nu ești de acord, poți face reclamație pe site, la Tichete.`,
       link: "/cod-penal.html", external: true, emailFallback: false, dedupeKey: `pv-${rows[0].id}` }).catch(() => {});

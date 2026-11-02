@@ -36,7 +36,7 @@ const GUIDES = {
           "O abatere procedurală poate fi invocată în apărare și poate reduce proporțional pedeapsa.",
           "Contravențiile presupun doar amendă și măsuri administrative — fără reținere, cătușe sau citirea drepturilor.",
           "Infracțiunile presupun obligatoriu: identificarea persoanei, anunțarea reținerii, citirea drepturilor, posibil cătușe și transport la sediul IGP.",
-          "Pedeapsa cumulată maximă pentru toate faptele dintr-un singur incident: 180 de luni de închisoare și/sau 300.000 lei amendă.",
+          "Pedeapsa cumulată maximă pentru toate faptele dintr-un singur incident: 120 de minute de închisoare și/sau 300.000 lei amendă. Poliția și Biroul Șerifului pot da cel mult 50 de minute, iar FIB cel mult 120 de minute.",
           "Aprecierea de bună-credință a agentului privind suspiciunea rezonabilă nu poate fi sancționată ulterior dacă fapta suspectată nu se confirmă.",
           "Documentele procedurale sunt valide doar cu semnătura agentului — semnătura persoanei vizate nu este niciodată obligatorie.",
           "Un singur element e suficient pentru legitimare/oprire/percheziție: comportament nervos, zonă cu activitate infracțională recentă, declarații contradictorii, miros de substanțe, obiecte ilegale vizibile, tentativă de evitare, corespondență cu o descriere, necooperare nejustificată, oră târzie în zonă izolată, sau orice altă circumstanță pe care un agent rezonabil ar considera-o suspectă.",
@@ -99,7 +99,7 @@ const GUIDES = {
         h: "Documentarea procedurilor (formulare oficiale)",
         list: [
           "Contravențiile se documentează prin PVCC (Formular 8.1) — document intern al agentului, cu amendă, zile de suspendare a permisului, puncte de penalizare (din 12) și alte măsuri administrative; nu necesită contrasemnătura persoanei.",
-          "Infracțiunile se documentează prin PVCI (Formular 8.2) — trebuie să consemneze citirea drepturilor, anunțarea reținerii, justificarea cătușării, uzul de forță (motiv/nivel/rezultat), cererea/disponibilitatea avocatului, probele ridicate și toate persoanele implicate; se încheie cu eliberare (amendă) sau reținere continuă (luni specificate); nu necesită contrasemnătură.",
+          "Infracțiunile se documentează prin PVCI (Formular 8.2) — trebuie să consemneze citirea drepturilor, anunțarea reținerii, justificarea cătușării, uzul de forță (motiv/nivel/rezultat), cererea/disponibilitatea avocatului, probele ridicate și toate persoanele implicate; se încheie cu eliberare (amendă) sau reținere continuă (minute specificate); nu necesită contrasemnătură.",
           "Declarațiile martorilor se documentează prin Formularul 8.3, valabil indiferent dacă martorul contrasemnează sau nu.",
           "Plângerea penală se depune prin Formularul 8.4 de către reclamant/victimă, cu data/ora/locul exact, descrierea faptei, prejudiciul estimat și dovezile atașate.",
           "Percheziția (corporală sau a vehiculului) se documentează prin PVP (Formularul 8.5), cu data/ora/locul exact, motivul, fiecare obiect găsit individual și statutul confiscării — valid prin semnătura agentului."
@@ -148,101 +148,101 @@ const GUIDES = {
       {
         h: "Cod Penal — Capitolul 2: Infracțiuni la ordinea publică",
         list: [
-          "Art. 201 — Condus fără permis — 15 luni + 15.000$",
-          "Art. 202 — Părăsirea locului accidentului — 15 luni + 20.000$",
+          "Art. 201 — Condus fără permis — 15 minute + 15.000$",
+          "Art. 202 — Părăsirea locului accidentului — 15 minute + 20.000$",
           "Art. 203 — Punerea în pericol a traficului — 18.000$",
           "Art. 203.1 — Sustragerea de la urmărirea poliției — 24.000$",
           "Art. 204 — Condus fără plăcuțe/vehicul neînmatriculat — 12.000$",
-          "Art. 205 — Constituirea unui grup infracțional organizat — 50 luni + 50.000$"
+          "Art. 205 — Constituirea unui grup infracțional organizat — 50 minute + 50.000$"
         ]
       },
       {
         h: "Cod Penal — Capitolul 3: Infracțiuni contra persoanei și autorității",
         list: [
-          "Art. 301 — Omor — 30 luni + 30.000$",
-          "Art. 302 — Omor calificat — 60 luni + 60.000$",
-          "Art. 303 — Ucidere din culpă — 25 luni + 25.000$",
-          "Art. 304 — Amenințări — 5 luni + 7.000$",
-          "Art. 305 — Lipsire de libertate în mod ilegal — 20 luni + 20.000$",
-          "Art. 306 — Lovire cu vătămare — 15 luni + 15.000$",
-          "Art. 307 — Viol — 30 luni + 30.000$",
-          "Art. 308 — Participare la altercație — 10 luni + 10.000$",
-          "Art. 309 — Șantaj — 20 luni + 20.000$",
-          "Art. 310 — Hărțuire — 15 luni + 15.000$",
-          "Art. 311 — Agresarea unui oficial public — 60 luni + 60.000$",
-          "Art. 312 — Uzurparea autorității oficiale — 30 luni + 30.000$"
+          "Art. 301 — Omor — 30 minute + 30.000$",
+          "Art. 302 — Omor calificat — 60 minute + 60.000$",
+          "Art. 303 — Ucidere din culpă — 25 minute + 25.000$",
+          "Art. 304 — Amenințări — 5 minute + 7.000$",
+          "Art. 305 — Lipsire de libertate în mod ilegal — 20 minute + 20.000$",
+          "Art. 306 — Lovire cu vătămare — 15 minute + 15.000$",
+          "Art. 307 — Viol — 30 minute + 30.000$",
+          "Art. 308 — Participare la altercație — 10 minute + 10.000$",
+          "Art. 309 — Șantaj — 20 minute + 20.000$",
+          "Art. 310 — Hărțuire — 15 minute + 15.000$",
+          "Art. 311 — Agresarea unui oficial public — 60 minute + 60.000$",
+          "Art. 312 — Uzurparea autorității oficiale — 30 minute + 30.000$"
         ]
       },
       {
         h: "Cod Penal — Capitolul 4: Infracțiuni contra proprietății",
         list: [
-          "Art. 401 — Furt — 20 luni + 20.000$",
-          "Art. 402 — Jaf armat — 30 luni + 30.000$",
-          "Art. 403 — Jaf calificat — 40 luni + 40.000$",
-          "Art. 404 — Abuz de încredere — 15 luni + 15.000$",
-          "Art. 405 — Înșelăciune — 20 luni + 20.000$",
-          "Art. 406 — Distrugere de bunuri — 15 luni + 10.000$",
-          "Art. 407 — Distrugere calificată — 40 luni + 40.000$",
-          "Art. 408 — Distrugere din culpă — 15 luni + 10.000$",
-          "Art. 409 — Pătrundere fără drept — 15 luni + 15.000$",
-          "Art. 410 — Furt calificat — 25 luni + 25.000$",
-          "Art. 411 — Furt de vehicul — 15 luni + 20.000$",
-          "Art. 412 — Jaf asupra unei entități comerciale — 45 luni + 60.000$"
+          "Art. 401 — Furt — 20 minute + 20.000$",
+          "Art. 402 — Jaf armat — 30 minute + 30.000$",
+          "Art. 403 — Jaf calificat — 40 minute + 40.000$",
+          "Art. 404 — Abuz de încredere — 15 minute + 15.000$",
+          "Art. 405 — Înșelăciune — 20 minute + 20.000$",
+          "Art. 406 — Distrugere de bunuri — 15 minute + 10.000$",
+          "Art. 407 — Distrugere calificată — 40 minute + 40.000$",
+          "Art. 408 — Distrugere din culpă — 15 minute + 10.000$",
+          "Art. 409 — Pătrundere fără drept — 15 minute + 15.000$",
+          "Art. 410 — Furt calificat — 25 minute + 25.000$",
+          "Art. 411 — Furt de vehicul — 15 minute + 20.000$",
+          "Art. 412 — Jaf asupra unei entități comerciale — 45 minute + 60.000$"
         ]
       },
       {
         h: "Cod Penal — Capitolul 5: Corupție și abuz în serviciu",
         list: [
-          "Art. 501 — Luare de mită — 120 luni + 120.000$",
-          "Art. 502 — Dare de mită — 120 luni + 120.000$",
-          "Art. 503 — Trafic de influență — 120 luni + 120.000$",
-          "Art. 504 — Comportament abuziv al unui oficial — 30 luni + 60.000$",
-          "Art. 505 — Abuz în serviciu — 60 luni + 120.000$",
-          "Art. 506 — Neglijență în serviciu — 20 luni + 30.000$",
-          "Art. 507 — Uzurparea unei funcții oficiale — 40 luni + 60.000$",
-          "Art. 508 — Divulgarea secretelor de stat — 240 luni + 300.000$",
-          "Art. 509 — Divulgarea secretelor de serviciu — 120 luni + 200.000$"
+          "Art. 501 — Luare de mită — 120 minute + 120.000$",
+          "Art. 502 — Dare de mită — 120 minute + 120.000$",
+          "Art. 503 — Trafic de influență — 120 minute + 120.000$",
+          "Art. 504 — Comportament abuziv al unui oficial — 30 minute + 60.000$",
+          "Art. 505 — Abuz în serviciu — 60 minute + 120.000$",
+          "Art. 506 — Neglijență în serviciu — 20 minute + 30.000$",
+          "Art. 507 — Uzurparea unei funcții oficiale — 40 minute + 60.000$",
+          "Art. 508 — Divulgarea secretelor de stat — 120 minute + 300.000$",
+          "Art. 509 — Divulgarea secretelor de serviciu — 120 minute + 200.000$"
         ]
       },
       {
         h: "Cod Penal — Capitolul 6: Infracțiuni economice și fals",
         list: [
           "Art. 600 — Prevedere privind confiscarea obligatorie a bunurilor",
-          "Art. 601 — Falsificarea de documente oficiale — 50 luni + 60.000$",
-          "Art. 602 — Folosirea de documente false — 50 luni + 70.000$",
-          "Art. 603 — Spălare de bani — 60 luni + 100.000$ + confiscarea bunurilor",
-          "Art. 604 — Evaziune fiscală — 50 luni + 70.000$",
-          "Art. 605 — Delapidare — 40 luni + 50.000$"
+          "Art. 601 — Falsificarea de documente oficiale — 50 minute + 60.000$",
+          "Art. 602 — Folosirea de documente false — 50 minute + 70.000$",
+          "Art. 603 — Spălare de bani — 60 minute + 100.000$ + confiscarea bunurilor",
+          "Art. 604 — Evaziune fiscală — 50 minute + 70.000$",
+          "Art. 605 — Delapidare — 40 minute + 50.000$"
         ]
       },
       {
         h: "Cod Penal — Capitolul 7: Obstrucționarea justiției",
         list: [
-          "Art. 701 — Acuzație falsă — 30 luni + 30.000$",
-          "Art. 702 — Ajutorarea făptuitorului — 20 luni + 25.000$",
-          "Art. 703 — Tăinuirea unei infracțiuni — 25 luni + 30.000$",
-          "Art. 704 — Obstrucționarea justiției — 40 luni + 40.000$",
-          "Art. 705 — Mărturie mincinoasă — 25 luni + 25.000$",
-          "Art. 706 — Represalii împotriva unui martor — 120 luni + 200.000$",
-          "Art. 707 — Evadare din custodie — 70 luni + 100.000$",
-          "Art. 708 — Facilitarea unei evadări — 70 luni + 100.000$",
-          "Art. 709 — Nedenunțarea unei infracțiuni — 30 luni + 30.000$",
-          "Art. 710 — Nedenunțare de către un oficial — 30 luni + 30.000$"
+          "Art. 701 — Acuzație falsă — 30 minute + 30.000$",
+          "Art. 702 — Ajutorarea făptuitorului — 20 minute + 25.000$",
+          "Art. 703 — Tăinuirea unei infracțiuni — 25 minute + 30.000$",
+          "Art. 704 — Obstrucționarea justiției — 40 minute + 40.000$",
+          "Art. 705 — Mărturie mincinoasă — 25 minute + 25.000$",
+          "Art. 706 — Represalii împotriva unui martor — 120 minute + 200.000$",
+          "Art. 707 — Evadare din custodie — 70 minute + 100.000$",
+          "Art. 708 — Facilitarea unei evadări — 70 minute + 100.000$",
+          "Art. 709 — Nedenunțarea unei infracțiuni — 30 minute + 30.000$",
+          "Art. 710 — Nedenunțare de către un oficial — 30 minute + 30.000$"
         ]
       },
       {
         h: "Cod Penal — Capitolul 8: Arme, muniție și substanțe",
         list: [
-          "Art. 801 — Deținere ilegală de arme Categoria I.1/I.2 — 30 luni + 50.000$",
-          "Art. 802 — Deținere ilegală de arme automate/de asalt — 50 luni + 70.000$",
-          "Art. 803 — Deținere ilegală de muniție — 20 luni + 40.000$",
-          "Art. 804 — Descărcarea neautorizată a unei arme de foc — 40 luni + 50.000$",
-          "Art. 805 — Agresiune armată cu vătămare — 60 luni + 100.000$",
-          "Art. 806 — Trafic ilegal de arme — 70 luni + 200.000$",
-          "Art. 807 — Deținere de substanțe Clasa II (uz personal) — 20 luni + 20.000$",
-          "Art. 808 — Deținere de substanțe Clasa I (uz personal) — 30 luni + 30.000$",
-          "Art. 809 — Trafic de substanțe Clasa II — 40 luni + 40.000$",
-          "Art. 810 — Trafic de substanțe Clasa I — 60 luni + 60.000$"
+          "Art. 801 — Deținere ilegală de arme Categoria I.1/I.2 — 30 minute + 50.000$",
+          "Art. 802 — Deținere ilegală de arme automate/de asalt — 50 minute + 70.000$",
+          "Art. 803 — Deținere ilegală de muniție — 20 minute + 40.000$",
+          "Art. 804 — Descărcarea neautorizată a unei arme de foc — 40 minute + 50.000$",
+          "Art. 805 — Agresiune armată cu vătămare — 60 minute + 100.000$",
+          "Art. 806 — Trafic ilegal de arme — 70 minute + 200.000$",
+          "Art. 807 — Deținere de substanțe Clasa II (uz personal) — 20 minute + 20.000$",
+          "Art. 808 — Deținere de substanțe Clasa I (uz personal) — 30 minute + 30.000$",
+          "Art. 809 — Trafic de substanțe Clasa II — 40 minute + 40.000$",
+          "Art. 810 — Trafic de substanțe Clasa I — 60 minute + 60.000$"
         ]
       },
       {

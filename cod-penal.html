@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#ff8a1f">
-  <meta name="description" content="Codul Penal al serverului Moldova RP: toate articolele cu amenzile, lunile de închisoare, suspendările de permis și confiscările, cu căutare. Pentru Poliție, Șerif și FIB: calculator de amenzi și sentințe.">
+  <meta name="description" content="Codul Penal al serverului Moldova RP: toate articolele cu amenzile, minutele de închisoare, suspendările de permis și confiscările, cu căutare. Pentru Poliție, Șerif și FIB: calculator de amenzi și sentințe.">
   <meta property="og:type" content="website"><meta property="og:site_name" content="Moldova RP"><meta property="og:locale" content="ro_RO">
   <meta property="og:title" content="Codul Penal — Moldova RP"><meta property="og:description" content="Toate articolele, amenzile și pedepsele, cu căutare. Calculator de amenzi și sentințe pentru Poliție, Șerif și FIB."><meta property="og:url" content="https://moldovarp.md/cod-penal.html">
   <meta property="og:image" content="https://moldovarp.md/assets/og/regulamente.jpg?v=1"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="Codul Penal — Moldova RP">
@@ -155,7 +155,7 @@
       <p class="eyebrow" style="margin-top:22px">POLIȚIE · ȘERIF · FIB</p>
       <h1>Codul Penal</h1>
       <p class="muted" style="max-width:700px;margin-top:14px" id="cp-intro">
-        Toate faptele pedepsite pe Moldova RP, cu amenda, lunile de închisoare, suspendarea permisului și ce se confiscă. Caută după cuvânt („viteză”, „armă”, „droguri”) sau după numărul articolului.
+        Toate faptele pedepsite pe Moldova RP, cu amenda, minutele de închisoare, suspendarea permisului și ce se confiscă. Caută după cuvânt („viteză”, „armă”, „droguri”) sau după numărul articolului.
       </p>
       <div class="cp-link" id="cp-link" hidden></div>
     </div>
@@ -187,7 +187,7 @@
           </div>
           <div class="cp-tot">
             <div><small>Amendă</small><strong id="cp-t-fine">0$</strong></div>
-            <div><small>Închisoare</small><strong id="cp-t-jail">0 luni</strong></div>
+            <div><small>Închisoare</small><strong id="cp-t-jail">0 min</strong></div>
             <div><small>Permis</small><strong id="cp-t-lic" style="font-size:15px">—</strong></div>
             <div><small>Puncte</small><strong id="cp-t-pts">0</strong></div>
           </div>
@@ -222,12 +222,16 @@
   const norm = s => String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   let CAP = { months: 180, fine: 300000 }, BAIL = 20;
   let arts = [], chapters = [], chapter = 'all', q = '', agentLine = '', lastCalc = null;
+  // (02.11.2026) cât poate da fiecare: Poliția și Șerifii cel mult 50 de minute, FIB cel mult 120 (staff: maximul general)
+  const DEPT_JAIL_CAP = { 'Poliție': 50, 'Departamentul Șerifului': 50, 'FIB': 120 };
+  let agentDept = '';
+  const jailCap = () => DEPT_JAIL_CAP[agentDept] || CAP.months;
   const sel = new Map(); // nr → { fine, months, role }
 
   function parsePenalty(p) {
     const clean = p.replace(/\([^)]*\)/g, ' ');
     const o = { raw: p };
-    let m = /(\d+)(?:\s*[–-]\s*(\d+))?\s*luni/i.exec(clean);
+    let m = /(\d+)(?:\s*[–-]\s*(\d+))?\s*(?:de\s+)?(?:luni|minute|min)\b/i.exec(clean);
     if (m) { o.mMin = +m[1]; o.mMax = m[2] ? +m[2] : +m[1]; }
     m = /(\d{1,3}(?:\.\d{3})+|\d+)\s*\$(?:\s*[–-]\s*(\d{1,3}(?:\.\d{3})+|\d+)\s*\$)?/.exec(clean);
     if (m) { o.fMin = num(m[1]); o.fMax = m[2] ? num(m[2]) : num(m[1]); }
@@ -251,8 +255,8 @@
       for (let n = h.nextElementSibling; n && n.tagName !== 'H2'; n = n.nextElementSibling) {
         if (gen) {
           const txt = n.textContent;
-          const c = /cel mult\s*(\d+)\s*de luni[^0-9]*?(\d{1,3}(?:\.\d{3})+)\s*\$/i.exec(txt); if (c) CAP = { months: +c[1], fine: num(c[2]) };
-          const b = /cauțiune[^.]*?cel mult\s*(\d+)\s*de luni/i.exec(txt); if (b) BAIL = +b[1];
+          const c = /cel mult\s*(\d+)\s*de (?:luni|minute)[^0-9]*?(\d{1,3}(?:\.\d{3})+)\s*\$/i.exec(txt); if (c) CAP = { months: +c[1], fine: num(c[2]) };
+          const b = /cauțiune[^.]*?cel mult\s*(\d+)\s*de (?:luni|minute)/i.exec(txt); if (b) BAIL = +b[1];
           continue;
         }
         n.querySelectorAll('li').forEach(li => {
@@ -269,7 +273,7 @@
   function tags(p) {
     const t = [];
     if (p.fMin != null) t.push(`<span class="cp-tag fine">💵 ${p.fMin === p.fMax ? money(p.fMin) : money(p.fMin) + '–' + money(p.fMax)}</span>`);
-    if (p.mMin != null) t.push(`<span class="cp-tag jail">⛓ ${p.mMin === p.mMax ? p.mMin : p.mMin + '–' + p.mMax} luni</span>`);
+    if (p.mMin != null) t.push(`<span class="cp-tag jail">⛓ ${p.mMin === p.mMax ? p.mMin : p.mMin + '–' + p.mMax} min</span>`);
     if (p.susp) t.push(`<span class="cp-tag lic">🚫 permis suspendat ${p.susp}h</span>`);
     if (p.pts) t.push(`<span class="cp-tag lic">⚠ ${p.pts} puncte</span>`);
     if (p.conf) t.push(`<span class="cp-tag note">📦 ${esc(p.conf)}</span>`);
@@ -307,16 +311,17 @@
       const f = Math.round((s.fine || 0) * k), mo = Math.round((s.months || 0) * k);
       fine += f; months += mo; susp = Math.max(susp, a.pen.susp || 0); pts += a.pen.pts || 0;
       if (a.pen.conf) conf.push(`Art. ${a.nr}: ${a.pen.conf}`);
-      const parts = [f ? money(f) : '', mo ? mo + ' luni' : '', a.pen.susp ? `suspendare ${a.pen.susp}h` : '', a.pen.pts ? `${a.pen.pts} puncte` : ''].filter(Boolean).join(' + ');
+      const parts = [f ? money(f) : '', mo ? mo + ' min' : '', a.pen.susp ? `suspendare ${a.pen.susp}h` : '', a.pen.pts ? `${a.pen.pts} puncte` : ''].filter(Boolean).join(' + ');
       lines.push(`• Art. ${a.nr} Cod Penal — ${a.desc}${s.role !== 'autor' ? ` (${ROLE[s.role].s})` : ''} — ${parts || '—'}`);
     }
     const warns = [];
-    const fineCapped = Math.min(fine, CAP.fine), monthsCapped = Math.min(months, CAP.months);
+    const fineCapped = Math.min(fine, CAP.fine), monthsCapped = Math.min(months, CAP.months, jailCap());
     if (fine > CAP.fine) warns.push(`Amenda adunată (${money(fine)}) trece de maximul de ${money(CAP.fine)} pentru un incident (Art. 1.11) — se dă ${money(CAP.fine)}.`);
-    if (months > CAP.months) warns.push(`Închisoarea adunată (${months} luni) trece de maximul de ${CAP.months} luni (Art. 1.11) — se dau ${CAP.months} luni.`);
-    if (monthsCapped > 0 && monthsCapped <= BAIL) warns.push(`Pedeapsa e de cel mult ${BAIL} de luni: reținutul poate fi eliberat pe cauțiune (o aprobă un Comisar sau procurorul).`);
+    if (months > CAP.months && CAP.months <= jailCap()) warns.push(`Închisoarea adunată (${months} min) trece de maximul de ${CAP.months} de minute (Art. 1.11) — se dau ${CAP.months} de minute.`);
+    else if (months > jailCap()) warns.push(`Închisoarea adunată (${months} min) trece de cât poate da ${agentDept || 'departamentul tău'}: cel mult ${jailCap()} de minute — se dau ${jailCap()} de minute.`);
+    if (monthsCapped > 0 && monthsCapped <= BAIL) warns.push(`Pedeapsa e de cel mult ${BAIL} de minute: reținutul poate fi eliberat pe cauțiune (o aprobă un Comisar sau procurorul).`);
     document.getElementById('cp-t-fine').textContent = money(fineCapped);
-    document.getElementById('cp-t-jail').textContent = monthsCapped + ' luni';
+    document.getElementById('cp-t-jail').textContent = monthsCapped + ' min';
     document.getElementById('cp-t-lic').textContent = susp ? `suspendat ${susp}h` : '—';
     document.getElementById('cp-t-pts').textContent = pts;
     document.getElementById('cp-warns').innerHTML = warns.map(w => `<p class="cp-warn">${esc(w)}</p>`).join('');
@@ -332,12 +337,12 @@
       ...(agentLine ? [agentLine] : []),
       ...(suspectLine() ? [suspectLine()] : []),
       ...lines,
-      `TOTAL: ${money(fineCapped)} amendă${monthsCapped ? ` · ${monthsCapped} luni închisoare` : ''}${susp ? ` · permis suspendat ${susp}h` : ''}${pts ? ` · ${pts} puncte de penalizare` : ''}${fine > CAP.fine || months > CAP.months ? ' (limitat la maximul din Art. 1.11)' : ''}`,
+      `TOTAL: ${money(fineCapped)} amendă${monthsCapped ? ` · ${monthsCapped} minute de închisoare` : ''}${susp ? ` · permis suspendat ${susp}h` : ''}${pts ? ` · ${pts} puncte de penalizare` : ''}${fine > CAP.fine || months > CAP.months ? ' (limitat la maximul din Art. 1.11)' : months > jailCap() ? ` (limitat la ${jailCap()} de minute, maximul pentru ${agentDept || 'departament'})` : ''}`,
       ...(conf.length ? ['CONFISCĂRI: ' + conf.join('; ')] : []),
     ].join('\n') : '';
     const mb = document.getElementById('cp-mobile-bar');
     mb.classList.toggle('on', canCalc);
-    const mbTxt = items.length ? `⚖️ ${items.length} ${items.length === 1 ? 'articol' : 'articole'} · ${money(fineCapped)}${monthsCapped ? ' · ' + monthsCapped + ' luni' : ''}` : '⚖️ Niciun articol încă';
+    const mbTxt = items.length ? `⚖️ ${items.length} ${items.length === 1 ? 'articol' : 'articole'} · ${money(fineCapped)}${monthsCapped ? ' · ' + monthsCapped + ' min' : ''}` : '⚖️ Niciun articol încă';
     const mbEl = document.getElementById('cp-mb-txt');
     if (mbEl.textContent !== mbTxt) { mbEl.textContent = mbTxt; if (items.length) { mb.classList.remove('bump'); void mb.offsetWidth; mb.classList.add('bump'); } }
   }
@@ -348,7 +353,7 @@
       const a = arts.find(x => x.nr === nr); if (!a) return '';
       const p = a.pen;
       const fineIn = p.fMin != null ? (p.fMin !== p.fMax ? `<label>Amendă <input type="number" data-f="${esc(nr)}" min="${p.fMin}" max="${p.fMax}" step="500" value="${s.fine}"></label><span>${money(p.fMin)}–${money(p.fMax)}</span>` : `<span>Amendă: <b style="color:#fff">${money(p.fMin)}</b></span>`) : '';
-      const jailIn = p.mMin != null ? (p.mMin !== p.mMax ? `<label>Luni <input type="number" data-m="${esc(nr)}" min="${p.mMin}" max="${p.mMax}" step="1" value="${s.months}"></label><span>${p.mMin}–${p.mMax}</span>` : `<span>Închisoare: <b style="color:#fff">${p.mMin} luni</b></span>`) : '';
+      const jailIn = p.mMin != null ? (p.mMin !== p.mMax ? `<label>Minute <input type="number" data-m="${esc(nr)}" min="${p.mMin}" max="${p.mMax}" step="1" value="${s.months}"></label><span>${p.mMin}–${p.mMax}</span>` : `<span>Închisoare: <b style="color:#fff">${p.mMin} min</b></span>`) : '';
       return `<div class="cp-it"><div class="cp-it-top"><div><b>Art. ${esc(nr)}</b><small>${esc(a.desc)}</small></div><button type="button" class="cp-x" data-rm="${esc(nr)}" aria-label="Scoate Art. ${esc(nr)}">✕</button></div>
         <div class="cp-it-row">${fineIn}${jailIn}<label>Rol <select data-r="${esc(nr)}">${Object.entries(ROLE).map(([k, v]) => `<option value="${k}"${s.role === k ? ' selected' : ''}>${v.t}</option>`).join('')}</select></label></div></div>`;
     }).join('');
@@ -406,7 +411,7 @@
   const fmtAt = x => new Date(x).toLocaleString('ro-RO', { timeZone: 'Europe/Chisinau', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   const ROLE_SHORT = { tentativa: ' (tentativă)', complice: ' (complice)' };
   function recHtml(r, withSuspect) {
-    const tot = [r.fine ? money(r.fine) : '', r.months ? r.months + ' luni' : '', r.suspHours ? `permis ${r.suspHours}h` : ''].filter(Boolean).join(' · ') || '—';
+    const tot = [r.fine ? money(r.fine) : '', r.months ? r.months + ' min' : '', r.suspHours ? `permis ${r.suspHours}h` : ''].filter(Boolean).join(' · ') || '—';
     const who = [r.agent.name, r.agent.dept, r.agent.grade].filter(Boolean).join(' · ');
     return `<div class="cp-rec${r.annulled ? ' annul' : ''}"><div class="meta">#${r.id} · ${esc(fmtAt(r.at))}${withSuspect ? ` · suspect: <b>${esc(r.suspect.name || '—')}</b> (ID ${esc(r.suspect.staticId)})` : ''}${who ? ` · ${esc(who)}` : ''}</div>
       <div class="arts">${(r.articles || []).map(a => `<b>Art. ${esc(a.nr)}</b> ${esc(a.desc)}${ROLE_SHORT[a.role] || ''}`).join('; ')}</div>
@@ -422,7 +427,7 @@
       if (my !== cazSeq) return;
       box.className = 'cp-caz' + (d.last30.n >= 3 ? ' bad' : '');
       box.innerHTML = d.total
-        ? `📁 Cazier: <b>${d.total}</b> ${d.total === 1 ? 'proces-verbal' : 'procese-verbale'}${d.last30.n ? ` · în ultimele 30 de zile: <b>${d.last30.n}</b> (${money(d.last30.fine)}${d.last30.months ? ', ' + d.last30.months + ' luni' : ''})` : ''}${d.last30.n >= 3 ? '<br><b style="color:#ff9b9b">⚠ Recidivist</b>' : ''}
+        ? `📁 Cazier: <b>${d.total}</b> ${d.total === 1 ? 'proces-verbal' : 'procese-verbale'}${d.last30.n ? ` · în ultimele 30 de zile: <b>${d.last30.n}</b> (${money(d.last30.fine)}${d.last30.months ? ', ' + d.last30.months + ' min' : ''})` : ''}${d.last30.n >= 3 ? '<br><b style="color:#ff9b9b">⚠ Recidivist</b>' : ''}
            <br><button type="button" data-caz-toggle>${cazOpen ? 'Ascunde' : 'Vezi procesele-verbale'}</button><div id="cp-caz-list" ${cazOpen ? '' : 'hidden'}>${d.records.map(r => recHtml(r)).join('')}</div>`
         : '📁 Cazier curat: niciun proces-verbal salvat pe site.';
       box.hidden = false;
@@ -477,10 +482,11 @@
       arts = res.arts; chapters = res.chs;
       if (!arts.length) throw new Error();
       document.getElementById('cp-general-list').innerHTML = [
-        `Pedeapsa adunată pentru toate faptele dintr-un incident e de cel mult <b>${CAP.months} de luni</b> și <b>${money(CAP.fine)}</b> amendă (Art. 1.11).`,
+        `Pedeapsa adunată pentru toate faptele dintr-un incident e de cel mult <b>${CAP.months} de minute</b> și <b>${money(CAP.fine)}</b> amendă (Art. 1.11).`,
+        'Poliția și Biroul Șerifului pot da cel mult <b>50 de minute</b> de închisoare, iar FIB cel mult <b>120 de minute</b>.',
         'Tentativa (fapta începută, dar neterminată) se pedepsește cu <b>jumătate</b> din pedeapsă.',
         'Complicele (cel care doar ajută) primește cel mult <b>două treimi</b> din pedeapsă. Organizatorul și instigatorul primesc cât autorul.',
-        `Cauțiune: la pedepse de cel mult <b>${BAIL} de luni</b>, aprobată de un Comisar sau de procuror.`,
+        `Cauțiune: la pedepse de cel mult <b>${BAIL} de minute</b>, aprobată de un Comisar sau de procuror.`,
         'Amenda fără articol ori cu o sumă peste maximul din Cod nu e valabilă (Cod de Procedură, Art. 9.2).',
         'Textul complet: <a href="ghid-factiune.html?slug=politie" style="color:var(--orange)">Ghidul Poliției</a>.',
       ].map(x => `<li>${x}</li>`).join('');
@@ -500,6 +506,7 @@
       : a.seen ? `<span class="st">gradul de la ultima intrare în joc (${esc(new Date(a.seen).toLocaleDateString('ro-RO', { timeZone: 'Europe/Chisinau' }))})</span>` : '';
     box.innerHTML = `<span class="ico" aria-hidden="true">${DEPT_ICO[a.dept] || '🛡️'}</span><div><b>${esc(a.name)}${id}</b><small>${esc(role)}</small>${seen}</div>`;
     box.hidden = false;
+    agentDept = a.dept || '';
     agentLine = `AGENT: ${a.name}${a.staticId ? ` (ID ${a.staticId})` : ''}${role ? ` — ${role}` : ''}`;
   }
   function showLink(d, token) {

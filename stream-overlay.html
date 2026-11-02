@@ -105,6 +105,27 @@ body.t-arcade #timer .clock{font-size:36px}
 /* artificii */
 #fw{position:fixed;inset:0;width:100vw;height:100vh;pointer-events:none}
 
+/* acțiuni (clipurile/imaginile/muzica alese de streamer) */
+#act{position:fixed;inset:0;pointer-events:none}
+.stage{position:absolute;z-index:2;display:flex;flex-direction:column;align-items:center;gap:14px;animation:stIn .45s cubic-bezier(.2,1.3,.4,1) both;max-width:96vw}
+.stage.out{animation:stOut .4s ease-in both}
+.stage.p-center{left:50%;top:50%;transform:translate(-50%,-50%)}
+.stage.p-top{left:50%;top:3vh;transform:translateX(-50%)}
+.stage.p-bottom{left:50%;bottom:3vh;transform:translateX(-50%)}
+.stage.p-left{left:3vw;top:50%;transform:translateY(-50%)}
+.stage.p-right{right:3vw;top:50%;transform:translateY(-50%)}
+.stage .md{display:block;max-height:72vh;object-fit:contain;border-radius:calc(var(--r) * .6)}
+.stage .cap{font-size:clamp(20px,3.2vw,46px);font-weight:700;text-align:center;line-height:1.2;padding:10px 20px;max-width:90vw}
+.stage .cap b{color:var(--accent)}
+body.t-arcade .stage .cap{font-size:clamp(14px,2vw,26px);line-height:1.6}
+@keyframes stIn{from{opacity:0;scale:.6}to{opacity:1;scale:1}}
+@keyframes stOut{to{opacity:0;scale:.9}}
+.shake{animation:shk .5s linear 3}
+@keyframes shk{0%,100%{translate:0 0}20%{translate:-14px 6px}40%{translate:12px -8px}60%{translate:-10px -4px}80%{translate:8px 8px}}
+#flash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none}
+#flash.go{animation:fl .7s ease-out}
+@keyframes fl{0%{opacity:.85}100%{opacity:0}}
+#fx{position:fixed;inset:0;width:100vw;height:100vh;pointer-events:none;z-index:1}
 #err{position:fixed;left:8px;bottom:8px;background:#300;color:#fbb;font:12px Inter,sans-serif;padding:6px 10px;border-radius:6px}
 @media (prefers-reduced-motion:reduce){.al,.msg{animation:none}}
 </style>
@@ -382,6 +403,76 @@ body.t-arcade #timer .clock{font-size:36px}
         const max = S?.fireworks?.maxIcons || 30;
         if (e.t === 'gift') burst(e, Math.min(max, Math.max(3, Math.round(e.count * 2 + Math.log2(1 + e.diamonds) * 2))));
         else if (e.t === 'giftcombo') burst(e, Math.min(6, max));
+      },
+    };
+  });
+
+  widgets.actions = (() => {
+    const SCREEN = Math.min(4, Math.max(1, Number(P.get('screen')) || 1));
+    root.innerHTML = '<div id="act"></div><div id="flash"></div><canvas id="fx"></canvas>';
+    const box = document.getElementById('act'), flash = document.getElementById('flash'), cv = document.getElementById('fx'), cx = cv.getContext('2d');
+    const fit = () => { cv.width = innerWidth * devicePixelRatio; cv.height = innerHeight * devicePixelRatio; };
+    fit(); addEventListener('resize', fit);
+    const q = []; let busy = false, parts = [], anim = false;
+    // efecte: confetti și inimi
+    function effect(kind) {
+      if (kind === 'flash') { flash.classList.remove('go'); void flash.offsetWidth; flash.classList.add('go'); return; }
+      if (kind !== 'confetti' && kind !== 'hearts') return;
+      const d = devicePixelRatio, W0 = cv.width, H0 = cv.height, cols = ['#ff8a1f', '#3ddc84', '#4aa3ff', '#f25f8b', '#ffd23f', '#b57bff'];
+      for (let i = 0; i < (kind === 'hearts' ? 60 : 160); i++) {
+        if (kind === 'hearts') parts.push({ k: 'h', x: Math.random() * W0, y: H0 + Math.random() * 200 * d, vx: (Math.random() - .5) * 2 * d, vy: -(3 + Math.random() * 4) * d, s: (24 + Math.random() * 30) * d, a: 0, r: 0, life: 0 });
+        else parts.push({ k: 'c', x: W0 / 2 + (Math.random() - .5) * W0 * .3, y: H0 * .55, vx: (Math.random() - .5) * 26 * d, vy: -(8 + Math.random() * 18) * d, s: (6 + Math.random() * 8) * d, c: cols[i % cols.length], a: Math.random() * 6, r: (Math.random() - .5) * .4, life: 0 });
+      }
+      if (!anim) { anim = true; requestAnimationFrame(tick); }
+    }
+    function tick() {
+      cx.clearRect(0, 0, cv.width, cv.height);
+      const g = .35 * devicePixelRatio;
+      parts = parts.filter(p => p.life < 420 && p.y < cv.height + 300 && p.y > -300);
+      for (const p of parts) {
+        p.life++;
+        if (p.k === 'c') { p.vy += g; p.vx *= .99; p.x += p.vx; p.y += p.vy; p.a += p.r; cx.save(); cx.translate(p.x, p.y); cx.rotate(p.a); cx.fillStyle = p.c; cx.fillRect(-p.s / 2, -p.s / 4, p.s, p.s / 2); cx.restore(); }
+        else { p.x += p.vx + Math.sin(p.life / 12) * devicePixelRatio; p.y += p.vy; cx.globalAlpha = Math.max(0, 1 - p.life / 300); cx.font = `${p.s}px serif`; cx.fillText('❤️', p.x, p.y); cx.globalAlpha = 1; }
+      }
+      if (parts.length) requestAnimationFrame(tick); else { anim = false; cx.clearRect(0, 0, cv.width, cv.height); }
+    }
+    function next() {
+      if (busy || !q.length) return;
+      busy = true;
+      const a = q.shift();
+      const st = document.createElement('div');
+      st.className = 'stage p-' + (a.position || 'center');
+      const vol = Math.max(0, Math.min(1, (a.volume ?? 80) / 100));
+      let md = null, timed = null, ended = false;
+      const done = () => { if (ended) return; ended = true; clearTimeout(timed); st.classList.add('out'); setTimeout(() => { st.remove(); try { md?.pause?.(); au?.pause(); } catch { /* */ } busy = false; setTimeout(next, 150); }, 400); };
+      if (a.media?.url && a.media.kind === 'image') { md = document.createElement('img'); md.src = a.media.url; }
+      else if (a.media?.url && a.media.kind === 'video') {
+        md = document.createElement('video'); md.src = a.media.url; md.playsInline = true; md.autoplay = true; md.volume = vol;
+        md.play().catch(() => { md.muted = true; md.play().catch(() => {}); });
+        if (!a.duration) md.onended = done;
+      } else if (a.media?.url && a.media.kind === 'audio' && !a.audio) a.audio = a.media.url;
+      if (md) { md.className = 'md'; md.style.width = `${a.size || 45}vw`; md.onerror = () => md.remove(); st.appendChild(md); }
+      if (a.text) {
+        const cap = document.createElement('div'); cap.className = 'cap card';
+        const name = esc(a.user?.name || ''); let html = esc(a.text); if (name) html = html.split(name).join(`<b>${name}</b>`);
+        cap.innerHTML = html; st.appendChild(cap);
+      }
+      let au = null;
+      if (a.audio) { au = new Audio(a.audio); au.volume = vol; au.play().catch(() => {}); if (!a.duration && !(a.media?.kind === 'video')) au.onended = done; }
+      else if (a.sound && a.sound !== 'none' && a.media?.kind !== 'video') play(a.sound, a.volume);
+      say(a.tts);
+      if (md || a.text) box.appendChild(st);
+      if (a.effect === 'shake') { box.classList.remove('shake'); void box.offsetWidth; box.classList.add('shake'); }
+      effect(a.effect);
+      const waitsMedia = !a.duration && (a.media?.kind === 'video' || au);
+      timed = setTimeout(done, waitsMedia ? 60000 : (a.duration || 6) * 1000);
+      if (!md && !a.text && !au && !waitsMedia) { clearTimeout(timed); timed = setTimeout(done, Math.min(3000, (a.duration || 2) * 1000)); }
+    }
+    return {
+      ev(e) {
+        if (e.t === 'clear') { q.length = 0; return; }
+        if (e.t !== 'action' || (e.screen || 1) !== SCREEN) return;
+        if (q.length < 40) { q.push(e); next(); }
       },
     };
   });

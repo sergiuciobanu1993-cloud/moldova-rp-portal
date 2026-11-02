@@ -52,7 +52,23 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
       points BIGINT NOT NULL DEFAULT 0,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       PRIMARY KEY (user_id, viewer));
-    CREATE INDEX IF NOT EXISTS stream_points_top ON stream_points(user_id, points DESC);`).catch(err => { tablesP = null; throw err; });
+    CREATE INDEX IF NOT EXISTS stream_points_top ON stream_points(user_id, points DESC);
+    CREATE TABLE IF NOT EXISTS stream_media (
+      id UUID PRIMARY KEY,
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name VARCHAR(120),
+      kind VARCHAR(10) NOT NULL,
+      mime VARCHAR(60) NOT NULL,
+      bytes INT NOT NULL,
+      data BYTEA NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+    CREATE INDEX IF NOT EXISTS stream_media_user ON stream_media(user_id, created_at DESC);
+    CREATE TABLE IF NOT EXISTS stream_gifts (
+      id BIGINT PRIMARY KEY,
+      name VARCHAR(80) NOT NULL,
+      diamonds INT NOT NULL DEFAULT 0,
+      img TEXT,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW());`).catch(err => { tablesP = null; throw err; });
 
   // ---------------------------------------------------------------- setări
   const clampN = (v, min, max, def) => { const n = Number(v); return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : def; };
@@ -64,6 +80,43 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
   const THEMES = ["neon", "glass", "minimal", "arcade"];
   const GOAL_TYPES = ["likes", "diamonds", "follows", "shares", "gifts"];
   const WHEEL_COLORS = ["#ff8a1f", "#3ddc84", "#4aa3ff", "#f25f8b", "#b57bff", "#ffd23f", "#2ee6d6", "#ff5a4e"];
+
+  const MAX_ACTIONS = 60, MAX_EVENTS = 60;
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const mediaRef = v => UUID_RE.test(String(v || "")) ? String(v).toLowerCase() : null;
+  const KINDS = ["image", "video", "audio"];
+  const EFFECTS = ["none", "confetti", "hearts", "shake", "flash"];
+  const POSITIONS = ["center", "top", "bottom", "left", "right"];
+  const TRIGGERS = ["gift", "follow", "share", "like", "command", "member", "subscribe"];
+  const safeId = (v, pre) => String(v || "").replace(/[^\w-]/g, "").slice(0, 16) || pre + crypto.randomBytes(4).toString("hex");
+  function normAction(x = {}, i = 0) {
+    const media = mediaRef(x.media), audio = mediaRef(x.audio);
+    return {
+      id: safeId(x.id, "a"), name: str(x.name, 40, `Acțiune ${i + 1}`),
+      media, mediaKind: media && KINDS.includes(x.mediaKind) ? x.mediaKind : null,
+      audio: audio && x.audio !== media ? audio : null,
+      sound: sound(x.sound, "none"),
+      text: str(x.text, 140), tts: str(x.tts, 200),
+      duration: clampN(x.duration, 0, 60, 6), volume: clampN(x.volume, 0, 100, 80),
+      screen: Math.round(clampN(x.screen, 1, 4, 1)), position: POSITIONS.includes(x.position) ? x.position : "center",
+      size: clampN(x.size, 10, 100, 45), effect: EFFECTS.includes(x.effect) ? x.effect : "none",
+      wheel: bool(x.wheel, false), timer: Math.round(clampN(x.timer, -3600, 3600, 0)), points: Math.round(clampN(x.points, -1_000_000, 1_000_000, 0)),
+    };
+  }
+  function normEvent(x = {}, i = 0, actionIds = new Set()) {
+    let cmd = str(x.command, 30).toLowerCase().replace(/\s+/g, "");
+    if (cmd && !cmd.startsWith("!")) cmd = "!" + cmd;
+    return {
+      id: safeId(x.id, "e"), on: bool(x.on, true),
+      trigger: TRIGGERS.includes(x.trigger) ? x.trigger : "gift",
+      gift: str(x.gift, 60), min: Math.round(clampN(x.min, 1, 1_000_000, 1)), perGift: bool(x.perGift, false),
+      likes: Math.round(clampN(x.likes, 10, 1_000_000, 100)),
+      command: cmd || "!dans", cost: Math.round(clampN(x.cost, 0, 10_000_000, 0)),
+      cooldown: clampN(x.cooldown, 0, 3600, 0), userCooldown: clampN(x.userCooldown, 0, 3600, 0),
+      random: bool(x.random, false),
+      actions: (Array.isArray(x.actions) ? x.actions : []).map(String).filter(id => actionIds.has(id)).slice(0, 6),
+    };
+  }
 
   function normalizeSettings(s = {}) {
     const a = s.alerts || {};
@@ -80,6 +133,12 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
       target: clampN(g?.target, 1, 100_000_000, 1000),
     }));
     const lines = (Array.isArray(s.rotator?.lines) ? s.rotator.lines : []).map(x => str(x, 120)).filter(Boolean).slice(0, 12);
+    // (03.11.2026) Acțiuni (ce se întâmplă: clip, imagine, muzică, text, voce, efect) și
+    // evenimente (când: un anumit cadou, follow, share, like-uri, comandă în chat…)
+    const seen = new Set();
+    const actions = (Array.isArray(s.actions) ? s.actions : []).slice(0, MAX_ACTIONS).map((x, i) => normAction(x, i)).filter(a => !seen.has(a.id) && seen.add(a.id));
+    const ids = new Set(actions.map(a => a.id)), seenE = new Set();
+    const events = (Array.isArray(s.events) ? s.events : []).slice(0, MAX_EVENTS).map((x, i) => normEvent(x, i, ids)).filter(e => !seenE.has(e.id) && seenE.add(e.id));
     return {
       alerts: {
         gift: alert(a.gift, { on: true, sound: "coin", text: "{user} a trimis {count}× {gift}!", min: 1 }),
@@ -133,6 +192,7 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
       },
       fireworks: { on: bool(s.fireworks?.on, true), maxIcons: clampN(s.fireworks?.maxIcons, 5, 80, 30) },
       rotator: { lines: lines.length || Array.isArray(s.rotator?.lines) ? lines : ["Dă follow ca să nu pierzi live-ul!", "Trimite un cadou și învârte roata!", "Scrie !tts mesaj și îl citesc cu voce"], every: clampN(s.rotator?.every, 3, 120, 8) },
+      actions, events,
       theme: { style: THEMES.includes(s.theme?.style) ? s.theme.style : "neon", accent: color(s.theme?.accent, "#ff8a1f"), scale: clampN(s.theme?.scale, 0.6, 2, 1) },
     };
   }
@@ -167,7 +227,7 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
       uid, key: r.overlay_key, tiktok: r.tiktok, settings: normalizeSettings(r.settings), state: cleanState(r.state),
       clients: new Set(), conn: null, status: "off", statusMsg: "", wanted: false, wantedSince: 0, retryT: null, gen: 0,
       dirty: false, pointsQ: new Map(), likeAcc: new Map(), chatCd: new Map(), ttsCd: new Map(), wheelQ: [], wheelBusyUntil: 0, pushT: null,
-      roomId: null, lastEventAt: 0,
+      roomId: null, lastEventAt: 0, evLast: new Map(), evUser: new Map(), likeUser: new Map(),
     };
     hubs.set(uid, h);
     if (h.key) keyToUid.set(h.key, uid);
@@ -214,6 +274,12 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
     const { rows } = await pool.query(`SELECT viewer AS id, name, points FROM stream_points WHERE user_id = $1 AND points > 0 ORDER BY points DESC LIMIT $2`, [uid, n]);
     return rows.map(r => ({ id: r.id, name: r.name || r.id, points: Number(r.points) }));
   }
+  function addPointsRaw(h, user, pts) {
+    if (!pts || !user?.id || user.test) return;
+    const q = h.pointsQ.get(user.id) || { name: user.name, pts: 0 };
+    q.pts += pts; q.name = user.name;
+    h.pointsQ.set(user.id, q);
+  }
   function addPoints(h, user, pts) {
     if (!h.settings.points.on || !(pts > 0) || !user.id || user.test) return;
     const q = h.pointsQ.get(user.id) || { name: user.name, pts: 0 };
@@ -243,6 +309,15 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
     if (t.running) t.endsAt = Math.min(Date.now() + maxMs, Math.max(t.endsAt, Date.now()) + sec * 1000);
     else if (t.left > 0) t.left = Math.min(maxMs, t.left + sec * 1000);
     else return;   // cronometrul nu e pornit — cadourile nu-l pornesc singure
+    broadcast(h, { t: "timer", timer: timerView(h), added: sec });
+    pushState(h);
+  }
+  function timerShift(h, sec) {
+    if (sec > 0) return timerAdd(h, sec);
+    const t = h.state.timer;
+    if (t.running) t.endsAt = Math.max(Date.now(), t.endsAt + sec * 1000);
+    else if (t.left > 0) t.left = Math.max(0, t.left + sec * 1000);
+    else return;
     broadcast(h, { t: "timer", timer: timerView(h), added: sec });
     pushState(h);
   }
@@ -303,12 +378,78 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
   }
 
   // ---------------------------------------------------------------- evenimente
-  const fill = (tpl, v) => String(tpl).replace(/\{(user|gift|count|diamonds|total)\}/g, (_, k) => String(v[k] ?? ""));
+  const fill = (tpl, v) => String(tpl).replace(/\{(user|gift|count|diamonds|total|text)\}/g, (_, k) => String(v[k] ?? ""));
   function alertOf(h, kind, vars, extra = {}) {
     const a = h.settings.alerts[kind];
     if (!a?.on) return null;
     const text = fill(a.text, vars);
     return { kind, text, sound: a.sound, duration: h.settings.alerts.duration, volume: h.settings.alerts.volume, tts: a.tts ? text.replace(URL_RE, " ").slice(0, 200) : null, ...extra };
+  }
+
+  // ---------------------------------------------------------------- acțiuni și evenimente
+  const giftKey = v => String(v || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+  function runAction(h, a, ctx = {}) {
+    if (!a) return;
+    const u = ctx.user || { id: "", name: "", avatar: "" };
+    const vars = { user: u.name, gift: ctx.gift || "", count: ctx.count || 1, diamonds: ctx.diamonds || 0, total: "", text: ctx.args || "" };
+    broadcast(h, {
+      t: "action", id: a.id, name: a.name, screen: a.screen,
+      media: a.media ? { url: `/api/stream/media/${a.media}`, kind: a.mediaKind || "image" } : null,
+      audio: a.audio ? `/api/stream/media/${a.audio}` : null,
+      sound: a.sound, text: fill(a.text, vars), tts: a.tts ? fill(a.tts, vars).replace(URL_RE, " ").slice(0, 220) : null,
+      duration: a.duration, volume: a.volume, position: a.position, size: a.size, effect: a.effect,
+      user: u, img: ctx.img || "", test: !!u.test,
+    });
+    if (a.wheel) wheelSpin(h, u.name);
+    if (a.timer) timerShift(h, a.timer);
+    if (a.points && u.id && !u.test) addPointsRaw(h, u, a.points);
+  }
+  function runEvent(h, e, ctx, times = 1) {
+    const acts = e.actions.map(id => h.settings.actions.find(a => a.id === id)).filter(Boolean);
+    if (!acts.length) return false;
+    for (let i = 0; i < times; i++) {
+      if (e.random) runAction(h, acts[crypto.randomInt(acts.length)], ctx);
+      else for (const a of acts) runAction(h, a, ctx);
+    }
+    return true;
+  }
+  function fireEvents(h, trigger, ctx) {
+    const now = Date.now(), uid = ctx.user?.id || "";
+    for (const e of h.settings.events) {
+      if (!e.on || e.trigger !== trigger || !e.actions.length) continue;
+      let times = 1;
+      if (trigger === "gift") {
+        if (e.gift && giftKey(e.gift) !== giftKey(ctx.gift) && String(e.gift) !== String(ctx.giftId || "")) continue;
+        if ((e.perGift ? ctx.diamonds / Math.max(1, ctx.count) : ctx.diamonds) < e.min) continue;
+        times = e.perGift ? Math.min(ctx.count || 1, 10) : 1;
+      } else if (trigger === "like") {
+        times = Math.min(3, Math.floor(ctx.after / e.likes) - Math.floor(ctx.before / e.likes));
+        if (times <= 0) continue;
+      } else if (trigger === "command") {
+        if (ctx.cmd !== e.command) continue;
+      }
+      if (e.cooldown && now - (h.evLast.get(e.id) || 0) < e.cooldown * 1000) continue;
+      const uk = e.id + "|" + uid;
+      if (e.userCooldown && uid && now - (h.evUser.get(uk) || 0) < e.userCooldown * 1000) continue;
+      const go = () => {
+        h.evLast.set(e.id, Date.now());
+        if (uid) { h.evUser.set(uk, Date.now()); if (h.evUser.size > 10000) h.evUser.clear(); }
+        runEvent(h, e, ctx, times);
+      };
+      if (trigger === "command" && e.cost > 0 && !ctx.user?.test) {
+        // comandă cu preț în puncte: verificăm și scădem punctele spectatorului
+        viewerPoints(h, uid).then(have => {
+          if (have < e.cost) { broadcast(h, { t: "notice", text: `${ctx.user.name} are ${have} puncte, iar ${e.command} costă ${e.cost}.` }); return; }
+          addPointsRaw(h, ctx.user, -e.cost);
+          go();
+        }).catch(() => {});
+      } else go();
+    }
+  }
+  async function viewerPoints(h, viewer) {
+    if (!viewer) return 0;
+    const { rows } = await pool.query(`SELECT points FROM stream_points WHERE user_id = $1 AND viewer = $2`, [h.uid, viewer]);
+    return Number(rows[0]?.points || 0) + Math.round(h.pointsQ.get(viewer)?.pts || 0);
   }
 
   function handle(h, ev) {
@@ -317,6 +458,8 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
     if (ev.type === "chat") {
       let tts = ttsText(h, u, ev.text);
       broadcast(h, { t: "chat", user: u, text: ev.text, tts });
+      const m = /^\s*(![^\s]{1,29})\s*(.*)$/.exec(ev.text || "");
+      if (m) fireEvents(h, "command", { user: u, cmd: m[1].toLowerCase(), args: m[2].slice(0, 120) });
       const last = h.chatCd.get(u.id) || 0;
       if (Date.now() - last > 10_000) { h.chatCd.set(u.id, Date.now()); addPoints(h, u, cfg.points.perChat); }
       if (h.chatCd.size > 5000) h.chatCd.clear();
@@ -336,6 +479,8 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
       if (Object.keys(st.gifters).length > 5000) st.gifters = {};
       const alert = total >= cfg.alerts.gift.min ? alertOf(h, "gift", { user: u.name, gift: ev.gift, count: ev.count, diamonds: total }, { img: ev.img, avatar: u.avatar, user: u.name }) : null;
       broadcast(h, { t: "gift", user: u, gift: ev.gift, img: ev.img, count: ev.count, diamonds: total, alert });
+      fireEvents(h, "gift", { user: u, gift: ev.gift, giftId: ev.giftId, diamonds: total, count: ev.count, img: ev.img });
+      if (ev.giftId && !u.test) rememberGift(ev.giftId, ev.gift, ev.diamonds, ev.img);
       addPoints(h, u, total * cfg.points.perDiamond);
       timerAdd(h, total * cfg.timer.perDiamond);
       if (cfg.wheel.trigger === "gift" && total >= cfg.wheel.minDiamonds) wheelSpin(h, u.name);
@@ -345,6 +490,7 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
     if (ev.type === "follow") {
       st.follows++;
       broadcast(h, { t: "follow", user: u, alert: alertOf(h, "follow", { user: u.name }, { avatar: u.avatar, user: u.name }) });
+      fireEvents(h, "follow", { user: u });
       addPoints(h, u, cfg.points.perFollow);
       timerAdd(h, cfg.timer.perFollow);
       pushState(h);
@@ -353,6 +499,7 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
     if (ev.type === "share") {
       st.shares++;
       broadcast(h, { t: "share", user: u, alert: alertOf(h, "share", { user: u.name }, { avatar: u.avatar, user: u.name }) });
+      fireEvents(h, "share", { user: u });
       addPoints(h, u, cfg.points.perShare);
       timerAdd(h, cfg.timer.perShare);
       pushState(h);
@@ -360,6 +507,12 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
     }
     if (ev.type === "member") {
       broadcast(h, { t: "member", user: u, alert: alertOf(h, "member", { user: u.name }, { avatar: u.avatar, user: u.name }) });
+      fireEvents(h, "member", { user: u });
+      return;
+    }
+    if (ev.type === "subscribe") {
+      broadcast(h, { t: "subscribe", user: u });
+      fireEvents(h, "subscribe", { user: u });
       return;
     }
     if (ev.type === "like") {
@@ -381,6 +534,12 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
         if (alert) broadcast(h, { t: "milestone", total: reached, alert });
       }
       broadcast(h, { t: "like", user: u, count: ev.count });
+      if (u.id) {
+        const b = h.likeUser.get(u.id) || 0;
+        h.likeUser.set(u.id, b + ev.count);
+        if (h.likeUser.size > 20000) h.likeUser.clear();
+        fireEvents(h, "like", { user: u, before: b, after: b + ev.count });
+      }
       pushState(h);
       return;
     }
@@ -431,7 +590,7 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
     const ended = Boolean(Number(first(d.repeatEnd, d.repeat_end, 0)));
     const img = first(d.giftPictureUrl, urlOf(g.giftImage?.giftPictureUrl), urlOf(g.giftImage), urlOf(g.image), urlOf(g.icon), urlOf(ex.image), urlOf(ex.icon), "");
     return {
-      type: "gift", user: nUser(d),
+      type: "gift", user: nUser(d), giftId: Number(first(d.giftId, g.id, g.giftId, ex.id, 0)) || 0,
       gift: String(first(d.giftName, g.giftName, g.name, ex.name, "cadou")).slice(0, 40),
       img: /^https:\/\//.test(img) ? img.slice(0, 600) : "",
       diamonds: Math.max(0, Number(first(d.diamondCount, g.diamondCount, g.diamond_count, ex.diamond_count, 0)) || 0),
@@ -485,6 +644,7 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
     on("follow", d => handle(h, { type: "follow", user: nUser(d) }));
     on("share", d => handle(h, { type: "share", user: nUser(d) }));
     on("member", d => handle(h, { type: "member", user: nUser(d) }));
+    on("subscribe", d => handle(h, { type: "subscribe", user: nUser(d) }));
     on("roomUser", d => handle(h, { type: "viewers", count: Math.max(0, Number(first(d.viewerCount, d.totalUser, d.total, 0)) || 0) }));
     const lost = why => {
       if (gen !== h.gen) return;
@@ -501,6 +661,7 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
       h.roomId = state?.roomId || null;
       h.lastEventAt = Date.now();
       setStatus(h, "live", `Conectat la live-ul lui @${h.tiktok}.`);
+      loadGiftCatalog(c).catch(() => {});
     } catch (err) {
       if (gen !== h.gen) return;
       dropConn(h);
@@ -533,7 +694,7 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
     } else if (type === "chat") handle(h, { type: "chat", user, text: str(opts.text, 200) || ["Salut din Chișinău! 👋", "!tts Ce live frumos azi", "Bravo, continuă tot așa!", "De unde ești?"][crypto.randomInt(4)] });
     else if (type === "like") handle(h, { type: "like", user, count: clampN(opts.count, 1, 5000, 50), total: 0 });
     else if (type === "viewers") handle(h, { type: "viewers", count: 20 + crypto.randomInt(300) });
-    else if (["follow", "share", "member"].includes(type)) handle(h, { type, user });
+    else if (["follow", "share", "member", "subscribe"].includes(type)) handle(h, { type, user });
   }
 
   // ---------------------------------------------------------------- acces
@@ -603,6 +764,17 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
   app.put("/api/stream/setari", auth, asyncRoute(async (req, res) => {
     const h = await requireApproved(req, res); if (!h) return;
     const s = normalizeSettings(req.body?.settings || {});
+    // fișierele din acțiuni trebuie să fie ale streamerului; tipul (imagine/clip/sunet) îl știe serverul
+    const refs = [...new Set(s.actions.flatMap(a => [a.media, a.audio]).filter(Boolean))];
+    const kinds = new Map();
+    if (refs.length) {
+      const { rows } = await pool.query(`SELECT id::text AS id, kind FROM stream_media WHERE user_id = $1 AND id = ANY($2::uuid[])`, [h.uid, refs]);
+      rows.forEach(r => kinds.set(r.id, r.kind));
+    }
+    for (const a of s.actions) {
+      a.mediaKind = kinds.get(a.media) || null; if (!a.mediaKind) a.media = null;
+      if (a.audio && kinds.get(a.audio) !== "audio") a.audio = null;
+    }
     const tiktok = req.body?.tiktok != null ? cleanTiktok(req.body.tiktok) : h.tiktok;
     if (!TIKTOK_RE.test(tiktok)) return res.status(400).json({ error: "Numele de TikTok nu e valid." });
     await pool.query(`UPDATE stream_profiles SET settings = $2, tiktok = $3, updated_at = NOW() WHERE user_id = $1`, [h.uid, JSON.stringify(s), tiktok]);
@@ -633,7 +805,7 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
     if (list.length >= 15) return res.status(429).json({ error: "Prea multe teste deodată. Mai așteaptă puțin." });
     list.push(now); testHits.set(h.uid, list);
     const type = String(req.body?.type || "");
-    if (!["gift", "chat", "follow", "share", "like", "member", "viewers"].includes(type)) return res.status(400).json({ error: "Tip de test necunoscut." });
+    if (!["gift", "chat", "follow", "share", "like", "member", "viewers", "subscribe"].includes(type)) return res.status(400).json({ error: "Tip de test necunoscut." });
     testEvent(h, type, req.body || {});
     res.json({ ok: true });
   }));
@@ -646,7 +818,7 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
     else if (a === "session-new") {
       const keepTimer = h.state.timer;
       h.state = emptyState(); h.state.timer = keepTimer;
-      h.likeAcc.clear();
+      h.likeAcc.clear(); h.likeUser.clear();
       pushState(h);
       broadcast(h, { t: "reset" });
     } else if (a === "points-reset") {
@@ -654,6 +826,17 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
       await pool.query(`DELETE FROM stream_points WHERE user_id = $1`, [h.uid]);
       broadcast(h, { t: "points", list: [] });
     } else if (a === "test-alert-clear") broadcast(h, { t: "clear" });
+    else if (a === "run") {
+      // „Testează" la o acțiune
+      const act = h.settings.actions.find(x => x.id === String(req.body?.id || ""));
+      if (!act) return res.status(404).json({ error: "Salvează întâi acțiunea, apoi testeaz-o." });
+      runAction(h, act, { user: { id: "", name: "Spectator_test", avatar: "", test: true }, gift: "Trandafir", count: 1, diamonds: 1, args: "mesaj de test" });
+    } else if (a === "event-test") {
+      // „Testează" la un eveniment: ca și cum s-ar fi întâmplat acum (fără pauză între ele)
+      const e = h.settings.events.find(x => x.id === String(req.body?.id || ""));
+      if (!e) return res.status(404).json({ error: "Salvează întâi evenimentul, apoi testează-l." });
+      if (!runEvent(h, e, { user: { id: "", name: "Spectator_test", avatar: "", test: true }, gift: e.gift || "Trandafir", count: 1, diamonds: Math.max(1, e.min), args: "mesaj de test" })) return res.status(400).json({ error: "Evenimentul nu are nicio acțiune aleasă." });
+    }
     else return res.status(400).json({ error: "Acțiune necunoscută." });
     res.json({ ok: true, state: snapshot(h) });
   }));
@@ -668,6 +851,137 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
     h.clients.clear();
     await logAction(req.user.sub, "stream.new_key", "stream_profiles", h.uid, {}, req.ip);
     res.json({ ok: true, key });
+  }));
+
+  // ---------------------------------------------------------------- fișierele streamerului (clipuri, imagini, muzică)
+  // Stau în baza de date (Railway nu păstrează fișierele de pe disc între deploy-uri).
+  // Tipul îl aflăm din primii octeți ai fișierului, nu din ce spune browserul.
+  const MEDIA_MAX = 15 * 1024 * 1024, MEDIA_QUOTA = 120 * 1024 * 1024, MEDIA_FILES = 80;
+  function sniff(b) {
+    const hex = b.subarray(0, 12).toString("hex"), asc = b.subarray(0, 12).toString("latin1");
+    if (hex.startsWith("89504e470d0a1a0a")) return { kind: "image", mime: "image/png" };
+    if (hex.startsWith("ffd8ff")) return { kind: "image", mime: "image/jpeg" };
+    if (asc.startsWith("GIF87a") || asc.startsWith("GIF89a")) return { kind: "image", mime: "image/gif" };
+    if (asc.startsWith("RIFF") && asc.slice(8, 12) === "WEBP") return { kind: "image", mime: "image/webp" };
+    if (asc.slice(4, 8) === "ftyp") return /^(M4A |M4B )/.test(asc.slice(8, 12)) ? { kind: "audio", mime: "audio/mp4" } : { kind: "video", mime: "video/mp4" };
+    if (hex.startsWith("1a45dfa3")) return { kind: "video", mime: "video/webm" };
+    if (asc.startsWith("ID3") || /^ff(fb|f3|f2|fa)/.test(hex)) return { kind: "audio", mime: "audio/mpeg" };
+    if (asc.startsWith("OggS")) return { kind: "audio", mime: "audio/ogg" };
+    if (asc.startsWith("RIFF") && asc.slice(8, 12) === "WAVE") return { kind: "audio", mime: "audio/wav" };
+    return null;
+  }
+  const rawBody = require("express").raw({ type: () => true, limit: MEDIA_MAX + 1024 });
+  const rawUpload = (req, res, next) => rawBody(req, res, err => err ? res.status(413).json({ error: "Fișierul e prea mare. Maxim 15 MB." }) : next());
+  const upHits = new Map();
+  app.post("/api/stream/media", auth, asyncRoute(async (req, res, next) => {
+    // verificăm accesul înainte să primim tot fișierul
+    const h = await requireApproved(req, res); if (!h) return;
+    const now = Date.now(), list = (upHits.get(h.uid) || []).filter(t => now - t < 60_000);
+    if (list.length >= 20) return res.status(429).json({ error: "Prea multe fișiere într-un minut." });
+    list.push(now); upHits.set(h.uid, list);
+    req.studioHub = h;
+    next();
+  }), rawUpload, asyncRoute(async (req, res) => {
+    const h = req.studioHub, buf = req.body;
+    if (!Buffer.isBuffer(buf) || !buf.length) return res.status(400).json({ error: "Alege un fișier." });
+    if (buf.length > MEDIA_MAX) return res.status(413).json({ error: "Fișierul e prea mare. Maxim 15 MB." });
+    const t = sniff(buf);
+    if (!t) return res.status(415).json({ error: "Tipul fișierului nu e acceptat. Merg: PNG, JPG, GIF, WEBP, MP4, WEBM, MP3, OGG, WAV." });
+    const { rows: [q] } = await pool.query(`SELECT COUNT(*)::int AS n, COALESCE(SUM(bytes), 0)::bigint AS used FROM stream_media WHERE user_id = $1`, [h.uid]);
+    if (q.n >= MEDIA_FILES) return res.status(400).json({ error: `Ai deja ${MEDIA_FILES} fișiere. Șterge din cele vechi.` });
+    if (Number(q.used) + buf.length > MEDIA_QUOTA) return res.status(400).json({ error: "Nu mai ai loc (maxim 120 MB în total). Șterge din fișierele vechi." });
+    let name = String(req.get("x-file-name") || "");
+    try { name = decodeURIComponent(name); } catch { /* */ }
+    name = str(name, 120, t.kind === "audio" ? "sunet" : t.kind === "video" ? "clip" : "imagine");
+    const id = crypto.randomUUID();
+    await pool.query(`INSERT INTO stream_media(id, user_id, name, kind, mime, bytes, data) VALUES ($1,$2,$3,$4,$5,$6,$7)`, [id, h.uid, name, t.kind, t.mime, buf.length, buf]);
+    res.json({ ok: true, item: { id, name, kind: t.kind, mime: t.mime, bytes: buf.length } });
+  }));
+  app.get("/api/stream/media", auth, asyncRoute(async (req, res) => {
+    const h = await requireApproved(req, res); if (!h) return;
+    const { rows } = await pool.query(`SELECT id::text AS id, name, kind, mime, bytes, created_at FROM stream_media WHERE user_id = $1 ORDER BY created_at DESC`, [h.uid]);
+    res.json({ items: rows.map(r => ({ ...r, bytes: Number(r.bytes) })), used: rows.reduce((x, r) => x + Number(r.bytes), 0), quota: MEDIA_QUOTA, maxFile: MEDIA_MAX, maxFiles: MEDIA_FILES });
+  }));
+  const mediaCache = new Map(); let mediaCacheBytes = 0;
+  app.delete("/api/stream/media/:id", auth, asyncRoute(async (req, res) => {
+    const h = await requireApproved(req, res); if (!h) return;
+    const id = mediaRef(req.params.id);
+    if (!id) return res.status(400).json({ error: "Fișier necunoscut." });
+    const { rowCount } = await pool.query(`DELETE FROM stream_media WHERE id = $1 AND user_id = $2`, [id, h.uid]);
+    if (!rowCount) return res.status(404).json({ error: "Fișierul nu există." });
+    const c = mediaCache.get(id); if (c) { mediaCacheBytes -= c.data.length; mediaCache.delete(id); }
+    res.json({ ok: true });
+  }));
+  // servit public (id-ul e aleator, ca un link secret), cu cache lung și „Range" pentru clipuri
+  app.get("/api/stream/media/:id", asyncRoute(async (req, res) => {
+    const id = mediaRef(req.params.id);
+    if (!id) return res.status(404).end();
+    let m = mediaCache.get(id);
+    if (!m) {
+      await tables();
+      const { rows } = await pool.query(`SELECT mime, data FROM stream_media WHERE id = $1`, [id]);
+      if (!rows[0]) return res.status(404).end();
+      m = { mime: rows[0].mime, data: rows[0].data };
+      mediaCache.set(id, m); mediaCacheBytes += m.data.length;
+      while (mediaCacheBytes > 150 * 1024 * 1024 && mediaCache.size > 1) { const [k, v] = mediaCache.entries().next().value; mediaCache.delete(k); mediaCacheBytes -= v.data.length; }
+    } else { mediaCache.delete(id); mediaCache.set(id, m); }
+    const etag = `"${id}"`;
+    res.set({ "Content-Type": m.mime, "Cache-Control": "public, max-age=31536000, immutable", ETag: etag, "Accept-Ranges": "bytes" });
+    if (req.headers["if-none-match"] === etag) return res.status(304).end();
+    const total = m.data.length, r = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || "");
+    if (r && (r[1] || r[2])) {
+      let start = r[1] ? Number(r[1]) : total - Number(r[2]), end = r[1] && r[2] ? Number(r[2]) : total - 1;
+      if (!r[1]) end = total - 1;
+      if (start < 0) start = 0;
+      if (start >= total || end < start) { res.set("Content-Range", `bytes */${total}`); return res.status(416).end(); }
+      end = Math.min(end, total - 1);
+      res.status(206).set({ "Content-Range": `bytes ${start}-${end}/${total}`, "Content-Length": String(end - start + 1) });
+      return res.end(m.data.subarray(start, end + 1));
+    }
+    res.set("Content-Length", String(total));
+    res.end(m.data);
+  }));
+
+  // ---------------------------------------------------------------- catalogul de cadouri TikTok
+  // Se umple singur: din lista pe care o dă TikTok la conectare și din cadourile primite pe live.
+  const knownGifts = new Map();
+  let giftsCache = null, giftsCacheAt = 0;
+  function rememberGift(id, name, diamonds, img) {
+    if (!id || !name) return;
+    const k = knownGifts.get(id);
+    if (k && k.name === name && (k.img || !img)) return;
+    knownGifts.set(id, { name, img });
+    tables().then(() => pool.query(
+      `INSERT INTO stream_gifts(id, name, diamonds, img) VALUES ($1,$2,$3,$4)
+       ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, diamonds = EXCLUDED.diamonds, img = COALESCE(EXCLUDED.img, stream_gifts.img), updated_at = NOW()`,
+      [id, String(name).slice(0, 80), Math.max(0, Math.round(diamonds || 0)), img || null])).then(() => { giftsCache = null; }).catch(() => {});
+  }
+  let catalogLoadedAt = 0;
+  async function loadGiftCatalog(c) {
+    if (Date.now() - catalogLoadedAt < 6 * 3600_000) return;
+    const fn = c.fetchAvailableGifts || c.getAvailableGifts;
+    if (typeof fn !== "function") return;
+    const list = await fn.call(c);
+    if (!Array.isArray(list) || !list.length) return;
+    catalogLoadedAt = Date.now();
+    const rows = list.map(g => ({ id: Number(first(g.id, g.giftId, 0)) || 0, name: String(first(g.name, g.giftName, "")).slice(0, 80), diamonds: Number(first(g.diamond_count, g.diamondCount, 0)) || 0, img: urlOf(g.image) || urlOf(g.icon) || null }))
+      .filter(g => g.id && g.name).slice(0, 2000);
+    if (!rows.length) return;
+    await tables();
+    await pool.query(
+      `INSERT INTO stream_gifts(id, name, diamonds, img)
+       SELECT * FROM UNNEST($1::bigint[], $2::text[], $3::int[], $4::text[])
+       ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, diamonds = EXCLUDED.diamonds, img = COALESCE(EXCLUDED.img, stream_gifts.img), updated_at = NOW()`,
+      [rows.map(g => g.id), rows.map(g => g.name), rows.map(g => g.diamonds), rows.map(g => /^https:\/\//.test(g.img || "") ? g.img : null)]);
+    giftsCache = null;
+  }
+  app.get("/api/stream/cadouri", auth, asyncRoute(async (_req, res) => {
+    if (!giftsCache || Date.now() - giftsCacheAt > 300_000) {
+      await tables();
+      const { rows } = await pool.query(`SELECT id::text AS id, name, diamonds, img FROM stream_gifts ORDER BY diamonds, name LIMIT 2000`);
+      giftsCache = rows; giftsCacheAt = Date.now();
+    }
+    res.json({ gifts: giftsCache });
   }));
 
   // ---------------------------------------------------------------- overlay-uri (fără cont, cu cheia)

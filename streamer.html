@@ -10,7 +10,8 @@
   <title>Studio de streaming — Moldova RP</title>
   <link rel="icon" href="assets/favicon.png">
   <link rel="stylesheet" href="styles.css">
-  <link rel="manifest" href="/manifest.webmanifest">
+  <!-- (03.11.2026) Studio-ul se poate instala ca aplicație separată (fereastra lui, fără bara browserului) -->
+  <link rel="manifest" href="/studio.webmanifest"><link rel="apple-touch-icon" href="/assets/app/apple-touch-icon.png">
   <script src="/pwa.js" defer></script>
   <style>
   /* (03.11.2026) Studio de streaming — backend: backend/stream-studio.js, overlay-uri: stream-overlay.html */
@@ -96,6 +97,44 @@
   .steps{margin:8px 0 0;padding-left:20px;color:#cfd3d7;font-size:13px;line-height:1.75}
   .steps b{color:var(--text)}
   .warn{border:1px solid rgba(255,194,75,.35);background:rgba(255,194,75,.07);border-radius:12px;padding:12px 14px;font-size:13px;line-height:1.55;color:#f2d9a6}
+  /* acțiuni și evenimente */
+  .flow{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px}
+  .flow span{display:inline-flex;align-items:center;gap:8px;padding:7px 12px;border-radius:99px;background:var(--panel2);border:1px solid var(--line);font-size:12.5px;font-weight:700;color:#cfd3d7}
+  .flow b{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--orange);color:#0b0b0b;font-size:11px}
+  .drop{display:block;border:1.5px dashed rgba(255,138,31,.45);border-radius:12px;padding:18px;text-align:center;font-size:13px;color:#cfd3d7;cursor:pointer;background:rgba(255,138,31,.04);transition:.15s}
+  .drop:hover,.drop.over{background:rgba(255,138,31,.1);border-color:var(--orange)}
+  .drop b{color:var(--orange)}
+  .qbar{height:6px;border-radius:9px;background:rgba(255,255,255,.08);overflow:hidden}
+  .qbar i{display:block;height:100%;background:var(--orange);width:0}
+  .mgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px}
+  .mi{position:relative;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#0b0c0e}
+  .mi .th{height:92px;display:grid;place-items:center;font-size:34px;background:repeating-conic-gradient(#14181d 0 25%,#0f1216 0 50%) 0 0/16px 16px}
+  .mi .th img,.mi .th video{width:100%;height:92px;object-fit:contain;display:block}
+  .mi .nm{padding:6px 8px;font-size:11.5px;line-height:1.35}
+  .mi .nm b{display:block;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .mi .nm small{color:var(--muted)}
+  .mi .x{position:absolute;top:5px;right:5px;width:26px;height:26px;border-radius:7px;border:0;background:rgba(0,0,0,.7);color:#ff9b9b;cursor:pointer;font-weight:900}
+  .mi .pl{position:absolute;top:5px;left:5px;width:26px;height:26px;border-radius:7px;border:0;background:rgba(0,0,0,.7);color:#fff;cursor:pointer}
+  details.act{border:1px solid var(--line);border-radius:12px;background:#0f1114}
+  details.act[open]{border-color:rgba(255,138,31,.45)}
+  details.act>summary{list-style:none;display:flex;align-items:center;gap:10px;padding:10px 12px;cursor:pointer}
+  details.act>summary::-webkit-details-marker{display:none}
+  details.act>summary .ic{width:38px;height:38px;flex:none;border-radius:8px;overflow:hidden;display:grid;place-items:center;background:#1a1d22;font-size:18px}
+  details.act>summary .ic img,details.act>summary .ic video{width:100%;height:100%;object-fit:cover}
+  details.act>summary .tt{flex:1;min-width:0}
+  details.act>summary .tt b{display:block;font-size:14px}
+  details.act>summary .tt small{color:var(--muted);font-size:12px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  details.act .body{padding:4px 12px 14px;display:grid;gap:10px}
+  .evrow{border:1px solid var(--line);border-radius:12px;background:#0f1114;padding:12px;display:grid;gap:10px}
+  .evrow.off{opacity:.55}
+  .evrow .line{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end}
+  .evrow .line>label.f{flex:1;min-width:140px}
+  .evrow .giftimg{width:34px;height:34px;object-fit:contain;flex:none;align-self:center}
+  .chips{display:flex;flex-wrap:wrap;gap:6px}
+  .chips label{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:99px;border:1px solid var(--line);font-size:12.5px;font-weight:700;cursor:pointer;background:var(--panel2)}
+  .chips label:has(input:checked){border-color:var(--orange);background:rgba(255,138,31,.12);color:var(--orange)}
+  .chips input{width:14px!important;height:14px!important}
+  .tag{display:inline-block;padding:2px 8px;border-radius:99px;background:rgba(255,255,255,.06);font-size:11px;font-weight:800;color:#cfd3d7;margin-right:4px}
   @media (max-width:980px){.st-app{grid-template-columns:1fr}.st-side{position:static}}
   @media (max-width:640px){.st{padding:0 16px 70px}.st-box{padding:16px}.grid2,.grid3{grid-template-columns:1fr}.goal-row{grid-template-columns:1fr 1fr}.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.prev iframe{height:300px}}
   </style>
@@ -162,6 +201,7 @@
             </div>
             <div class="ttsbar">
               <label class="tog"><input type="checkbox" id="tts-here"> 🔊 Citește cu voce pe acest calculator</label>
+              <button type="button" class="b sm" id="btn-install" hidden>💻 Instalează Studio-ul ca aplicație</button>
             </div>
             <p class="hint" id="tts-hint">Vocea se aude din pagina asta: ține Studio-ul deschis în timpul live-ului (TikTok LIVE Studio prinde sunetul calculatorului). Pentru o voce românească naturală, deschide Studio-ul în Microsoft Edge.</p>
             <div class="feed" id="feed" aria-live="off"></div>
@@ -174,7 +214,8 @@
 
         <section class="st-box" aria-label="Setări">
           <div class="tabs" role="tablist" aria-label="Setări Studio">
-            <button type="button" role="tab" aria-selected="true" data-tab="alerte">🔔 Alerte</button>
+            <button type="button" role="tab" aria-selected="true" data-tab="actiuni">⚡ Acțiuni</button>
+            <button type="button" role="tab" aria-selected="false" data-tab="alerte">🔔 Alerte rapide</button>
             <button type="button" role="tab" aria-selected="false" data-tab="voce">🗣 Voce</button>
             <button type="button" role="tab" aria-selected="false" data-tab="obiective">🎯 Obiective</button>
             <button type="button" role="tab" aria-selected="false" data-tab="jocuri">🎡 Jocuri</button>
@@ -182,8 +223,37 @@
             <button type="button" role="tab" aria-selected="false" data-tab="overlay">🧩 Overlay-uri</button>
           </div>
 
+          <!-- ACȚIUNI ȘI EVENIMENTE -->
+          <div class="pane" data-pane="actiuni" role="tabpanel">
+            <p class="st-muted" style="margin-top:0">Alege ce se întâmplă pe live la fiecare cadou, follow, share sau comandă din chat: clipul tău, o imagine sau un GIF, o melodie, un text și o voce. Fiecare cadou poate avea alerta lui.</p>
+            <div class="flow" aria-label="Pașii"><span><b>1</b> Încarcă fișierele</span><span><b>2</b> Fă acțiunile</span><span><b>3</b> Leagă-le de cadouri și evenimente</span><span><b>4</b> Pune overlay-ul „⚡ Ecran acțiuni”</span></div>
+
+            <div class="card2" style="margin-bottom:12px">
+              <div class="hd"><b>📁 Fișierele tale</b><span class="hint" id="media-quota"></span></div>
+              <div class="qbar"><i id="media-qbar"></i></div>
+              <label class="drop" id="drop"><input type="file" id="media-file" multiple accept="image/png,image/jpeg,image/gif,image/webp,video/mp4,video/webm,audio/mpeg,audio/mp3,audio/ogg,audio/wav,audio/x-wav,audio/mp4,.mp3,.wav,.ogg,.m4a,.webm,.mp4,.gif" hidden>
+                <b>Trage fișierele aici sau apasă</b><br>Clipuri MP4 sau WEBM, imagini și GIF-uri (PNG, JPG, GIF, WEBP), muzică MP3, OGG sau WAV. Cel mult 15 MB pe fișier.</label>
+              <p class="hint" id="media-up" aria-live="polite"></p>
+              <div class="mgrid" id="media-grid"></div>
+              <p class="hint">Pune doar clipuri și muzică pe care ai voie să le folosești. TikTok poate opri live-ul pentru muzică cu drepturi de autor.</p>
+            </div>
+
+            <div class="card2" style="margin-bottom:12px">
+              <div class="hd"><b>⚡ Acțiuni: ce se întâmplă</b><span style="display:flex;gap:6px"><button type="button" class="b sm" id="btn-examples" hidden>✨ Pune exemple</button><button type="button" class="b sm pri" id="btn-act-add">+ Acțiune nouă</button></span></div>
+              <div id="acts" style="display:grid;gap:8px"></div>
+              <p class="hint">În texte poți folosi <code>{user}</code> (numele), <code>{gift}</code>, <code>{count}</code>, <code>{diamonds}</code> și, la comenzi, <code>{text}</code> (ce scrie spectatorul după comandă).</p>
+            </div>
+
+            <div class="card2">
+              <div class="hd"><b>🎯 Evenimente: când se întâmplă</b><button type="button" class="b sm pri" id="btn-ev-add">+ Eveniment nou</button></div>
+              <div id="evts" style="display:grid;gap:8px"></div>
+              <datalist id="gift-list"></datalist>
+              <p class="hint">Dacă un cadou se potrivește la mai multe evenimente, pornesc toate. Lasă numele cadoului gol ca evenimentul să meargă la orice cadou (de la câte 💎 alegi). Salvează setările, apoi apasă „Testează”.</p>
+            </div>
+          </div>
+
           <!-- ALERTE -->
-          <div class="pane" data-pane="alerte" role="tabpanel">
+          <div class="pane" data-pane="alerte" role="tabpanel" hidden>
             <p class="st-muted" style="margin-top:0">Ce apare pe ecran când primești ceva pe live. În texte poți folosi <code>{user}</code>, <code>{gift}</code>, <code>{count}</code>, <code>{diamonds}</code> și, la like-uri, <code>{total}</code>.</p>
             <div class="grid2">
               <div class="card2" data-alert="gift"><div class="hd"><b>🎁 Cadouri</b><label class="tog"><input type="checkbox" data-s="alerts.gift.on"> Pornit</label></div>
@@ -386,6 +456,7 @@
     if (ME.lib === false) note('Legătura cu TikTok LIVE nu e încă instalată pe server. Testele și overlay-urile merg deja.', 'sys');
     connectSse();
     $('#aspect-prev').src = ovUrl('alerts') + '&demo=1';
+    loadMedia(); loadGifts();
   }
 
   // ------------------------------------------------------------ setări ↔ formular
@@ -400,7 +471,7 @@
     });
     $('#rot-lines').value = (S.rotator.lines || []).join('\n');
     $('#wheel-segs').value = S.wheel.segments.map(x => x.label).join('\n');
-    drawGoals(); shows(); markDirty();
+    drawGoals(); drawActs(); drawEvts(); shows(); markDirty();
   }
   function shows() { $$('[data-show]').forEach(el => { el.textContent = getP(S, el.dataset.show); }); }
   function read() {
@@ -430,6 +501,210 @@
   };
   addEventListener('beforeunload', e => { if (S && JSON.stringify(S) !== SAVED) { e.preventDefault(); e.returnValue = ''; } });
 
+  // ------------------------------------------------------------ fișiere, acțiuni, evenimente
+  let MEDIA = [];
+  const kb = n => n >= 1048576 ? (n / 1048576).toFixed(1).replace('.', ',') + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB';
+  const mUrl = id => '/api/stream/media/' + id;
+  const KIND_IC = { image: '🖼', video: '🎬', audio: '🎵' };
+  async function loadMedia() {
+    try {
+      const d = await api('/api/stream/media');
+      MEDIA = d.items;
+      $('#media-quota').textContent = `${kb(d.used)} din ${kb(d.quota)} · ${MEDIA.length}/${d.maxFiles} fișiere`;
+      $('#media-qbar').style.width = Math.min(100, d.used / d.quota * 100) + '%';
+      drawMedia(); drawActs();
+    } catch (err) { $('#media-up').textContent = err.message; }
+  }
+  function thumb(m) {
+    if (!m) return '';
+    if (m.kind === 'image') return `<img src="${mUrl(m.id)}" alt="" loading="lazy">`;
+    if (m.kind === 'video') return `<video src="${mUrl(m.id)}#t=0.5" muted preload="metadata" playsinline></video>`;
+    return KIND_IC.audio;
+  }
+  function drawMedia() {
+    const used = new Set((S?.actions || []).flatMap(a => [a.media, a.audio]));
+    $('#media-grid').innerHTML = MEDIA.map(m => `<div class="mi"><div class="th">${thumb(m)}</div>
+      ${m.kind !== 'image' ? `<button type="button" class="pl" data-play="${m.id}" aria-label="Ascultă ${esc(m.name)}">▶</button>` : ''}
+      <button type="button" class="x" data-mdel="${m.id}" aria-label="Șterge ${esc(m.name)}">✕</button>
+      <div class="nm"><b title="${esc(m.name)}">${esc(m.name)}</b><small>${KIND_IC[m.kind]} ${kb(m.bytes)}${used.has(m.id) ? ' · folosit' : ''}</small></div></div>`).join('') || '<p class="hint">Încă nu ai încărcat nimic.</p>';
+  }
+  let previewAudio = null;
+  $('#media-grid').addEventListener('click', async e => {
+    const pl = e.target.closest('[data-play]'), del = e.target.closest('[data-mdel]');
+    if (pl) {
+      const m = MEDIA.find(x => x.id === pl.dataset.play);
+      if (previewAudio) { previewAudio.pause(); if (previewAudio.dataset?.id === m.id) { previewAudio = null; pl.textContent = '▶'; return; } }
+      $$('#media-grid [data-play]').forEach(b => { b.textContent = '▶'; });
+      if (m.kind === 'video') { const v = pl.closest('.mi').querySelector('video'); v.muted = false; v.currentTime = 0; v.play(); previewAudio = v; }
+      else { previewAudio = new Audio(mUrl(m.id)); previewAudio.play(); }
+      previewAudio.dataset.id = m.id; pl.textContent = '■';
+      previewAudio.onended = () => { pl.textContent = '▶'; previewAudio = null; };
+    }
+    if (del) {
+      const m = MEDIA.find(x => x.id === del.dataset.mdel);
+      const inUse = (S.actions || []).filter(a => a.media === m.id || a.audio === m.id).map(a => a.name);
+      if (!confirm(inUse.length ? `„${m.name}” e folosit în: ${inUse.join(', ')}. Îl ștergi oricum?` : `Ștergi „${m.name}”?`)) return;
+      try { await api('/api/stream/media/' + m.id, null, 'DELETE'); loadMedia(); } catch (err) { alert(err.message); }
+    }
+  });
+  function upload(file) {
+    return new Promise((resolve, reject) => {
+      if (file.size > 15 * 1024 * 1024) return reject(new Error(`${file.name}: e mai mare de 15 MB.`));
+      const x = new XMLHttpRequest();
+      x.open('POST', '/api/stream/media');
+      x.setRequestHeader('Authorization', 'Bearer ' + token);
+      x.setRequestHeader('Content-Type', 'application/octet-stream');
+      x.setRequestHeader('X-File-Name', encodeURIComponent(file.name.replace(/\.[^.]+$/, '')));
+      x.upload.onprogress = ev => { if (ev.lengthComputable) $('#media-up').textContent = `Se încarcă ${file.name}: ${Math.round(ev.loaded / ev.total * 100)}%`; };
+      x.onload = () => { let d = {}; try { d = JSON.parse(x.responseText); } catch { /* */ } x.status < 300 ? resolve(d.item) : reject(new Error(`${file.name}: ${d.error || 'nu s-a putut încărca.'}`)); };
+      x.onerror = () => reject(new Error(`${file.name}: conexiunea s-a întrerupt.`));
+      x.send(file);
+    });
+  }
+  async function uploadAll(files) {
+    const errs = [];
+    for (const f of files) { try { await upload(f); } catch (err) { errs.push(err.message); } }
+    $('#media-up').textContent = errs.length ? errs.join(' ') : `Gata, ${files.length === 1 ? 'fișierul e încărcat' : 'fișierele sunt încărcate'}.`;
+    loadMedia();
+  }
+  $('#media-file').onchange = e => { const f = [...e.target.files]; e.target.value = ''; if (f.length) uploadAll(f); };
+  const drop = $('#drop');
+  ['dragenter', 'dragover'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove('over'); }));
+  drop.addEventListener('drop', e => { const f = [...e.dataTransfer.files]; if (f.length) uploadAll(f); });
+
+  // catalogul de cadouri (se umple din live-uri)
+  let GIFTS = [];
+  async function loadGifts() {
+    try { GIFTS = (await api('/api/stream/cadouri')).gifts || []; } catch { GIFTS = []; }
+    $('#gift-list').innerHTML = GIFTS.map(g => `<option value="${esc(g.name)}">${g.diamonds} 💎</option>`).join('');
+    $$('#evts .evrow').forEach(r => giftPreview(r));
+  }
+  const gKey = v => String(v || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+  function giftPreview(row) {
+    const inp = row.querySelector('[data-e=gift]'), img = row.querySelector('.giftimg');
+    if (!inp || !img) return;
+    const g = GIFTS.find(x => gKey(x.name) === gKey(inp.value));
+    img.hidden = !(g && g.img); if (g?.img) img.src = g.img;
+  }
+
+  const newId = p => p + Math.random().toString(36).slice(2, 10);
+  const EFF = [['none', 'Fără efect'], ['confetti', '🎉 Confetti'], ['hearts', '❤️ Inimi'], ['shake', '📳 Tremură ecranul'], ['flash', '⚡ Fulger']];
+  const POS = [['center', 'Centru'], ['top', 'Sus'], ['bottom', 'Jos'], ['left', 'Stânga'], ['right', 'Dreapta']];
+  const opt = (list, cur) => list.map(([v, l]) => `<option value="${esc(v)}"${String(v) === String(cur) ? ' selected' : ''}>${esc(l)}</option>`).join('');
+  const openActs = new Set();
+  function actSummary(a) {
+    const m = MEDIA.find(x => x.id === a.media), au = MEDIA.find(x => x.id === a.audio);
+    const bits = [m ? `${KIND_IC[m.kind]} ${m.name}` : '', au ? `🎵 ${au.name}` : a.sound !== 'none' ? `🔔 ${(SOUNDS.find(x => x[0] === a.sound) || [])[1] || ''}` : '', a.text ? `„${a.text}”` : '', a.tts ? '🗣 voce' : '', a.wheel ? '🎡 roata' : '', a.timer ? `⏱ ${a.timer > 0 ? '+' : ''}${a.timer}s` : ''].filter(Boolean);
+    return bits.join(' · ') || 'Nimic ales încă';
+  }
+  function drawActs() {
+    if (!S) return;
+    const vis = MEDIA.filter(m => m.kind !== 'audio'), aud = MEDIA.filter(m => m.kind === 'audio');
+    $('#btn-examples').hidden = (S.actions || []).length > 0;
+    $('#acts').innerHTML = (S.actions || []).map(a => {
+      const m = MEDIA.find(x => x.id === a.media);
+      const sndVal = a.audio ? 'm:' + a.audio : 's:' + a.sound;
+      return `<details class="act" data-aid="${esc(a.id)}"${openActs.has(a.id) ? ' open' : ''}><summary>
+        <span class="ic">${m ? thumb(m) : '⚡'}</span><span class="tt"><b>${esc(a.name)}</b><small>${esc(actSummary(a))}</small></span>
+        <button type="button" class="b sm" data-arun="${esc(a.id)}">▶ Testează</button></summary>
+        <div class="body">
+          <div class="grid2"><label class="f">Numele acțiunii<input type="text" data-a="name" maxlength="40" value="${esc(a.name)}"></label>
+            <label class="f">Clip, imagine sau GIF<select data-a="media"><option value="">— fără —</option>${vis.map(x => `<option value="${x.id}"${x.id === a.media ? ' selected' : ''}>${KIND_IC[x.kind]} ${esc(x.name)}</option>`).join('')}</select></label></div>
+          <div class="grid2"><label class="f">Muzică sau sunet<select data-a="snd"><option value="s:none"${sndVal === 's:none' ? ' selected' : ''}>— fără —</option>
+              <optgroup label="Muzica ta">${aud.map(x => `<option value="m:${x.id}"${sndVal === 'm:' + x.id ? ' selected' : ''}>🎵 ${esc(x.name)}</option>`).join('') || '<option disabled>Încarcă un MP3 mai sus</option>'}</optgroup>
+              <optgroup label="Sunete gata făcute">${SOUNDS.filter(x => x[0] !== 'none').map(([v, l]) => `<option value="s:${v}"${sndVal === 's:' + v ? ' selected' : ''}>🔔 ${l}</option>`).join('')}</optgroup></select></label>
+            <label class="f">Efect<select data-a="effect">${opt(EFF, a.effect)}</select></label></div>
+          <label class="f">Text pe ecran<input type="text" data-a="text" maxlength="140" value="${esc(a.text)}" placeholder="de exemplu: Mersi, {user}, pentru {gift}! 🌹"></label>
+          <label class="f">Citit cu voce (opțional)<input type="text" data-a="tts" maxlength="200" value="${esc(a.tts)}" placeholder="de exemplu: Mulțumesc frumos, {user}!"></label>
+          <div class="grid3"><label class="f">Cât stă (secunde)<input type="number" min="0" max="60" data-a="duration" value="${a.duration}"></label>
+            <label class="f">Ecranul<select data-a="screen">${opt([[1, 'Ecranul 1'], [2, 'Ecranul 2'], [3, 'Ecranul 3'], [4, 'Ecranul 4']], a.screen)}</select></label>
+            <label class="f">Poziția<select data-a="position">${opt(POS, a.position)}</select></label></div>
+          <p class="hint" style="margin-top:-4px">0 secunde = cât ține clipul sau melodia.</p>
+          <div class="grid2"><label class="f"><span>Mărimea clipului: ${a.size}% din ecran</span><input type="range" min="10" max="100" data-a="size" value="${a.size}"></label>
+            <label class="f"><span>Volum: ${a.volume}%</span><input type="range" min="0" max="100" data-a="volume" value="${a.volume}"></label></div>
+          <div class="grid3"><label class="tog" style="align-self:end;min-height:40px"><input type="checkbox" data-a="wheel"${a.wheel ? ' checked' : ''}> 🎡 Învârte roata</label>
+            <label class="f">Subathon (± secunde)<input type="number" min="-3600" max="3600" data-a="timer" value="${a.timer}"></label>
+            <label class="f">Puncte spectatorului (±)<input type="number" data-a="points" value="${a.points}"></label></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="b sm" data-adup="${esc(a.id)}">⧉ Copiază acțiunea</button><button type="button" class="b sm red" data-adel="${esc(a.id)}">Șterge</button></div>
+        </div></details>`;
+    }).join('') || '<p class="hint">Nicio acțiune încă. Apasă „+ Acțiune nouă” sau „Pune exemple”.</p>';
+    drawMedia();
+  }
+  function newAction(over = {}) { return { id: newId('a'), name: 'Acțiune nouă', media: null, audio: null, sound: 'coin', text: 'Mersi, {user}!', tts: '', duration: 6, volume: 80, screen: 1, position: 'center', size: 45, effect: 'confetti', wheel: false, timer: 0, points: 0, ...over }; }
+  $('#btn-act-add').onclick = () => { const a = newAction(); S.actions.push(a); openActs.add(a.id); drawActs(); drawEvts(); markDirty(); };
+  $('#acts').addEventListener('toggle', e => { const d = e.target.closest('details.act'); if (!d) return; d.open ? openActs.add(d.dataset.aid) : openActs.delete(d.dataset.aid); }, true);
+  $('#acts').addEventListener('input', e => {
+    const d = e.target.closest('details.act'); if (!d) return;
+    const a = S.actions.find(x => x.id === d.dataset.aid), k = e.target.dataset.a; if (!a || !k) return;
+    if (k === 'snd') { const v = e.target.value; if (v.startsWith('m:')) { a.audio = v.slice(2); a.sound = 'none'; } else { a.audio = null; a.sound = v.slice(2); window.MRPSound?.play(a.sound, a.volume); } }
+    else if (k === 'media') { a.media = e.target.value || null; a.mediaKind = (MEDIA.find(x => x.id === a.media) || {}).kind || null; }
+    else if (e.target.type === 'checkbox') a[k] = e.target.checked;
+    else if (e.target.type === 'number' || e.target.type === 'range') a[k] = Number(e.target.value);
+    else a[k] = e.target.value;
+    if (e.target.type === 'range') e.target.previousElementSibling.textContent = k === 'size' ? `Mărimea clipului: ${a.size}% din ecran` : `Volum: ${a.volume}%`;
+    d.querySelector('summary small').textContent = actSummary(a);
+    if (k === 'name') { d.querySelector('summary b').textContent = a.name; drawEvts(); }
+    if (k === 'media') d.querySelector('summary .ic').innerHTML = thumb(MEDIA.find(x => x.id === a.media)) || '⚡';
+  });
+  $('#acts').addEventListener('click', async e => {
+    const run = e.target.closest('[data-arun]'), dup = e.target.closest('[data-adup]'), del = e.target.closest('[data-adel]');
+    if (run) { e.preventDefault(); await saveIfDirty(); try { await api('/api/stream/actiune', { action: 'run', id: run.dataset.arun }); } catch (err) { note(esc(err.message), 'sys', '⚠️'); } }
+    if (dup) { const a = S.actions.find(x => x.id === dup.dataset.adup); const c = { ...a, id: newId('a'), name: (a.name + ' (copie)').slice(0, 40) }; S.actions.splice(S.actions.indexOf(a) + 1, 0, c); openActs.add(c.id); drawActs(); drawEvts(); markDirty(); }
+    if (del) { const a = S.actions.find(x => x.id === del.dataset.adel); if (!confirm(`Ștergi acțiunea „${a.name}”?`)) return; S.actions = S.actions.filter(x => x !== a); S.events.forEach(ev => { ev.actions = ev.actions.filter(id => id !== a.id); }); drawActs(); drawEvts(); markDirty(); }
+  });
+
+  const TRIG = [['gift', '🎁 Primești un cadou'], ['follow', '💖 Cineva te urmărește'], ['share', '📣 Cineva distribuie live-ul'], ['like', '❤️ Like-uri de la un spectator'], ['command', '💬 Comandă în chat'], ['member', '👋 Cineva intră pe live'], ['subscribe', '⭐ Cineva se abonează']];
+  function drawEvts() {
+    if (!S) return;
+    const acts = S.actions || [];
+    $('#evts').innerHTML = (S.events || []).map(ev => {
+      const t = ev.trigger;
+      const params = t === 'gift' ? `<label class="f">Cadoul (gol = orice cadou)<input type="text" data-e="gift" list="gift-list" maxlength="60" value="${esc(ev.gift)}" placeholder="de exemplu: Rose, Lion, TikTok" autocomplete="off"></label><img class="giftimg" alt="" hidden referrerpolicy="no-referrer"><label class="f" style="max-width:140px;min-width:110px">De la câte 💎<input type="number" min="1" data-e="min" value="${ev.min}"></label>`
+        : t === 'like' ? `<label class="f" style="max-width:260px">La fiecare … like-uri de la același spectator<input type="number" min="10" step="10" data-e="likes" value="${ev.likes}"></label>`
+        : t === 'command' ? `<label class="f" style="max-width:200px">Comanda<input type="text" data-e="command" maxlength="30" value="${esc(ev.command)}" placeholder="!dans"></label><label class="f" style="max-width:200px">Costă puncte (0 = gratuit)<input type="number" min="0" data-e="cost" value="${ev.cost}"></label>` : '';
+      return `<div class="evrow${ev.on ? '' : ' off'}" data-eid="${esc(ev.id)}">
+        <div class="line"><label class="tog" style="min-height:40px"><input type="checkbox" data-e="on"${ev.on ? ' checked' : ''}> Pornit</label>
+          <label class="f">Când<select data-e="trigger">${opt(TRIG, t)}</select></label>${params}</div>
+        ${t === 'gift' ? `<label class="tog"><input type="checkbox" data-e="perGift"${ev.perGift ? ' checked' : ''}> Pornește pentru fiecare cadou din serie (5 trandafiri = de 5 ori, cel mult 10)</label>` : ''}
+        <div><span class="hint" style="display:block;margin-bottom:6px">Atunci:</span><div class="chips">${acts.map(a => `<label><input type="checkbox" data-e-act="${esc(a.id)}"${ev.actions.includes(a.id) ? ' checked' : ''}> ${esc(a.name)}</label>`).join('') || '<span class="hint">Fă întâi o acțiune, mai sus.</span>'}</div></div>
+        <div class="line"><label class="tog" style="min-height:40px"><input type="checkbox" data-e="random"${ev.random ? ' checked' : ''}> Doar una, la întâmplare</label>
+          <label class="f" style="max-width:170px">Pauză între ele (s)<input type="number" min="0" max="3600" data-e="cooldown" value="${ev.cooldown}"></label>
+          <label class="f" style="max-width:200px">Pauză per spectator (s)<input type="number" min="0" max="3600" data-e="userCooldown" value="${ev.userCooldown}"></label>
+          <span style="margin-left:auto;display:flex;gap:6px"><button type="button" class="b sm" data-etest="${esc(ev.id)}">▶ Testează</button><button type="button" class="b sm red" data-edel="${esc(ev.id)}" aria-label="Șterge evenimentul">✕</button></span></div>
+      </div>`;
+    }).join('') || '<p class="hint">Niciun eveniment încă. Apasă „+ Eveniment nou”.</p>';
+    $$('#evts .evrow').forEach(r => giftPreview(r));
+  }
+  function newEvent(over = {}) { return { id: newId('e'), on: true, trigger: 'gift', gift: '', min: 1, perGift: false, likes: 100, command: '!dans', cost: 0, cooldown: 0, userCooldown: 0, random: false, actions: [], ...over }; }
+  $('#btn-ev-add').onclick = () => { S.events.push(newEvent({ actions: S.actions[0] ? [S.actions[0].id] : [] })); drawEvts(); markDirty(); };
+  $('#evts').addEventListener('input', e => {
+    const r = e.target.closest('.evrow'); if (!r) return;
+    const ev = S.events.find(x => x.id === r.dataset.eid); if (!ev) return;
+    if (e.target.dataset.eAct) { const id = e.target.dataset.eAct; ev.actions = e.target.checked ? [...new Set([...ev.actions, id])].slice(0, 6) : ev.actions.filter(x => x !== id); return; }
+    const k = e.target.dataset.e; if (!k) return;
+    ev[k] = e.target.type === 'checkbox' ? e.target.checked : e.target.type === 'number' ? Number(e.target.value) : e.target.value;
+    if (k === 'trigger' || k === 'on') drawEvts();
+    if (k === 'gift') giftPreview(r);
+  });
+  $('#evts').addEventListener('click', async e => {
+    const t = e.target.closest('[data-etest]'), d = e.target.closest('[data-edel]');
+    if (t) { await saveIfDirty(); try { await api('/api/stream/actiune', { action: 'event-test', id: t.dataset.etest }); } catch (err) { note(esc(err.message), 'sys', '⚠️'); } }
+    if (d) { S.events = S.events.filter(x => x.id !== d.dataset.edel); drawEvts(); markDirty(); }
+  });
+  // exemple pentru început
+  $('#btn-examples').onclick = () => {
+    const a1 = newAction({ name: 'Mersi pentru trandafir', text: 'Mersi, {user}, pentru trandafir! 🌹', sound: 'magic', effect: 'hearts' });
+    const a2 = newAction({ name: 'Cadou mare', text: '{user} a trimis {gift}! 🔥', tts: 'Wow, {user}, mulțumesc pentru {gift}!', sound: 'fanfare', effect: 'confetti', duration: 8, wheel: true });
+    const a3 = newAction({ name: 'Follow nou', text: 'Bine ai venit, {user}! 💖', sound: 'pop', effect: 'none', duration: 4, position: 'bottom' });
+    const a4 = newAction({ name: 'Dansează!', text: '{user} vrea să dansez! 💃', sound: 'drum', effect: 'shake', duration: 5 });
+    S.actions.push(a1, a2, a3, a4);
+    S.events.push(newEvent({ gift: 'Rose', actions: [a1.id] }), newEvent({ min: 100, actions: [a2.id] }), newEvent({ trigger: 'follow', actions: [a3.id], userCooldown: 60 }), newEvent({ trigger: 'command', command: '!dans', cost: 50, cooldown: 30, actions: [a4.id] }));
+    drawActs(); drawEvts(); markDirty();
+    note('Am pus 4 exemple. Schimbă-le cum vrei, adaugă clipurile tale și apasă „Salvează setările”.', 'sys', '✨');
+  };
+  async function saveIfDirty() { if (JSON.stringify(S) !== SAVED) await $('#btn-save').onclick(); }
+
   // obiective
   const GT = [['likes', '❤️ Like-uri'], ['follows', '👤 Urmăritori'], ['diamonds', '💎 Diamante'], ['gifts', '🎁 Cadouri'], ['shares', '📣 Distribuiri']];
   function drawGoals() {
@@ -453,7 +728,8 @@
   const ovUrl = (w, extra = '') => `${location.origin}/stream-overlay.html?k=${encodeURIComponent(KEY)}&w=${w}${extra}`;
   function renderOverlays() {
     const list = [
-      ['alerts', '🔔 Alerte', '800 × 300', 'Cadouri, urmăritori, distribuiri și praguri de like-uri, cu sunet.'],
+      ...[1, 2, 3, 4].map(n => ['actions', `⚡ Ecran acțiuni ${n}`, '1920 × 1080 (tot ecranul)', n === 1 ? 'Aici apar acțiunile tale: clipuri, imagini, muzică și efecte. Pune-l peste tot ecranul live-ului.' : `Pentru acțiunile la care ai ales „Ecranul ${n}” (de exemplu, în alt colț sau în altă scenă).`, `&screen=${n}`]),
+      ['alerts', '🔔 Alerte rapide', '800 × 300', 'Cadouri, urmăritori, distribuiri și praguri de like-uri, cu sunet.'],
       ['alerts', '🔔 Alerte + voce', '800 × 300', 'Ca mai sus, iar alertele bifate sunt citite și cu voce (merge doar unde programul de live redă vocea paginilor).', '&tts=1'],
       ['chat', '💬 Chat', '420 × 600', 'Ultimele mesaje de pe live, cu cadourile.'],
       ...(S.goals || []).map(g => ['goal', `🎯 ${g.title}`, '600 × 110', 'Bară de progres pentru obiectiv.', `&id=${encodeURIComponent(g.id)}`]),
@@ -548,6 +824,9 @@
     if (e.t === 'follow') { note(`${who(e.user)} te urmărește acum`, '', '💖'); speak(e.alert?.tts); return; }
     if (e.t === 'share') { note(`${who(e.user)} a distribuit live-ul`, '', '📣'); speak(e.alert?.tts); return; }
     if (e.t === 'milestone') { note(`Ați ajuns la <b>${fmt(e.total)}</b> de like-uri!`, 'gift', '❤️'); speak(e.alert?.tts); return; }
+    if (e.t === 'action') { note(`${esc(e.name)}${e.user?.name ? ' · ' + who(e.user) : ''}${e.test ? ' <span style="color:var(--muted)">(test)</span>' : ''}`, 'gift', '⚡'); speak(e.tts); return; }
+    if (e.t === 'notice') { note(esc(e.text), 'sys', '⭐'); return; }
+    if (e.t === 'subscribe') { note(`${who(e.user)} s-a abonat`, 'gift', '⭐'); return; }
     if (e.t === 'wheel') { note(`Roata s-a oprit la <b>${esc(e.label)}</b>${e.by ? ' · ' + esc(e.by) : ''}`, 'gift', '🎡'); return; }
     if (e.t === 'like') {
       // like-urile vin des: le adunăm într-un singur rând la câteva secunde
@@ -607,6 +886,12 @@
     } catch (err) { note(esc(err.message), 'sys', '⚠️'); }
     setTimeout(() => { btn.disabled = false; }, 400);
   });
+
+  // instalare ca aplicație (Chrome / Edge pe calculator și Android)
+  let installEv = null;
+  addEventListener('beforeinstallprompt', e => { installEv = e; $('#btn-install').hidden = false; });
+  addEventListener('appinstalled', () => { $('#btn-install').hidden = true; note('Studio-ul e instalat. Îl găsești în meniul Start, ca „MRP Studio”.', 'sys', '💻'); });
+  $('#btn-install').onclick = async () => { if (!installEv) return; installEv.prompt(); try { await installEv.userChoice; } catch { /* */ } installEv = null; $('#btn-install').hidden = true; };
 
   load();
 })();

@@ -228,6 +228,8 @@
             <p class="st-muted" style="margin-top:0">Alege ce se întâmplă pe live la fiecare cadou, follow, share sau comandă din chat: clipul tău, o imagine sau un GIF, o melodie, un text și o voce. Fiecare cadou poate avea alerta lui.</p>
             <div class="flow" aria-label="Pașii"><span><b>1</b> Încarcă fișierele</span><span><b>2</b> Fă acțiunile</span><span><b>3</b> Leagă-le de cadouri și evenimente</span><span><b>4</b> Pune overlay-ul „⚡ Ecran acțiuni”</span></div>
 
+            <div class="prev" id="act-prev" style="margin:0 0 12px" hidden><div class="bar"><b style="font-size:12px">👁 Așa arată pe live</b><span class="hint" id="act-prev-hint" style="margin-left:8px">Ecranul 1</span><button type="button" class="b sm" id="act-prev-close" style="margin-left:auto">Închide</button></div><iframe id="act-frame" title="Previzualizarea acțiunilor" allow="autoplay"></iframe></div>
+
             <div class="card2" style="margin-bottom:12px">
               <div class="hd"><b>📁 Fișierele tale</b><span class="hint" id="media-quota"></span></div>
               <div class="qbar"><i id="media-qbar"></i></div>
@@ -702,7 +704,7 @@
   });
   $('#acts').addEventListener('click', async e => {
     const run = e.target.closest('[data-arun]'), dup = e.target.closest('[data-adup]'), del = e.target.closest('[data-adel]');
-    if (run) { e.preventDefault(); await saveIfDirty(); try { await api('/api/stream/actiune', { action: 'run', id: run.dataset.arun }); } catch (err) { note(esc(err.message), 'sys', '⚠️'); } }
+    if (run) { e.preventDefault(); await saveIfDirty(); const a = S.actions.find(x => x.id === run.dataset.arun); await openActPrev(a?.screen || 1); try { await api('/api/stream/actiune', { action: 'run', id: run.dataset.arun }); } catch (err) { note(esc(err.message), 'sys', '⚠️'); } }
     if (dup) { const a = S.actions.find(x => x.id === dup.dataset.adup); const c = { ...a, id: newId('a'), name: (a.name + ' (copie)').slice(0, 40) }; S.actions.splice(S.actions.indexOf(a) + 1, 0, c); openActs.add(c.id); drawActs(); drawEvts(); markDirty(); }
     if (del) { const a = S.actions.find(x => x.id === del.dataset.adel); if (!confirm(`Ștergi acțiunea „${a.name}”?`)) return; S.actions = S.actions.filter(x => x !== a); S.events.forEach(ev => { ev.actions = ev.actions.filter(id => id !== a.id); }); drawActs(); drawEvts(); markDirty(); }
   });
@@ -742,7 +744,7 @@
   });
   $('#evts').addEventListener('click', async e => {
     const t = e.target.closest('[data-etest]'), d = e.target.closest('[data-edel]');
-    if (t) { await saveIfDirty(); try { await api('/api/stream/actiune', { action: 'event-test', id: t.dataset.etest }); } catch (err) { note(esc(err.message), 'sys', '⚠️'); } }
+    if (t) { await saveIfDirty(); const ev = S.events.find(x => x.id === t.dataset.etest), a = S.actions.find(x => x.id === ev?.actions?.[0]); if (!ev?.actions?.length) { note('Bifează la eveniment, la „Atunci:”, cel puțin o acțiune, apoi salvează.', 'sys', '⚠️'); return; } await openActPrev(a?.screen || 1); try { await api('/api/stream/actiune', { action: 'event-test', id: t.dataset.etest }); } catch (err) { note(esc(err.message), 'sys', '⚠️'); } }
     if (d) { S.events = S.events.filter(x => x.id !== d.dataset.edel); drawEvts(); markDirty(); }
   });
   // exemple pentru început
@@ -756,6 +758,18 @@
     drawActs(); drawEvts(); markDirty();
     note('Am pus 4 exemple. Schimbă-le cum vrei, adaugă clipurile tale și apasă „Salvează setările”.', 'sys', '✨');
   };
+  // previzualizarea acțiunilor chiar în Studio (ca să se vadă testul fără TikTok LIVE Studio)
+  let actPrevScreen = 0;
+  function openActPrev(screen) {
+    const box = $('#act-prev'), f = $('#act-frame');
+    box.hidden = false;
+    $('#act-prev-hint').textContent = `Ecranul ${screen}. Pe live, același lucru apare în overlay-ul „⚡ Ecran acțiuni ${screen}”.`;
+    box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    if (actPrevScreen === screen && f.src) return Promise.resolve();
+    actPrevScreen = screen;
+    return new Promise(res => { f.onload = () => setTimeout(res, 900); f.src = ovUrl('actions', `&screen=${screen}`); setTimeout(res, 4000); });
+  }
+  $('#act-prev-close').onclick = () => { $('#act-prev').hidden = true; $('#act-frame').removeAttribute('src'); actPrevScreen = 0; };
   async function saveIfDirty() { if (JSON.stringify(S) !== SAVED) await $('#btn-save').onclick(); }
 
   // obiective

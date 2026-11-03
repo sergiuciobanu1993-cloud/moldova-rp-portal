@@ -79,6 +79,22 @@
   .hint{color:var(--muted);font-size:12px;line-height:1.5;margin:0}
   .hint code{background:rgba(255,255,255,.06);padding:1px 6px;border-radius:5px;color:#ffd0a3}
   .goal-row{display:grid;grid-template-columns:130px minmax(0,1fr) 120px auto;gap:8px;align-items:center}
+  /* (04.11.2026) obiective cu mai multe opțiuni, roata cu acțiuni, lista spectatorilor */
+  .gcard{border:1px solid var(--line);border-radius:12px;padding:10px;background:#0f1114;display:grid;gap:8px}
+  .gcard .r1{display:grid;grid-template-columns:215px minmax(0,1fr) 120px auto;gap:8px;align-items:center}
+  .gcard .r2{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .gcard .r2 select,.gcard .r2 input[type=text]{width:auto;min-width:150px;flex:1 1 150px}
+  .gcard .gv{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;margin-left:auto}
+  .gcard .gv b{color:var(--text)}
+  .wsrow{display:grid;grid-template-columns:44px minmax(0,1fr) minmax(0,1fr) auto;gap:8px;align-items:center}
+  .vwrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px}
+  .vtools{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .vtools input[type=search]{flex:1 1 200px;width:auto;min-height:40px;padding:9px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:#0b0c0e;color:var(--text);font:500 14px Inter,system-ui,sans-serif}
+  .vtools select{width:auto}
+  .lvl{display:inline-block;min-width:26px;padding:2px 7px;border-radius:99px;background:rgba(255,138,31,.14);color:var(--orange);font-weight:900;font-size:11.5px;text-align:center}
+  .atbl .pm{display:inline-flex;gap:4px}
+  .atbl .pm input{width:80px;padding:4px 6px}
+  @media (max-width:900px){.gcard .r1{grid-template-columns:1fr 1fr}.wsrow{grid-template-columns:44px 1fr auto}.wsrow select{grid-column:2/3}}
   .savebar{position:sticky;bottom:12px;margin-top:18px;display:flex;gap:12px;align-items:center;justify-content:flex-end;padding:12px 14px;border-radius:14px;background:rgba(16,18,20,.92);border:1px solid var(--line);backdrop-filter:blur(10px);z-index:5}
   .savebar.dirty{border-color:rgba(255,138,31,.6)}
   .savebar span{margin-right:auto;font-size:13px;color:var(--muted)}
@@ -507,7 +523,8 @@
                 <label class="f">Titlu<input type="text" data-s="points.title" maxlength="60"></label>
                 <div class="grid3"><label class="f">Per mesaj<input type="number" min="0" data-s="points.perChat"></label><label class="f">La 100 like<input type="number" min="0" data-s="points.perLikes100"></label><label class="f">Per 💎<input type="number" min="0" data-s="points.perDiamond"></label></div>
                 <div class="grid3"><label class="f">Per follow<input type="number" min="0" data-s="points.perFollow"></label><label class="f">Per share<input type="number" min="0" data-s="points.perShare"></label><label class="f">Câți apar<input type="number" min="3" max="10" data-s="points.count"></label></div>
-                <p class="hint">Punctele rămân de la un live la altul. Mesajele dau puncte cel mult o dată la 10 secunde de spectator.</p>
+                <label class="f">Bonus pentru abonați (%, 0 = fără)<input type="number" min="0" max="500" data-s="points.subBonus"></label>
+                <p class="hint">Punctele rămân de la un live la altul. Mesajele dau puncte cel mult o dată la 10 secunde de spectator. Abonații primesc mai multe puncte cu bonusul de mai sus.</p>
                 <div id="points-top" class="st-muted"></div>
                 <div><button type="button" class="b sm red" data-act="points-reset">Șterge toate punctele</button></div></div>
               <div class="card2"><div class="hd"><b>🏅 Niveluri</b></div>
@@ -522,15 +539,32 @@
                   <label class="f">Câți spectatori<input type="number" min="1" max="1000" id="drop-max" value="10"></label>
                   <label class="f">Cât ține (s)<input type="number" min="10" max="600" id="drop-sec" value="60"></label></div>
                 <div style="display:flex;gap:6px"><button type="button" class="b sm pri" id="btn-drop">▶ Pornește ploaia</button><button type="button" class="b sm" data-act="drop-stop">⏹ Oprește</button></div></div>
+              <div class="card2"><div class="hd"><b>🏁 Provocare</b><span id="chal-now" class="pill">oprită</span></div>
+                <p class="hint">Pune deoparte punctele tuturor și pornește un clasament nou de la 0. La final alegi: punctele câștigate în provocare se adaugă la cele vechi sau se pierd.</p>
+                <div style="display:flex;gap:6px;flex-wrap:wrap"><button type="button" class="b sm pri" data-act="challenge-start">▶ Pornește provocarea</button>
+                  <button type="button" class="b sm" data-act="challenge-end" data-mode="add">✓ Termină și adaugă punctele</button>
+                  <button type="button" class="b sm red" data-act="challenge-end" data-mode="discard">Termină fără punctele câștigate</button></div>
+                <div class="hd" style="margin-top:6px"><b>✂️ Înjumătățire</b></div>
+                <p class="hint">Scade punctele tuturor cu un procent, ca să rămână interesant. Nivelurile se recalculează.</p>
+                <div style="display:flex;gap:6px;align-items:end;flex-wrap:wrap"><label class="f" style="max-width:150px">Scade cu (%)<input type="number" min="1" max="99" id="halve-pct" value="50"></label>
+                  <button type="button" class="b sm" data-act="points-halve">✂️ Scade acum</button></div></div>
+            </div>
+            <div class="card2" style="margin-top:12px">
+              <div class="hd"><b>👥 Spectatorii tăi</b><span class="hint" id="v-total"></span></div>
+              <div class="vtools"><input type="search" id="v-q" placeholder="Caută după nume" aria-label="Caută spectator">
+                <select id="v-sort" aria-label="Ordonează"><option value="points">Cele mai multe puncte</option><option value="last">Activi recent</option><option value="first">Cei mai noi</option><option value="name">După nume</option></select>
+                <button type="button" class="b sm" id="v-reload">↻ Reîncarcă</button></div>
+              <div class="vwrap"><table class="atbl" id="v-table"><thead><tr><th>Spectator</th><th>Nivel</th><th>Puncte</th><th>Până la nivelul următor</th><th>Prima oară</th><th>Ultima oară</th><th>Schimbă punctele</th><th></th></tr></thead><tbody></tbody></table></div>
+              <div style="display:flex;justify-content:center"><button type="button" class="b sm" id="v-more" hidden>Arată mai mulți</button></div>
             </div>
           </div>
 
           <div class="pane" data-pane="obiective" role="tabpanel" hidden>
             <header class="ph"><h1>Obiective și topuri</h1><p>Bare de obiective, topul susținătorilor, contorul de cadouri și textele care se rotesc.</p></header>
             <div class="card2">
-              <div class="hd"><b>🎯 Obiective (cel mult 4)</b><button type="button" class="b sm" id="btn-goal-add">+ Adaugă</button></div>
+              <div class="hd"><b>🎯 Obiective (cel mult 8)</b><button type="button" class="b sm" id="btn-goal-add">+ Adaugă</button></div>
               <div id="goals" style="display:grid;gap:8px"></div>
-              <p class="hint">Fiecare obiectiv are overlay-ul lui, în tabul Overlay-uri. Se pornesc de la zero cu „Sesiune nouă”.</p>
+              <p class="hint">Fiecare obiectiv are overlay-ul lui, în tabul Overlay-uri. <b>Un cadou anume</b> numără doar cadoul ales (de exemplu 100 de trandafiri). <b>Personalizat</b> crește doar din acțiunile tale sau din butoanele ±. Cu <b>Reia</b>, obiectivul o ia de la capăt de fiecare dată când e atins. Se pornesc de la zero cu „Sesiune nouă”.</p>
             </div>
             <div class="grid2" style="margin-top:12px">
               <div class="card2"><div class="hd"><b>🏆 Top susținători</b></div>
@@ -539,6 +573,11 @@
               <div class="card2"><div class="hd"><b>🎁 Contor de cadouri</b></div>
                 <label class="f">Titlu<input type="text" data-s="counter.title" maxlength="60"></label>
                 <p class="hint">Arată diamantele, cadourile și like-urile din sesiunea de acum.</p></div>
+              <div class="card2"><div class="hd"><b>📜 Ultimele cadouri</b></div>
+                <label class="f">Titlu<input type="text" data-s="feed.title" maxlength="60"></label>
+                <div class="grid2"><label class="f">Câte apar<input type="number" min="3" max="12" data-s="feed.count"></label>
+                  <label class="f">Doar de la (💎)<input type="number" min="1" data-s="feed.min"></label></div>
+                <p class="hint">Lista cu ultimele cadouri primite, cu poza cadoului și numele spectatorului.</p></div>
               <div class="card2"><div class="hd"><b>🔁 Texte care se rotesc</b></div>
                 <label class="f">Câte un text pe rând<textarea id="rot-lines" rows="4"></textarea></label>
                 <label class="f">Schimbă la fiecare (s)<input type="number" min="3" max="120" data-s="rotator.every"></label></div>
@@ -553,11 +592,16 @@
                 <label class="f">Titlu<input type="text" data-s="wheel.title" maxlength="60"></label>
                 <div class="grid2"><label class="f">Pornește<select data-s="wheel.trigger"><option value="gift">La un cadou</option><option value="manual">Doar de mine</option></select></label>
                   <label class="f">Cadou de la (💎)<input type="number" min="1" data-s="wheel.minDiamonds"></label></div>
-                <label class="f">Variantele roții, câte una pe rând (2–16)<textarea id="wheel-segs" rows="6"></textarea></label></div>
+                <div class="hd" style="margin-top:2px"><b style="font-size:13px">Variantele roții (2–16)</b><button type="button" class="b sm" id="btn-ws-add">+ Variantă</button></div>
+                <div id="wsegs" style="display:grid;gap:6px"></div>
+                <p class="hint">Fiecare variantă poate porni una dintre acțiunile tale (un clip, un sunet, puncte…) când roata se oprește la ea.</p></div>
               <div class="card2"><div class="hd"><b>⏱ Subathon</b><span id="timer-now" class="pill">--:--:--</span></div>
                 <label class="f">Titlu<input type="text" data-s="timer.title" maxlength="60"></label>
-                <div class="grid3"><label class="f">Pornește cu (min)<input type="number" min="1" data-s="timer.startMin"></label><label class="f">Sec. per 💎<input type="number" min="0" data-s="timer.perDiamond"></label><label class="f">Sec. per follow<input type="number" min="0" data-s="timer.perFollow"></label></div>
-                <div class="grid3"><label class="f">Sec. per share<input type="number" min="0" data-s="timer.perShare"></label><label class="f">Sec. la 100 like<input type="number" min="0" data-s="timer.perLikes100"></label><label class="f">Maxim (ore)<input type="number" min="1" max="168" data-s="timer.maxHours"></label></div>
+                <div class="grid3"><label class="f">Pornește cu (min)<input type="number" min="1" data-s="timer.startMin"></label><label class="f">Sec. per 💎<input type="number" min="-600" max="600" step="0.1" data-s="timer.perDiamond"></label><label class="f">Sec. per follow<input type="number" min="-3600" max="3600" data-s="timer.perFollow"></label></div>
+                <div class="grid3"><label class="f">Sec. per share<input type="number" min="-3600" max="3600" data-s="timer.perShare"></label><label class="f">Sec. la 100 like<input type="number" min="-600" max="600" data-s="timer.perLikes100"></label><label class="f">Sec. per abonat<input type="number" min="-3600" max="3600" data-s="timer.perSub"></label></div>
+                <div class="grid3"><label class="f">Sec. per mesaj<input type="number" min="-60" max="60" step="0.5" data-s="timer.perChat"></label><label class="f">Multiplicator (×)<input type="number" min="0.1" max="10" step="0.1" data-s="timer.mult"></label><label class="f">Maxim (ore)<input type="number" min="1" max="168" data-s="timer.maxHours"></label></div>
+                <label class="f">Când ajunge la zero, pornește<select data-s="timer.endAction" data-actsel></select></label>
+                <p class="hint">Valorile negative scad timpul (de exemplu −2 sec. per mesaj, pentru un „joc de supraviețuire”). Multiplicatorul se aplică tuturor, ca să faci un „happy hour” cu ×2. Mesajele contează cel mult o dată la 10 secunde de spectator.</p>
                 <div style="display:flex;gap:6px;flex-wrap:wrap">
                   <button type="button" class="b sm pri" data-act="timer-start">▶ Pornește</button>
                   <button type="button" class="b sm" data-act="timer-pause">⏸ Pauză</button>
@@ -584,6 +628,18 @@
                 <span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap"><button type="button" class="b sm pri" data-act="battle-start">▶ Pornește bătălia</button><button type="button" class="b sm" data-act="battle-add1">+1 min</button><button type="button" class="b sm" data-act="battle-stop">⏹ Termină acum</button><button type="button" class="b sm red" data-act="battle-reset">Golește</button></span></div>
             </div>
 
+            <div class="card2" style="margin-top:12px">
+              <div class="hd"><b>🔨 Licitație cu cadouri</b><span id="auc-now" class="pill">oprită</span></div>
+              <p class="hint">Scoți ceva la licitație (un joc, o provocare, un shoutout). Spectatorii licitează cu cadouri: câștigă cine trimite cele mai multe diamante până la final. O ofertă în ultimele secunde mai adaugă puțin timp, ca să nu „fure” nimeni licitația.</p>
+              <div class="grid3"><label class="f">Titlu<input type="text" data-s="auction.title" maxlength="60"></label>
+                <label class="f">Ce se licitează<input type="text" data-s="auction.item" maxlength="80"></label>
+                <label class="f">Durata (minute)<input type="number" min="0.5" max="120" step="0.5" data-s="auction.minutes"></label></div>
+              <div class="grid3"><label class="f">Oferta minimă (💎)<input type="number" min="1" data-s="auction.min"></label>
+                <label class="f">Prelungire la final (sec.)<input type="number" min="0" max="60" data-s="auction.snipe"></label>
+                <label class="f">Câți apar<input type="number" min="3" max="10" data-s="auction.count"></label></div>
+              <div style="display:flex;gap:6px;flex-wrap:wrap"><button type="button" class="b sm pri" data-act="auction-start">▶ Pornește licitația</button><button type="button" class="b sm" data-act="auction-add1">+1 min</button><button type="button" class="b sm" data-act="auction-stop">⏹ Termină acum</button><button type="button" class="b sm red" data-act="auction-reset">Golește</button></div>
+            </div>
+
             <div class="grid2" style="margin-top:12px">
               <div class="card2"><div class="hd"><b>🫙 Borcanul cu cadouri</b><button type="button" class="b sm red" data-act="jar-reset">Golește</button></div>
                 <p class="hint">Fiecare cadou cade în vas și rămâne acolo, cu poza lui.</p>
@@ -603,7 +659,7 @@
                   <label class="f">Cadouri de la (💎)<input type="number" min="1" data-s="cannon.min"></label></div>
                 <label class="tog"><input type="checkbox" data-s="cannon.names"> Scrie numele lângă cadou</label></div>
               <div class="card2"><div class="hd"><b>🕒 Ultimii de pe live</b></div>
-                <div class="chips"><label><input type="checkbox" data-s="last.follower"> 💖 Ultimul follower</label><label><input type="checkbox" data-s="last.gifter"> 🎁 Ultimul cadou</label><label><input type="checkbox" data-s="last.sharer"> 📣 Ultimul share</label><label><input type="checkbox" data-s="last.subscriber"> ⭐ Ultimul abonat</label></div>
+                <div class="chips"><label><input type="checkbox" data-s="last.follower"> 💖 Ultimul follower</label><label><input type="checkbox" data-s="last.gifter"> 🎁 Ultimul cadou</label><label><input type="checkbox" data-s="last.sharer"> 📣 Ultimul share</label><label><input type="checkbox" data-s="last.subscriber"> ⭐ Ultimul abonat</label><label><input type="checkbox" data-s="last.liker"> ❤️ Ultimul like</label><label><input type="checkbox" data-s="last.chatter"> 💬 Ultimul mesaj</label><label><input type="checkbox" data-s="last.topgift"> 👑 Cel mai mare cadou</label><label><input type="checkbox" data-s="last.topstreak"> 🔥 Cel mai lung combo</label></div>
                 <label class="f">Așezare<select data-s="last.layout"><option value="column">Unul sub altul</option><option value="row">Unul lângă altul</option></select></label></div>
               <div class="card2"><div class="hd"><b>😂 Emoji din chat</b></div>
                 <p class="hint">Emoji-urile scrise de spectatori în chat zboară pe ecran.</p>
@@ -742,14 +798,16 @@
   }
   $('#btn-team-add').onclick = () => { read(); const n = S.battle.teams.length; S.battle.teams.push({ name: `Echipa ${n + 1}`, color: ['#ff4d6a', '#4aa3ff', '#3ddc84', '#ffd23f'][n], command: '', gifts: '' }); fill(); };
   $('#teams').addEventListener('click', e => { const d = e.target.closest('[data-team-del]'); if (!d) return; read(); S.battle.teams.splice(Number(d.dataset.teamDel), 1); fill(); });
+  const actOptions = cur => '<option value="">— nimic —</option>' + (S.actions || []).map(a => `<option value="${esc(a.id)}"${a.id === cur ? ' selected' : ''}>⚡ ${esc(a.name)}</option>`).join('');
   function fill() {
     drawTeams();
+    $$('[data-actsel]').forEach(sel => { sel.innerHTML = actOptions(getP(S, sel.dataset.s)); });
     $$('[data-s]').forEach(el => {
       const v = getP(S, el.dataset.s);
       if (el.type === 'checkbox') el.checked = !!v; else if (v != null) el.value = v;
     });
     $('#rot-lines').value = (S.rotator.lines || []).join('\n');
-    $('#wheel-segs').value = S.wheel.segments.map(x => x.label).join('\n');
+    drawWsegs();
     drawGoals(); drawActs(); drawEvts(); drawSnds(); drawIvs(); drawLevels(); drawStart(); shows(); markDirty();
   }
   function shows() { $$('[data-show]').forEach(el => { el.textContent = getP(S, el.dataset.show); }); }
@@ -760,9 +818,11 @@
       setP(S, el.dataset.s, v);
     });
     S.rotator.lines = $('#rot-lines').value.split('\n').map(x => x.trim()).filter(Boolean);
-    const old = S.wheel.segments, COLORS = ['#ff8a1f', '#3ddc84', '#4aa3ff', '#f25f8b', '#b57bff', '#ffd23f', '#2ee6d6', '#ff5a4e'];
-    S.wheel.segments = $('#wheel-segs').value.split('\n').map(x => x.trim()).filter(Boolean).slice(0, 16).map((label, i) => ({ label, color: old[i]?.color || COLORS[i % 8] }));
-    S.goals = $$('#goals .goal-row').map(r => ({ id: r.dataset.id, type: r.querySelector('select').value, title: r.querySelector('[data-g=title]').value, target: Number(r.querySelector('[data-g=target]').value) }));
+    S.wheel.segments = $$('#wsegs .wsrow').map(r => ({ color: r.querySelector('[data-ws=color]').value, label: r.querySelector('[data-ws=label]').value.slice(0, 40), action: r.querySelector('[data-ws=action]').value }));
+    S.goals = $$('#goals .gcard').map(r => {
+      const v = k => r.querySelector(`[data-g=${k}]`);
+      return { id: r.dataset.id, type: v('type').value, title: v('title').value, target: Number(v('target').value), gift: v('gift').value.trim(), style: v('style').value, action: v('action').value, repeat: v('repeat').checked };
+    });
   }
   function pushPreview() {
     if (!S) return;
@@ -950,6 +1010,9 @@
           <div class="grid3"><label class="tog" style="align-self:end;min-height:40px"><input type="checkbox" data-a="wheel"${a.wheel ? ' checked' : ''}> 🎡 Învârte roata</label>
             <label class="f">Subathon (± secunde)<input type="number" min="-3600" max="3600" data-a="timer" value="${a.timer}"></label>
             <label class="f">Puncte spectatorului (±)<input type="number" data-a="points" value="${a.points}"></label></div>
+          <div class="grid3"><label class="f">Obiectiv personalizat<select data-a="goal"><option value="">— niciunul —</option>${(S.goals || []).filter(g => g.type === 'custom').map(g => `<option value="${esc(g.id)}"${g.id === a.goal ? ' selected' : ''}>🎯 ${esc(g.title)}</option>`).join('')}</select></label>
+            <label class="f">Crește obiectivul cu (±)<input type="number" data-a="goalAdd" value="${a.goalAdd || 0}"></label>
+            <label class="tog" style="align-self:end;min-height:40px" title="Dacă vine altă acțiune pe același ecran, asta se oprește imediat"><input type="checkbox" data-a="skip"${a.skip ? ' checked' : ''}> ⏭ Se oprește la următoarea</label></div>
           <div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="b sm" data-adup="${esc(a.id)}">⧉ Copiază acțiunea</button><button type="button" class="b sm red" data-adel="${esc(a.id)}">Șterge</button></div>
         </div></details>`;
     }).join('') || '<p class="hint">Nicio acțiune încă. Apasă „+ Acțiune nouă” sau „Pune exemple”.</p>';
@@ -995,7 +1058,7 @@
     card.innerHTML = `<button data-${k}="${esc(b.dataset[k])}"></button>`; $('#acts').appendChild(card);
     card.firstChild.dispatchEvent(fake); card.remove();
   });
-  function newAction(over = {}) { return { id: newId('a'), name: 'Acțiune nouă', media: null, audio: null, sound: 'coin', text: 'Mersi, {user}!', tts: '', duration: 6, volume: 80, screen: 1, position: 'center', size: 45, effect: 'confetti', wheel: false, timer: 0, points: 0, ...over }; }
+  function newAction(over = {}) { return { id: newId('a'), name: 'Acțiune nouă', media: null, audio: null, sound: 'coin', text: 'Mersi, {user}!', tts: '', duration: 6, volume: 80, screen: 1, position: 'center', size: 45, effect: 'confetti', wheel: false, timer: 0, points: 0, goal: '', goalAdd: 0, skip: false, ...over }; }
   $('#btn-act-add').onclick = () => { const a = newAction(); S.actions.push(a); openActs.add(a.id); drawActs(); drawEvts(); markDirty(); };
   $('#acts').addEventListener('toggle', e => { const d = e.target.closest('details.act'); if (!d) return; d.open ? openActs.add(d.dataset.aid) : openActs.delete(d.dataset.aid); }, true);
   $('#acts').addEventListener('input', e => {
@@ -1205,6 +1268,41 @@
     el.textContent = DROP && l ? `▶ ${l}s · ${DROP.claimed}/${DROP.max}` : 'oprită'; el.className = 'pill' + (DROP && l ? ' live' : '');
   }, 500);
 
+  // ------------------------------------------------------------ spectatorii (puncte, nivel, prima și ultima activitate)
+  let vOff = 0, vItems = [], vT = null;
+  const when = d => { if (!d) return '—'; const t = new Date(d), diff = (Date.now() - t) / 1000; if (diff < 60) return 'acum'; if (diff < 3600) return `acum ${Math.floor(diff / 60)} min`; if (diff < 86400) return `acum ${Math.floor(diff / 3600)} h`; return t.toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit', year: '2-digit' }); };
+  async function loadViewers(more) {
+    if (!S) return;
+    if (!more) { vOff = 0; vItems = []; }
+    try {
+      const d = await api(`/api/stream/spectatori?q=${encodeURIComponent($('#v-q').value.trim())}&sort=${$('#v-sort').value}&off=${vOff}`);
+      vItems = vItems.concat(d.items); vOff += d.items.length;
+      $('#v-total').textContent = `${fmt(d.total)} spectatori · ${fmt(d.sum)} ${S.points.currency} în total${d.challenge?.running ? ' · provocare pornită' : ''}`;
+      const cur = esc(S.points.currency);
+      $('#v-table tbody').innerHTML = vItems.map(x => `<tr data-vid="${esc(x.id)}"><td><b>${esc(x.name)}</b>${x.name !== x.id ? ` <span class="hint">@${esc(x.id)}</span>` : ''}</td><td><span class="lvl">${x.level}</span></td>
+        <td><b>${fmt(x.points)}</b>${x.saved != null ? ` <span class="hint" title="Puse deoparte în timpul provocării">(+${fmt(x.saved)} deoparte)</span>` : ''}</td><td class="hint">${fmt(x.toNext)} ${cur}</td>
+        <td class="hint">${when(x.first)}</td><td class="hint">${when(x.last)}</td>
+        <td><span class="pm"><input type="number" value="100" aria-label="Câte puncte"><button type="button" class="b sm" data-vpm="1" title="Adaugă">+</button><button type="button" class="b sm" data-vpm="-1" title="Scade">−</button></span></td>
+        <td class="ops"><button type="button" data-vdel title="Scoate din listă">🗑</button></td></tr>`).join('') || `<tr><td colspan="8" class="hint">${$('#v-q').value.trim() ? 'Nu am găsit pe nimeni cu numele ăsta.' : 'Încă nu are nimeni puncte. Spectatorii apar aici după primul mesaj, like sau cadou.'}</td></tr>`;
+      $('#v-more').hidden = vOff >= d.total;
+    } catch (err) { $('#v-total').textContent = err.message; }
+  }
+  const loadViewersSoon = () => { clearTimeout(vT); vT = setTimeout(() => loadViewers(), 1500); };
+  $('#v-q').addEventListener('input', () => { clearTimeout(vT); vT = setTimeout(() => loadViewers(), 350); });
+  $('#v-sort').onchange = () => loadViewers();
+  $('#v-reload').onclick = () => loadViewers();
+  $('#v-more').onclick = () => loadViewers(true);
+  $('#v-table').addEventListener('click', async e => {
+    const tr = e.target.closest('tr[data-vid]'); if (!tr) return;
+    const pm = e.target.closest('[data-vpm]'), del = e.target.closest('[data-vdel]');
+    try {
+      if (pm) { const n = Math.abs(Number(tr.querySelector('.pm input').value) || 0); if (!n) return; pm.disabled = true; await api('/api/stream/spectatori', { id: tr.dataset.vid, delta: n * Number(pm.dataset.vpm) }, 'PUT'); }
+      else if (del) { if (!confirm('Scoți spectatorul din listă? Punctele lui se șterg.')) return; await api('/api/stream/spectatori/' + encodeURIComponent(tr.dataset.vid), {}, 'DELETE'); }
+      else return;
+      loadViewers();
+    } catch (err) { note(esc(err.message), 'sys', '⚠️'); if (pm) pm.disabled = false; }
+  });
+
   // ------------------------------------------------------------ export / import
   $('#btn-export').onclick = () => {
     const blob = new Blob([JSON.stringify({ studio: 'moldovarp', version: 1, settings: S }, null, 2)], { type: 'application/json' });
@@ -1297,24 +1395,59 @@
   async function saveIfDirty() { if (JSON.stringify(S) !== SAVED) await $('#btn-save').onclick(); }
 
   // obiective
-  const GT = [['likes', '❤️ Like-uri'], ['follows', '👤 Urmăritori'], ['diamonds', '💎 Diamante'], ['gifts', '🎁 Cadouri'], ['shares', '📣 Distribuiri']];
+  const GT = [['likes', '❤️ Like-uri'], ['follows', '👤 Urmăritori noi'], ['diamonds', '💎 Diamante'], ['gifts', '🎁 Toate cadourile'], ['gift', '🌹 Un cadou anume'], ['shares', '📣 Distribuiri'], ['subs', '⭐ Abonați noi'], ['viewers', '👁 Spectatori acum'], ['custom', '🎯 Personalizat (din acțiuni)']];
+  const GSTY = [['bar', 'Stil: bară groasă'], ['slim', 'Stil: bară subțire'], ['ring', 'Stil: inel'], ['big', 'Stil: cifră mare']];
+  let GOALV = {};
   function drawGoals() {
-    $('#goals').innerHTML = (S.goals || []).map(g => `<div class="goal-row" data-id="${esc(g.id)}">
-      <select aria-label="Tipul obiectivului">${GT.map(([v, l]) => `<option value="${v}"${v === g.type ? ' selected' : ''}>${l}</option>`).join('')}</select>
-      <input type="text" data-g="title" maxlength="60" value="${esc(g.title)}" aria-label="Titlul obiectivului">
-      <input type="number" data-g="target" min="1" value="${esc(g.target)}" aria-label="Ținta">
-      <button type="button" class="b sm red" data-goal-del aria-label="Șterge obiectivul">✕</button></div>`).join('') || '<p class="hint">Niciun obiectiv. Apasă „Adaugă”.</p>';
-    $('#btn-goal-add').disabled = (S.goals || []).length >= 4;
+    $('#goals').innerHTML = (S.goals || []).map(g => `<div class="gcard" data-id="${esc(g.id)}">
+      <div class="r1"><select data-g="type" aria-label="Tipul obiectivului">${opt(GT, g.type)}</select>
+        <input type="text" data-g="title" maxlength="60" value="${esc(g.title)}" aria-label="Titlul obiectivului">
+        <input type="number" data-g="target" min="1" value="${esc(g.target)}" aria-label="Ținta">
+        <button type="button" class="b sm red" data-goal-del aria-label="Șterge obiectivul">✕</button></div>
+      <div class="r2"><input type="text" data-g="gift" list="gift-list" maxlength="60" value="${esc(g.gift || '')}" placeholder="Cadoul numărat, de exemplu Rose" aria-label="Cadoul numărat"${g.type === 'gift' ? '' : ' hidden'}>
+        <select data-g="style" aria-label="Stilul overlay-ului">${opt(GSTY, g.style || 'bar')}</select>
+        <select data-g="action" aria-label="Acțiunea când e atins">${actOptions(g.action).replace('— nimic —', 'Când e atins: nimic')}</select>
+        <label class="tog"><input type="checkbox" data-g="repeat"${g.repeat ? ' checked' : ''}> 🔁 Reia</label>
+        ${g.type === 'custom' ? `<button type="button" class="b sm" data-gadd="${esc(g.id)}" data-n="1">+1</button><button type="button" class="b sm" data-gadd="${esc(g.id)}" data-n="-1">−1</button>` : ''}
+        <button type="button" class="b sm" data-greset="${esc(g.id)}" title="Pornește obiectivul de la zero">↺ De la zero</button>
+        <span class="gv" data-gv="${esc(g.id)}">${GOALV[g.id] != null ? `acum <b>${fmt(GOALV[g.id])}</b> / ${fmt(g.target)}` : ''}</span></div></div>`).join('') || '<p class="hint">Niciun obiectiv. Apasă „Adaugă”.</p>';
+    $('#btn-goal-add').disabled = (S.goals || []).length >= 8;
   }
-  $('#btn-goal-add').onclick = () => { read(); const used = new Set(S.goals.map(g => g.id)); let n = 1; while (used.has('g' + n)) n++; S.goals.push({ id: 'g' + n, type: 'likes', title: 'Obiectiv nou', target: 1000 }); drawGoals(); markDirty(); renderOverlays(); };
-  $('#goals').addEventListener('click', e => { if (!e.target.closest('[data-goal-del]')) return; e.target.closest('.goal-row').remove(); read(); drawGoals(); markDirty(); renderOverlays(); });
+  function drawGoalVals(v) {
+    GOALV = v || {};
+    $$('[data-gv]').forEach(el => { const g = (S.goals || []).find(x => x.id === el.dataset.gv); el.innerHTML = g && GOALV[g.id] != null ? `acum <b>${fmt(GOALV[g.id])}</b> / ${fmt(g.target)}` : ''; });
+  }
+  $('#btn-goal-add').onclick = () => { read(); const used = new Set(S.goals.map(g => g.id)); let n = 1; while (used.has('g' + n)) n++; S.goals.push({ id: 'g' + n, type: 'likes', title: 'Obiectiv nou', target: 1000, gift: '', style: 'bar', action: '', repeat: false }); drawGoals(); markDirty(); renderOverlays(); };
+  $('#goals').addEventListener('change', e => { if (e.target.dataset.g === 'type') { read(); drawGoals(); } });
+  $('#goals').addEventListener('click', async e => {
+    if (e.target.closest('[data-goal-del]')) { e.target.closest('.gcard').remove(); read(); drawGoals(); markDirty(); renderOverlays(); return; }
+    const b = e.target.closest('[data-gadd],[data-greset]'); if (!b) return;
+    const id = b.dataset.gadd || b.dataset.greset;
+    if (JSON.stringify(S) !== SAVED && !(SAVED && JSON.parse(SAVED).goals.some(g => g.id === id))) { note('Salvează întâi obiectivul nou.', 'sys', '⚠️'); return; }
+    try { const d = await api('/api/stream/actiune', b.dataset.gadd ? { action: 'goal-add', id, n: Number(b.dataset.n) } : { action: 'goal-reset', id }); if (d.state) drawState(d.state); } catch (err) { note(esc(err.message), 'sys', '⚠️'); }
+  });
+
+  // roata: variantele, fiecare cu acțiunea ei
+  const WCOL = ['#ff8a1f', '#3ddc84', '#4aa3ff', '#f25f8b', '#b57bff', '#ffd23f', '#2ee6d6', '#ff5a4e'];
+  function drawWsegs() {
+    const segs = S.wheel.segments || [];
+    $('#wsegs').innerHTML = segs.map((x, i) => `<div class="wsrow"><input type="color" data-ws="color" value="${esc(x.color || WCOL[i % 8])}" aria-label="Culoarea variantei ${i + 1}">
+      <input type="text" data-ws="label" maxlength="40" value="${esc(x.label)}" placeholder="de exemplu: 10 flotări" aria-label="Varianta ${i + 1}">
+      <select data-ws="action" aria-label="Acțiunea variantei ${i + 1}">${actOptions(x.action).replace('— nimic —', 'Fără acțiune')}</select>
+      <button type="button" class="b sm red" data-wsdel="${i}"${segs.length <= 2 ? ' disabled' : ''} aria-label="Șterge varianta">✕</button></div>`).join('');
+    $('#btn-ws-add').disabled = segs.length >= 16;
+  }
+  $('#btn-ws-add').onclick = () => { read(); const n = S.wheel.segments.length; S.wheel.segments.push({ label: 'Variantă nouă', color: WCOL[n % 8], action: '' }); drawWsegs(); markDirty(); $('#wsegs .wsrow:last-child [data-ws=label]')?.select(); };
+  $('#wsegs').addEventListener('click', e => { const d = e.target.closest('[data-wsdel]'); if (!d) return; read(); S.wheel.segments.splice(Number(d.dataset.wsdel), 1); drawWsegs(); markDirty(); });
 
   // taburi
   function goTab(tab) {
     $$('.sa-rail [data-tab]').forEach(x => x.setAttribute('aria-selected', String(x.dataset.tab === tab)));
     $$('.pane').forEach(p => { p.hidden = p.dataset.pane !== tab; });
     if (tab === 'start') drawStart();
-    if (tab === 'puncte') drawLevels();
+    if (tab === 'puncte') { drawLevels(); loadViewers(); }
+    // listele cu acțiuni (cronometru, obiective, roată) arată și acțiunile făcute între timp
+    if (S && (tab === 'jocuri' || tab === 'obiective')) { read(); $$('[data-actsel]').forEach(sel => { sel.innerHTML = actOptions(getP(S, sel.dataset.s)); }); drawGoals(); drawWsegs(); }
     try { sessionStorage.setItem('mrp_studio_tab', tab); } catch { /* */ }
     document.querySelector('.sa-content')?.scrollTo?.(0, 0); window.scrollTo(0, 0);
   }
@@ -1334,11 +1467,14 @@
       { w: 'chat', cat: 'ultimii', ic: '💬', name: 'Chat', size: '420 × 600', desc: 'Ultimele mesaje de pe live, cu cadourile.', test: 'chat' },
       { w: 'last', cat: 'ultimii', ic: '🕒', name: 'Ultimii de pe live', size: '420 × 320', desc: 'Ultimul follower, ultimul cadou, ultimul share.', test: 'follow' },
       { w: 'emoji', cat: 'grafice', ic: '😂', name: 'Emoji din chat', size: '1080 × 1920', desc: 'Emoji-urile din chat zboară pe ecran.', test: 'chat' },
-      ...(S.goals || []).map(g => ({ w: 'goal', cat: 'obiective', ic: '🎯', name: g.title, size: '600 × 110', desc: 'Bară de progres pentru obiectiv.', extra: `&id=${encodeURIComponent(g.id)}`, test: 'like' })),
+      ...(S.goals || []).map(g => ({ w: 'goal', cat: 'obiective', ic: '🎯', name: g.title, size: '600 × 110', desc: ({ gift: `Numără doar ${g.gift || 'cadoul ales'}.`, custom: 'Obiectiv controlat de acțiunile tale.', viewers: 'Câți spectatori sunt acum.' })[g.type] || 'Bară de progres pentru obiectiv.', extra: `&id=${encodeURIComponent(g.id)}`, test: 'like' })),
       { w: 'top', cat: 'obiective', ic: '🏆', name: 'Top susținători', size: '380 × 420', desc: 'Cine a trimis cele mai multe diamante.', test: 'gift' },
       { w: 'topliker', cat: 'obiective', ic: '❤️', name: 'Likeathon', size: '380 × 480', desc: 'Cine dă cele mai multe like-uri.', test: 'like' },
       { w: 'points', cat: 'obiective', ic: '⭐', name: 'Puncte spectatori', size: '380 × 420', desc: 'Cei mai fideli spectatori, de la un live la altul.', test: 'chat' },
       { w: 'counter', cat: 'cadouri', ic: '🎁', name: 'Contor cadouri', size: '460 × 130', desc: 'Diamante, cadouri și like-uri pe sesiune.', test: 'gift' },
+      { w: 'feed', cat: 'cadouri', ic: '📜', name: 'Ultimele cadouri', size: '400 × 460', desc: 'Lista cu ultimele cadouri, cu poza cadoului.', test: 'gift' },
+      { w: 'last', cat: 'cadouri', ic: '👑', name: 'Cel mai mare cadou', size: '420 × 110', desc: 'Cine a trimis cel mai scump cadou în sesiunea asta.', extra: '&only=topgift', test: 'gift' },
+      { w: 'last', cat: 'cadouri', ic: '🔥', name: 'Cel mai lung combo', size: '420 × 110', desc: 'Cel mai lung șir de cadouri trimise deodată.', extra: '&only=topstreak', test: 'gift' },
       { w: 'viewers', cat: 'obiective', ic: '👁', name: 'Spectatori', size: '260 × 100', desc: 'Câți oameni se uită acum.' },
       { w: 'jar', cat: 'cadouri', ic: '🫙', name: 'Borcanul cu cadouri', size: '420 × 600', desc: 'Cadourile cad în borcan, butoi sau ulcior.', test: 'gift' },
       { w: 'cannon', cat: 'cadouri', ic: '💥', name: 'Tunul de cadouri', size: '1080 × 1920', desc: 'Fiecare cadou e tras cu tunul peste ecran.', test: 'gift' },
@@ -1347,6 +1483,7 @@
       { w: 'wheel', cat: 'jocuri', ic: '🎡', name: 'Roata norocului', size: '520 × 620', desc: 'Se învârte la cadouri, la comandă sau când apeși tu.', act: 'wheel' },
       { w: 'timer', cat: 'jocuri', ic: '⏱', name: 'Subathon', size: '520 × 180', desc: 'Cronometru care crește cu cadouri, follow și like-uri.', test: 'gift' },
       { w: 'battle', cat: 'jocuri', ic: '⚔️', name: 'Bătălia echipelor', size: '640 × 300', desc: 'Scorul echipelor, timpul și câștigătorul.', test: 'gift' },
+      { w: 'auction', cat: 'jocuri', ic: '🔨', name: 'Licitație', size: '460 × 420', desc: 'Cine licitează cele mai multe diamante, cu timpul rămas.', test: 'gift' },
       { w: 'rotator', cat: 'grafice', ic: '🔁', name: 'Texte care se rotesc', size: '700 × 90', desc: 'Mesajele tale, pe rând.' },
     ];
   }
@@ -1461,7 +1598,18 @@
     $('#k-viewers').textContent = fmt(st.viewers); $('#k-likes').textContent = fmt(st.likes);
     $('#k-diamonds').textContent = fmt(st.diamonds); $('#k-follows').textContent = fmt(st.follows);
     if (st.timer) setTimer(st.timer);
+    if (st.goals) drawGoalVals(st.goals);
+    if (st.auction) drawAuction(st.auction);
+    if (st.challenge) { const el = $('#chal-now'); if (el) { el.textContent = st.challenge.running ? '▶ pornită' : 'oprită'; el.className = 'pill' + (st.challenge.running ? ' live' : ''); } }
   }
+  let AU = null, auAt = 0;
+  function drawAuction(a) { AU = a; auAt = Date.now(); }
+  setInterval(() => {
+    const el = $('#auc-now'); if (!el) return;
+    const l = AU?.running ? Math.max(0, Math.ceil((AU.left - (Date.now() - auAt)) / 1000)) : 0, top = AU?.top?.[0];
+    el.textContent = AU?.running ? `▶ ${Math.floor(l / 60)}:${String(l % 60).padStart(2, '0')}${top ? ' · ' + top.name + ' ' + fmt(top.diamonds) + ' 💎' : ''}` : AU?.winner ? `gata · ${AU.winner.name}` : 'oprită';
+    el.className = 'pill' + (AU?.running ? ' live' : '');
+  }, 500);
   function setTimer(t) { timerRun = !!t.running; timerLeft = Number(t.left) || 0; timerAt = Date.now(); }
   setInterval(() => {
     const ms = Math.max(0, timerRun ? timerLeft - (Date.now() - timerAt) : timerLeft), s = Math.ceil(ms / 1000);
@@ -1485,8 +1633,8 @@
     if (e.t === 'hello') { drawState(e.state); drawLive(e.live); drawPoints(e.points); return; }
     if (e.t === 'state') return drawState(e.state);
     if (e.t === 'status') { drawLive(e); if (e.msg) note(esc(e.msg), 'sys', e.status === 'live' ? '🔴' : 'ℹ️'); return; }
-    if (e.t === 'points') return drawPoints(e.list);
-    if (e.t === 'timer') return setTimer(e.timer);
+    if (e.t === 'points') { if (!$('[data-pane=puncte]').hidden) loadViewersSoon(); return drawPoints(e.list); }
+    if (e.t === 'timer') { if (e.ended) note('Subathonul a ajuns la zero.', 'gift', '⏱'); return setTimer(e.timer); }
     if (e.t === 'revoked') return;
     if (e.t === 'chat') { note(`${who(e.user)} ${esc(e.text)}`, '', '💬'); speak(e.tts); return; }
     if (e.t === 'gift') { note(`${who(e.user)} a trimis ${e.count > 1 ? e.count + '× ' : ''}${esc(e.gift)} <span style="color:var(--muted)">(${fmt(e.diamonds)} 💎)</span>`, 'gift', '🎁'); speak(e.alert?.tts); return; }
@@ -1500,6 +1648,9 @@
     if (e.t === 'sound') { playSound(e.src, e.volume); return; }
     if (e.t === 'battle') { drawBattle(e.battle); if (e.ended) { const t = S.battle.teams[e.battle.winner]; note(t ? `Bătălia s-a terminat: câștigă <b>${esc(t.name)}</b>!` : 'Bătălia s-a terminat la egalitate.', 'gift', '⚔️'); } return; }
     if (e.t === 'jar-reset') return;
+    if (e.t === 'auction') { drawAuction(e.auction); if (e.ended) note(e.auction.winner ? `Licitația s-a terminat: câștigă <b>${esc(e.auction.winner.name)}</b> cu ${fmt(e.auction.winner.diamonds)} 💎` : 'Licitația s-a terminat fără oferte.', 'gift', '🔨'); return; }
+    if (e.t === 'goal') { note(`Obiectiv atins: <b>${esc(e.title)}</b>${e.times > 1 ? ' ×' + e.times : ''} 🎉`, 'gift', '🎯'); return; }
+    if (e.t === 'challenge') { loadViewers(); return; }
     if (e.t === 'subscribe') { note(`${who(e.user)} s-a abonat`, 'gift', '⭐'); return; }
     if (e.t === 'wheel') { note(`Roata s-a oprit la <b>${esc(e.label)}</b>${e.by ? ' · ' + esc(e.by) : ''}`, 'gift', '🎡'); return; }
     if (e.t === 'like') {
@@ -1551,12 +1702,13 @@
     const t = e.target.closest('[data-test]'), a = e.target.closest('[data-act]');
     if (!t && !a) return;
     const btn = t || a;
-    const ASK = { 'points-reset': 'Ștergi toate punctele spectatorilor? Nu se poate anula.', 'session-new': 'Pornești o sesiune nouă? Contoarele, topul, obiectivele și „ultimii” încep de la zero.', 'battle-reset': 'Golești scorul bătăliei?', 'jar-reset': 'Golești borcanul cu cadouri?', 'battle-stop': 'Termini bătălia acum?' };
+    const ASK = { 'challenge-start': 'Pornești provocarea? Punctele de acum se pun deoparte și toată lumea pornește de la 0.', 'points-halve': `Scazi punctele tuturor spectatorilor cu ${Number($('#halve-pct')?.value) || 50}%? Nu se poate anula.`, 'auction-reset': 'Golești licitația?', 'auction-stop': 'Termini licitația acum?', 'points-reset': 'Ștergi toate punctele spectatorilor? Nu se poate anula.', 'session-new': 'Pornești o sesiune nouă? Contoarele, topul, obiectivele și „ultimii” încep de la zero.', 'battle-reset': 'Golești scorul bătăliei?', 'jar-reset': 'Golești borcanul cu cadouri?', 'battle-stop': 'Termini bătălia acum?' };
     if (a && ASK[a.dataset.act] && !confirm(ASK[a.dataset.act])) return;
+    if (a?.dataset.act === 'challenge-end' && !confirm(a.dataset.mode === 'add' ? 'Termini provocarea? Punctele câștigate se adaugă la cele vechi.' : 'Termini provocarea? Punctele câștigate în provocare se pierd, fiecare rămâne cu ce avea înainte.')) return;
     btn.disabled = true;
     try {
       if (t) await api('/api/stream/test', { type: t.dataset.test, gift: t.dataset.gift != null ? Number(t.dataset.gift) : undefined, count: t.dataset.test === 'like' ? 50 : undefined });
-      else { const d = await api('/api/stream/actiune', { action: a.dataset.act, minutes: a.dataset.min != null ? Number(a.dataset.min) : undefined }); if (d.state) drawState(d.state); }
+      else { const d = await api('/api/stream/actiune', { action: a.dataset.act, minutes: a.dataset.min != null ? Number(a.dataset.min) : undefined, mode: a.dataset.mode, pct: a.dataset.act === 'points-halve' ? Number($('#halve-pct').value) : undefined }); if (d.state) drawState(d.state); if (/^(challenge|points)-/.test(a.dataset.act)) loadViewers(); }
     } catch (err) { note(esc(err.message), 'sys', '⚠️'); }
     setTimeout(() => { btn.disabled = false; }, 400);
   });

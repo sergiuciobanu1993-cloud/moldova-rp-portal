@@ -53,6 +53,8 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       PRIMARY KEY (user_id, viewer));
     CREATE INDEX IF NOT EXISTS stream_points_top ON stream_points(user_id, points DESC);
+    ALTER TABLE stream_points ADD COLUMN IF NOT EXISTS first_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+    ALTER TABLE stream_points ADD COLUMN IF NOT EXISTS saved BIGINT;
     CREATE TABLE IF NOT EXISTS stream_media (
       id UUID PRIMARY KEY,
       user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -78,7 +80,9 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
   const SOUNDS = ["coin", "pop", "whoosh", "fanfare", "laser", "bell", "drum", "magic", "none"];
   const sound = (v, def) => SOUNDS.includes(v) ? v : def;
   const THEMES = ["neon", "glass", "minimal", "arcade"];
-  const GOAL_TYPES = ["likes", "diamonds", "follows", "shares", "gifts"];
+  const GOAL_TYPES = ["likes", "diamonds", "follows", "shares", "gifts", "subs", "viewers", "gift", "custom"];
+  const GOAL_STYLES = ["bar", "slim", "ring", "big"];
+  const MAX_GOALS = 8;
   const WHEEL_COLORS = ["#ff8a1f", "#3ddc84", "#4aa3ff", "#f25f8b", "#b57bff", "#ffd23f", "#2ee6d6", "#ff5a4e"];
 
   const MAX_ACTIONS = 60, MAX_EVENTS = 60;
@@ -102,6 +106,9 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
       screen: Math.round(clampN(x.screen, 1, 8, 1)), position: POSITIONS.includes(x.position) ? x.position : "center",
       size: clampN(x.size, 10, 100, 45), effect: EFFECTS.includes(x.effect) ? x.effect : "none",
       wheel: bool(x.wheel, false), timer: Math.round(clampN(x.timer, -3600, 3600, 0)), points: Math.round(clampN(x.points, -1_000_000, 1_000_000, 0)),
+      // (04.11.2026) controlează un obiectiv personalizat; poate fi tăiată de următoarea acțiune de pe același ecran
+      goal: String(x.goal || "").replace(/[^\w-]/g, "").slice(0, 12), goalAdd: Math.round(clampN(x.goalAdd, -1_000_000, 1_000_000, 0)),
+      skip: bool(x.skip, false),
     };
   }
   function normEvent(x = {}, i = 0, actionIds = new Set()) {
@@ -171,13 +178,16 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
     const tm = s.timer || {};
     const p = s.points || {};
     const w = s.wheel || {};
-    const segs = (Array.isArray(w.segments) ? w.segments : []).map((x, i) => ({ label: str(x?.label ?? x, 40), color: color(x?.color, WHEEL_COLORS[i % WHEEL_COLORS.length]) })).filter(x => x.label).slice(0, 16);
-    const goals = (Array.isArray(s.goals) ? s.goals : []).slice(0, 4).map((g, i) => ({
+    const seenG = new Set();
+    const goals = (Array.isArray(s.goals) ? s.goals : []).slice(0, MAX_GOALS).map((g, i) => ({
       id: str(g?.id, 12, `g${i + 1}`).replace(/[^\w-]/g, "") || `g${i + 1}`,
       type: GOAL_TYPES.includes(g?.type) ? g.type : "likes",
       title: str(g?.title, 60, "Obiectiv"),
       target: clampN(g?.target, 1, 100_000_000, 1000),
-    }));
+      // (04.11.2026) cadoul numărat (la tipul „gift"), stilul barei, acțiunea la atingere, reluare de la zero
+      gift: str(g?.gift, 60), style: GOAL_STYLES.includes(g?.style) ? g.style : "bar",
+      action: String(g?.action || "").replace(/[^\w-]/g, "").slice(0, 16), repeat: bool(g?.repeat, false),
+    })).filter(g => !seenG.has(g.id) && seenG.add(g.id));
     const lines = (Array.isArray(s.rotator?.lines) ? s.rotator.lines : []).map(x => str(x, 120)).filter(Boolean).slice(0, 12);
     // (03.11.2026) Acțiuni (ce se întâmplă: clip, imagine, muzică, text, voce, efect) și
     // evenimente (când: un anumit cadou, follow, share, like-uri, comandă în chat…)
@@ -185,6 +195,11 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
     const actions = (Array.isArray(s.actions) ? s.actions : []).slice(0, MAX_ACTIONS).map((x, i) => normAction(x, i)).filter(a => !seen.has(a.id) && seen.add(a.id));
     const ids = new Set(actions.map(a => a.id)), seenE = new Set();
     const events = (Array.isArray(s.events) ? s.events : []).slice(0, MAX_EVENTS).map((x, i) => normEvent(x, i, ids)).filter(e => !seenE.has(e.id) && seenE.add(e.id));
+    for (const g of goals) if (!ids.has(g.action)) g.action = "";
+    for (const a of actions) if (a.goal && !goals.some(g => g.id === a.goal && g.type === "custom")) { a.goal = ""; a.goalAdd = 0; }
+    // (04.11.2026) roata: fiecare variantă poate porni o acțiune
+    const segs = (Array.isArray(w.segments) ? w.segments : []).map((x, i) => ({ label: str(x?.label ?? x, 40), color: color(x?.color, WHEEL_COLORS[i % WHEEL_COLORS.length]), action: ids.has(String(x?.action || "")) ? String(x.action) : "" })).filter(x => x.label).slice(0, 16);
+    const au = s.auction || {};
     return {
       alerts: {
         gift: alert(a.gift, { on: true, sound: "coin", text: "{user} a trimis {count}× {gift}!", min: 1 }),
@@ -207,7 +222,7 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
         cooldown: clampN(t.cooldown, 0, 120, 5),
         banned: str(t.banned, 600),
       },
-      goals: goals.length || Array.isArray(s.goals) ? goals : [{ id: "g1", type: "likes", title: "Obiectiv like-uri", target: 10000 }, { id: "g2", type: "follows", title: "Urmăritori noi", target: 50 }],
+      goals: goals.length || Array.isArray(s.goals) ? goals : [{ id: "g1", type: "likes", title: "Obiectiv like-uri", target: 10000, gift: "", style: "bar", action: "", repeat: false }, { id: "g2", type: "follows", title: "Urmăritori noi", target: 50, gift: "", style: "bar", action: "", repeat: false }],
       top: { title: str(s.top?.title, 60, "Top susținători"), count: clampN(s.top?.count, 3, 10, 5) },
       counter: { title: str(s.counter?.title, 60, "Cadouri pe live") },
       chat: { max: clampN(s.chat?.max, 3, 20, 8), showGifts: bool(s.chat?.showGifts, true), hideCommands: bool(s.chat?.hideCommands, true), fade: clampN(s.chat?.fade, 0, 300, 60) },
@@ -215,16 +230,21 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
         title: str(w.title, 60, "Roata norocului"),
         trigger: ["manual", "gift"].includes(w.trigger) ? w.trigger : "gift",
         minDiamonds: clampN(w.minDiamonds, 1, 100000, 99),
-        segments: segs.length >= 2 ? segs : ["10 flotări", "Cântă un refren", "Shoutout", "Mai joci o tură", "Accent rusesc 1 min", "Încă o dată!"].map((label, i) => ({ label, color: WHEEL_COLORS[i] })),
+        segments: segs.length >= 2 ? segs : ["10 flotări", "Cântă un refren", "Shoutout", "Mai joci o tură", "Accent rusesc 1 min", "Încă o dată!"].map((label, i) => ({ label, color: WHEEL_COLORS[i], action: "" })),
       },
       timer: {
         title: str(tm.title, 60, "Subathon"),
         startMin: clampN(tm.startMin, 1, 1440, 60),
-        perDiamond: clampN(tm.perDiamond, 0, 600, 5),
-        perFollow: clampN(tm.perFollow, 0, 3600, 30),
-        perShare: clampN(tm.perShare, 0, 3600, 10),
-        perLikes100: clampN(tm.perLikes100, 0, 600, 5),
+        // (04.11.2026) valorile pot fi și negative (scad timpul); „mult" le înmulțește pe toate
+        perDiamond: clampN(tm.perDiamond, -600, 600, 5),
+        perFollow: clampN(tm.perFollow, -3600, 3600, 30),
+        perShare: clampN(tm.perShare, -3600, 3600, 10),
+        perLikes100: clampN(tm.perLikes100, -600, 600, 5),
+        perSub: clampN(tm.perSub, -3600, 3600, 60),
+        perChat: clampN(tm.perChat, -60, 60, 0),
+        mult: clampN(tm.mult, 0.1, 10, 1),
         maxHours: clampN(tm.maxHours, 1, 168, 24),
+        endAction: ids.has(String(tm.endAction || "")) ? String(tm.endAction) : "",
       },
       points: {
         on: bool(p.on, true),
@@ -238,6 +258,7 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
         currency: str(p.currency, 20, "puncte"),
         levelBase: Math.round(clampN(p.levelBase, 1, 1_000_000, 50)),
         levelMult: clampN(p.levelMult, 1, 3, 1.25),
+        subBonus: Math.round(clampN(p.subBonus, 0, 500, 0)),
       },
       // (03.11.2026) sunete rapide (fără overlay), comenzi de chat, likeathon
       sounds: {
@@ -253,7 +274,11 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
       jar: { title: str(s.jar?.title, 60, "Borcanul cu cadouri"), shape: JAR_SHAPES.includes(s.jar?.shape) ? s.jar.shape : "borcan", max: Math.round(clampN(s.jar?.max, 20, 250, 120)), min: Math.round(clampN(s.jar?.min, 1, 100000, 1)) },
       fountain: { emoji: str(s.fountain?.emoji, 8, "❤️"), perLikes: Math.round(clampN(s.fountain?.perLikes, 1, 500, 5)), avatars: bool(s.fountain?.avatars, true), max: Math.round(clampN(s.fountain?.max, 10, 400, 160)) },
       cannon: { side: ["left", "right", "both"].includes(s.cannon?.side) ? s.cannon.side : "both", min: Math.round(clampN(s.cannon?.min, 1, 100000, 1)), names: bool(s.cannon?.names, true) },
-      last: { follower: bool(s.last?.follower, true), gifter: bool(s.last?.gifter, true), sharer: bool(s.last?.sharer, true), subscriber: bool(s.last?.subscriber, false), layout: ["row", "column"].includes(s.last?.layout) ? s.last.layout : "column" },
+      last: { follower: bool(s.last?.follower, true), gifter: bool(s.last?.gifter, true), sharer: bool(s.last?.sharer, true), subscriber: bool(s.last?.subscriber, false),
+        liker: bool(s.last?.liker, false), chatter: bool(s.last?.chatter, false), topgift: bool(s.last?.topgift, false), topstreak: bool(s.last?.topstreak, false),
+        layout: ["row", "column"].includes(s.last?.layout) ? s.last.layout : "column" },
+      feed: { title: str(s.feed?.title, 60, "Ultimele cadouri"), count: Math.round(clampN(s.feed?.count, 3, 12, 6)), min: Math.round(clampN(s.feed?.min, 1, 100000, 1)) },
+      auction: { title: str(au.title, 60, "Licitație"), item: str(au.item, 80, "Alegi tu jocul următor"), minutes: clampN(au.minutes, 0.5, 120, 3), min: Math.round(clampN(au.min, 1, 100000, 1)), snipe: Math.round(clampN(au.snipe, 0, 60, 10)), count: Math.round(clampN(au.count, 3, 10, 5)) },
       emoji: { size: Math.round(clampN(s.emoji?.size, 24, 160, 64)), max: Math.round(clampN(s.emoji?.max, 1, 10, 4)) },
       rotator: { lines: lines.length || Array.isArray(s.rotator?.lines) ? lines : ["Dă follow ca să nu pierzi live-ul!", "Trimite un cadou și învârte roata!", "Scrie !tts mesaj și îl citesc cu voce"], every: clampN(s.rotator?.every, 3, 120, 8) },
       actions, events,
@@ -271,6 +296,9 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
     top: {}, gifters: {}, timer: { running: false, endsAt: 0, left: 0 }, likeMilestone: 0,
     last: {}, jar: [], battle: { running: false, endsAt: 0, scores: [], winner: null, team: {} },
     likers: {}, drop: null, emotes: [],
+    // (04.11.2026) obiective noi, fluxul de cadouri, licitația, provocarea
+    subs: 0, giftCount: {}, custom: {}, goalBase: {}, goalHit: {}, feed: [], topGift: null, topStreak: null,
+    auction: { running: false, endsAt: 0, bids: {}, winner: null }, challenge: { running: false, since: 0 },
   });
   function cleanState(s) {
     const st = { ...emptyState(), ...(s && typeof s === "object" ? s : {}) };
@@ -283,6 +311,12 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
     st.drop = st.drop && st.drop.until > Date.now() ? st.drop : null;
     const b = st.battle || {};
     st.battle = { running: !!b.running, endsAt: Number(b.endsAt) || 0, scores: Array.isArray(b.scores) ? b.scores.map(Number) : [], winner: b.winner ?? null, team: b.team && typeof b.team === "object" ? b.team : {} };
+    for (const k of ["giftCount", "custom", "goalBase", "goalHit"]) st[k] = st[k] && typeof st[k] === "object" && !Array.isArray(st[k]) ? st[k] : {};
+    st.subs = Number(st.subs) || 0;
+    st.feed = Array.isArray(st.feed) ? st.feed.slice(0, 12) : [];
+    const au = st.auction || {};
+    st.auction = { running: !!au.running, endsAt: Number(au.endsAt) || 0, bids: au.bids && typeof au.bids === "object" ? au.bids : {}, winner: au.winner || null };
+    st.challenge = { running: !!st.challenge?.running, since: Number(st.challenge?.since) || 0 };
     return st;
   }
 
@@ -324,7 +358,81 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
     since: h.state.since, likes: h.state.likes, diamonds: h.state.diamonds, gifts: h.state.gifts, follows: h.state.follows,
     shares: h.state.shares, viewers: h.state.viewers, peakViewers: h.state.peakViewers, top: publicTop(h), timer: timerView(h),
     last: h.state.last, battle: battleView(h), likers: topLikers(h), drop: dropView(h), emotes: h.state.emotes || [],
+    subs: h.state.subs, goals: goalValues(h), feed: h.state.feed, topGift: h.state.topGift, topStreak: h.state.topStreak,
+    auction: auctionView(h), challenge: h.state.challenge,
   });
+  // ---------------------------------------------------------------- obiective (04.11.2026)
+  function goalRaw(h, g) {
+    const st = h.state;
+    switch (g.type) {
+      case "likes": return st.likes; case "diamonds": return st.diamonds; case "follows": return st.follows;
+      case "shares": return st.shares; case "gifts": return st.gifts; case "subs": return st.subs; case "viewers": return st.viewers;
+      case "gift": return Number(st.giftCount[giftKey(g.gift)]) || 0;
+      case "custom": return Number(st.custom[g.id]) || 0;
+      default: return 0;
+    }
+  }
+  const goalValue = (h, g) => g.type === "viewers" ? goalRaw(h, g) : Math.max(0, goalRaw(h, g) - (Number(h.state.goalBase[g.id]) || 0));
+  function goalValues(h) { const o = {}; for (const g of h.settings.goals) o[g.id] = goalValue(h, g); return o; }
+  // un obiectiv atins: pornește acțiunea lui o singură dată; cu „reia" o ia de la capăt
+  function checkGoals(h) {
+    const st = h.state;
+    for (const g of h.settings.goals) {
+      const v = goalValue(h, g);
+      if (v < g.target) { if (st.goalHit[g.id] && !g.repeat && g.type === "viewers") delete st.goalHit[g.id]; continue; }
+      if (g.repeat && g.type !== "viewers") {
+        const times = Math.min(10, Math.floor(v / g.target));
+        st.goalBase[g.id] = (Number(st.goalBase[g.id]) || 0) + times * g.target;
+        broadcast(h, { t: "goal", id: g.id, title: g.title, times });
+        if (g.action) for (let i = 0; i < times; i++) runAction(h, h.settings.actions.find(a => a.id === g.action), { user: { id: "", name: "", avatar: "" } });
+      } else if (!st.goalHit[g.id]) {
+        st.goalHit[g.id] = 1;
+        broadcast(h, { t: "goal", id: g.id, title: g.title, times: 1 });
+        if (g.action) runAction(h, h.settings.actions.find(a => a.id === g.action), { user: { id: "", name: "", avatar: "" } });
+      }
+    }
+  }
+  // ---------------------------------------------------------------- licitația (04.11.2026)
+  const auctionTop = h => Object.entries(h.state.auction.bids).map(([id, v]) => ({ id, name: v.name, avatar: v.avatar, diamonds: v.d }))
+    .sort((a, b) => b.diamonds - a.diamonds).slice(0, 10);
+  const auctionView = h => { const a = h.state.auction; return { running: a.running, left: a.running ? Math.max(0, a.endsAt - Date.now()) : 0, top: auctionTop(h), winner: a.winner }; };
+  function auctionSchedule(h) {
+    clearTimeout(h.auctionT);
+    if (!h.state.auction.running) return;
+    h.auctionT = setTimeout(() => auctionEnd(h), Math.max(0, h.state.auction.endsAt - Date.now()));
+  }
+  function auctionEnd(h) {
+    const a = h.state.auction;
+    if (!a.running) return;
+    if (Date.now() < a.endsAt - 50) return auctionSchedule(h);   // a fost prelungită între timp
+    a.running = false; clearTimeout(h.auctionT);
+    const best = auctionTop(h)[0];
+    a.winner = best ? { name: best.name, avatar: best.avatar, diamonds: best.diamonds } : null;
+    broadcast(h, { t: "auction", auction: auctionView(h), ended: true });
+    pushState(h);
+  }
+  function auctionAction(h, act) {
+    const a = h.state.auction;
+    if (act === "start") { a.running = true; a.endsAt = Date.now() + h.settings.auction.minutes * 60_000; a.bids = {}; a.winner = null; auctionSchedule(h); }
+    else if (act === "stop") { a.endsAt = Date.now(); return auctionEnd(h); }
+    else if (act === "add1" && a.running) { a.endsAt += 60_000; auctionSchedule(h); }
+    else if (act === "reset") { clearTimeout(h.auctionT); a.running = false; a.bids = {}; a.winner = null; }
+    broadcast(h, { t: "auction", auction: auctionView(h) });
+    pushState(h);
+  }
+  function auctionBid(h, u, diamonds) {
+    const a = h.state.auction, c = h.settings.auction;
+    if (!a.running || !u?.id || diamonds < c.min) return;
+    const now = Date.now();
+    if (now > a.endsAt) return auctionEnd(h);
+    const b = a.bids[u.id] || { name: u.name, avatar: u.avatar, d: 0 };
+    b.name = u.name; b.avatar = u.avatar || b.avatar; b.d += diamonds;
+    a.bids[u.id] = b;
+    if (Object.keys(a.bids).length > 3000) for (const [id] of Object.entries(a.bids).sort((x, y) => x[1].d - y[1].d).slice(0, 1000)) delete a.bids[id];
+    // „anti-ultima secundă": o ofertă la final mai adaugă câteva secunde
+    if (c.snipe && a.endsAt - now < c.snipe * 1000) { a.endsAt = now + c.snipe * 1000; auctionSchedule(h); }
+    broadcast(h, { t: "auction", auction: auctionView(h), bid: { name: u.name, diamonds } });
+  }
   const topLikers = h => Object.entries(h.state.likers).map(([id, v]) => ({ id, name: v.name, avatar: v.avatar, likes: Math.round(v.likes) }))
     .filter(x => x.likes > 0).sort((a, b) => b.likes - a.likes).slice(0, 15);
   const dropView = h => { const d = h.state.drop; return d && d.until > Date.now() ? { amount: d.amount, left: d.until - Date.now(), max: d.max, claimed: d.claimed.length } : null; };
@@ -410,6 +518,8 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
   // un singur „state" la câteva sute de ms, chiar dacă vin sute de like-uri pe secundă
   function pushState(h) {
     h.dirty = true;
+    // (o acțiune pornită de un obiectiv poate schimba alt obiectiv: nu intrăm de două ori)
+    if (!h.inGoals) { h.inGoals = true; try { checkGoals(h); } catch (err) { console.error("Studio: obiective:", err.message); } h.inGoals = false; }
     if (h.pushT) return;
     h.pushT = setTimeout(() => { h.pushT = null; broadcast(h, { t: "state", state: snapshot(h) }); }, 350);
   }
@@ -421,9 +531,13 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
     h.pointsQ.clear();
     try {
       await pool.query(
-        `INSERT INTO stream_points(user_id, viewer, name, points)
-         SELECT $1, v, n, p FROM UNNEST($2::text[], $3::text[], $4::bigint[]) AS x(v, n, p)
-         ON CONFLICT (user_id, viewer) DO UPDATE SET points = stream_points.points + EXCLUDED.points, name = EXCLUDED.name, updated_at = NOW()`,
+        // punctele nu scad sub zero (comenzi cu preț, scăderi date de streamer)
+        `WITH x AS (SELECT v, n, p FROM UNNEST($2::text[], $3::text[], $4::bigint[]) AS t(v, n, p)),
+         up AS (UPDATE stream_points sp SET points = GREATEST(0, sp.points + x.p), name = x.n, updated_at = NOW()
+                FROM x WHERE sp.user_id = $1 AND sp.viewer = x.v RETURNING sp.viewer)
+         INSERT INTO stream_points(user_id, viewer, name, points)
+         SELECT $1, v, n, GREATEST(0, p) FROM x WHERE v NOT IN (SELECT viewer FROM up)
+         ON CONFLICT (user_id, viewer) DO NOTHING`,
         [h.uid, batch.map(b => b[0]), batch.map(b => b[1].name), batch.map(b => Math.round(b[1].pts))]);
       return true;
     } catch (err) { console.error("Studio: puncte nesalvate:", err.message); return false; }
@@ -440,6 +554,7 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
   }
   function addPoints(h, user, pts) {
     if (!h.settings.points.on || !(pts > 0) || !user.id || user.test) return;
+    if (user.sub && h.settings.points.subBonus) pts *= 1 + h.settings.points.subBonus / 100;   // bonus pentru abonați
     const q = h.pointsQ.get(user.id) || { name: user.name, pts: 0 };
     q.pts += pts; q.name = user.name;
     h.pointsQ.set(user.id, q);
@@ -467,16 +582,34 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
     if (t.running) t.endsAt = Math.min(Date.now() + maxMs, Math.max(t.endsAt, Date.now()) + sec * 1000);
     else if (t.left > 0) t.left = Math.min(maxMs, t.left + sec * 1000);
     else return;   // cronometrul nu e pornit — cadourile nu-l pornesc singure
-    broadcast(h, { t: "timer", timer: timerView(h), added: sec });
+    broadcast(h, { t: "timer", timer: timerView(h), added: Math.round(sec * 10) / 10 });
     pushState(h);
   }
+  // timpul adăugat singur (cadouri, follow…): cu multiplicator, poate fi și negativ
+  function timerAuto(h, sec) {
+    const v = Math.round(sec * h.settings.timer.mult * 10) / 10;
+    if (v) timerShift(h, v);
+  }
+  // cronometrul a ajuns la zero: îl oprim și pornim acțiunea aleasă
+  setInterval(() => {
+    const now = Date.now();
+    for (const h of hubs.values()) {
+      const t = h.state.timer;
+      if (!t.running || t.endsAt > now) continue;
+      t.running = false; t.endsAt = 0; t.left = 0;
+      broadcast(h, { t: "timer", timer: timerView(h), ended: true });
+      const a = h.settings.actions.find(x => x.id === h.settings.timer.endAction);
+      if (a) runAction(h, a, { user: { id: "", name: "", avatar: "" } });
+      pushState(h);
+    }
+  }, 1000).unref?.();
   function timerShift(h, sec) {
     if (sec > 0) return timerAdd(h, sec);
     const t = h.state.timer;
     if (t.running) t.endsAt = Math.max(Date.now(), t.endsAt + sec * 1000);
     else if (t.left > 0) t.left = Math.max(0, t.left + sec * 1000);
     else return;
-    broadcast(h, { t: "timer", timer: timerView(h), added: sec });
+    broadcast(h, { t: "timer", timer: timerView(h), added: Math.round(sec * 10) / 10 });
     pushState(h);
   }
   function timerAction(h, a, minutes) {
@@ -506,6 +639,9 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
       const idx = crypto.randomInt(segs.length);
       h.wheelBusyUntil = Date.now() + WHEEL_SPIN_MS + WHEEL_HOLD_MS;
       broadcast(h, { t: "wheel", idx, label: segs[idx].label, by, spinMs: WHEEL_SPIN_MS, holdMs: WHEEL_HOLD_MS, queue: h.wheelQ.length, n: segs.length });
+      // (04.11.2026) varianta aleasă poate porni o acțiune, după ce se oprește roata
+      const act = segs[idx].action && h.settings.actions.find(a => a.id === segs[idx].action);
+      if (act) setTimeout(() => runAction(h, act, { user: { id: "", name: by || "", avatar: "" } }), WHEEL_SPIN_MS);
       runWheel(h);
     }, wait);
   }
@@ -556,8 +692,9 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
       audio: a.audio ? `/api/stream/media/${a.audio}` : null,
       sound: a.sound, text: fill(a.text, vars), tts: a.tts ? fill(a.tts, vars).replace(URL_RE, " ").slice(0, 220) : null,
       duration: a.duration, volume: a.volume, position: a.position, size: a.size, effect: a.effect,
-      user: u, img: ctx.img || "", test: !!u.test,
+      user: u, img: ctx.img || "", test: !!u.test, skip: !!a.skip,
     });
+    if (a.goal && a.goalAdd) { h.state.custom[a.goal] = Math.max(0, (Number(h.state.custom[a.goal]) || 0) + a.goalAdd); pushState(h); }
     if (a.wheel) wheelSpin(h, u.name);
     if (a.timer) timerShift(h, a.timer);
     if (a.points && u.id && !u.test) addPointsRaw(h, u, a.points);
@@ -724,7 +861,8 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
         }
       }
       const last = h.chatCd.get(u.id) || 0;
-      if (Date.now() - last > 10_000) { h.chatCd.set(u.id, Date.now()); addPoints(h, u, cfg.points.perChat); }
+      if (Date.now() - last > 10_000) { h.chatCd.set(u.id, Date.now()); addPoints(h, u, cfg.points.perChat); if (cfg.timer.perChat) timerAuto(h, cfg.timer.perChat); }
+      if (cfg.last.chatter && u.id) { st.last.chatter = { name: u.name, avatar: u.avatar, text: String(ev.text || "").slice(0, 80), at: Date.now() }; pushState(h); }
       if (h.chatCd.size > 5000) h.chatCd.clear();
       return;
     }
@@ -754,10 +892,17 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
       fireEvents(h, "gift", gctx); fireSounds(h, "gift", gctx);
       if (ev.giftId && !u.test) rememberGift(ev.giftId, ev.gift, ev.diamonds, ev.img);
       st.last.gifter = { name: u.name, avatar: u.avatar, gift: ev.gift, img: ev.img, count: ev.count, diamonds: total, at: Date.now() };
+      // (04.11.2026) contor pe cadou, fluxul de cadouri, cel mai mare cadou, cel mai lung combo, licitația
+      const gk = giftKey(ev.gift);
+      if (gk) { st.giftCount[gk] = (Number(st.giftCount[gk]) || 0) + ev.count; if (Object.keys(st.giftCount).length > 500) st.giftCount = { [gk]: st.giftCount[gk] }; }
+      if (total >= cfg.feed.min) st.feed = [{ name: u.name, avatar: u.avatar, gift: ev.gift, img: ev.img, count: ev.count, diamonds: total, at: Date.now() }, ...st.feed].slice(0, 12);
+      if (!st.topGift || total > st.topGift.diamonds) st.topGift = { name: u.name, avatar: u.avatar, gift: ev.gift, img: ev.img, count: ev.count, diamonds: total, at: Date.now() };
+      if (ev.count > 1 && (!st.topStreak || ev.count > st.topStreak.count)) st.topStreak = { name: u.name, avatar: u.avatar, gift: ev.gift, img: ev.img, count: ev.count, diamonds: total, at: Date.now() };
+      auctionBid(h, u, total);
       if (total >= cfg.jar.min) { st.jar.push({ img: ev.img, n: Math.min(ev.count, 20), d: ev.diamonds }); if (st.jar.length > 250) st.jar.splice(0, st.jar.length - 250); }
       battleGift(h, u, ev.gift, total);
       addPoints(h, u, total * cfg.points.perDiamond);
-      timerAdd(h, total * cfg.timer.perDiamond);
+      timerAuto(h, total * cfg.timer.perDiamond);
       if (cfg.wheel.trigger === "gift" && total >= cfg.wheel.minDiamonds) wheelSpin(h, u.name);
       pushState(h);
       return;
@@ -768,7 +913,7 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
       broadcast(h, { t: "follow", user: u, alert: alertOf(h, "follow", { user: u.name }, { avatar: u.avatar, user: u.name }) });
       fireEvents(h, "follow", { user: u }); fireSounds(h, "follow", { user: u });
       addPoints(h, u, cfg.points.perFollow);
-      timerAdd(h, cfg.timer.perFollow);
+      timerAuto(h, cfg.timer.perFollow);
       pushState(h);
       return;
     }
@@ -778,7 +923,7 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
       broadcast(h, { t: "share", user: u, alert: alertOf(h, "share", { user: u.name }, { avatar: u.avatar, user: u.name }) });
       fireEvents(h, "share", { user: u }); fireSounds(h, "share", { user: u });
       addPoints(h, u, cfg.points.perShare);
-      timerAdd(h, cfg.timer.perShare);
+      timerAuto(h, cfg.timer.perShare);
       pushState(h);
       return;
     }
@@ -789,6 +934,8 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
     }
     if (ev.type === "subscribe") {
       st.last.subscriber = { name: u.name, avatar: u.avatar, at: Date.now() };
+      st.subs++;
+      timerAuto(h, cfg.timer.perSub);
       pushState(h);
       broadcast(h, { t: "subscribe", user: u });
       fireEvents(h, "subscribe", { user: u }); fireSounds(h, "subscribe", { user: u });
@@ -802,7 +949,7 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
         const acc = (h.likeAcc.get(u.id) || 0) + ev.count;
         const hundreds = Math.floor(acc / 100);
         h.likeAcc.set(u.id, acc % 100);
-        if (hundreds) { addPoints(h, u, hundreds * cfg.points.perLikes100); timerAdd(h, hundreds * cfg.timer.perLikes100); }
+        if (hundreds) { addPoints(h, u, hundreds * cfg.points.perLikes100); timerAuto(h, hundreds * cfg.timer.perLikes100); }
         if (h.likeAcc.size > 5000) h.likeAcc.clear();
       }
       const every = cfg.alerts.likes.every;
@@ -813,6 +960,7 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
         if (alert) broadcast(h, { t: "milestone", total: reached, alert });
       }
       broadcast(h, { t: "like", user: u, count: ev.count });
+      if (u.id) st.last.liker = { name: u.name, avatar: u.avatar, count: ev.count, at: Date.now() };
       if (u.id) {
         const b = h.likeUser.get(u.id) || 0;
         h.likeUser.set(u.id, b + ev.count);
@@ -1115,10 +1263,10 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
     if (a === "wheel") { if (!wheelSpin(h, str(req.body?.by, 40, "streamer"))) return res.status(429).json({ error: "Sunt deja 20 de învârtiri la rând." }); }
     else if (a.startsWith("timer-")) timerAction(h, a.slice(6), req.body?.minutes);
     else if (a === "session-new") {
-      const keepTimer = h.state.timer;
-      h.state = emptyState(); h.state.timer = keepTimer;
+      const keep = { timer: h.state.timer, challenge: h.state.challenge, custom: h.state.custom };
+      h.state = { ...emptyState(), ...keep };
       h.likeAcc.clear(); h.likeUser.clear(); h.seen?.clear();
-      clearTimeout(h.battleT);
+      clearTimeout(h.battleT); clearTimeout(h.auctionT);
       pushState(h);
       broadcast(h, { t: "reset" });
     } else if (a.startsWith("battle-")) {
@@ -1141,7 +1289,50 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
     } else if (a === "points-reset") {
       h.pointsQ.clear();
       await pool.query(`DELETE FROM stream_points WHERE user_id = $1`, [h.uid]);
+      h.state.challenge = { running: false, since: 0 }; pushState(h);
       broadcast(h, { t: "points", list: [] });
+    } else if (a === "points-halve") {
+      // (04.11.2026) „înjumătățire": scade punctele tuturor cu X% (nivelurile se recalculează din puncte)
+      const pct = Math.round(clampN(req.body?.pct, 1, 99, 50));
+      await flushPoints(h);
+      await pool.query(`UPDATE stream_points SET points = FLOOR(points * (100 - $2::int) / 100) WHERE user_id = $1`, [h.uid, pct]);
+      broadcast(h, { t: "points", list: await pointsTop(h.uid).catch(() => []) });
+      info(h, `✂️ Punctele tuturor au scăzut cu ${pct}%.`);
+    } else if (a === "challenge-start") {
+      // provocare: punctele de acum se pun deoparte și toată lumea pornește de la 0
+      if (h.state.challenge.running) return res.status(400).json({ error: "Provocarea e deja pornită." });
+      await flushPoints(h);
+      await pool.query(`UPDATE stream_points SET saved = points, points = 0 WHERE user_id = $1`, [h.uid]);
+      h.state.challenge = { running: true, since: Date.now() }; pushState(h);
+      broadcast(h, { t: "points", list: [] });
+      info(h, `🏁 Provocarea a început! Toți pornesc de la 0 ${h.settings.points.currency}.`);
+    } else if (a === "challenge-end") {
+      if (!h.state.challenge.running) return res.status(400).json({ error: "Nu e nicio provocare pornită." });
+      const add = req.body?.mode === "add";
+      await flushPoints(h);
+      const top = await pointsTop(h.uid, 3).catch(() => []);
+      await pool.query(add
+        ? `UPDATE stream_points SET points = COALESCE(saved, 0) + points, saved = NULL WHERE user_id = $1`
+        : `UPDATE stream_points SET points = COALESCE(saved, 0), saved = NULL WHERE user_id = $1`, [h.uid]);
+      h.state.challenge = { running: false, since: 0 }; pushState(h);
+      broadcast(h, { t: "points", list: await pointsTop(h.uid).catch(() => []) });
+      broadcast(h, { t: "challenge", ended: true, top });
+      info(h, top.length ? `🏁 Provocarea s-a terminat! Câștigă ${top[0].name} cu ${top[0].points.toLocaleString("ro-RO")} ${h.settings.points.currency}.` : "🏁 Provocarea s-a terminat.");
+    } else if (a.startsWith("auction-")) {
+      auctionAction(h, a.slice(8));
+    } else if (a === "goal-add" || a === "goal-reset") {
+      const g = h.settings.goals.find(x => x.id === String(req.body?.id || ""));
+      if (!g) return res.status(404).json({ error: "Salvează întâi obiectivul." });
+      if (a === "goal-add") {
+        if (g.type !== "custom") return res.status(400).json({ error: "Doar obiectivele personalizate se schimbă de mână." });
+        h.state.custom[g.id] = Math.max(0, (Number(h.state.custom[g.id]) || 0) + Math.round(clampN(req.body?.n, -1_000_000, 1_000_000, 1)));
+      } else {
+        // o ia de la zero fără să atingă restul sesiunii
+        if (g.type === "custom") { h.state.custom[g.id] = 0; h.state.goalBase[g.id] = 0; }
+        else h.state.goalBase[g.id] = goalRaw(h, g);
+        delete h.state.goalHit[g.id];
+      }
+      pushState(h);
     } else if (a === "test-alert-clear") broadcast(h, { t: "clear" });
     else if (a === "run") {
       // „Testează" la o acțiune
@@ -1156,6 +1347,47 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
     }
     else return res.status(400).json({ error: "Acțiune necunoscută." });
     res.json({ ok: true, state: snapshot(h) });
+  }));
+
+  // ---------------------------------------------------------------- spectatorii și punctele lor (04.11.2026)
+  app.get("/api/stream/spectatori", auth, asyncRoute(async (req, res) => {
+    const h = await requireApproved(req, res); if (!h) return;
+    await flushPoints(h);
+    const q = str(req.query.q, 40).toLowerCase().replace(/^@/, "").replace(/[%_\\]/g, "\\$&");
+    const sort = { points: "points DESC", last: "updated_at DESC", first: "first_at DESC", name: "LOWER(COALESCE(name, viewer)) ASC" }[String(req.query.sort || "points")] || "points DESC";
+    const off = Math.round(clampN(req.query.off, 0, 100000, 0));
+    const where = `user_id = $1${q ? " AND (LOWER(viewer) LIKE $2 OR LOWER(name) LIKE $2)" : ""}`;
+    const args = q ? [h.uid, `%${q}%`] : [h.uid];
+    const [list, cnt] = await Promise.all([
+      pool.query(`SELECT viewer, name, points, saved, first_at, updated_at FROM stream_points WHERE ${where} ORDER BY ${sort}, viewer LIMIT 50 OFFSET ${off}`, args),
+      pool.query(`SELECT COUNT(*)::int AS n, COALESCE(SUM(points), 0)::bigint AS total FROM stream_points WHERE ${where}`, args),
+    ]);
+    res.json({
+      total: cnt.rows[0].n, sum: Number(cnt.rows[0].total), off, challenge: h.state.challenge,
+      items: list.rows.map(r => {
+        const pts = Number(r.points), lv = levelOf(h, pts);
+        return { id: r.viewer, name: r.name || r.viewer, points: pts, saved: r.saved == null ? null : Number(r.saved), level: lv.level, toNext: lv.toNext, first: r.first_at, last: r.updated_at };
+      }),
+    });
+  }));
+  app.put("/api/stream/spectatori", auth, asyncRoute(async (req, res) => {
+    const h = await requireApproved(req, res); if (!h) return;
+    const viewer = str(req.body?.id, 64), delta = Math.round(clampN(req.body?.delta, -10_000_000, 10_000_000, 0));
+    if (!viewer || !delta) return res.status(400).json({ error: "Alege spectatorul și câte puncte." });
+    const { rows } = await pool.query(`SELECT name FROM stream_points WHERE user_id = $1 AND viewer = $2`, [h.uid, viewer]);
+    if (!rows[0]) return res.status(404).json({ error: "Spectatorul nu e în listă." });
+    addPointsRaw(h, { id: viewer, name: rows[0].name || viewer }, delta);
+    await flushPoints(h);
+    broadcast(h, { t: "points", list: await pointsTop(h.uid).catch(() => []) });
+    res.json({ ok: true, points: await viewerPoints(h, viewer) });
+  }));
+  app.delete("/api/stream/spectatori/:viewer", auth, asyncRoute(async (req, res) => {
+    const h = await requireApproved(req, res); if (!h) return;
+    const viewer = str(req.params.viewer, 64);
+    h.pointsQ.delete(viewer);
+    await pool.query(`DELETE FROM stream_points WHERE user_id = $1 AND viewer = $2`, [h.uid, viewer]);
+    broadcast(h, { t: "points", list: await pointsTop(h.uid).catch(() => []) });
+    res.json({ ok: true });
   }));
 
   app.post("/api/stream/cheie-noua", auth, asyncRoute(async (req, res) => {

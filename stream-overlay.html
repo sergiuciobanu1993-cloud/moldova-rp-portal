@@ -6,7 +6,7 @@
 <meta name="robots" content="noindex">
 <title>Overlay — Studio Moldova RP</title>
 <!-- (03.11.2026) Overlay-urile Studio-ului de streaming: se pun în TikTok LIVE Studio („Link") sau OBS („Browser").
-     ?k=CHEIA (din Studio) &w=alerts|chat|goal|top|counter|wheel|timer|fireworks|points|rotator|viewers
+     ?k=CHEIA (din Studio) &w=alerts|chat|goal|top|counter|wheel|timer|fireworks|points|rotator|viewers|feed|auction|last…
      &id=g1 (la goal) · &tts=1 (alertele citite cu voce) · &demo=1 (evenimente de probă, fără live) -->
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=Inter:wght@500;700;900&family=Press+Start+2P&display=swap">
@@ -64,6 +64,49 @@ body.t-arcade .bar{border-radius:0}
 .bar span{position:absolute;inset:0;display:grid;place-items:center;font-weight:700;font-size:15px;text-shadow:0 1px 2px rgba(0,0,0,.6)}
 #goal.done .bar i{animation:pulse 1.2s ease-in-out infinite}
 @keyframes pulse{50%{filter:brightness(1.5)}}
+/* (04.11.2026) stilurile obiectivelor: subțire, inel, cifră mare */
+#goal.s-slim{padding:10px 14px}
+#goal.s-slim .bar{height:10px}
+#goal.s-slim .bar span{display:none}
+#goal .sub{display:flex;justify-content:space-between;gap:10px;font-size:14px;font-weight:700;margin-top:6px}
+#goal .sub i{font-style:normal;color:var(--sub)}
+#goal.s-ring{display:flex;align-items:center;gap:16px;padding:12px 18px}
+#goal .ring{position:relative;width:96px;height:96px;flex:none}
+#goal .ring svg{width:96px;height:96px;transform:rotate(-90deg)}
+#goal .ring circle{fill:none;stroke-width:10}
+#goal .ring .bg{stroke:rgba(255,255,255,.14)}
+#goal .ring .fg{stroke:var(--accent);stroke-linecap:round;transition:stroke-dashoffset .8s cubic-bezier(.2,.9,.3,1);filter:drop-shadow(0 0 6px var(--accent))}
+#goal .ring b{position:absolute;inset:0;display:grid;place-items:center;font-size:20px}
+#goal.s-ring .ttl{margin:0 0 4px}
+#goal.s-ring .val{font-size:22px;font-weight:700}
+#goal.s-big{text-align:center;padding:14px 22px}
+#goal.s-big .val{font-size:52px;font-weight:700;line-height:1.05}
+#goal.s-big .val small{font-size:22px;color:var(--sub)}
+#goal.s-big .bar{height:8px;margin-top:8px}
+#goal.s-big .bar span{display:none}
+#goal.hitfx{animation:alIn .6s both}
+/* flux de cadouri */
+#feed{margin:8px;padding:12px 14px;display:grid;gap:6px}
+#feed .fr{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:calc(var(--r) * .5);background:rgba(255,255,255,.05)}
+#feed .fr.new{animation:msgIn .45s ease-out both;background:color-mix(in srgb,var(--accent) 22%,transparent)}
+#feed .fr .av{width:32px;height:32px;font-size:13px}
+#feed .fr .nm{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:700}
+#feed .fr .gi{width:30px;height:30px;object-fit:contain}
+#feed .fr .x{font-weight:900;color:var(--accent);font-variant-numeric:tabular-nums}
+/* licitația */
+#auc{margin:8px;padding:14px 16px}
+#auc .top{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+#auc .item{font-size:20px;font-weight:700;margin:2px 0 10px}
+#auc .clock{font-weight:700;font-size:24px;font-variant-numeric:tabular-nums}
+#auc .clock.hot{color:#ff5a4e;animation:pulse .8s infinite}
+#auc .lead{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:calc(var(--r) * .6);background:color-mix(in srgb,var(--accent) 24%,transparent);border:2px solid color-mix(in srgb,var(--accent) 70%,transparent)}
+#auc .lead.bump{animation:alIn .5s both}
+#auc .lead b{font-size:20px;display:block}
+#auc .lead .v{margin-left:auto;font-size:26px;font-weight:900}
+#auc .rows .row .v{font-size:15px}
+#auc .how{margin-top:8px;color:var(--sub);font-size:12.5px;text-align:center}
+#auc .win{text-align:center;font-size:24px;font-weight:700;margin-top:10px;animation:alIn .6s both}
+#timer.over .clock{color:#ff5a4e}
 
 /* liste: top, puncte */
 .list{padding:14px 16px;margin:8px}
@@ -264,23 +307,85 @@ body.t-arcade #bt .tm .sc{font-size:20px}
     };
   });
 
-  const GOAL_VAL = { likes: 'likes', diamonds: 'diamonds', follows: 'follows', shares: 'shares', gifts: 'gifts' };
-  const GOAL_UNIT = { likes: '❤️', diamonds: '💎', follows: '👤', shares: '📣', gifts: '🎁' };
+  const GOAL_VAL = { likes: 'likes', diamonds: 'diamonds', follows: 'follows', shares: 'shares', gifts: 'gifts', subs: 'subs', viewers: 'viewers' };
+  const GOAL_UNIT = { likes: '❤️', diamonds: '💎', follows: '👤', shares: '📣', gifts: '🎁', subs: '⭐', viewers: '👁', gift: '🎁', custom: '🎯' };
   widgets.goal = (() => {
-    root.innerHTML = '<div id="goal" class="card"><p class="ttl"></p><div class="bar"><i></i><span class="num"></span></div></div>';
+    root.innerHTML = '<div id="goal" class="card"></div>';
     const el = document.getElementById('goal');
+    let shape = '';
     function draw() {
       const goals = S?.goals || [];
       const g = goals.find(x => x.id === P.get('id')) || goals[Number(P.get('i')) || 0];
       if (!g) { el.classList.add('hide'); return; }
       el.classList.remove('hide');
-      const v = ST?.[GOAL_VAL[g.type]] || 0, pct = Math.min(100, v / g.target * 100);
+      const style = ['bar', 'slim', 'ring', 'big'].includes(P.get('style')) ? P.get('style') : g.style || 'bar';
+      // (04.11.2026) valoarea vine gata calculată de server (cu „reia" și contoarele pe cadou)
+      const v = ST?.goals && ST.goals[g.id] != null ? ST.goals[g.id] : ST?.[GOAL_VAL[g.type]] || 0;
+      const pct = Math.min(100, v / g.target * 100), unit = GOAL_UNIT[g.type] || '🎯';
+      if (shape !== style) {
+        shape = style; el.className = 'card s-' + style;
+        el.innerHTML = style === 'ring' ? '<div class="ring"><svg viewBox="0 0 100 100"><circle class="bg" cx="50" cy="50" r="44"/><circle class="fg" cx="50" cy="50" r="44" stroke-dasharray="276.5" stroke-dashoffset="276.5"/></svg><b class="pc num"></b></div><div><p class="ttl"></p><div class="val num"></div></div>'
+          : style === 'big' ? '<p class="ttl"></p><div class="val num"></div><div class="bar"><i></i><span></span></div>'
+          : '<p class="ttl"></p><div class="bar"><i></i><span class="num"></span></div>' + (style === 'slim' ? '<div class="sub"><span class="val num"></span><i class="pc num"></i></div>' : '');
+      }
       el.querySelector('.ttl').textContent = g.title;
-      el.querySelector('i').style.width = pct + '%';
-      el.querySelector('span').textContent = `${GOAL_UNIT[g.type]} ${fmt(Math.min(v, g.target))} / ${fmt(g.target)}`;
+      const bar = el.querySelector('.bar i'); if (bar) bar.style.width = pct + '%';
+      const sp = el.querySelector('.bar span'); if (sp) sp.textContent = `${unit} ${fmt(Math.min(v, g.target))} / ${fmt(g.target)}`;
+      const val = el.querySelector('.val');
+      if (val) val.innerHTML = style === 'big' ? `${unit} ${fmt(v)} <small>/ ${fmt(g.target)}</small>` : `${unit} ${fmt(Math.min(v, g.target))} / ${fmt(g.target)}`;
+      const pc = el.querySelector('.pc'); if (pc) pc.textContent = Math.floor(pct) + '%';
+      const fg = el.querySelector('.fg'); if (fg) fg.style.strokeDashoffset = String(276.5 * (1 - pct / 100));
       el.classList.toggle('done', v >= g.target);
     }
+    return {
+      draw,
+      ev(e) { if (e.t === 'goal' && e.id === (P.get('id') || (S?.goals || [])[0]?.id)) { el.classList.remove('hitfx'); void el.offsetWidth; el.classList.add('hitfx'); } },
+    };
+  });
+
+  // ---- (04.11.2026) fluxul de cadouri: ultimele cadouri primite, cu poza cadoului
+  widgets.feed = (() => {
+    root.innerHTML = '<div id="feed" class="card"><p class="ttl" style="margin:0 0 2px"></p><div class="rows" style="display:grid;gap:6px"></div></div>';
+    const el = document.getElementById('feed');
+    let lastAt = 0;
+    const draw = () => {
+      el.querySelector('.ttl').textContent = S?.feed?.title || 'Ultimele cadouri';
+      const list = (ST?.feed || []).slice(0, S?.feed?.count || 6);
+      el.querySelector('.rows').innerHTML = list.length ? list.map(x => `<div class="fr${x.at > lastAt && lastAt ? ' new' : ''}">${avatar(x)}<span class="nm">${esc(x.name)}</span>${safeUrl(x.img) ? `<img class="gi" src="${esc(x.img)}" alt="" referrerpolicy="no-referrer">` : '<span class="gi" style="font-size:24px;text-align:center">🎁</span>'}<span class="x">×${fmt(x.count)}</span></div>`).join('') : '<div class="empty">Primul cadou apare aici.</div>';
+      lastAt = Math.max(lastAt || 1, ...list.map(x => x.at || 0));
+    };
     return { draw };
+  });
+
+  // ---- (04.11.2026) licitația: spectatorii licitează cu cadouri, câștigă cel cu cele mai multe diamante
+  widgets.auction = (() => {
+    root.innerHTML = '<div id="auc" class="card"><div class="top"><p class="ttl" style="margin:0"></p><span class="clock num">--:--</span></div><div class="item"></div><div class="lead hide"></div><div class="rows"></div><div class="win hide"></div><div class="how"></div></div>';
+    const el = document.getElementById('auc'), clock = el.querySelector('.clock');
+    let A = null, at = 0, leadId = '';
+    const set = a => { if (a) { A = a; at = Date.now(); } };
+    function draw() {
+      if (ST?.auction && !A) set(ST.auction);
+      const c = S?.auction || {};
+      el.querySelector('.ttl').textContent = c.title || 'Licitație';
+      el.querySelector('.item').textContent = c.item || '';
+      const top = A?.top || [], lead = el.querySelector('.lead'), win = el.querySelector('.win');
+      lead.classList.toggle('hide', !top.length);
+      if (top.length) {
+        lead.innerHTML = `${avatar(top[0])}<div><small style="color:var(--sub)">👑 conduce</small><b>${esc(top[0].name)}</b></div><span class="v num">💎 ${fmt(top[0].diamonds)}</span>`;
+        if (leadId && leadId !== top[0].id) { lead.classList.remove('bump'); void lead.offsetWidth; lead.classList.add('bump'); }
+        leadId = top[0].id;
+      }
+      el.querySelector('.rows').innerHTML = top.slice(1, c.count || 5).map((x, i) => `<div class="row"><span class="pos">${i + 2}</span>${avatar(x)}<span class="nm">${esc(x.name)}</span><span class="v num">💎 ${fmt(x.diamonds)}</span></div>`).join('');
+      win.classList.toggle('hide', !!A?.running || !A?.winner);
+      if (A?.winner) win.innerHTML = `🏆 Câștigă <b style="color:var(--accent)">${esc(A.winner.name)}</b> cu 💎 ${fmt(A.winner.diamonds)}`;
+      el.querySelector('.how').textContent = A?.running ? `Trimite orice cadou${c.min > 1 ? ` de la ${fmt(c.min)} 💎` : ''} ca să licitezi.` : A?.winner ? '' : 'Licitația începe în curând.';
+    }
+    setInterval(() => {
+      const l = A?.running ? Math.max(0, A.left - (Date.now() - at)) : 0, s = Math.ceil(l / 1000);
+      clock.textContent = A?.running ? `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` : A?.winner ? 'gata' : '--:--';
+      clock.classList.toggle('hot', !!A?.running && s <= 10);
+    }, 250);
+    return { draw, ev(e) { if (e.t === 'auction') { set(e.auction); draw(); } } };
   });
 
   widgets.top = (() => {
@@ -326,7 +431,8 @@ body.t-arcade #bt .tm .sc{font-size:20px}
       ev(e) {
         if (e.t !== 'timer') return;
         set(e.timer);
-        if (e.added > 0) { const p = document.createElement('div'); p.className = 'plus'; p.textContent = `+${e.added >= 60 ? Math.round(e.added / 6) / 10 + ' min' : e.added + 's'}`; el.appendChild(p); setTimeout(() => p.remove(), 1700); }
+        el.classList.toggle('over', !!e.ended);
+        if (e.added) { const p = document.createElement('div'), ab = Math.abs(e.added); p.className = 'plus'; if (e.added < 0) p.style.color = '#ff5a4e'; p.textContent = `${e.added > 0 ? '+' : '−'}${ab >= 60 ? Math.round(ab / 6) / 10 + ' min' : ab + 's'}`; el.appendChild(p); setTimeout(() => p.remove(), 1700); }
       },
     };
   });
@@ -450,7 +556,7 @@ body.t-arcade #bt .tm .sc{font-size:20px}
     const box = document.getElementById('act'), flash = document.getElementById('flash'), cv = document.getElementById('fx'), cx = cv.getContext('2d');
     const fit = () => { cv.width = innerWidth * devicePixelRatio; cv.height = innerHeight * devicePixelRatio; };
     fit(); addEventListener('resize', fit);
-    const q = []; let busy = false, parts = [], anim = false;
+    const q = []; let busy = false, parts = [], anim = false, cur = null;
     // efecte: confetti și inimi
     function effect(kind) {
       if (kind === 'flash') { flash.classList.remove('go'); void flash.offsetWidth; flash.classList.add('go'); return; }
@@ -481,7 +587,9 @@ body.t-arcade #bt .tm .sc{font-size:20px}
       st.className = 'stage p-' + (a.position || 'center');
       const vol = Math.max(0, Math.min(1, (a.volume ?? 80) / 100));
       let md = null, timed = null, ended = false;
-      const done = () => { if (ended) return; ended = true; clearTimeout(timed); st.classList.add('out'); setTimeout(() => { st.remove(); try { md?.pause?.(); au?.pause(); } catch { /* */ } busy = false; setTimeout(next, 150); }, 400); };
+      const done = () => { if (ended) return; ended = true; cur = null; clearTimeout(timed); st.classList.add('out'); setTimeout(() => { st.remove(); try { md?.pause?.(); au?.pause(); } catch { /* */ } busy = false; setTimeout(next, 150); }, 400); };
+      // (04.11.2026) „poate fi întreruptă": următoarea acțiune de pe ecran o oprește
+      cur = a.skip ? done : null;
       if (a.media?.url && a.media.kind === 'image') { md = document.createElement('img'); md.src = a.media.url; }
       else if (a.media?.url && a.media.kind === 'video') {
         md = document.createElement('video'); md.src = a.media.url; md.playsInline = true; md.autoplay = true; md.volume = vol;
@@ -509,7 +617,7 @@ body.t-arcade #bt .tm .sc{font-size:20px}
       ev(e) {
         if (e.t === 'clear') { q.length = 0; return; }
         if (e.t !== 'action' || (e.screen || 1) !== SCREEN) return;
-        if (q.length < 40) { q.push(e); next(); }
+        if (q.length < 40) { q.push(e); if (cur) cur(); else next(); }
       },
     };
   });
@@ -744,13 +852,21 @@ body.t-arcade #bt .tm .sc{font-size:20px}
     root.innerHTML = '<div id="last"></div>';
     const el = document.getElementById('last');
     let prev = {};
-    const ROWS = [['follower', 'Ultimul follower', '💖'], ['gifter', 'Ultimul cadou', '🎁'], ['sharer', 'Ultimul share', '📣'], ['subscriber', 'Ultimul abonat', '⭐']];
+    const ROWS = [['follower', 'Ultimul follower', '💖'], ['gifter', 'Ultimul cadou', '🎁'], ['sharer', 'Ultimul share', '📣'], ['subscriber', 'Ultimul abonat', '⭐'],
+      ['liker', 'Ultimul like', '❤️'], ['chatter', 'Ultimul mesaj', '💬'], ['topgift', 'Cel mai mare cadou', '👑'], ['topstreak', 'Cel mai lung combo', '🔥']];
+    const OPT = ['subscriber', 'liker', 'chatter', 'topgift', 'topstreak'];
+    // &only=topgift → un singur rând (de exemplu doar „Cel mai mare cadou")
+    const ONLY = (P.get('only') || '').split(',').filter(Boolean);
     function draw() {
-      const cfg = S?.last || {}, L = ST?.last || {};
+      const cfg = S?.last || {}, L = { ...(ST?.last || {}), topgift: ST?.topGift, topstreak: ST?.topStreak };
       el.className = cfg.layout === 'row' ? '' : 'column';
-      el.innerHTML = ROWS.filter(([k]) => cfg[k] !== false && (k !== 'subscriber' || cfg.subscriber)).map(([k, label, ic]) => {
+      el.innerHTML = ROWS.filter(([k]) => ONLY.length ? ONLY.includes(k) : OPT.includes(k) ? cfg[k] : cfg[k] !== false).map(([k, label, ic]) => {
         const x = L[k], isNew = x && prev[k] !== x.at;
-        const det = k === 'gifter' && x ? `<span>${x.count > 1 ? x.count + '× ' : ''}${safeUrl(x.img) ? `<img class="gimg" src="${esc(x.img)}" alt="" referrerpolicy="no-referrer">` : '🎁'} ${esc(x.gift || '')}</span>` : '';
+        const gi = x => `${safeUrl(x.img) ? `<img class="gimg" src="${esc(x.img)}" alt="" referrerpolicy="no-referrer">` : '🎁'} ${esc(x.gift || '')}`;
+        const det = !x ? '' : k === 'gifter' ? `<span>${x.count > 1 ? x.count + '× ' : ''}${gi(x)}</span>`
+          : k === 'topgift' ? `<span>${x.count > 1 ? x.count + '× ' : ''}${gi(x)} · 💎 ${fmt(x.diamonds)}</span>`
+          : k === 'topstreak' ? `<span>🔥 ${fmt(x.count)}× ${gi(x)}</span>`
+          : k === 'chatter' ? `<span>${esc(x.text || '')}</span>` : k === 'liker' ? `<span>❤️ ${fmt(x.count)}</span>` : '';
         return `<div class="it card${isNew ? ' new' : ''}">${x ? avatar(x) : `<span class="av">${ic}</span>`}<div class="tx"><small>${ic} ${label}</small><b>${x ? esc(x.name) : '—'}</b>${det}</div></div>`;
       }).join('');
       prev = Object.fromEntries(ROWS.map(([k]) => [k, L[k]?.at]));
@@ -869,6 +985,10 @@ body.t-arcade #bt .tm .sc{font-size:20px}
         onEvent({ t: 'gift', user: u, gift: g[0], img: '', count: c, diamonds: tot, alert: { kind: 'gift', text: `${u.name} a trimis ${c}× ${g[0]}!`, user: u.name, sound: 'coin', duration: 4, volume: 40 } });
         if (W === 'timer') onEvent({ t: 'timer', timer: { running: true, left: 3600_000 }, added: 30 });
         ST.last = { ...(ST.last || {}), gifter: { name: u.name, avatar: '', gift: g[0], img: '', count: c, at: Date.now() } };
+        ST.feed = [{ name: u.name, avatar: '', gift: g[0], img: '', count: c, diamonds: tot, at: Date.now() }, ...(ST.feed || [])].slice(0, 12);
+        if (!ST.topGift || tot > ST.topGift.diamonds) ST.topGift = { name: u.name, avatar: '', gift: g[0], img: '', count: c, diamonds: tot, at: Date.now() };
+        if (c > 1 && (!ST.topStreak || c > ST.topStreak.count)) ST.topStreak = { name: u.name, avatar: '', gift: g[0], img: '', count: c, diamonds: tot, at: Date.now() };
+        if (W === 'auction') { const b = new Map(((ST.auction || {}).top || []).map(x => [x.id, x])); const x = b.get(u.id) || { id: u.id, name: u.name, avatar: '', diamonds: 0 }; x.diamonds += tot; b.set(u.id, x); ST.auction = { running: true, left: 95000 - (i % 40) * 2000, top: [...b.values()].sort((p, q) => q.diamonds - p.diamonds), winner: null }; onEvent({ t: 'auction', auction: ST.auction }); }
         if (W === 'battle') { const tm = i % 2; bsc[tm] += tot; onEvent({ t: 'battle', battle: { running: true, left: 240000, scores: [...bsc], winner: null }, team: tm, pts: tot, user: u.name }); }
         if (W === 'actions') onEvent({ t: 'action', screen: Number(P.get('screen')) || 1, name: 'Exemplu', text: `Mersi, ${u.name}, pentru ${g[0]}! 🎉`, user: u, sound: 'magic', volume: 40, duration: 3, effect: 'confetti', position: 'center' });
       } else if (k === 1) { ST.follows = (ST.follows || 0) + 1; ST.last = { ...(ST.last || {}), follower: { name: u.name, avatar: '', at: Date.now() } }; onEvent({ t: 'follow', user: u, alert: { kind: 'follow', text: `${u.name} te urmărește acum!`, user: u.name, sound: 'pop', duration: 4, volume: 40 } }); }
@@ -889,7 +1009,8 @@ body.t-arcade #bt .tm .sc{font-size:20px}
       timer: { title: 'Subathon' }, points: { title: 'Puncte', count: 5 }, fireworks: { on: true, maxIcons: 30 }, rotator: { lines: ['Dă follow!', 'Trimite un cadou și învârte roata!'], every: 4 },
       battle: { title: 'Bătălia echipelor', minutes: 5, teams: [{ name: 'Roșii', color: '#ff4d6a', command: '!rosu', gifts: 'Rose' }, { name: 'Albaștrii', color: '#4aa3ff', command: '!albastru', gifts: 'TikTok' }] },
       jar: { title: 'Borcanul cu cadouri', shape: P.get('shape') || 'borcan', max: 120, min: 1 }, fountain: { emoji: '❤️', perLikes: 5, avatars: true, max: 160 }, cannon: { side: 'both', min: 1, names: true },
-      last: { follower: true, gifter: true, sharer: true, layout: 'column' }, emoji: { size: 64, max: 4 }, likeathon: { title: 'Cine dă cele mai multe like-uri', count: 8 } };
+      last: { follower: true, gifter: true, sharer: true, layout: 'column' }, emoji: { size: 64, max: 4 }, likeathon: { title: 'Cine dă cele mai multe like-uri', count: 8 },
+      feed: { title: 'Ultimele cadouri', count: 6, min: 1 }, auction: { title: 'Licitație', item: 'Alegi tu jocul următor', minutes: 3, min: 1, snipe: 10, count: 5 } };
   }
 })();
 </script>

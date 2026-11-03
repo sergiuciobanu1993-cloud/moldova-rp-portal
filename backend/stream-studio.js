@@ -1239,7 +1239,19 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
       [rows.map(g => g.id), rows.map(g => g.name), rows.map(g => g.diamonds), rows.map(g => /^https:\/\//.test(g.img || "") ? g.img : null)]);
     giftsCache = null;
   }
-  app.get("/api/stream/cadouri", auth, asyncRoute(async (_req, res) => {
+  // lista de cadouri și fără live: cerem catalogul TikTok cu numele streamerului (fără conectare)
+  let standaloneAt = 0;
+  async function catalogWithoutLive(username) {
+    if (Date.now() - standaloneAt < 3600_000) return;
+    standaloneAt = Date.now();
+    let Conn; try { Conn = await loadLib(); } catch { return; }
+    const opts = { processInitialData: false, enableExtendedGiftInfo: true };
+    if (process.env.EULER_API_KEY) opts.signApiKey = process.env.EULER_API_KEY;
+    try { const c = new Conn(username, opts); catalogLoadedAt = 0; await loadGiftCatalog(c); try { c.disconnect?.(); } catch { /* */ } }
+    catch (err) { console.warn("Studio: catalogul de cadouri nu s-a putut lua fără live:", err.message); }
+  }
+  app.get("/api/stream/cadouri", auth, asyncRoute(async (req, res) => {
+    if (giftsCache && giftsCache.length < 30) { const h = hubs.get(req.user.sub); if (h?.tiktok) catalogWithoutLive(h.tiktok).catch(() => {}); }
     if (!giftsCache || Date.now() - giftsCacheAt > 300_000) {
       await tables();
       const { rows } = await pool.query(`SELECT id::text AS id, name, diamonds, img FROM stream_gifts ORDER BY diamonds, name LIMIT 2000`);

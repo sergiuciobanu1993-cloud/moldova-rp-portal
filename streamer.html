@@ -144,10 +144,22 @@
   .trig .add [data-tp]{display:none}
   .trig .add.t-gift [data-tp=gift],.trig .add.t-like [data-tp=like],.trig .add.t-command [data-tp=command]{display:block}
   .warnmini{color:#ffc24b}
+  .gpm{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.65);display:grid;place-items:center;padding:16px}
+  .gpm[hidden]{display:none}
+  .gpm-box{width:min(860px,100%);max-height:86vh;display:flex;flex-direction:column;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:var(--shadow)}
+  .gpm-hd{display:flex;gap:8px}
+  .gpm-grid{overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:8px;padding-right:4px}
+  .gpm-grid button{display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 6px;border-radius:12px;border:1px solid var(--line);background:var(--panel2);color:var(--text);cursor:pointer;font:700 12px Inter,system-ui,sans-serif;text-align:center}
+  .gpm-grid button:hover,.gpm-grid button:focus-visible{border-color:var(--orange);background:rgba(255,138,31,.1)}
+  .gpm-grid img{width:48px;height:48px;object-fit:contain}
+  .gpm-grid .ge{font-size:34px;line-height:48px}
+  .gpm-grid small{color:var(--muted);font-weight:700}
+  .gp{flex:none;min-height:40px;padding:0 10px}
   .tag{display:inline-block;padding:2px 8px;border-radius:99px;background:rgba(255,255,255,.06);font-size:11px;font-weight:800;color:#cfd3d7;margin-right:4px}
   /* (03.11.2026) Studio ca aplicație: meniu în stânga, bară de live sus, activitatea în dreapta */
   body.app-mode .site-header,body.app-mode .page-hero,body.app-mode>footer{display:none}
   body.app-mode{background-image:none}
+  body.app-mode>[class^="wn-"],body.app-mode>[class*=" wn-"],body.app-mode>[class^="hw-"],body.app-mode>[class*=" hw-"],body.app-mode .pwa-card{display:none!important}
   body.app-mode::before{display:none}
   body.app-mode main{padding:0;margin:0}
   body.app-mode .st{max-width:none;padding:0}
@@ -716,7 +728,14 @@
     S.wheel.segments = $('#wheel-segs').value.split('\n').map(x => x.trim()).filter(Boolean).slice(0, 16).map((label, i) => ({ label, color: old[i]?.color || COLORS[i % 8] }));
     S.goals = $$('#goals .goal-row').map(r => ({ id: r.dataset.id, type: r.querySelector('select').value, title: r.querySelector('[data-g=title]').value, target: Number(r.querySelector('[data-g=target]').value) }));
   }
+  function pushPreview() {
+    if (!S) return;
+    const msg = { mrpPreview: JSON.parse(JSON.stringify(S)) };
+    $$('#aspect-prev, #ov-frame, #act-frame, .ovc .vis iframe').forEach(f => { try { f.contentWindow?.postMessage(msg, location.origin); } catch { /* */ } });
+  }
+  document.addEventListener('load', e => { if (e.target.tagName === 'IFRAME') setTimeout(pushPreview, 300); }, true);
   function markDirty() {
+    clearTimeout(window.__pv); window.__pv = setTimeout(pushPreview, 150);
     const now = JSON.stringify(S) !== SAVED;
     $('#savebar').classList.toggle('dirty', now);
     $('#save-state').textContent = now ? 'Ai modificări nesalvate.' : 'Totul e salvat.';
@@ -808,9 +827,38 @@
   let GIFTS = [];
   async function loadGifts() {
     try { GIFTS = (await api('/api/stream/cadouri')).gifts || []; } catch { GIFTS = []; }
-    $('#gift-list').innerHTML = GIFTS.map(g => `<option value="${esc(g.name)}">${g.diamonds} 💎</option>`).join('');
+    $('#gift-list').innerHTML = allGifts().map(g => `<option value="${esc(g.name)}">${g.diamonds != null ? g.diamonds + ' 💎' : ''}</option>`).join('');
     $$('#evts .evrow').forEach(r => giftPreview(r));
   }
+  // cadourile cunoscute de TikTok, ca rezervă cât timp catalogul (cu poze și prețuri) încă nu s-a încărcat
+  const GIFT_NAMES = ['Rose', 'TikTok', 'GG', 'Ice Cream Cone', 'Heart Me', 'Finger Heart', 'Rosa', 'Love you', 'Perfume', 'Doughnut', 'Hand Hearts', 'Confetti', 'Paper Crane', 'Little Crown', 'Cap', 'Hat and Mustache', 'Sunglasses', 'Friendship Necklace', 'Mic', 'Butterfly', 'Lollipop', 'Game Controller', 'Corgi', 'Boxing Gloves', 'Money Gun', 'Swan', 'Train', 'Galaxy', 'Fireworks', 'Gerry the Giraffe', 'Whale diving', 'Motorcycle', 'Private Jet', 'Sports Car', 'Unicorn Fantasy', 'Interstellar', 'Rosa Nebula', 'Falcon', 'Lion', 'Universe', 'TikTok Universe'];
+  function allGifts() {
+    const have = new Set(GIFTS.map(g => gKey(g.name)));
+    return [...GIFTS, ...GIFT_NAMES.filter(n => !have.has(gKey(n))).map(n => ({ name: n, diamonds: null, img: '' }))];
+  }
+  const gpm = document.createElement('div');
+  gpm.className = 'gpm'; gpm.id = 'gpick'; gpm.hidden = true;
+  gpm.innerHTML = `<div class="gpm-box" role="dialog" aria-modal="true" aria-label="Alege cadoul"><div class="gpm-hd"><input type="text" id="gpick-q" placeholder="Caută cadoul… (de exemplu: rose, lion)" autocomplete="off"><button type="button" class="b sm" id="gpick-any">Orice cadou</button><button type="button" class="b sm" id="gpick-x" aria-label="Închide">✕</button></div><p class="hint" id="gpick-note" style="margin:0"></p><div class="gpm-grid" id="gpick-grid"></div></div>`;
+  document.body.appendChild(gpm);
+  let gTarget = null;
+  function drawPicker() {
+    const q = gKey($('#gpick-q').value), list = allGifts().filter(g => !q || gKey(g.name).includes(q));
+    $('#gpick-note').textContent = GIFTS.length ? `${GIFTS.length} cadouri din catalogul TikTok, cu poză și preț în 💎.` : 'Catalogul cu poze se încarcă singur când te conectezi la un live. Până atunci vezi cadourile cele mai folosite.';
+    $('#gpick-grid').innerHTML = list.slice(0, 400).map(g => `<button type="button" data-gname="${esc(g.name)}">${g.img ? `<img src="${esc(g.img)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '<span class="ge">🎁</span>'}<span>${esc(g.name)}</span>${g.diamonds != null ? `<small>${fmt(g.diamonds)} 💎</small>` : ''}</button>`).join('') || '<p class="hint">Nu am găsit. Poți scrie numele de mână.</p>';
+  }
+  document.addEventListener('click', e => {
+    const b = e.target.closest('[data-gpick]'); if (!b) return;
+    gTarget = b.parentElement.querySelector('input[list="gift-list"]');
+    $('#gpick-q').value = ''; drawPicker(); gpm.hidden = false; setTimeout(() => $('#gpick-q').focus(), 30);
+    if (GIFTS.length < 30) loadGifts().then(() => { if (!gpm.hidden) drawPicker(); });
+  });
+  const pickGift = name => { if (gTarget) { gTarget.value = name; gTarget.dispatchEvent(new Event('input', { bubbles: true })); } gpm.hidden = true; };
+  $('#gpick-q').addEventListener('input', drawPicker);
+  $('#gpick-grid').addEventListener('click', e => { const g = e.target.closest('[data-gname]'); if (g) pickGift(g.dataset.gname); });
+  $('#gpick-any').onclick = () => pickGift('');
+  $('#gpick-x').onclick = () => { gpm.hidden = true; };
+  gpm.addEventListener('click', e => { if (e.target === gpm) gpm.hidden = true; });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !gpm.hidden) gpm.hidden = true; });
   const gKey = v => String(v || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
   function giftPreview(row) {
     const inp = row.querySelector('[data-e=gift]'), img = row.querySelector('.giftimg');
@@ -843,7 +891,7 @@
           <div class="trig"><b style="font-size:13px">🎯 Pornește când:</b>
             <div class="on">${evOf(a.id).map(ev => `<span>${esc(evText(ev))}<button type="button" data-tdel="${esc(ev.id)}" data-aid2="${esc(a.id)}" aria-label="Scoate">✕</button></span>`).join('') || '<span class="hint warnmini" style="background:none;border:0;padding:0">Încă nu pornește la nimic. Alege mai jos când să pornească.</span>'}</div>
             <div class="add t-gift"><select data-t="trigger" aria-label="Când pornește">${opt(TRIG, 'gift')}</select>
-              <input type="text" data-t="gift" data-tp="gift" list="gift-list" maxlength="60" placeholder="Cadoul (gol = orice cadou)" aria-label="Cadoul">
+              <input type="text" data-t="gift" data-tp="gift" list="gift-list" maxlength="60" placeholder="Cadoul (gol = orice cadou)" aria-label="Cadoul"><button type="button" class="b sm gp" data-tp="gift" data-gpick title="Alege din lista de cadouri TikTok">🎁 Alege</button>
               <input type="number" data-t="min" data-tp="gift" min="1" placeholder="de la câte 💎 (1)" aria-label="De la câte diamante">
               <input type="number" data-t="likes" data-tp="like" min="10" step="10" placeholder="la fiecare … like-uri (100)" aria-label="La câte like-uri">
               <input type="text" data-t="command" data-tp="command" maxlength="30" placeholder="!comanda" aria-label="Comanda">
@@ -928,7 +976,7 @@
     const acts = S.actions || [];
     $('#evts').innerHTML = (S.events || []).map(ev => {
       const t = ev.trigger;
-      const params = t === 'gift' ? `<label class="f">Cadoul (gol = orice cadou)<input type="text" data-e="gift" list="gift-list" maxlength="60" value="${esc(ev.gift)}" placeholder="de exemplu: Rose, Lion, TikTok" autocomplete="off"></label><img class="giftimg" alt="" hidden referrerpolicy="no-referrer"><label class="f" style="max-width:140px;min-width:110px">De la câte 💎<input type="number" min="1" data-e="min" value="${ev.min}"></label>`
+      const params = t === 'gift' ? `<label class="f">Cadoul (gol = orice cadou)<span style="display:flex;gap:6px"><input type="text" data-e="gift" list="gift-list" maxlength="60" value="${esc(ev.gift)}" placeholder="de exemplu: Rose, Lion, TikTok" autocomplete="off"><button type="button" class="b sm gp" data-gpick title="Alege din lista de cadouri TikTok">🎁</button></span></label><img class="giftimg" alt="" hidden referrerpolicy="no-referrer"><label class="f" style="max-width:140px;min-width:110px">De la câte 💎<input type="number" min="1" data-e="min" value="${ev.min}"></label>`
         : t === 'like' ? `<label class="f" style="max-width:260px">La fiecare … like-uri de la același spectator<input type="number" min="10" step="10" data-e="likes" value="${ev.likes}"></label>`
         : t === 'command' ? `<label class="f" style="max-width:200px">Comanda<input type="text" data-e="command" maxlength="30" value="${esc(ev.command)}" placeholder="!dans"></label><label class="f" style="max-width:200px">Costă puncte (0 = gratuit)<input type="number" min="0" data-e="cost" value="${ev.cost}"></label>` : '';
       return `<div class="evrow${ev.on ? '' : ' off'}" data-eid="${esc(ev.id)}">
@@ -1020,7 +1068,7 @@
     box.innerHTML = S.sounds.list.map(x => `<div class="sndrow${x.on ? '' : ' off'}" data-sid="${esc(x.id)}">
       <input type="checkbox" data-sn="on"${x.on ? ' checked' : ''} aria-label="Pornit">
       <select data-sn="trigger" aria-label="Când">${opt(TRIG, x.trigger)}</select>
-      ${x.trigger === 'gift' ? `<span style="display:flex;gap:6px"><input type="text" data-sn="gift" list="gift-list" value="${esc(x.gift)}" placeholder="orice cadou" aria-label="Cadoul"><input type="number" data-sn="min" min="1" value="${x.min}" style="width:80px" aria-label="De la câte diamante" title="de la câte 💎"></span>`
+      ${x.trigger === 'gift' ? `<span style="display:flex;gap:6px"><input type="text" data-sn="gift" list="gift-list" value="${esc(x.gift)}" placeholder="orice cadou" aria-label="Cadoul"><button type="button" class="b sm gp" data-gpick title="Alege din lista de cadouri TikTok">🎁</button><input type="number" data-sn="min" min="1" value="${x.min}" style="width:80px" aria-label="De la câte diamante" title="de la câte 💎"></span>`
         : x.trigger === 'like' ? `<input type="number" data-sn="likes" min="10" step="10" value="${x.likes}" aria-label="La câte like-uri" title="la fiecare … like-uri">`
         : x.trigger === 'command' ? `<input type="text" data-sn="command" value="${esc(x.command)}" maxlength="30" aria-label="Comanda">` : '<span class="hint">—</span>'}
       <select data-sn="src" aria-label="Sunetul">${sndSel(x.src)}</select>

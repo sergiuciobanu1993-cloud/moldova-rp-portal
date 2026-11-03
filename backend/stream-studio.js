@@ -98,7 +98,7 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
       sound: sound(x.sound, "none"),
       text: str(x.text, 140), tts: str(x.tts, 200),
       duration: clampN(x.duration, 0, 60, 6), volume: clampN(x.volume, 0, 100, 80),
-      screen: Math.round(clampN(x.screen, 1, 4, 1)), position: POSITIONS.includes(x.position) ? x.position : "center",
+      screen: Math.round(clampN(x.screen, 1, 8, 1)), position: POSITIONS.includes(x.position) ? x.position : "center",
       size: clampN(x.size, 10, 100, 45), effect: EFFECTS.includes(x.effect) ? x.effect : "none",
       wheel: bool(x.wheel, false), timer: Math.round(clampN(x.timer, -3600, 3600, 0)), points: Math.round(clampN(x.points, -1_000_000, 1_000_000, 0)),
     };
@@ -118,6 +118,31 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
     };
   }
 
+  function normSound(x = {}, i = 0) {
+    let cmd = str(x.command, 30).toLowerCase().replace(/\s+/g, "");
+    if (cmd && !cmd.startsWith("!")) cmd = "!" + cmd;
+    const src = String(x.src || "");
+    return {
+      id: safeId(x.id, "s"), on: bool(x.on, true), trigger: TRIGGERS.includes(x.trigger) ? x.trigger : "gift",
+      gift: str(x.gift, 60), min: Math.round(clampN(x.min, 1, 1_000_000, 1)), likes: Math.round(clampN(x.likes, 10, 1_000_000, 100)), command: cmd || "!sunet",
+      src: /^m:[0-9a-f-]{36}$/i.test(src) ? src.toLowerCase() : /^s:\w+$/.test(src) && SOUNDS.includes(src.slice(2)) ? src : "s:coin",
+      volume: Math.round(clampN(x.volume, 0, 100, 80)), key: str(x.key, 12).toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 10),
+    };
+  }
+  function normCommands(c = {}) {
+    const one = (x, def, extra = {}) => {
+      let cmd = str(x?.cmd, 24).toLowerCase().replace(/\s+/g, "");
+      if (cmd && !cmd.startsWith("!")) cmd = "!" + cmd;
+      return { on: bool(x?.on, true), cmd: cmd || def, ...extra };
+    };
+    return {
+      points: one(c?.points, "!puncte"),
+      send: one(c?.send, "!trimite", { min: Math.round(clampN(c?.send?.min, 1, 1_000_000, 10)) }),
+      spin: one(c?.spin, "!roata", { cost: Math.round(clampN(c?.spin?.cost, 0, 10_000_000, 100)) }),
+      drop: one(c?.drop, "!ia"),
+      list: one(c?.list, "!comenzi"),
+    };
+  }
   const JAR_SHAPES = ["borcan", "butoi", "ulcior"];
   const TEAM_COLORS = ["#ff4d6a", "#4aa3ff", "#3ddc84", "#ffd23f"];
   function normBattle(b = {}) {
@@ -206,7 +231,18 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
         perDiamond: clampN(p.perDiamond, 0, 1000, 10),
         perFollow: clampN(p.perFollow, 0, 10000, 25),
         perShare: clampN(p.perShare, 0, 10000, 10),
+        currency: str(p.currency, 20, "puncte"),
+        levelBase: Math.round(clampN(p.levelBase, 1, 1_000_000, 50)),
+        levelMult: clampN(p.levelMult, 1, 3, 1.25),
       },
+      // (03.11.2026) sunete rapide (fără overlay), comenzi de chat, likeathon
+      sounds: {
+        simultaneous: bool(s.sounds?.simultaneous, true), maxQueue: Math.round(clampN(s.sounds?.maxQueue, 1, 200, 50)),
+        list: (Array.isArray(s.sounds?.list) ? s.sounds.list : []).slice(0, 60).map((x, i) => normSound(x, i)),
+      },
+      commands: normCommands(s.commands),
+      intervals: (Array.isArray(s.intervals) ? s.intervals : []).slice(0, 20).map(x => ({ id: safeId(x?.id, "t"), on: bool(x?.on, true), minutes: clampN(x?.minutes, 1, 240, 10), action: safeId(x?.action, "a"), onlyLive: bool(x?.onlyLive, true) })).filter(x => ids.has(x.action)),
+      likeathon: { title: str(s.likeathon?.title, 60, "Cine dă cele mai multe like-uri"), count: Math.round(clampN(s.likeathon?.count, 3, 15, 8)), decay: bool(s.likeathon?.decay, false), decayPct: Math.round(clampN(s.likeathon?.decayPct, 1, 50, 10)) },
       fireworks: { on: bool(s.fireworks?.on, true), maxIcons: clampN(s.fireworks?.maxIcons, 5, 80, 30) },
       // (03.11.2026) jocuri și widgeturi noi: bătălia echipelor, borcanul, fântâna, tunul, ultimii, emoji din chat
       battle: normBattle(s.battle),
@@ -230,6 +266,7 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
     since: Date.now(), likes: 0, diamonds: 0, gifts: 0, follows: 0, shares: 0, viewers: 0, peakViewers: 0,
     top: {}, gifters: {}, timer: { running: false, endsAt: 0, left: 0 }, likeMilestone: 0,
     last: {}, jar: [], battle: { running: false, endsAt: 0, scores: [], winner: null, team: {} },
+    likers: {}, drop: null,
   });
   function cleanState(s) {
     const st = { ...emptyState(), ...(s && typeof s === "object" ? s : {}) };
@@ -238,6 +275,8 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
     st.timer = { running: !!st.timer?.running, endsAt: Number(st.timer?.endsAt) || 0, left: Number(st.timer?.left) || 0 };
     st.last = st.last && typeof st.last === "object" ? st.last : {};
     st.jar = Array.isArray(st.jar) ? st.jar.slice(-250) : [];
+    st.likers = st.likers && typeof st.likers === "object" ? st.likers : {};
+    st.drop = st.drop && st.drop.until > Date.now() ? st.drop : null;
     const b = st.battle || {};
     st.battle = { running: !!b.running, endsAt: Number(b.endsAt) || 0, scores: Array.isArray(b.scores) ? b.scores.map(Number) : [], winner: b.winner ?? null, team: b.team && typeof b.team === "object" ? b.team : {} };
     return st;
@@ -280,8 +319,42 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
   const snapshot = h => ({
     since: h.state.since, likes: h.state.likes, diamonds: h.state.diamonds, gifts: h.state.gifts, follows: h.state.follows,
     shares: h.state.shares, viewers: h.state.viewers, peakViewers: h.state.peakViewers, top: publicTop(h), timer: timerView(h),
-    last: h.state.last, battle: battleView(h),
+    last: h.state.last, battle: battleView(h), likers: topLikers(h), drop: dropView(h),
   });
+  const topLikers = h => Object.entries(h.state.likers).map(([id, v]) => ({ id, name: v.name, avatar: v.avatar, likes: Math.round(v.likes) }))
+    .filter(x => x.likes > 0).sort((a, b) => b.likes - a.likes).slice(0, 15);
+  const dropView = h => { const d = h.state.drop; return d && d.until > Date.now() ? { amount: d.amount, left: d.until - Date.now(), max: d.max, claimed: d.claimed.length } : null; };
+  // temporizatoare: o acțiune la fiecare N minute (implicit doar cât e conectat la live)
+  setInterval(() => {
+    const now = Date.now();
+    for (const h of hubs.values()) {
+      for (const t of h.settings.intervals || []) {
+        if (!t.on || (t.onlyLive && h.status !== "live")) continue;
+        h.ivLast ||= new Map();
+        const last = h.ivLast.get(t.id) || 0;
+        if (!last) { h.ivLast.set(t.id, now); continue; }
+        if (now - last >= t.minutes * 60_000) { h.ivLast.set(t.id, now); runAction(h, h.settings.actions.find(a => a.id === t.action), { user: { id: "", name: "", avatar: "" } }); }
+      }
+    }
+  }, 15_000).unref?.();
+  // likeathon: scorul scade cu X% la 10 secunde, dacă streamerul a pornit asta
+  setInterval(() => {
+    for (const h of hubs.values()) {
+      const c = h.settings.likeathon;
+      if (!c?.decay) continue;
+      let any = false;
+      for (const [id, v] of Object.entries(h.state.likers)) { v.likes *= 1 - c.decayPct / 100; if (v.likes < 1) delete h.state.likers[id]; any = true; }
+      if (any) pushState(h);
+    }
+  }, 10_000).unref?.();
+
+  // nivelul spectatorului după puncte: fiecare nivel cere de „levelMult" ori mai mult decât precedentul
+  function levelOf(h, pts) {
+    const { levelBase, levelMult } = h.settings.points;
+    let lvl = 1, need = levelBase, total = 0;
+    while (pts >= total + need && lvl < 999) { total += need; lvl++; need = Math.ceil(need * levelMult); }
+    return { level: lvl, toNext: total + need - pts };
+  }
 
   // ---------------------------------------------------------------- bătălia echipelor
   function battleSchedule(h) {
@@ -527,6 +600,73 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
       } else go();
     }
   }
+  // sunete rapide: ca la evenimente, dar fără overlay — se aud din Studio (sau din overlay-ul „Sunete”).
+  // Mai multe sunete pe același declanșator = se alege unul la întâmplare.
+  function fireSounds(h, trigger, ctx) {
+    const groups = new Map();
+    for (const x of h.settings.sounds.list) {
+      if (!x.on || x.trigger !== trigger) continue;
+      if (trigger === "gift") {
+        if (x.gift && giftKey(x.gift) !== giftKey(ctx.gift) && String(x.gift) !== String(ctx.giftId || "")) continue;
+        if (ctx.diamonds < x.min) continue;
+      } else if (trigger === "like") {
+        if (Math.floor(ctx.after / x.likes) - Math.floor(ctx.before / x.likes) <= 0) continue;
+      } else if (trigger === "command" && ctx.cmd !== x.command) continue;
+      const k = [x.trigger, giftKey(x.gift), x.min, x.likes, x.command].join("|");
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(x);
+    }
+    for (const list of groups.values()) {
+      const x = list[crypto.randomInt(list.length)];
+      broadcast(h, { t: "sound", src: x.src.startsWith("m:") ? `/api/stream/media/${x.src.slice(2)}` : x.src, volume: x.volume, user: ctx.user?.name || "" });
+    }
+  }
+  // comenzile de chat gata făcute: !puncte, !trimite, !roata, !ia, !comenzi
+  function info(h, text) { broadcast(h, { t: "cmdinfo", text }); }
+  async function builtinCommand(h, u, cmd, args) {
+    const c = h.settings.commands, cur = h.settings.points.currency;
+    if (!u.id) return;
+    if (c.points.on && cmd === c.points.cmd) {
+      const pts = await viewerPoints(h, u.id), lv = levelOf(h, pts);
+      return info(h, `${u.name}: ${pts.toLocaleString("ro-RO")} ${cur} · nivelul ${lv.level} (încă ${lv.toNext.toLocaleString("ro-RO")} până la ${lv.level + 1})`);
+    }
+    if (c.send.on && cmd === c.send.cmd) {
+      const m = /^@?(\S+)\s+(\d{1,9})/.exec(args || "");
+      if (!m) return info(h, `${u.name}: scrie ${c.send.cmd} @nume suma`);
+      const amount = Number(m[2]), who = m[1].toLowerCase();
+      if (amount < c.send.min) return info(h, `${u.name}: poți trimite cel puțin ${c.send.min} ${cur}.`);
+      const { rows } = await pool.query(`SELECT viewer, name FROM stream_points WHERE user_id = $1 AND (LOWER(viewer) = $2 OR LOWER(name) = $2) LIMIT 1`, [h.uid, who]);
+      if (!rows[0]) return info(h, `${u.name}: nu-l găsesc pe ${m[1]} printre spectatori.`);
+      if (rows[0].viewer === u.id) return;
+      const have = await viewerPoints(h, u.id);
+      if (have < amount) return info(h, `${u.name}: ai doar ${have.toLocaleString("ro-RO")} ${cur}.`);
+      addPointsRaw(h, u, -amount);
+      addPointsRaw(h, { id: rows[0].viewer, name: rows[0].name || rows[0].viewer }, amount);
+      return info(h, `${u.name} i-a trimis ${amount.toLocaleString("ro-RO")} ${cur} lui ${rows[0].name || rows[0].viewer} 🎁`);
+    }
+    if (c.spin.on && cmd === c.spin.cmd) {
+      if (c.spin.cost) {
+        const have = await viewerPoints(h, u.id);
+        if (have < c.spin.cost) return info(h, `${u.name}: roata costă ${c.spin.cost} ${cur}, ai ${have}.`);
+        addPointsRaw(h, u, -c.spin.cost);
+      }
+      wheelSpin(h, u.name);
+      return info(h, `${u.name} învârte roata! 🎡`);
+    }
+    if (c.drop.on && cmd === c.drop.cmd) {
+      const d = h.state.drop;
+      if (!d || d.until < Date.now() || d.claimed.length >= d.max || d.claimed.includes(u.id)) return;
+      d.claimed.push(u.id);
+      addPointsRaw(h, u, d.amount);
+      info(h, `${u.name} a prins ${d.amount.toLocaleString("ro-RO")} ${cur}! (${d.claimed.length}/${d.max})`);
+      return pushState(h);
+    }
+    if (c.list.on && cmd === c.list.cmd) {
+      const own = [c.points, c.send, c.spin, c.drop].filter(x => x.on).map(x => x.cmd);
+      const custom = [...new Set(h.settings.events.filter(e => e.on && e.trigger === "command").map(e => e.command + (e.cost ? ` (${e.cost})` : "")))];
+      return info(h, `Comenzi: ${[...own, ...custom].join(" · ")}`);
+    }
+  }
   async function viewerPoints(h, viewer) {
     if (!viewer) return 0;
     const { rows } = await pool.query(`SELECT points FROM stream_points WHERE user_id = $1 AND viewer = $2`, [h.uid, viewer]);
@@ -540,7 +680,11 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
       let tts = ttsText(h, u, ev.text);
       broadcast(h, { t: "chat", user: u, text: ev.text, tts });
       const m = /^\s*(![^\s]{1,29})\s*(.*)$/.exec(ev.text || "");
-      if (m) fireEvents(h, "command", { user: u, cmd: m[1].toLowerCase(), args: m[2].slice(0, 120) });
+      if (m) {
+        const ctx = { user: u, cmd: m[1].toLowerCase(), args: m[2].slice(0, 120) };
+        fireEvents(h, "command", ctx); fireSounds(h, "command", ctx);
+        if (!u.test || /^test_/.test(u.id)) builtinCommand(h, u, ctx.cmd, ctx.args).catch(() => {});
+      }
       if (m && h.state.battle.running) {
         const team = cfg.battle.teams.findIndex(t => t.command && t.command === m[1].toLowerCase());
         if (team >= 0) {
@@ -568,7 +712,8 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
       if (Object.keys(st.gifters).length > 5000) st.gifters = {};
       const alert = total >= cfg.alerts.gift.min ? alertOf(h, "gift", { user: u.name, gift: ev.gift, count: ev.count, diamonds: total }, { img: ev.img, avatar: u.avatar, user: u.name }) : null;
       broadcast(h, { t: "gift", user: u, gift: ev.gift, img: ev.img, count: ev.count, diamonds: total, alert });
-      fireEvents(h, "gift", { user: u, gift: ev.gift, giftId: ev.giftId, diamonds: total, count: ev.count, img: ev.img });
+      const gctx = { user: u, gift: ev.gift, giftId: ev.giftId, diamonds: total, count: ev.count, img: ev.img };
+      fireEvents(h, "gift", gctx); fireSounds(h, "gift", gctx);
       if (ev.giftId && !u.test) rememberGift(ev.giftId, ev.gift, ev.diamonds, ev.img);
       st.last.gifter = { name: u.name, avatar: u.avatar, gift: ev.gift, img: ev.img, count: ev.count, diamonds: total, at: Date.now() };
       if (total >= cfg.jar.min) { st.jar.push({ img: ev.img, n: Math.min(ev.count, 20), d: ev.diamonds }); if (st.jar.length > 250) st.jar.splice(0, st.jar.length - 250); }
@@ -583,7 +728,7 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
       st.follows++;
       st.last.follower = { name: u.name, avatar: u.avatar, at: Date.now() };
       broadcast(h, { t: "follow", user: u, alert: alertOf(h, "follow", { user: u.name }, { avatar: u.avatar, user: u.name }) });
-      fireEvents(h, "follow", { user: u });
+      fireEvents(h, "follow", { user: u }); fireSounds(h, "follow", { user: u });
       addPoints(h, u, cfg.points.perFollow);
       timerAdd(h, cfg.timer.perFollow);
       pushState(h);
@@ -593,7 +738,7 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
       st.shares++;
       st.last.sharer = { name: u.name, avatar: u.avatar, at: Date.now() };
       broadcast(h, { t: "share", user: u, alert: alertOf(h, "share", { user: u.name }, { avatar: u.avatar, user: u.name }) });
-      fireEvents(h, "share", { user: u });
+      fireEvents(h, "share", { user: u }); fireSounds(h, "share", { user: u });
       addPoints(h, u, cfg.points.perShare);
       timerAdd(h, cfg.timer.perShare);
       pushState(h);
@@ -601,14 +746,14 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
     }
     if (ev.type === "member") {
       broadcast(h, { t: "member", user: u, alert: alertOf(h, "member", { user: u.name }, { avatar: u.avatar, user: u.name }) });
-      fireEvents(h, "member", { user: u });
+      fireEvents(h, "member", { user: u }); fireSounds(h, "member", { user: u });
       return;
     }
     if (ev.type === "subscribe") {
       st.last.subscriber = { name: u.name, avatar: u.avatar, at: Date.now() };
       pushState(h);
       broadcast(h, { t: "subscribe", user: u });
-      fireEvents(h, "subscribe", { user: u });
+      fireEvents(h, "subscribe", { user: u }); fireSounds(h, "subscribe", { user: u });
       return;
     }
     if (ev.type === "like") {
@@ -634,7 +779,10 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
         const b = h.likeUser.get(u.id) || 0;
         h.likeUser.set(u.id, b + ev.count);
         if (h.likeUser.size > 20000) h.likeUser.clear();
-        fireEvents(h, "like", { user: u, before: b, after: b + ev.count });
+        fireEvents(h, "like", { user: u, before: b, after: b + ev.count }); fireSounds(h, "like", { user: u, before: b, after: b + ev.count });
+        const lk = st.likers[u.id] || { name: u.name, avatar: u.avatar, likes: 0 };
+        lk.name = u.name; lk.avatar = u.avatar || lk.avatar; lk.likes += ev.count; st.likers[u.id] = lk;
+        if (Object.keys(st.likers).length > 3000) { const keep = topLikers(h).map(x => x.id); for (const id of Object.keys(st.likers)) if (!keep.includes(id)) delete st.likers[id]; }
         if (cfg.battle.likePoints && h.state.battle.running && h.state.battle.team[u.id] != null) battleScore(h, h.state.battle.team[u.id], Math.round(ev.count * cfg.battle.likePoints / 10), u);
       }
       pushState(h);
@@ -862,7 +1010,7 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
     const h = await requireApproved(req, res); if (!h) return;
     const s = normalizeSettings(req.body?.settings || {});
     // fișierele din acțiuni trebuie să fie ale streamerului; tipul (imagine/clip/sunet) îl știe serverul
-    const refs = [...new Set(s.actions.flatMap(a => [a.media, a.audio]).filter(Boolean))];
+    const refs = [...new Set([...s.actions.flatMap(a => [a.media, a.audio]), ...s.sounds.list.filter(x => x.src.startsWith("m:")).map(x => x.src.slice(2))].filter(Boolean))];
     const kinds = new Map();
     if (refs.length) {
       const { rows } = await pool.query(`SELECT id::text AS id, kind FROM stream_media WHERE user_id = $1 AND id = ANY($2::uuid[])`, [h.uid, refs]);
@@ -872,6 +1020,7 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
       a.mediaKind = kinds.get(a.media) || null; if (!a.mediaKind) a.media = null;
       if (a.audio && kinds.get(a.audio) !== "audio") a.audio = null;
     }
+    for (const x of s.sounds.list) if (x.src.startsWith("m:") && !["audio", "video"].includes(kinds.get(x.src.slice(2)))) x.src = "s:coin";
     const tiktok = req.body?.tiktok != null ? cleanTiktok(req.body.tiktok) : h.tiktok;
     if (!TIKTOK_RE.test(tiktok)) return res.status(400).json({ error: "Numele de TikTok nu e valid." });
     await pool.query(`UPDATE stream_profiles SET settings = $2, tiktok = $3, updated_at = NOW() WHERE user_id = $1`, [h.uid, JSON.stringify(s), tiktok]);
@@ -921,6 +1070,19 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
       broadcast(h, { t: "reset" });
     } else if (a.startsWith("battle-")) {
       battleAction(h, a.slice(7));
+    } else if (a === "drop-start") {
+      const amount = Math.round(clampN(req.body?.amount, 1, 1_000_000, 100)), max = Math.round(clampN(req.body?.max, 1, 1000, 10)), sec = Math.round(clampN(req.body?.seconds, 10, 600, 60));
+      h.state.drop = { amount, max, until: Date.now() + sec * 1000, claimed: [] };
+      info(h, `🎁 Ploaie de ${h.settings.points.currency}! Primii ${max} care scriu ${h.settings.commands.drop.cmd} primesc ${amount.toLocaleString("ro-RO")}.`);
+      pushState(h);
+    } else if (a === "drop-stop") {
+      h.state.drop = null; pushState(h);
+    } else if (a === "likeathon-reset") {
+      h.state.likers = {}; pushState(h);
+    } else if (a === "sound-test") {
+      const x = h.settings.sounds.list.find(y => y.id === String(req.body?.id || ""));
+      if (!x) return res.status(404).json({ error: "Salvează întâi sunetul." });
+      broadcast(h, { t: "sound", src: x.src.startsWith("m:") ? `/api/stream/media/${x.src.slice(2)}` : x.src, volume: x.volume, user: "test" });
     } else if (a === "jar-reset") {
       h.state.jar = []; pushState(h); broadcast(h, { t: "jar-reset" });
     } else if (a === "points-reset") {

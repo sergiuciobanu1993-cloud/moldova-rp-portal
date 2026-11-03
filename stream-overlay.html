@@ -183,8 +183,11 @@ body.t-arcade #bt .tm .sc{font-size:20px}
   // ----------------------------------------------------------- aspect
   function applyTheme() {
     if (!S) return;
-    document.body.className = 't-' + (S.theme?.style || 'neon');
-    document.documentElement.style.setProperty('--accent', S.theme?.accent || '#ff8a1f');
+    // (03.11.2026) fiecare overlay își poate avea stilul lui: &theme=glass&accent=ff3366 în link
+    const th = ['neon', 'glass', 'minimal', 'arcade'].includes(P.get('theme')) ? P.get('theme') : S.theme?.style || 'neon';
+    const ac = /^[0-9a-f]{6}$/i.test(P.get('accent') || '') ? '#' + P.get('accent') : S.theme?.accent || '#ff8a1f';
+    document.body.className = 't-' + th;
+    document.documentElement.style.setProperty('--accent', ac);
     const sc = Number(P.get('scale')) || S.theme?.scale || 1;
     root.style.transform = sc !== 1 ? `scale(${sc})` : '';
     root.style.width = sc !== 1 ? `${100 / sc}%` : '';
@@ -442,7 +445,7 @@ body.t-arcade #bt .tm .sc{font-size:20px}
   });
 
   widgets.actions = (() => {
-    const SCREEN = Math.min(4, Math.max(1, Number(P.get('screen')) || 1));
+    const SCREEN = Math.min(8, Math.max(1, Number(P.get('screen')) || 1));
     root.innerHTML = '<div id="act"></div><div id="flash"></div><canvas id="fx"></canvas>';
     const box = document.getElementById('act'), flash = document.getElementById('flash'), cv = document.getElementById('fx'), cx = cv.getContext('2d');
     const fit = () => { cv.width = innerWidth * devicePixelRatio; cv.height = innerHeight * devicePixelRatio; };
@@ -773,6 +776,51 @@ body.t-arcade #bt .tm .sc{font-size:20px}
     };
   });
 
+  // ---- sunete rapide (fără nimic pe ecran) — pentru cine vrea sunetele din OBS, nu din Studio
+  widgets.sounds = (() => {
+    let playing = 0;
+    return {
+      ev(e) {
+        if (e.t !== 'sound') return;
+        if (!/^s:/.test(e.src)) { if (playing > 6) return; const a = new Audio(e.src); a.volume = Math.max(0, Math.min(1, (e.volume ?? 80) / 100)); playing++; a.onended = a.onerror = () => playing--; a.play().catch(() => playing--); }
+        else play(e.src.slice(2), e.volume);
+      },
+    };
+  });
+
+  // ---- răspunsurile comenzilor din chat (!puncte, !trimite…) și ploaia de puncte
+  widgets.cmdinfo = (() => {
+    root.innerHTML = '<div id="ci" style="margin:8px;display:grid;gap:8px"></div>';
+    const box = document.getElementById('ci');
+    let dropEl = null, dropEnd = 0;
+    function add(text) {
+      const el = document.createElement('div'); el.className = 'card'; el.style.cssText = 'padding:12px 16px;font-size:20px;font-weight:700;animation:alIn .5s both';
+      el.textContent = text; box.appendChild(el);
+      while (box.children.length > 4) box.firstChild.remove();
+      setTimeout(() => { el.style.animation = 'alOut .4s both'; setTimeout(() => el.remove(), 400); }, 7000);
+    }
+    function drawDrop() {
+      const d = ST?.drop;
+      if (!d) { dropEl?.remove(); dropEl = null; return; }
+      dropEnd = Date.now() + d.left;
+      if (!dropEl) { dropEl = document.createElement('div'); dropEl.className = 'card'; dropEl.style.cssText = 'padding:12px 16px;font-size:18px;font-weight:700;border-color:var(--accent)'; box.prepend(dropEl); }
+      dropEl.dataset.txt = `🎁 Scrie ${S?.commands?.drop?.cmd || '!ia'} și primești ${fmt(d.amount)} ${S?.points?.currency || 'puncte'} (${d.claimed}/${d.max})`;
+    }
+    setInterval(() => { if (dropEl) { const l = Math.max(0, Math.ceil((dropEnd - Date.now()) / 1000)); dropEl.textContent = `${dropEl.dataset.txt} · ${l}s`; if (!l) { dropEl.remove(); dropEl = null; } } }, 250);
+    return { draw: drawDrop, ev(e) { if (e.t === 'cmdinfo') add(e.text); } };
+  });
+
+  // ---- likeathon: cine dă cele mai multe like-uri
+  widgets.topliker = (() => {
+    root.innerHTML = '<div class="list card"><p class="ttl"></p><div class="rows"></div></div>';
+    const draw = () => {
+      root.querySelector('.ttl').textContent = S?.likeathon?.title || '';
+      const n = S?.likeathon?.count || 8, list = (ST?.likers || []).slice(0, n);
+      root.querySelector('.rows').innerHTML = list.length ? list.map((x, i) => `<div class="row"><span class="pos">${['👑', '🥈', '🥉'][i] || i + 1}</span>${avatar(x)}<span class="nm">${esc(x.name)}</span><span class="v num">❤️ ${fmt(x.likes)}</span></div>`).join('') : '<div class="empty">Dă like ca să apari aici!</div>';
+    };
+    return { draw };
+  });
+
   // ----------------------------------------------------------- pornire
   const factory = widgets[W] || widgets.alerts;
   const w = factory();
@@ -819,7 +867,8 @@ body.t-arcade #bt .tm .sc{font-size:20px}
         if (W === 'actions') onEvent({ t: 'action', screen: Number(P.get('screen')) || 1, name: 'Exemplu', text: `Mersi, ${u.name}, pentru ${g[0]}! 🎉`, user: u, sound: 'magic', volume: 40, duration: 3, effect: 'confetti', position: 'center' });
       } else if (k === 1) { ST.follows = (ST.follows || 0) + 1; ST.last = { ...(ST.last || {}), follower: { name: u.name, avatar: '', at: Date.now() } }; onEvent({ t: 'follow', user: u, alert: { kind: 'follow', text: `${u.name} te urmărește acum!`, user: u.name, sound: 'pop', duration: 4, volume: 40 } }); }
       else if (k === 2) onEvent({ t: 'chat', user: u, text: ['Salut! 👋🔥', 'Bravo, live super 😂😂', '!tts ce faci azi? 🎉', 'De unde ești? ❤️'][i % 4] });
-      else if (k === 4) { ST.likes = (ST.likes || 0) + 337; onEvent({ t: 'like', user: u, count: 120 }); }
+      else if (k === 4) { ST.likes = (ST.likes || 0) + 337; const L = new Map((ST.likers || []).map(x => [x.id, x])); const x = L.get(u.id) || { ...u, likes: 0 }; x.likes += 120 + i * 7; L.set(u.id, x); ST.likers = [...L.values()].sort((a, b) => b.likes - a.likes); onEvent({ t: 'like', user: u, count: 120 }); }
+      if (W === 'cmdinfo' && k === 2) onEvent({ t: 'cmdinfo', text: `${u.name}: ${fmt(100 + i * 37)} puncte · nivelul ${1 + (i % 5)}` });
       else if (k === 5 && W === 'wheel') { const n = S.wheel.segments.length; onEvent({ t: 'wheel', idx: i % n, by: u.name, spinMs: 4000, holdMs: 2500, n }); }
       POINTS = (ST.top || []).map(x => ({ name: x.name, points: x.diamonds * 10 }));
       w.draw?.();
@@ -834,7 +883,7 @@ body.t-arcade #bt .tm .sc{font-size:20px}
       timer: { title: 'Subathon' }, points: { title: 'Puncte', count: 5 }, fireworks: { on: true, maxIcons: 30 }, rotator: { lines: ['Dă follow!', 'Trimite un cadou și învârte roata!'], every: 4 },
       battle: { title: 'Bătălia echipelor', minutes: 5, teams: [{ name: 'Roșii', color: '#ff4d6a', command: '!rosu', gifts: 'Rose' }, { name: 'Albaștrii', color: '#4aa3ff', command: '!albastru', gifts: 'TikTok' }] },
       jar: { title: 'Borcanul cu cadouri', shape: P.get('shape') || 'borcan', max: 120, min: 1 }, fountain: { emoji: '❤️', perLikes: 5, avatars: true, max: 160 }, cannon: { side: 'both', min: 1, names: true },
-      last: { follower: true, gifter: true, sharer: true, layout: 'column' }, emoji: { size: 64, max: 4 } };
+      last: { follower: true, gifter: true, sharer: true, layout: 'column' }, emoji: { size: 64, max: 4 }, likeathon: { title: 'Cine dă cele mai multe like-uri', count: 8 } };
   }
 })();
 </script>

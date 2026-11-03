@@ -145,6 +145,83 @@
   .trig .add.t-gift [data-tp=gift],.trig .add.t-like [data-tp=like],.trig .add.t-command [data-tp=command]{display:block}
   .warnmini{color:#ffc24b}
   .tag{display:inline-block;padding:2px 8px;border-radius:99px;background:rgba(255,255,255,.06);font-size:11px;font-weight:800;color:#cfd3d7;margin-right:4px}
+  /* (03.11.2026) Studio ca aplicație: meniu în stânga, bară de live sus, activitatea în dreapta */
+  body.app-mode .site-header,body.app-mode .page-hero,body.app-mode>footer{display:none}
+  body.app-mode{background-image:none}
+  body.app-mode::before{display:none}
+  body.app-mode main{padding:0;margin:0}
+  body.app-mode .st{max-width:none;padding:0}
+  .sa{display:grid;grid-template-columns:92px minmax(0,1fr);min-height:100vh;background:#0a0c0f}
+  .sa[hidden]{display:none!important}
+  .sa-rail{position:sticky;top:0;height:100vh;overflow-y:auto;scrollbar-width:none;background:linear-gradient(180deg,#101318,#0b0d10);border-right:1px solid var(--line);display:flex;flex-direction:column;gap:2px;padding:12px 8px}
+  .sa-logo{display:flex;flex-direction:column;align-items:center;gap:5px;padding:2px 0 14px;margin-bottom:6px;border-bottom:1px solid var(--line)}
+  .sa-logo img{width:40px;height:40px;object-fit:contain}
+  .sa-logo span{font-size:10px;font-weight:900;letter-spacing:.24em;color:var(--orange)}
+  .sa-rail button,.sa-back{display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 2px;border:0;border-radius:12px;background:transparent;color:#8f969e;font:700 10.5px Inter,system-ui,sans-serif;cursor:pointer;transition:color .15s}
+  .sa-rail i,.sa-back i{font-style:normal;font-size:19px;width:44px;height:34px;display:grid;place-items:center;border-radius:11px;transition:background .15s,box-shadow .15s}
+  .sa-rail button:hover{color:#e7e9eb}
+  .sa-rail button:hover i{background:rgba(255,255,255,.06)}
+  .sa-rail button[aria-selected=true]{color:#fff}
+  .sa-rail button[aria-selected=true] i{background:linear-gradient(180deg,#ff9a3c,var(--orange));box-shadow:0 6px 18px rgba(255,138,31,.35)}
+  .sa-rail button:focus-visible{outline:2px solid var(--orange);outline-offset:1px}
+  .sa-back{margin-top:auto;padding-top:12px;border-top:1px solid var(--line);border-radius:0;text-decoration:none}
+  .sa-main{min-width:0;display:flex;flex-direction:column}
+  .sa-top{position:sticky;top:0;z-index:15;display:flex;align-items:center;gap:12px 16px;flex-wrap:wrap;padding:10px 20px;background:rgba(10,12,15,.9);backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
+  .sa-live{display:flex;align-items:center;gap:14px;margin-right:auto;flex-wrap:wrap}
+  .sa-top .kpis{display:flex;gap:14px;font-size:13px;color:#aeb4bb;font-variant-numeric:tabular-nums}
+  .sa-top .kpis b{color:#fff}
+  .sa-top .st-conn{width:min(380px,100%)}
+  .sa-top .savebar{position:static;margin:0;padding:0;background:none;border:0;backdrop-filter:none;gap:8px}
+  .sa-top .savebar span{font-size:12px;max-width:180px;line-height:1.3}
+  .sa-body{display:grid;grid-template-columns:minmax(0,1fr) 340px;flex:1;min-height:0}
+  .sa-content{padding:26px 30px 70px;min-width:0}
+  .sa-feed{position:sticky;top:59px;height:calc(100vh - 59px);overflow-y:auto;border-left:1px solid var(--line);background:#0d0f13;padding:14px;display:flex;flex-direction:column;gap:10px}
+  .sa-feed .feed{height:auto;flex:1;min-height:220px;overflow-y:auto}
+  .sa-feed .tests .b{flex:1 1 auto}
+  .fh{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:4px}
+  .fh b{font-size:13px}
+  .ph{margin-bottom:20px}
+  .ph h1{font-size:28px;margin:0 0 6px;letter-spacing:-.02em;line-height:1.15}
+  .ph p{color:var(--muted);margin:0;max-width:780px;font-size:14px;line-height:1.6}
+  .steps2{display:flex;gap:8px;flex-wrap:wrap}
+  .steps2 span{display:inline-flex;align-items:center;gap:8px;padding:7px 12px;border-radius:99px;background:var(--panel2);border:1px solid var(--line);font-size:12.5px;font-weight:700;color:#cfd3d7}
+  .steps2 b{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--orange);color:#0b0b0b;font-size:11px}
+  .cmds{display:grid;grid-template-columns:190px 170px minmax(0,1fr);gap:8px 12px;align-items:center}
+  .cats{display:flex;gap:6px;flex-wrap:wrap;margin:14px 0}
+  .cats button{min-height:34px;padding:0 13px;border-radius:99px;border:1px solid var(--line);background:transparent;color:#cfd3d7;font:800 12.5px Inter,system-ui,sans-serif;cursor:pointer}
+  .cats button[aria-pressed=true]{background:rgba(255,138,31,.14);border-color:var(--orange);color:var(--orange)}
+  .ovgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:12px}
+  .ovc{border:1px solid var(--line);border-radius:14px;background:var(--panel);display:flex;flex-direction:column;overflow:hidden}
+  .ovc .vis{height:150px;position:relative;background:#141920;background-image:linear-gradient(45deg,#1a2028 25%,transparent 25%),linear-gradient(-45deg,#1a2028 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#1a2028 75%),linear-gradient(-45deg,transparent 75%,#1a2028 75%);background-size:20px 20px;background-position:0 0,0 10px,10px -10px,-10px 0;display:grid;place-items:center;font-size:44px;overflow:hidden}
+  .ovc .vis iframe{position:absolute;left:0;top:0;border:0;transform-origin:0 0;pointer-events:none}
+  .ovc .bd{padding:12px 14px;display:grid;gap:8px}
+  .ovc .bd b{font-size:14.5px}
+  .ovc .bd .sz{color:var(--muted);font-size:11.5px;font-weight:700}
+  .ovc .bd p{margin:0;color:var(--muted);font-size:12.5px;line-height:1.5}
+  .ovc .bd input{font:11.5px ui-monospace,Consolas,monospace!important;min-height:32px!important;color:#cfd3d7!important}
+  .ovc .acts{display:flex;gap:6px;flex-wrap:wrap}
+  .ovc .cust{display:none;grid-template-columns:1fr 60px 1fr;gap:6px;align-items:center}
+  .ovc.cz .cust{display:grid}
+  .ovc .cust select,.ovc .cust input[type=color]{min-height:32px!important;height:32px}
+  details.howto{border:1px solid var(--line);border-radius:12px;padding:10px 14px;background:var(--panel2)}
+  details.howto summary{cursor:pointer;font-weight:800;font-size:13.5px}
+  .sbox{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:14px}
+  .scard{border:1px solid var(--line);border-radius:14px;padding:16px;background:linear-gradient(160deg,rgba(255,138,31,.07),transparent 60%),var(--panel);display:grid;gap:6px;cursor:pointer;text-align:left;color:inherit;font:inherit}
+  .scard:hover{border-color:rgba(255,138,31,.5)}
+  .scard small{color:var(--muted);font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase}
+  .scard strong{font-size:22px;line-height:1.2}
+  .scard span{color:#cfd3d7;font-size:13px}
+  .chk{display:grid;gap:8px}
+  .chk div{display:flex;gap:10px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--panel2);font-size:14px}
+  .chk div i{font-style:normal;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;flex:none;background:rgba(255,255,255,.06);font-size:13px;font-weight:900}
+  .chk div.ok i{background:var(--green);color:#0b0b0b}
+  .chk div button{margin-left:auto}
+  .sndrow{display:grid;grid-template-columns:auto 190px minmax(0,1fr) minmax(0,1.2fr) 90px 80px auto;gap:8px;align-items:center;border:1px solid var(--line);border-radius:12px;padding:10px;background:#0f1114}
+  .sndrow.off{opacity:.55}
+  .ivrow{display:grid;grid-template-columns:auto 150px minmax(0,1fr) auto auto;gap:8px;align-items:center;border:1px solid var(--line);border-radius:12px;padding:10px;background:#0f1114}
+  @media (max-width:1250px){.sa-body{grid-template-columns:1fr}.sa-feed{position:static;height:auto;border-left:0;border-top:1px solid var(--line)}.sa-feed .feed{max-height:420px}}
+  @media (max-width:900px){.sndrow{grid-template-columns:1fr 1fr}.cmds{grid-template-columns:1fr 1fr}.cmds .hint{grid-column:1/-1}.ivrow{grid-template-columns:1fr 1fr}}
+  @media (max-width:760px){.sa{grid-template-columns:1fr}.sa-rail{position:static;height:auto;flex-direction:row;overflow-x:auto;padding:8px;border-right:0;border-bottom:1px solid var(--line)}.sa-logo,.sa-back{display:none}.sa-rail button{min-width:72px}.sa-content{padding:18px 16px 60px}.sa-top{padding:10px 16px}.sa-top .savebar span{display:none}}
   @media (max-width:980px){.st-app{grid-template-columns:1fr}.st-side{position:static}}
   @media (max-width:640px){.st{padding:0 16px 70px}.st-box{padding:16px}.grid2,.grid3{grid-template-columns:1fr}.goal-row{grid-template-columns:1fr 1fr}.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.prev iframe{height:300px}}
   </style>
@@ -179,62 +256,76 @@
       <section class="st-box st-gate" id="gate" aria-live="polite"><p class="st-muted">Se încarcă…</p></section>
 
       <!-- Studio-ul propriu-zis -->
-      <div class="st-app" id="app" hidden>
-        <aside class="st-side">
-          <section class="st-box st-live" aria-labelledby="live-title">
-            <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
-              <h2 id="live-title" style="margin:0">Live</h2>
-              <span class="pill" id="live-pill"><i></i><span>Deconectat</span></span>
-            </div>
-            <div class="st-conn">
-              <input type="text" id="tiktok" aria-label="Numele tău de TikTok" placeholder="@numele_tau" autocomplete="off" spellcheck="false">
-              <button type="button" class="b pri" id="btn-conn">Conectează</button>
-            </div>
-            <p class="st-msg" id="live-msg"></p>
-            <div class="kpis">
-              <div class="kpi"><b id="k-viewers">0</b><small>👁 acum</small></div>
-              <div class="kpi"><b id="k-likes">0</b><small>❤️ like-uri</small></div>
-              <div class="kpi"><b id="k-diamonds">0</b><small>💎 diamante</small></div>
-              <div class="kpi"><b id="k-follows">0</b><small>👤 follow</small></div>
-            </div>
-            <div>
-              <p class="hint" style="margin-bottom:6px">Testează alertele și overlay-urile fără să fii live:</p>
-              <div class="tests">
-                <button type="button" class="b sm" data-test="gift">🎁 Cadou mic</button>
-                <button type="button" class="b sm" data-test="gift" data-gift="5">🦁 Cadou mare</button>
-                <button type="button" class="b sm" data-test="follow">💖 Follow</button>
-                <button type="button" class="b sm" data-test="share">📣 Share</button>
-                <button type="button" class="b sm" data-test="chat">💬 Mesaj</button>
-                <button type="button" class="b sm" data-test="like">❤️ 50 like-uri</button>
-                <button type="button" class="b sm" data-act="wheel">🎡 Învârte roata</button>
-              </div>
-            </div>
-            <div class="ttsbar">
-              <label class="tog"><input type="checkbox" id="tts-here"> 🔊 Citește cu voce pe acest calculator</label>
-              <button type="button" class="b sm" id="btn-install" hidden>💻 Instalează Studio-ul ca aplicație</button>
-            </div>
-            <p class="hint" id="tts-hint">Vocea se aude din pagina asta: ține Studio-ul deschis în timpul live-ului (TikTok LIVE Studio prinde sunetul calculatorului). Pentru o voce românească naturală, deschide Studio-ul în Microsoft Edge.</p>
-            <div class="feed" id="feed" aria-live="off"></div>
-            <div style="display:flex;gap:8px;flex-wrap:wrap">
-              <button type="button" class="b sm" data-act="session-new">↺ Sesiune nouă</button>
-              <button type="button" class="b sm" id="btn-clear-feed">Golește lista</button>
-            </div>
-          </section>
-        </aside>
-
-        <section class="st-box" aria-label="Setări">
-          <div class="tabs" role="tablist" aria-label="Setări Studio">
-            <button type="button" role="tab" aria-selected="true" data-tab="actiuni">⚡ Acțiuni</button>
-            <button type="button" role="tab" aria-selected="false" data-tab="alerte">🔔 Alerte rapide</button>
-            <button type="button" role="tab" aria-selected="false" data-tab="voce">🗣 Voce</button>
-            <button type="button" role="tab" aria-selected="false" data-tab="obiective">🎯 Obiective</button>
-            <button type="button" role="tab" aria-selected="false" data-tab="jocuri">🎡 Jocuri</button>
-            <button type="button" role="tab" aria-selected="false" data-tab="aspect">🎨 Aspect</button>
-            <button type="button" role="tab" aria-selected="false" data-tab="overlay">🧩 Overlay-uri</button>
+      <div class="sa" id="app" hidden>
+        <nav class="sa-rail" aria-label="Meniul Studio-ului">
+          <a class="sa-logo" href="index.html" title="Moldova RP"><img src="assets/logo-128.webp" alt="Moldova RP"><span>STUDIO</span></a>
+          <button type="button" data-tab="start" aria-selected="true"><i>🏠</i><span>Start</span></button>
+          <button type="button" data-tab="conectare" aria-selected="false"><i>🔌</i><span>Conectare</span></button>
+          <button type="button" data-tab="overlay" aria-selected="false"><i>🖥</i><span>Overlay-uri</span></button>
+          <button type="button" data-tab="actiuni" aria-selected="false"><i>⚡</i><span>Acțiuni</span></button>
+          <button type="button" data-tab="alerte" aria-selected="false"><i>🔔</i><span>Alerte</span></button>
+          <button type="button" data-tab="sunete" aria-selected="false"><i>🔊</i><span>Sunete</span></button>
+          <button type="button" data-tab="chat" aria-selected="false"><i>💬</i><span>Chat</span></button>
+          <button type="button" data-tab="puncte" aria-selected="false"><i>⭐</i><span>Puncte</span></button>
+          <button type="button" data-tab="obiective" aria-selected="false"><i>🎯</i><span>Obiective</span></button>
+          <button type="button" data-tab="jocuri" aria-selected="false"><i>🎮</i><span>Unelte</span></button>
+          <button type="button" data-tab="aspect" aria-selected="false"><i>🎨</i><span>Aspect</span></button>
+          <a class="sa-back" href="dashboard.html" title="Înapoi la contul meu"><i>←</i><span>Contul meu</span></a>
+        </nav>
+        <div class="sa-main">
+          <header class="sa-top">
+            <div class="sa-live"><span class="pill" id="live-pill"><i></i><span>Deconectat</span></span>
+              <div class="kpis"><span title="Spectatori acum">👁 <b id="k-viewers">0</b></span><span title="Like-uri">❤️ <b id="k-likes">0</b></span><span title="Diamante">💎 <b id="k-diamonds">0</b></span><span title="Follow">👤 <b id="k-follows">0</b></span></div></div>
+            <div class="st-conn"><input type="text" id="tiktok" aria-label="Numele tău de TikTok" placeholder="@numele_tau" autocomplete="off" spellcheck="false"><button type="button" class="b pri" id="btn-conn">Conectează</button></div>
+            <div class="savebar" id="savebar"><span id="save-state">Totul e salvat.</span><button type="button" class="b sm" id="btn-reset" disabled>Anulează</button><button type="button" class="b sm pri" id="btn-save" disabled>Salvează</button></div>
+          </header>
+          <div class="sa-body">
+            <section class="sa-content" aria-label="Setări">
+          <div class="pane" data-pane="start" role="tabpanel">
+            <header class="ph"><h1>Bun venit în Studio</h1><p>Tot ce-ți trebuie pentru live-urile pe TikTok: alerte cu clipurile tale, voce, jocuri și overlay-uri. Gratuit pentru streamerii Moldova RP.</p></header>
+            <div id="start-box"></div>
           </div>
 
-          <!-- ACȚIUNI ȘI EVENIMENTE -->
-          <div class="pane" data-pane="actiuni" role="tabpanel">
+          <div class="pane" data-pane="conectare" role="tabpanel" hidden>
+            <header class="ph"><h1>Conectare și setări</h1><p>Legătura cu live-ul tău de TikTok, aplicația și setările generale.</p></header>
+            <div class="card2">
+              <div class="hd"><b>🔌 Contul de TikTok</b></div>
+              <p class="hint">Scrie numele tău de TikTok sus, în bară, și apasă <b>Conectează</b>. Nu-ți cerem parola: citim doar ce e public pe live (cadouri, chat, like-uri, follow). Dacă nu ești live încă, ne conectăm singuri când pornești.</p>
+              <div class="steps2"><span><b>1</b> Pornește live-ul în TikTok LIVE Studio</span><span><b>2</b> Apasă Conectează</span><span><b>3</b> Pune overlay-urile din pagina Overlay-uri</span></div>
+            </div>
+            <div class="grid2" style="margin-top:12px">
+              <div class="card2"><div class="hd"><b>💻 Aplicația Studio</b></div>
+                <p class="hint">Instalează Studio-ul ca aplicație: se deschide în fereastra lui, fără bara browserului. Ține-l deschis pe durata live-ului, ca să se audă vocea și sunetele.</p>
+                <div><button type="button" class="b sm" id="btn-install2">💻 Instalează aplicația</button> <span class="hint" id="install-hint"></span></div></div>
+              <div class="card2"><div class="hd"><b>↺ Sesiunea de live</b></div>
+                <p class="hint">Pornește de la zero contoarele, topul, obiectivele, „ultimii” și likeathonul (punctele spectatorilor rămân).</p>
+                <div><button type="button" class="b sm" data-act="session-new">↺ Sesiune nouă</button></div></div>
+              <div class="card2"><div class="hd"><b>📦 Salvează sau mută setările</b></div>
+                <p class="hint">Descarcă toate setările într-un fișier sau încarcă-le din altul (de exemplu, de pe alt cont). Fișierele încărcate (clipuri, muzică) nu sunt în el.</p>
+                <div style="display:flex;gap:6px;flex-wrap:wrap"><button type="button" class="b sm" id="btn-export">⬇ Descarcă setările</button><label class="b sm" style="cursor:pointer">⬆ Încarcă setări<input type="file" id="imp-file" accept=".json,application/json" hidden></label></div></div>
+              <div class="card2"><div class="hd"><b>🔒 Siguranță</b></div>
+                <p class="hint">Linkurile overlay-urilor și fișierele tale sunt doar ale tale. Adminii site-ului văd doar dacă ești live, nu și setările sau fișierele. Dacă ți-a scăpat un link, schimbă-le din pagina Overlay-uri.</p></div>
+            </div>
+          </div>
+
+          <div class="pane" data-pane="overlay" role="tabpanel" hidden>
+            <header class="ph"><h1>Overlay-uri</h1><p>Widgeturile pe care le pui peste live. Copiază linkul, previzualizează-l sau schimbă-i stilul.</p></header>
+            <div class="warn" style="margin-bottom:12px">🔒 Linkurile sunt doar ale tale. Nu le arăta pe ecran. Dacă ți-a scăpat unul, apasă „Schimbă linkurile” (jos).</div>
+            <details class="howto"><summary>Cum pun un overlay în TikTok LIVE Studio sau OBS?</summary>
+            <ol class="steps">
+              <li>Apasă <b>Copiază</b> la overlay-ul dorit.</li>
+              <li>În TikTok LIVE Studio: <b>Adaugă sursă</b> → <b>Link</b>. În OBS: <b>Sursă nouă</b> → <b>Browser</b>.</li>
+              <li>Lipește linkul și pune mărimea scrisă la overlay. Fundalul e transparent.</li>
+              <li>În OBS, bifează <b>Control audio via OBS</b> ca să se audă sunetele.</li>
+            </ol></details>
+            <div class="cats" id="ov-cats"></div>
+            <div class="ovgrid" id="ovs"></div>
+            <div class="prev" id="ov-prev" hidden><div class="bar"><span id="ov-prev-name"></span><span class="hint" id="ov-prev-hint" style="margin-left:10px"></span><label class="tog" style="margin-left:auto;font-size:12px"><input type="checkbox" id="ov-demo" checked> Date de probă</label><button type="button" class="b sm" id="ov-prev-close">Închide</button></div><iframe id="ov-frame" title="Previzualizare overlay" allow="autoplay"></iframe></div>
+            <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button type="button" class="b sm red" id="btn-newkey">🔑 Schimbă linkurile</button><span class="hint">Linkurile vechi se opresc imediat.</span></div>
+          </div>
+
+          <div class="pane" data-pane="actiuni" role="tabpanel" hidden>
+            <header class="ph"><h1>Acțiuni și evenimente</h1><p>Ce se întâmplă pe live (clip, imagine, muzică, text, voce, efect) și când (un anumit cadou, follow, comandă…).</p></header>
             <p class="st-muted" style="margin-top:0">Alege ce se întâmplă pe live la fiecare cadou, follow, share sau comandă din chat: clipul tău, o imagine sau un GIF, o melodie, un text și o voce. Fiecare cadou poate avea alerta lui.</p>
             <div class="flow" aria-label="Pașii"><span><b>1</b> Încarcă fișierele</span><span><b>2</b> Fă acțiunile</span><span><b>3</b> Leagă-le de cadouri și evenimente</span><span><b>4</b> Pune overlay-ul „⚡ Ecran acțiuni”</span></div>
 
@@ -262,10 +353,16 @@
               <datalist id="gift-list"></datalist>
               <p class="hint">Dacă un cadou se potrivește la mai multe evenimente, pornesc toate. Lasă numele cadoului gol ca evenimentul să meargă la orice cadou (de la câte 💎 alegi). Salvează setările, apoi apasă „Testează”.</p>
             </div>
+          
+            <div class="card2" style="margin-top:12px">
+              <div class="hd"><b>⏲ Temporizatoare</b><button type="button" class="b sm" id="btn-iv-add">+ Temporizator</button></div>
+              <p class="hint">Pornește o acțiune la fiecare câteva minute, de exemplu „Dă follow!” la fiecare 10 minute.</p>
+              <div id="ivs" style="display:grid;gap:8px"></div>
+            </div>
           </div>
 
-          <!-- ALERTE -->
           <div class="pane" data-pane="alerte" role="tabpanel" hidden>
+            <header class="ph"><h1>Alerte rapide</h1><p>Alerte gata făcute pentru cadouri, follow, share și like-uri, cu text și sunet. Pentru clipurile tale, folosește Acțiuni.</p></header>
             <p class="st-muted" style="margin-top:0">Ce apare pe ecran când primești ceva pe live. În texte poți folosi <code>{user}</code>, <code>{gift}</code>, <code>{count}</code>, <code>{diamonds}</code> și, la like-uri, <code>{total}</code>.</p>
             <div class="grid2">
               <div class="card2" data-alert="gift"><div class="hd"><b>🎁 Cadouri</b><label class="tog"><input type="checkbox" data-s="alerts.gift.on"> Pornit</label></div>
@@ -293,10 +390,36 @@
                 <label class="f"><span>Volumul sunetelor: <span data-show="alerts.volume"></span>%</span><input type="range" min="0" max="100" data-s="alerts.volume"></label>
                 <button type="button" class="b sm" id="btn-sound-test">▶ Ascultă sunetele</button></div>
             </div>
+          
           </div>
 
-          <!-- VOCE -->
-          <div class="pane" data-pane="voce" role="tabpanel" hidden>
+          <div class="pane" data-pane="sunete" role="tabpanel" hidden>
+            <header class="ph"><h1>Sunete</h1><p>Sunete la cadouri, follow sau comenzi, fără nimic pe ecran.</p></header>
+            <div class="card2">
+              <div class="hd"><b>🔊 Sunete rapide</b><button type="button" class="b sm pri" id="btn-snd-add">+ Sunet nou</button></div>
+              <p class="hint">Cel mai simplu mod de a pune un sunet la un cadou, follow sau comandă. Se aud din Studio (ține-l deschis) sau din overlay-ul „🔊 Sunete”. Dacă pui mai multe sunete la același lucru, se alege unul la întâmplare. Cu tasta aleasă, îl pornești tu de pe tastatură.</p>
+              <div id="snds" style="display:grid;gap:8px"></div>
+            </div>
+            <div class="card2" style="margin-top:12px"><div class="hd"><b>⚙️ Setări</b></div>
+              <label class="tog"><input type="checkbox" id="snd-here" checked> Redă sunetele pe acest calculator</label>
+              <label class="tog"><input type="checkbox" data-s="sounds.simultaneous"> Mai multe sunete deodată (altfel, unul după altul)</label>
+              <label class="f" style="max-width:260px">Cel mult la rând<input type="number" min="1" max="200" data-s="sounds.maxQueue"></label></div>
+          </div>
+
+          <div class="pane" data-pane="chat" role="tabpanel" hidden>
+            <header class="ph"><h1>Chat și voce</h1><p>Comenzile spectatorilor, vocea care citește chatul și chatul pe ecran.</p></header>
+            <div class="card2">
+              <div class="hd"><b>⌨️ Comenzi gata făcute</b></div>
+              <p class="hint">Spectatorii le scriu în chat. Răspunsul apare în overlay-ul „💬 Răspunsuri la comenzi” (TikTok nu ne lasă să scriem în chat în locul tău). Comenzile tale proprii le faci din Acțiuni, cu „💬 Comandă în chat”.</p>
+              <div class="cmds">
+                <label class="tog"><input type="checkbox" data-s="commands.points.on"> Câte puncte am</label><input type="text" data-s="commands.points.cmd" maxlength="24"><span class="hint">ex: „Andrei: 1.250 puncte · nivelul 4”</span>
+                <label class="tog"><input type="checkbox" data-s="commands.send.on"> Trimite puncte</label><input type="text" data-s="commands.send.cmd" maxlength="24"><span class="hint">ex: !trimite @nume 100 · minim <input type="number" min="1" data-s="commands.send.min" style="width:90px;min-height:30px;padding:4px 8px"></span>
+                <label class="tog"><input type="checkbox" data-s="commands.spin.on"> Învârte roata</label><input type="text" data-s="commands.spin.cmd" maxlength="24"><span class="hint">costă <input type="number" min="0" data-s="commands.spin.cost" style="width:90px;min-height:30px;padding:4px 8px"> puncte</span>
+                <label class="tog"><input type="checkbox" data-s="commands.drop.on"> Prinde puncte</label><input type="text" data-s="commands.drop.cmd" maxlength="24"><span class="hint">merge în timpul unei „ploi de puncte” (pagina Puncte)</span>
+                <label class="tog"><input type="checkbox" data-s="commands.list.on"> Lista comenzilor</label><input type="text" data-s="commands.list.cmd" maxlength="24"><span class="hint">arată toate comenzile pornite</span>
+              </div>
+            </div>
+            <div style="margin-top:12px">
             <div class="card2">
               <div class="hd"><b>🗣 Mesajele din chat citite cu voce</b><label class="tog"><input type="checkbox" data-s="tts.on"> Pornit</label></div>
               <div class="grid2">
@@ -320,10 +443,43 @@
               <p class="hint">Linkurile sunt scoase din mesaje înainte de citire. Comenzile acceptate: <code>!tts mesaj</code>, <code>!spune mesaj</code>.</p>
               <div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="b sm" id="btn-voice-test">▶ Ascultă vocea</button><button type="button" class="b sm" id="btn-voice-stop">■ Oprește vocea</button></div>
             </div>
+          
+            </div>
+            <div class="grid2" style="margin-top:12px">
+              <div class="card2"><div class="hd"><b>💬 Chat pe ecran</b></div>
+                <div class="grid2"><label class="f">Mesaje vizibile<input type="number" min="3" max="20" data-s="chat.max"></label><label class="f">Dispar după (s, 0 = niciodată)<input type="number" min="0" max="300" data-s="chat.fade"></label></div>
+                <label class="tog"><input type="checkbox" data-s="chat.showGifts"> Arată și cadourile în chat</label>
+                <label class="tog"><input type="checkbox" data-s="chat.hideCommands"> Ascunde comenzile (!…)</label></div>
+            </div>
           </div>
 
-          <!-- OBIECTIVE -->
+          <div class="pane" data-pane="puncte" role="tabpanel" hidden>
+            <header class="ph"><h1>Puncte și niveluri</h1><p>Spectatorii strâng puncte cu mesaje, like-uri, cadouri și follow, apoi le folosesc la comenzi.</p></header>
+            <div class="grid2">
+              <div class="card2"><div class="hd"><b>⭐ Puncte pentru spectatori</b><label class="tog"><input type="checkbox" data-s="points.on"> Pornit</label></div>
+                <label class="f">Titlu<input type="text" data-s="points.title" maxlength="60"></label>
+                <div class="grid3"><label class="f">Per mesaj<input type="number" min="0" data-s="points.perChat"></label><label class="f">La 100 like<input type="number" min="0" data-s="points.perLikes100"></label><label class="f">Per 💎<input type="number" min="0" data-s="points.perDiamond"></label></div>
+                <div class="grid3"><label class="f">Per follow<input type="number" min="0" data-s="points.perFollow"></label><label class="f">Per share<input type="number" min="0" data-s="points.perShare"></label><label class="f">Câți apar<input type="number" min="3" max="10" data-s="points.count"></label></div>
+                <p class="hint">Punctele rămân de la un live la altul. Mesajele dau puncte cel mult o dată la 10 secunde de spectator.</p>
+                <div id="points-top" class="st-muted"></div>
+                <div><button type="button" class="b sm red" data-act="points-reset">Șterge toate punctele</button></div></div>
+              <div class="card2"><div class="hd"><b>🏅 Niveluri</b></div>
+                <p class="hint">Spectatorii urcă în nivel cu punctele strânse. Fiecare nivel cere mai multe puncte decât precedentul.</p>
+                <div class="grid3"><label class="f">Numele punctelor<input type="text" data-s="points.currency" maxlength="20"></label>
+                  <label class="f">Nivelul 2 la<input type="number" min="1" data-s="points.levelBase"></label>
+                  <label class="f">Crește de (×)<input type="number" min="1" max="3" step="0.05" data-s="points.levelMult"></label></div>
+                <div id="levels" class="hint"></div></div>
+              <div class="card2"><div class="hd"><b>🎁 Ploaie de puncte</b><span id="drop-now" class="pill">oprită</span></div>
+                <p class="hint">Primii spectatori care scriu comanda (implicit <code>!ia</code>) primesc puncte. Bun pentru momentele când vrei activitate în chat.</p>
+                <div class="grid3"><label class="f">Câte puncte<input type="number" min="1" id="drop-amount" value="100"></label>
+                  <label class="f">Câți spectatori<input type="number" min="1" max="1000" id="drop-max" value="10"></label>
+                  <label class="f">Cât ține (s)<input type="number" min="10" max="600" id="drop-sec" value="60"></label></div>
+                <div style="display:flex;gap:6px"><button type="button" class="b sm pri" id="btn-drop">▶ Pornește ploaia</button><button type="button" class="b sm" data-act="drop-stop">⏹ Oprește</button></div></div>
+            </div>
+          </div>
+
           <div class="pane" data-pane="obiective" role="tabpanel" hidden>
+            <header class="ph"><h1>Obiective și topuri</h1><p>Bare de obiective, topul susținătorilor, contorul de cadouri și textele care se rotesc.</p></header>
             <div class="card2">
               <div class="hd"><b>🎯 Obiective (cel mult 4)</b><button type="button" class="b sm" id="btn-goal-add">+ Adaugă</button></div>
               <div id="goals" style="display:grid;gap:8px"></div>
@@ -336,18 +492,15 @@
               <div class="card2"><div class="hd"><b>🎁 Contor de cadouri</b></div>
                 <label class="f">Titlu<input type="text" data-s="counter.title" maxlength="60"></label>
                 <p class="hint">Arată diamantele, cadourile și like-urile din sesiunea de acum.</p></div>
-              <div class="card2"><div class="hd"><b>💬 Chat pe ecran</b></div>
-                <div class="grid2"><label class="f">Mesaje vizibile<input type="number" min="3" max="20" data-s="chat.max"></label><label class="f">Dispar după (s, 0 = niciodată)<input type="number" min="0" max="300" data-s="chat.fade"></label></div>
-                <label class="tog"><input type="checkbox" data-s="chat.showGifts"> Arată și cadourile în chat</label>
-                <label class="tog"><input type="checkbox" data-s="chat.hideCommands"> Ascunde comenzile (!…)</label></div>
               <div class="card2"><div class="hd"><b>🔁 Texte care se rotesc</b></div>
                 <label class="f">Câte un text pe rând<textarea id="rot-lines" rows="4"></textarea></label>
                 <label class="f">Schimbă la fiecare (s)<input type="number" min="3" max="120" data-s="rotator.every"></label></div>
             </div>
+          
           </div>
 
-          <!-- JOCURI -->
           <div class="pane" data-pane="jocuri" role="tabpanel" hidden>
+            <header class="ph"><h1>Unelte și jocuri</h1><p>Roata, subathonul, bătălia echipelor, borcanul, fântâna, tunul, likeathonul și altele.</p></header>
             <div class="grid2">
               <div class="card2"><div class="hd"><b>🎡 Roata norocului</b><button type="button" class="b sm" data-act="wheel">Învârte acum</button></div>
                 <label class="f">Titlu<input type="text" data-s="wheel.title" maxlength="60"></label>
@@ -366,13 +519,6 @@
                   <button type="button" class="b sm" data-act="timer-add" data-min="-5">−5 min</button>
                   <button type="button" class="b sm red" data-act="timer-reset">Oprește</button>
                 </div></div>
-              <div class="card2"><div class="hd"><b>⭐ Puncte pentru spectatori</b><label class="tog"><input type="checkbox" data-s="points.on"> Pornit</label></div>
-                <label class="f">Titlu<input type="text" data-s="points.title" maxlength="60"></label>
-                <div class="grid3"><label class="f">Per mesaj<input type="number" min="0" data-s="points.perChat"></label><label class="f">La 100 like<input type="number" min="0" data-s="points.perLikes100"></label><label class="f">Per 💎<input type="number" min="0" data-s="points.perDiamond"></label></div>
-                <div class="grid3"><label class="f">Per follow<input type="number" min="0" data-s="points.perFollow"></label><label class="f">Per share<input type="number" min="0" data-s="points.perShare"></label><label class="f">Câți apar<input type="number" min="3" max="10" data-s="points.count"></label></div>
-                <p class="hint">Punctele rămân de la un live la altul. Mesajele dau puncte cel mult o dată la 10 secunde de spectator.</p>
-                <div id="points-top" class="st-muted"></div>
-                <div><button type="button" class="b sm red" data-act="points-reset">Șterge toate punctele</button></div></div>
               <div class="card2"><div class="hd"><b>🎆 Artificii din cadouri</b><label class="tog"><input type="checkbox" data-s="fireworks.on"> Pornit</label></div>
                 <label class="f"><span>Câte iconițe cel mult: <span data-show="fireworks.maxIcons"></span></span><input type="range" min="5" max="80" data-s="fireworks.maxIcons"></label>
                 <p class="hint">Cadourile sar de jos pe tot ecranul, cu poza cadoului. Overlay-ul se pune pe tot ecranul live-ului.</p></div>
@@ -417,35 +563,51 @@
                 <div class="grid2"><label class="f">Mărime (px)<input type="number" min="24" max="160" data-s="emoji.size"></label>
                   <label class="f">Cel mult dintr-un mesaj<input type="number" min="1" max="10" data-s="emoji.max"></label></div></div>
             </div>
+          
+            <div class="card2" style="margin-top:12px">
+              <div class="hd"><b>❤️ Likeathon</b><button type="button" class="b sm red" data-act="likeathon-reset">Golește</button></div>
+              <p class="hint">Topul celor care dau cele mai multe like-uri. Ca să fie mai greu, scorul poate scădea singur, ca spectatorii să tot dea like ca să-și păstreze locul.</p>
+              <div class="grid3"><label class="f">Titlu<input type="text" data-s="likeathon.title" maxlength="60"></label>
+                <label class="f">Câți apar<input type="number" min="3" max="15" data-s="likeathon.count"></label>
+                <label class="f"><span>Scade cu <span data-show="likeathon.decayPct"></span>% la 10 secunde</span><input type="range" min="1" max="50" data-s="likeathon.decayPct"></label></div>
+              <label class="tog"><input type="checkbox" data-s="likeathon.decay"> Pornește scăderea automată</label>
+            </div>
           </div>
 
-          <!-- ASPECT -->
           <div class="pane" data-pane="aspect" role="tabpanel" hidden>
+            <header class="ph"><h1>Aspect</h1><p>Stilul tuturor overlay-urilor. Fiecare overlay poate avea și stilul lui, din pagina Overlay-uri.</p></header>
             <div class="grid3">
               <label class="f">Stil<select data-s="theme.style"><option value="neon">Neon (întunecat, cu strălucire)</option><option value="glass">Sticlă (transparent)</option><option value="minimal">Minimal (doar text)</option><option value="arcade">Arcade (pixeli)</option></select></label>
               <label class="f">Culoarea principală<span style="display:flex;gap:8px;align-items:center"><input type="color" data-s="theme.accent"><span class="hint">Se vede pe bare, titluri și nume.</span></span></label>
               <label class="f"><span>Mărime: <span data-show="theme.scale"></span>×</span><input type="range" min="0.6" max="2" step="0.1" data-s="theme.scale"></label>
             </div>
             <div class="prev" style="margin-top:16px"><div class="bar">Previzualizare: alertele, cu date de probă</div><iframe id="aspect-prev" title="Previzualizare aspect" loading="lazy"></iframe></div>
+          
           </div>
-
-          <!-- OVERLAY-URI -->
-          <div class="pane" data-pane="overlay" role="tabpanel" hidden>
-            <div class="warn" style="margin-bottom:14px">🔒 Linkurile de mai jos sunt doar ale tale. Nu le arăta pe ecran și nu le da nimănui. Dacă ți-a scăpat unul, apasă „Schimbă linkurile” și pune-le din nou.</div>
-            <h3 style="margin-top:0">Cum pui un overlay în TikTok LIVE Studio</h3>
-            <ol class="steps">
-              <li>Copiază linkul overlay-ului dorit de mai jos.</li>
-              <li>În TikTok LIVE Studio apasă <b>Adaugă sursă</b> → <b>Link</b> (în OBS: <b>Sursă nouă</b> → <b>Browser</b>).</li>
-              <li>Lipește linkul și pune mărimea scrisă lângă overlay. Fundalul e transparent.</li>
-              <li>Ca să se audă sunetele alertelor în OBS, bifează <b>Control audio via OBS</b>.</li>
-            </ol>
-            <div class="ovs" id="ovs" style="margin-top:14px"></div>
-            <div class="prev" id="ov-prev" hidden><div class="bar"><span id="ov-prev-name"></span><span class="hint" id="ov-prev-hint" style="margin-left:10px"></span><label class="tog" style="margin-left:auto;font-size:12px"><input type="checkbox" id="ov-demo" checked> Date de probă</label><button type="button" class="b sm" id="ov-prev-close">Închide</button></div><iframe id="ov-frame" title="Previzualizare overlay"></iframe></div>
-            <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button type="button" class="b sm red" id="btn-newkey">🔑 Schimbă linkurile</button><span class="hint">Linkurile vechi se opresc imediat.</span></div>
+            </section>
+            <aside class="sa-feed" aria-label="Activitate live">
+              <p class="st-msg" id="live-msg"></p>
+              <div class="fh"><b>🧪 Simulator</b><span class="hint">fără să fii live</span></div>
+              <div class="tests">
+                <button type="button" class="b sm" data-test="gift">🎁 Cadou</button>
+                <button type="button" class="b sm" data-test="gift" data-gift="5">🦁 Cadou mare</button>
+                <button type="button" class="b sm" data-test="follow">💖 Follow</button>
+                <button type="button" class="b sm" data-test="share">📣 Share</button>
+                <button type="button" class="b sm" data-test="subscribe">⭐ Abonat</button>
+                <button type="button" class="b sm" data-test="chat">💬 Mesaj</button>
+                <button type="button" class="b sm" data-test="like">❤️ 50 like-uri</button>
+                <button type="button" class="b sm" data-act="wheel">🎡 Roata</button>
+              </div>
+              <div class="ttsbar">
+                <label class="tog"><input type="checkbox" id="tts-here"> 🗣 Citește cu voce aici</label>
+                <button type="button" class="b sm" id="btn-install" hidden>💻 Instalează</button>
+              </div>
+              <p class="hint" id="tts-hint">Vocea și sunetele se aud din fereastra asta: ține Studio-ul deschis în timpul live-ului.</p>
+              <div class="fh"><b>📡 Activitate</b><button type="button" class="b sm" id="btn-clear-feed">Golește</button></div>
+              <div class="feed" id="feed" aria-live="off"></div>
+            </aside>
           </div>
-
-          <div class="savebar" id="savebar"><span id="save-state">Totul e salvat.</span><button type="button" class="b" id="btn-reset" disabled>Anulează</button><button type="button" class="b pri" id="btn-save" disabled>Salvează setările</button></div>
-        </section>
+        </div>
       </div>
     </div>
   </main>
@@ -501,6 +663,8 @@
     if (ME.status === 'rejected') return gateForm('Cererea a fost respinsă', ME.note ? `Motivul: ${esc(ME.note)}. Poți trimite o cerere nouă.` : 'Poți trimite o cerere nouă.', ME.tiktok);
     if (ME.status === 'revoked') { gate.innerHTML = `<h2>Accesul la Studio a fost oprit</h2><p class="st-muted">${ME.note ? 'Motivul: ' + esc(ME.note) + '. ' : ''}Dacă crezi că e o greșeală, scrie-ne la <a href="tichete.html" style="color:var(--orange)">Tichete</a>.</p>`; return; }
     gate.hidden = true; $('#app').hidden = false;
+    document.body.classList.add('app-mode');
+    document.title = 'Studio — Moldova RP';
     KEY = ME.key; DEF = ME.defaults;
     S = ME.settings; SAVED = JSON.stringify(S);
     $('#tiktok').value = '@' + ME.tiktok;
@@ -509,6 +673,8 @@
     connectSse();
     $('#aspect-prev').src = ovUrl('alerts') + '&demo=1';
     loadMedia(); loadGifts();
+    let t0 = 'start'; try { t0 = sessionStorage.getItem('mrp_studio_tab') || 'start'; } catch { /* */ }
+    goTab($(`.sa-rail [data-tab="${t0}"]`) ? t0 : 'start');
   }
 
   // ------------------------------------------------------------ setări ↔ formular
@@ -536,7 +702,7 @@
     });
     $('#rot-lines').value = (S.rotator.lines || []).join('\n');
     $('#wheel-segs').value = S.wheel.segments.map(x => x.label).join('\n');
-    drawGoals(); drawActs(); drawEvts(); shows(); markDirty();
+    drawGoals(); drawActs(); drawEvts(); drawSnds(); drawIvs(); drawLevels(); drawStart(); shows(); markDirty();
   }
   function shows() { $$('[data-show]').forEach(el => { el.textContent = getP(S, el.dataset.show); }); }
   function read() {
@@ -692,7 +858,7 @@
           <label class="f">Text pe ecran<input type="text" data-a="text" maxlength="140" value="${esc(a.text)}" placeholder="de exemplu: Mersi, {user}, pentru {gift}! 🌹"></label>
           <label class="f">Citit cu voce (opțional)<input type="text" data-a="tts" maxlength="200" value="${esc(a.tts)}" placeholder="de exemplu: Mulțumesc frumos, {user}!"></label>
           <div class="grid3"><label class="f">Cât stă (secunde)<input type="number" min="0" max="60" data-a="duration" value="${a.duration}"></label>
-            <label class="f">Ecranul<select data-a="screen">${opt([[1, 'Ecranul 1'], [2, 'Ecranul 2'], [3, 'Ecranul 3'], [4, 'Ecranul 4']], a.screen)}</select></label>
+            <label class="f">Ecranul<select data-a="screen">${opt([1, 2, 3, 4, 5, 6, 7, 8].map(n => [n, 'Ecranul ' + n]), a.screen)}</select></label>
             <label class="f">Poziția<select data-a="position">${opt(POS, a.position)}</select></label></div>
           <p class="hint" style="margin-top:-4px">0 secunde = cât ține clipul sau melodia.</p>
           <div class="grid2"><label class="f"><span>Mărimea clipului: ${a.size}% din ecran</span><input type="range" min="10" max="100" data-a="size" value="${a.size}"></label>
@@ -818,6 +984,121 @@
     return new Promise(res => { f.onload = () => setTimeout(res, 900); f.src = ovUrl('actions', `&screen=${screen}`); setTimeout(res, 4000); });
   }
   $('#act-prev-close').onclick = () => { $('#act-prev').hidden = true; $('#act-frame').removeAttribute('src'); actPrevScreen = 0; };
+  // ------------------------------------------------------------ pagina Start
+  let LIVE_SEEN = false;
+  function drawStart() {
+    const box = $('#start-box'); if (!box || !S) return;
+    const acts = S.actions.length, evs = S.events.filter(e => e.on && e.actions.length).length, snds = S.sounds.list.length;
+    const st = LIVE?.status || 'off';
+    const steps = [
+      [!!(ME?.tiktok), 'Contul de TikTok', `@${esc(ME?.tiktok || '')}`, 'conectare'],
+      [st === 'live' || LIVE_SEEN, 'Conectat la un live', st === 'live' ? 'Ești conectat acum' : 'Pornește live-ul și apasă Conectează', 'conectare'],
+      [MEDIA.length > 0, 'Clipurile, imaginile sau muzica ta', MEDIA.length ? `${MEDIA.length} fișiere` : 'Încarcă-le din Acțiuni', 'actiuni'],
+      [acts > 0 && evs > 0, 'Alerte la cadourile tale', acts ? `${acts} acțiuni, ${evs} pornesc singure` : 'Fă prima acțiune', 'actiuni'],
+      [false, 'Overlay-urile în TikTok LIVE Studio', 'Copiază linkurile din Overlay-uri', 'overlay'],
+    ];
+    box.innerHTML = `<div class="sbox">
+        <button type="button" class="scard" data-goto="conectare"><small>Live</small><strong>${({ live: '🔴 Conectat', connecting: '⏳ Se conectează', waiting: '⏳ Așteaptă live-ul', error: '⚠️ Eroare', off: '⚪ Deconectat' })[st] || st}</strong><span>${esc(LIVE?.msg || 'Apasă Conectează sus, în bară.')}</span></button>
+        <button type="button" class="scard" data-goto="actiuni"><small>Acțiuni</small><strong>${acts}</strong><span>${evs} evenimente pornite · ${MEDIA.length} fișiere</span></button>
+        <button type="button" class="scard" data-goto="sunete"><small>Sunete</small><strong>${snds}</strong><span>sunete rapide</span></button>
+        <button type="button" class="scard" data-goto="overlay"><small>Overlay-uri</small><strong>${overlayList().filter(o => !o.hide).length}</strong><span>gata de pus pe live</span></button>
+      </div>
+      <div class="card2"><div class="hd"><b>🚀 Primii pași</b></div><div class="chk">${steps.map(([ok, t, d, go]) => `<div class="${ok ? 'ok' : ''}"><i>${ok ? '✓' : '·'}</i><span><b>${t}</b><br><span class="hint">${d}</span></span><button type="button" class="b sm" data-goto="${go}">Deschide</button></div>`).join('')}</div></div>
+      <div class="grid2" style="margin-top:12px">
+        <div class="card2"><div class="hd"><b>💡 Ce poți face</b></div><p class="hint">Clipul tău la fiecare cadou, voce care citește chatul, roata norocului, subathon, bătălia echipelor, borcanul cu cadouri, likeathon, puncte și niveluri pentru spectatori, comenzi în chat. Totul gratuit.</p></div>
+        <div class="card2"><div class="hd"><b>🧪 Încearcă fără live</b></div><p class="hint">Folosește Simulatorul din dreapta: trimite un cadou, un follow sau un mesaj de probă și vezi ce se întâmplă în overlay-uri.</p></div>
+      </div>`;
+  }
+
+  // ------------------------------------------------------------ sunete rapide
+  function sndSel(cur) {
+    const aud = MEDIA.filter(m => m.kind === 'audio' || m.kind === 'video');
+    return `<optgroup label="Muzica ta">${aud.map(x => `<option value="m:${x.id}"${cur === 'm:' + x.id ? ' selected' : ''}>🎵 ${esc(x.name)}</option>`).join('') || '<option disabled>Încarcă MP3 din Acțiuni</option>'}</optgroup><optgroup label="Sunete gata făcute">${SOUNDS.filter(x => x[0] !== 'none').map(([v, l]) => `<option value="s:${v}"${cur === 's:' + v ? ' selected' : ''}>🔔 ${l}</option>`).join('')}</optgroup>`;
+  }
+  function drawSnds() {
+    const box = $('#snds'); if (!box || !S) return;
+    box.innerHTML = S.sounds.list.map(x => `<div class="sndrow${x.on ? '' : ' off'}" data-sid="${esc(x.id)}">
+      <input type="checkbox" data-sn="on"${x.on ? ' checked' : ''} aria-label="Pornit">
+      <select data-sn="trigger" aria-label="Când">${opt(TRIG, x.trigger)}</select>
+      ${x.trigger === 'gift' ? `<span style="display:flex;gap:6px"><input type="text" data-sn="gift" list="gift-list" value="${esc(x.gift)}" placeholder="orice cadou" aria-label="Cadoul"><input type="number" data-sn="min" min="1" value="${x.min}" style="width:80px" aria-label="De la câte diamante" title="de la câte 💎"></span>`
+        : x.trigger === 'like' ? `<input type="number" data-sn="likes" min="10" step="10" value="${x.likes}" aria-label="La câte like-uri" title="la fiecare … like-uri">`
+        : x.trigger === 'command' ? `<input type="text" data-sn="command" value="${esc(x.command)}" maxlength="30" aria-label="Comanda">` : '<span class="hint">—</span>'}
+      <select data-sn="src" aria-label="Sunetul">${sndSel(x.src)}</select>
+      <input type="number" data-sn="volume" min="0" max="100" value="${x.volume}" aria-label="Volum" title="volum %">
+      <input type="text" data-sn="key" maxlength="10" value="${esc(x.key)}" placeholder="tastă" aria-label="Tasta" title="O tastă (de ex. 1 sau F) care pornește sunetul">
+      <span style="display:flex;gap:4px"><button type="button" class="b sm" data-snplay="${esc(x.id)}" aria-label="Ascultă">▶</button><button type="button" class="b sm red" data-sndel="${esc(x.id)}" aria-label="Șterge">✕</button></span></div>`).join('') || '<p class="hint">Niciun sunet încă. Apasă „+ Sunet nou”.</p>';
+  }
+  $('#btn-snd-add').onclick = () => { S.sounds.list.push({ id: newId('s'), on: true, trigger: 'gift', gift: '', min: 1, likes: 100, command: '!sunet', src: 's:coin', volume: 80, key: '' }); drawSnds(); markDirty(); };
+  $('#snds').addEventListener('input', e => {
+    const r = e.target.closest('.sndrow'), k = e.target.dataset.sn; if (!r || !k) return;
+    const x = S.sounds.list.find(y => y.id === r.dataset.sid); if (!x) return;
+    x[k] = e.target.type === 'checkbox' ? e.target.checked : e.target.type === 'number' ? Number(e.target.value) : e.target.value;
+    if (k === 'trigger' || k === 'on') drawSnds();
+  });
+  $('#snds').addEventListener('click', e => {
+    const pl = e.target.closest('[data-snplay]'), d = e.target.closest('[data-sndel]');
+    if (pl) { const x = S.sounds.list.find(y => y.id === pl.dataset.snplay); if (x) playSound(x.src.startsWith('m:') ? mUrl(x.src.slice(2)) : x.src, x.volume, true); }
+    if (d) { S.sounds.list = S.sounds.list.filter(y => y.id !== d.dataset.sndel); drawSnds(); markDirty(); }
+  });
+  let sndQ = [], sndBusy = 0;
+  function playSound(src, vol, force) {
+    if (!force && !$('#snd-here').checked) return;
+    if (/^s:/.test(src)) return window.MRPSound?.play(src.slice(2), vol);
+    const go = () => { const a = new Audio(src); a.volume = Math.max(0, Math.min(1, (vol ?? 80) / 100)); sndBusy++; const end = () => { sndBusy--; if (sndQ.length) sndQ.shift()(); }; a.onended = a.onerror = end; a.play().catch(end); };
+    if (force || S?.sounds?.simultaneous || !sndBusy) go(); else if (sndQ.length < (S?.sounds?.maxQueue || 50)) sndQ.push(go);
+  }
+  // tastele pentru sunete (nu când scrii într-un câmp)
+  document.addEventListener('keydown', e => {
+    if (!S || e.ctrlKey || e.metaKey || e.altKey || e.target.closest('input,textarea,select,[contenteditable]')) return;
+    const k = String(e.key || '').toLowerCase();
+    const x = S.sounds.list.find(y => y.on && y.key && y.key === k);
+    if (x) { e.preventDefault(); playSound(x.src.startsWith('m:') ? mUrl(x.src.slice(2)) : x.src, x.volume, true); note(`Sunet pornit de la tastă: ${esc(k)}`, 'sys', '🔊'); }
+  });
+
+  // ------------------------------------------------------------ temporizatoare
+  function drawIvs() {
+    const box = $('#ivs'); if (!box || !S) return;
+    box.innerHTML = (S.intervals || []).map(t => `<div class="ivrow" data-tid="${esc(t.id)}"><input type="checkbox" data-iv="on"${t.on ? ' checked' : ''} aria-label="Pornit">
+      <label class="f" style="display:flex;align-items:center;gap:6px">la fiecare<input type="number" data-iv="minutes" min="1" max="240" value="${t.minutes}" style="width:80px"> min</label>
+      <select data-iv="action" aria-label="Acțiunea">${S.actions.map(a => `<option value="${esc(a.id)}"${a.id === t.action ? ' selected' : ''}>${esc(a.name)}</option>`).join('')}</select>
+      <label class="tog"><input type="checkbox" data-iv="onlyLive"${t.onlyLive ? ' checked' : ''}> doar când ești live</label>
+      <button type="button" class="b sm red" data-ivdel="${esc(t.id)}" aria-label="Șterge">✕</button></div>`).join('') || '<p class="hint">Niciun temporizator.</p>';
+  }
+  $('#btn-iv-add').onclick = () => { if (!S.actions.length) { note('Fă întâi o acțiune.', 'sys', '⚠️'); return; } S.intervals ||= []; S.intervals.push({ id: newId('t'), on: true, minutes: 10, action: S.actions[0].id, onlyLive: true }); drawIvs(); markDirty(); };
+  $('#ivs').addEventListener('input', e => { const r = e.target.closest('.ivrow'), k = e.target.dataset.iv; if (!r || !k) return; const t = S.intervals.find(x => x.id === r.dataset.tid); t[k] = e.target.type === 'checkbox' ? e.target.checked : e.target.type === 'number' ? Number(e.target.value) : e.target.value; });
+  $('#ivs').addEventListener('click', e => { const d = e.target.closest('[data-ivdel]'); if (!d) return; S.intervals = S.intervals.filter(x => x.id !== d.dataset.ivdel); drawIvs(); markDirty(); });
+
+  // ------------------------------------------------------------ niveluri și ploaia de puncte
+  function drawLevels() {
+    const el = $('#levels'); if (!el || !S) return;
+    let need = S.points.levelBase, total = 0; const out = [];
+    for (let l = 2; l <= 10; l++) { total += need; out.push(`nivelul ${l}: ${fmt(total)}`); need = Math.ceil(need * S.points.levelMult); }
+    el.textContent = out.join(' · ');
+  }
+  $('#btn-drop').onclick = async () => { try { await api('/api/stream/actiune', { action: 'drop-start', amount: Number($('#drop-amount').value), max: Number($('#drop-max').value), seconds: Number($('#drop-sec').value) }); } catch (err) { note(esc(err.message), 'sys', '⚠️'); } };
+  let DROP = null, dropAt = 0;
+  setInterval(() => {
+    const el = $('#drop-now'); if (!el) return;
+    const l = DROP ? Math.max(0, Math.ceil((DROP.left - (Date.now() - dropAt)) / 1000)) : 0;
+    el.textContent = DROP && l ? `▶ ${l}s · ${DROP.claimed}/${DROP.max}` : 'oprită'; el.className = 'pill' + (DROP && l ? ' live' : '');
+  }, 500);
+
+  // ------------------------------------------------------------ export / import
+  $('#btn-export').onclick = () => {
+    const blob = new Blob([JSON.stringify({ studio: 'moldovarp', version: 1, settings: S }, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `studio-${ME.tiktok}-${new Date().toISOString().slice(0, 10)}.json`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  };
+  $('#imp-file').onchange = async e => {
+    const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+    try {
+      const d = JSON.parse(await f.text()), st = d.settings || d;
+      if (!st || typeof st !== 'object' || !st.alerts) throw new Error();
+      if (!confirm('Înlocuiești setările de acum cu cele din fișier? Le vezi înainte să le salvezi.')) return;
+      S = { ...S, ...st }; fill(); renderOverlays(); note('Setările au fost încărcate. Apasă „Salvează” ca să rămână.', 'sys', '📦');
+    } catch { alert('Fișierul nu e o salvare de setări a Studio-ului.'); }
+  };
+  $('#btn-install2').onclick = () => $('#btn-install').click();
+
   async function saveIfDirty() { if (JSON.stringify(S) !== SAVED) await $('#btn-save').onclick(); }
 
   // obiective
@@ -834,48 +1115,102 @@
   $('#goals').addEventListener('click', e => { if (!e.target.closest('[data-goal-del]')) return; e.target.closest('.goal-row').remove(); read(); drawGoals(); markDirty(); renderOverlays(); });
 
   // taburi
-  $$('.tabs button').forEach(b => b.addEventListener('click', () => {
-    $$('.tabs button').forEach(x => x.setAttribute('aria-selected', String(x === b)));
-    $$('.pane').forEach(p => { p.hidden = p.dataset.pane !== b.dataset.tab; });
-  }));
+  function goTab(tab) {
+    $$('.sa-rail [data-tab]').forEach(x => x.setAttribute('aria-selected', String(x.dataset.tab === tab)));
+    $$('.pane').forEach(p => { p.hidden = p.dataset.pane !== tab; });
+    if (tab === 'start') drawStart();
+    if (tab === 'puncte') drawLevels();
+    try { sessionStorage.setItem('mrp_studio_tab', tab); } catch { /* */ }
+    document.querySelector('.sa-content')?.scrollTo?.(0, 0); window.scrollTo(0, 0);
+  }
+  $$('.sa-rail [data-tab]').forEach(b => b.addEventListener('click', () => goTab(b.dataset.tab)));
+  document.addEventListener('click', e => { const g = e.target.closest('[data-goto]'); if (g) goTab(g.dataset.goto); });
 
   // ------------------------------------------------------------ overlay-uri
   const ovUrl = (w, extra = '') => `${location.origin}/stream-overlay.html?k=${encodeURIComponent(KEY)}&w=${w}${extra}`;
-  function renderOverlays() {
-    const list = [
-      ...[1, 2, 3, 4].map(n => ['actions', `⚡ Ecran acțiuni ${n}`, '1920 × 1080 (tot ecranul)', n === 1 ? 'Aici apar acțiunile tale: clipuri, imagini, muzică și efecte. Pune-l peste tot ecranul live-ului.' : `Pentru acțiunile la care ai ales „Ecranul ${n}” (de exemplu, în alt colț sau în altă scenă).`, `&screen=${n}`]),
-      ['alerts', '🔔 Alerte rapide', '800 × 300', 'Cadouri, urmăritori, distribuiri și praguri de like-uri, cu sunet.'],
-      ['alerts', '🔔 Alerte + voce', '800 × 300', 'Ca mai sus, iar alertele bifate sunt citite și cu voce (merge doar unde programul de live redă vocea paginilor).', '&tts=1'],
-      ['chat', '💬 Chat', '420 × 600', 'Ultimele mesaje de pe live, cu cadourile.'],
-      ...(S.goals || []).map(g => ['goal', `🎯 ${g.title}`, '600 × 110', 'Bară de progres pentru obiectiv.', `&id=${encodeURIComponent(g.id)}`]),
-      ['top', '🏆 Top susținători', '380 × 420', 'Cine a trimis cele mai multe diamante în sesiunea asta.'],
-      ['counter', '🎁 Contor cadouri', '460 × 130', 'Diamante, cadouri și like-uri pe sesiune.'],
-      ['viewers', '👁 Spectatori', '260 × 100', 'Câți oameni se uită acum.'],
-      ['wheel', '🎡 Roata norocului', '520 × 620', 'Se învârte la cadouri sau când apeși tu.'],
-      ['timer', '⏱ Subathon', '520 × 180', 'Cronometru care crește cu fiecare cadou, follow și like.'],
-      ['points', '⭐ Puncte spectatori', '380 × 420', 'Cei mai fideli spectatori, de la un live la altul.'],
-      ['fireworks', '🎆 Artificii din cadouri', '1080 × 1920', 'Pe tot ecranul live-ului.'],
-      ['rotator', '🔁 Texte care se rotesc', '700 × 90', 'Mesajele tale, pe rând.'],
-      ['battle', '⚔️ Bătălia echipelor', '640 × 300', 'Scorul echipelor, timpul rămas și câștigătorul.'],
-      ['jar', '🫙 Borcanul cu cadouri', '420 × 600', 'Cadourile cad în borcan, butoi sau ulcior și rămân acolo.'],
-      ['fountain', '⛲ Fântâna de like-uri', '1080 × 1920', 'Pe tot ecranul live-ului.'],
-      ['cannon', '💥 Tunul de cadouri', '1080 × 1920', 'Pe tot ecranul live-ului.'],
-      ['last', '🕒 Ultimii de pe live', '420 × 320', 'Ultimul follower, ultimul cadou, ultimul share.'],
-      ['emoji', '😂 Emoji din chat', '1080 × 1920', 'Pe tot ecranul live-ului.'],
+  const OV_CATS = [['toate', 'Toate'], ['actiuni', '⚡ Acțiuni și alerte'], ['obiective', '🎯 Obiective și topuri'], ['cadouri', '🎁 Cadouri'], ['ultimii', '🕒 Chat și ultimii'], ['jocuri', '🎮 Jocuri'], ['grafice', '🎆 Efecte pe tot ecranul']];
+  let ovCat = 'toate';
+  function overlayList() {
+    return [
+      ...[1, 2, 3, 4, 5, 6, 7, 8].map(n => ({ w: 'actions', cat: 'actiuni', ic: '⚡', name: `Ecran acțiuni ${n}`, size: '1920 × 1080', desc: n === 1 ? 'Aici apar acțiunile tale: clipuri, imagini, muzică și efecte. Pune-l peste tot ecranul.' : `Pentru acțiunile cu „Ecranul ${n}”. Fiecare ecran are coada lui.`, extra: `&screen=${n}`, test: 'gift', hide: n > 2 })),
+      { w: 'alerts', cat: 'actiuni', ic: '🔔', name: 'Alerte rapide', size: '800 × 300', desc: 'Cadouri, follow, share și praguri de like-uri, cu sunet.', test: 'gift' },
+      { w: 'sounds', cat: 'actiuni', ic: '🔊', name: 'Sunete', size: '300 × 100 (nu se vede)', desc: 'Sunetele rapide, pentru cine le vrea din OBS, nu din Studio.', test: 'gift', novis: true },
+      { w: 'cmdinfo', cat: 'ultimii', ic: '⌨️', name: 'Răspunsuri la comenzi', size: '600 × 300', desc: 'Răspunsul la !puncte, !trimite, !roata și ploaia de puncte.', test: 'chat' },
+      { w: 'chat', cat: 'ultimii', ic: '💬', name: 'Chat', size: '420 × 600', desc: 'Ultimele mesaje de pe live, cu cadourile.', test: 'chat' },
+      { w: 'last', cat: 'ultimii', ic: '🕒', name: 'Ultimii de pe live', size: '420 × 320', desc: 'Ultimul follower, ultimul cadou, ultimul share.', test: 'follow' },
+      { w: 'emoji', cat: 'grafice', ic: '😂', name: 'Emoji din chat', size: '1080 × 1920', desc: 'Emoji-urile din chat zboară pe ecran.', test: 'chat' },
+      ...(S.goals || []).map(g => ({ w: 'goal', cat: 'obiective', ic: '🎯', name: g.title, size: '600 × 110', desc: 'Bară de progres pentru obiectiv.', extra: `&id=${encodeURIComponent(g.id)}`, test: 'like' })),
+      { w: 'top', cat: 'obiective', ic: '🏆', name: 'Top susținători', size: '380 × 420', desc: 'Cine a trimis cele mai multe diamante.', test: 'gift' },
+      { w: 'topliker', cat: 'obiective', ic: '❤️', name: 'Likeathon', size: '380 × 480', desc: 'Cine dă cele mai multe like-uri.', test: 'like' },
+      { w: 'points', cat: 'obiective', ic: '⭐', name: 'Puncte spectatori', size: '380 × 420', desc: 'Cei mai fideli spectatori, de la un live la altul.', test: 'chat' },
+      { w: 'counter', cat: 'cadouri', ic: '🎁', name: 'Contor cadouri', size: '460 × 130', desc: 'Diamante, cadouri și like-uri pe sesiune.', test: 'gift' },
+      { w: 'viewers', cat: 'obiective', ic: '👁', name: 'Spectatori', size: '260 × 100', desc: 'Câți oameni se uită acum.' },
+      { w: 'jar', cat: 'cadouri', ic: '🫙', name: 'Borcanul cu cadouri', size: '420 × 600', desc: 'Cadourile cad în borcan, butoi sau ulcior.', test: 'gift' },
+      { w: 'cannon', cat: 'cadouri', ic: '💥', name: 'Tunul de cadouri', size: '1080 × 1920', desc: 'Fiecare cadou e tras cu tunul peste ecran.', test: 'gift' },
+      { w: 'fireworks', cat: 'grafice', ic: '🎆', name: 'Artificii din cadouri', size: '1080 × 1920', desc: 'Cadourile sar de jos pe tot ecranul.', test: 'gift' },
+      { w: 'fountain', cat: 'grafice', ic: '⛲', name: 'Fântâna de like-uri', size: '1080 × 1920', desc: 'Like-urile țâșnesc de jos.', test: 'like' },
+      { w: 'wheel', cat: 'jocuri', ic: '🎡', name: 'Roata norocului', size: '520 × 620', desc: 'Se învârte la cadouri, la comandă sau când apeși tu.', act: 'wheel' },
+      { w: 'timer', cat: 'jocuri', ic: '⏱', name: 'Subathon', size: '520 × 180', desc: 'Cronometru care crește cu cadouri, follow și like-uri.', test: 'gift' },
+      { w: 'battle', cat: 'jocuri', ic: '⚔️', name: 'Bătălia echipelor', size: '640 × 300', desc: 'Scorul echipelor, timpul și câștigătorul.', test: 'gift' },
+      { w: 'rotator', cat: 'grafice', ic: '🔁', name: 'Texte care se rotesc', size: '700 × 90', desc: 'Mesajele tale, pe rând.' },
     ];
-    $('#ovs').innerHTML = list.map(([w, name, size, desc, extra = '']) => `<div class="ov"><div><b>${esc(name)}</b><span class="sz">${size}</span></div>
-      <div class="acts"><button type="button" class="b sm" data-copy="${esc(ovUrl(w, extra))}">Copiază</button><button type="button" class="b sm" data-prev="${esc(ovUrl(w, extra))}" data-name="${esc(name)}">Vezi</button></div>
-      <p>${esc(desc)}</p><input type="text" readonly value="${esc(ovUrl(w, extra))}" aria-label="Linkul overlay-ului ${esc(name)}" onclick="this.select()"></div>`).join('');
   }
+  const ovCustom = {};
+  const ovFull = o => { const c = ovCustom[o.w + (o.extra || '')] || {}; return ovUrl(o.w, (o.extra || '') + (c.theme ? '&theme=' + c.theme : '') + (c.accent ? '&accent=' + c.accent.slice(1) : '') + (c.scale && c.scale !== '1' ? '&scale=' + c.scale : '')); };
+  function renderOverlays() {
+    const box = $('#ov-prev'); if (box && $('#ovs').contains(box)) { $('#ovs').after(box); box.hidden = true; $('#ov-frame').src = 'about:blank'; }
+    $('#ov-cats').innerHTML = OV_CATS.map(([k, l]) => `<button type="button" data-cat="${k}" aria-pressed="${k === ovCat}">${l}</button>`).join('');
+    const list = overlayList().filter(o => ovCat === 'toate' ? !o.hide : o.cat === ovCat);
+    $('#ovs').innerHTML = list.map(o => {
+      const key = o.w + (o.extra || ''), c = ovCustom[key] || {}, url = ovFull(o);
+      const [vw, vh] = o.size.match(/\d+/g) || [800, 300];
+      return `<div class="ovc" data-key="${esc(key)}"><div class="vis" data-vw="${vw}" data-vh="${vh}" data-src="${o.novis ? '' : esc(ovUrl(o.w, o.extra || '') + '&demo=1')}" title="Treci cu mouse-ul ca să vezi o probă">${o.ic}</div><div class="bd">
+        <div><b>${o.ic} ${esc(o.name)}</b> <span class="sz">${o.size}</span></div><p>${esc(o.desc)}</p>
+        <input type="text" readonly value="${esc(url)}" aria-label="Linkul overlay-ului ${esc(o.name)}" onclick="this.select()">
+        <div class="acts"><button type="button" class="b sm pri" data-copy="${esc(url)}">Copiază</button>${o.novis ? '' : `<button type="button" class="b sm" data-prev="${esc(url)}" data-name="${esc(o.name)}">👁 Vezi</button>`}${o.test || o.act ? `<button type="button" class="b sm" data-ovtest="${o.test || ''}" data-ovact="${o.act || ''}">▶ Testează</button>` : ''}<button type="button" class="b sm" data-cust="${esc(key)}">🎨</button></div>
+        <div class="cust"><select data-c="theme" aria-label="Stil"><option value="">Stil comun</option><option value="neon"${c.theme === 'neon' ? ' selected' : ''}>Neon</option><option value="glass"${c.theme === 'glass' ? ' selected' : ''}>Sticlă</option><option value="minimal"${c.theme === 'minimal' ? ' selected' : ''}>Minimal</option><option value="arcade"${c.theme === 'arcade' ? ' selected' : ''}>Arcade</option></select>
+          <input type="color" data-c="accent" value="${esc(c.accent || S.theme.accent)}" aria-label="Culoare"><select data-c="scale" aria-label="Mărime">${['0.75', '1', '1.25', '1.5', '2'].map(v => `<option value="${v}"${(c.scale || '1') === v ? ' selected' : ''}>${v}×</option>`).join('')}</select></div>
+      </div></div>`;
+    }).join('');
+  }
+  // probă mică pe card, cât ții mouse-ul pe el
+  $('#ovs').addEventListener('mouseover', e => {
+    const v = e.target.closest('.vis'); if (!v || !v.dataset.src || v.querySelector('iframe')) return;
+    const W = Number(v.dataset.vw) || 800, H = Number(v.dataset.vh) || 300, k = Math.min(v.clientWidth / W, v.clientHeight / H);
+    const f = document.createElement('iframe'); f.src = v.dataset.src; f.width = W; f.height = H; f.setAttribute('aria-hidden', 'true'); f.tabIndex = -1;
+    f.style.cssText = `width:${W}px;height:${H}px;transform:scale(${k});left:${(v.clientWidth - W * k) / 2}px;top:${(v.clientHeight - H * k) / 2}px`;
+    v.appendChild(f);
+  });
+  $('#ovs').addEventListener('mouseout', e => {
+    const v = e.target.closest('.vis'); if (!v || v.contains(e.relatedTarget)) return;
+    v.querySelector('iframe')?.remove();
+  });
+  $('#ov-cats').addEventListener('click', e => { const b = e.target.closest('[data-cat]'); if (!b) return; ovCat = b.dataset.cat; renderOverlays(); });
+  $('#ovs').addEventListener('change', e => {
+    const card = e.target.closest('.ovc'), k = e.target.dataset.c; if (!card || !k) return;
+    const c = ovCustom[card.dataset.key] ||= {};
+    c[k] = e.target.value;
+    const o = overlayList().find(x => x.w + (x.extra || '') === card.dataset.key), url = ovFull(o);
+    card.querySelector('input[readonly]').value = url; card.querySelector('[data-copy]').dataset.copy = url; const pv = card.querySelector('[data-prev]'); if (pv) pv.dataset.prev = url;
+  });
+  $('#ovs').addEventListener('click', async e => {
+    const cz = e.target.closest('[data-cust]'), t = e.target.closest('[data-ovtest]');
+    if (cz) cz.closest('.ovc').classList.toggle('cz');
+    if (t) {
+      const card = t.closest('.ovc'), pv = card.querySelector('[data-prev]');
+      if (pv && $('#ov-prev').hidden) { $('#ov-demo').checked = false; pv.click(); await new Promise(r => setTimeout(r, 1500)); }
+      try { if (t.dataset.ovact) await api('/api/stream/actiune', { action: t.dataset.ovact }); else await api('/api/stream/test', { type: t.dataset.ovtest, count: t.dataset.ovtest === 'like' ? 120 : undefined }); } catch (err) { note(esc(err.message), 'sys', '⚠️'); }
+    }
+  });
   $('#ovs').addEventListener('click', async e => {
     const c = e.target.closest('[data-copy]'), p = e.target.closest('[data-prev]');
-    if (c) { try { await navigator.clipboard.writeText(c.dataset.copy); c.textContent = 'Copiat ✓'; } catch { c.closest('.ov').querySelector('input').select(); c.textContent = 'Apasă Ctrl+C'; } setTimeout(() => { c.textContent = 'Copiază'; }, 1800); }
-    if (p) { $('#ov-prev').hidden = false; $('#ov-prev-name').textContent = p.dataset.name; $('#ov-frame').dataset.src = p.dataset.prev; setPrev(); $('#ov-prev').scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
+    if (c) { try { await navigator.clipboard.writeText(c.dataset.copy); c.textContent = 'Copiat ✓'; } catch { c.closest('.ovc').querySelector('input').select(); c.textContent = 'Apasă Ctrl+C'; } setTimeout(() => { c.textContent = 'Copiază'; }, 1800); }
+    if (p) { const box = $('#ov-prev'); box.style.gridColumn = '1 / -1'; p.closest('.ovc').after(box); box.hidden = false; $('#ov-prev-name').textContent = p.dataset.name; $('#ov-frame').dataset.src = p.dataset.prev; setPrev(); box.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
   });
   function setPrev() {
     const f = $('#ov-frame'), demo = $('#ov-demo').checked;
     f.src = f.dataset.src + (demo ? '&demo=1' : '');
-    $('#ov-prev-hint').textContent = demo ? 'Arată evenimente de probă.' : 'Arată doar live-ul tău: apasă butoanele de test din stânga (Cadou, Follow, Mesaj…).';
+    $('#ov-prev-hint').textContent = demo ? 'Arată evenimente de probă.' : 'Arată doar live-ul tău: folosește Simulatorul din dreapta.';
   }
   $('#ov-demo').onchange = setPrev;
   $('#ov-prev-close').onclick = () => { $('#ov-prev').hidden = true; $('#ov-frame').src = 'about:blank'; };
@@ -890,6 +1225,8 @@
   let LIVE = null;
   function drawLive(l) {
     LIVE = l || LIVE || {};
+    if (LIVE.status === 'live') LIVE_SEEN = true;
+    if (!$('[data-pane="start"]')?.hidden) drawStart();
     const [cls, txt] = PILL[LIVE.status] || PILL.off;
     $('#live-pill').className = 'pill ' + cls; $('#live-pill span').textContent = txt;
     $('#live-msg').textContent = LIVE.msg || (LIVE.status === 'off' ? 'Pornește live-ul pe TikTok și apasă Conectează. Te conectăm singuri și dacă intri live mai târziu.' : '');
@@ -924,6 +1261,7 @@
   function drawState(st) {
     if (!st) return;
     if (st.battle) drawBattle(st.battle);
+    DROP = st.drop || null; dropAt = Date.now();
     $('#k-viewers').textContent = fmt(st.viewers); $('#k-likes').textContent = fmt(st.likes);
     $('#k-diamonds').textContent = fmt(st.diamonds); $('#k-follows').textContent = fmt(st.follows);
     if (st.timer) setTimer(st.timer);
@@ -961,6 +1299,8 @@
     if (e.t === 'milestone') { note(`Ați ajuns la <b>${fmt(e.total)}</b> de like-uri!`, 'gift', '❤️'); speak(e.alert?.tts); return; }
     if (e.t === 'action') { note(`${esc(e.name)}${e.user?.name ? ' · ' + who(e.user) : ''}${e.test ? ' <span style="color:var(--muted)">(test)</span>' : ''}`, 'gift', '⚡'); speak(e.tts); return; }
     if (e.t === 'notice') { note(esc(e.text), 'sys', '⭐'); return; }
+    if (e.t === 'cmdinfo') { note(esc(e.text), 'sys', '⌨️'); return; }
+    if (e.t === 'sound') { playSound(e.src, e.volume); return; }
     if (e.t === 'battle') { drawBattle(e.battle); if (e.ended) { const t = S.battle.teams[e.battle.winner]; note(t ? `Bătălia s-a terminat: câștigă <b>${esc(t.name)}</b>!` : 'Bătălia s-a terminat la egalitate.', 'gift', '⚔️'); } return; }
     if (e.t === 'jar-reset') return;
     if (e.t === 'subscribe') { note(`${who(e.user)} s-a abonat`, 'gift', '⭐'); return; }
@@ -1026,7 +1366,9 @@
 
   // instalare ca aplicație (Chrome / Edge pe calculator și Android)
   let installEv = null;
-  addEventListener('beforeinstallprompt', e => { installEv = e; $('#btn-install').hidden = false; });
+  addEventListener('beforeinstallprompt', e => { installEv = e; $('#btn-install').hidden = false; $('#install-hint').textContent = ''; });
+  if (matchMedia('(display-mode: standalone)').matches) { $('#btn-install2').hidden = true; $('#install-hint').textContent = '✓ Studio-ul rulează deja ca aplicație.'; }
+  else $('#install-hint').textContent = 'Merge în Chrome și Edge, pe calculator.';
   addEventListener('appinstalled', () => { $('#btn-install').hidden = true; note('Studio-ul e instalat. Îl găsești în meniul Start, ca „MRP Studio”.', 'sys', '💻'); });
   $('#btn-install').onclick = async () => { if (!installEv) return; installEv.prompt(); try { await installEv.userChoice; } catch { /* */ } installEv = null; $('#btn-install').hidden = true; };
 

@@ -144,7 +144,26 @@
   .trig .add [data-tp]{display:none}
   .trig .add.t-gift [data-tp=gift],.trig .add.t-like [data-tp=like],.trig .add.t-command [data-tp=command]{display:block}
   .warnmini{color:#ffc24b}
-  .gpm{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.65);display:grid;place-items:center;padding:16px}
+  .quick{display:flex;align-items:center;gap:16px;justify-content:space-between;padding:16px 18px;margin-bottom:14px;border-radius:14px;border:1px solid rgba(255,138,31,.45);background:linear-gradient(120deg,rgba(255,138,31,.16),rgba(255,138,31,.03) 60%),var(--panel)}
+  .quick b{display:block;font-size:15.5px;margin-bottom:3px}
+  .quick span{color:#cfd3d7;font-size:13px}
+  .gpm.wz{z-index:90}
+  .wz .gpm-box{max-width:820px;gap:14px;overflow-y:auto}
+  .wz h3{margin:0;font-size:15px;display:flex;align-items:center;gap:8px}
+  .wz h3 i{font-style:normal;display:inline-grid;place-items:center;width:24px;height:24px;border-radius:50%;background:var(--orange);color:#0b0b0b;font-size:12px}
+  .wtiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+  .wtiles label{display:flex;align-items:center;gap:8px;padding:11px 12px;border-radius:12px;border:1px solid var(--line);background:var(--panel2);cursor:pointer;font-size:13px;font-weight:700}
+  .wtiles label:has(input:checked){border-color:var(--orange);background:rgba(255,138,31,.12);color:#ffd0a3}
+  .wtiles input{position:absolute;opacity:0;pointer-events:none}
+  .wmedia{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px;max-height:260px;overflow-y:auto}
+  .wmedia label{position:relative;border:2px solid var(--line);border-radius:10px;overflow:hidden;cursor:pointer;background:#0b0c0e}
+  .wmedia label:has(input:checked){border-color:var(--orange)}
+  .wmedia input{position:absolute;opacity:0}
+  .wmedia .th{height:74px;display:grid;place-items:center;font-size:28px;background:repeating-conic-gradient(#14181d 0 25%,#0f1216 0 50%) 0 0/14px 14px}
+  .wmedia .th img,.wmedia .th video{width:100%;height:74px;object-fit:contain}
+  .wmedia small{display:block!important;color:#cfd3d7;padding:4px 6px;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .wfoot{display:flex;gap:8px;justify-content:flex-end;align-items:center;position:sticky;bottom:0;background:var(--panel);padding-top:8px}
+  .gpm{position:fixed;inset:0;z-index:100;max-width:none!important;margin:0!important;background:rgba(0,0,0,.65);display:grid;place-items:center;padding:16px}
   .gpm[hidden]{display:none}
   .gpm-box{width:min(860px,100%);max-height:86vh;display:flex;flex-direction:column;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:var(--shadow)}
   .gpm-hd{display:flex;gap:8px}
@@ -339,6 +358,7 @@
           <div class="pane" data-pane="actiuni" role="tabpanel" hidden>
             <header class="ph"><h1>Acțiuni și evenimente</h1><p>Ce se întâmplă pe live (clip, imagine, muzică, text, voce, efect) și când (un anumit cadou, follow, comandă…).</p></header>
             <p class="st-muted" style="margin-top:0">Alege ce se întâmplă pe live la fiecare cadou, follow, share sau comandă din chat: clipul tău, o imagine sau un GIF, o melodie, un text și o voce. Fiecare cadou poate avea alerta lui.</p>
+            <div class="quick"><div><b>✨ Cel mai simplu: alertă nouă în 3 pași</b><span>Alegi cadoul (sau follow, share, comandă), alegi clipul, imaginea sau muzica, scrii textul. Gata, pornește singură pe live.</span></div><button type="button" class="b pri" data-wiz>✨ Alertă nouă</button></div>
             <div class="flow" aria-label="Pașii"><span><b>1</b> Încarcă fișierele</span><span><b>2</b> Fă acțiunile</span><span><b>3</b> Leagă-le de cadouri și evenimente</span><span><b>4</b> Pune overlay-ul „⚡ Ecran acțiuni”</span></div>
 
             <div class="prev" id="act-prev" style="margin:0 0 12px" hidden><div class="bar"><b style="font-size:12px">👁 Așa arată pe live</b><span class="hint" id="act-prev-hint" style="margin-left:8px">Ecranul 1</span><button type="button" class="b sm" id="act-prev-close" style="margin-left:auto">Închide</button></div><iframe id="act-frame" title="Previzualizarea acțiunilor" allow="autoplay"></iframe></div>
@@ -837,7 +857,7 @@
     return [...GIFTS, ...GIFT_NAMES.filter(n => !have.has(gKey(n))).map(n => ({ name: n, diamonds: null, img: '' }))];
   }
   const gpm = document.createElement('div');
-  gpm.className = 'gpm'; gpm.id = 'gpick'; gpm.hidden = true;
+  gpm.className = 'gpm st'; gpm.id = 'gpick'; gpm.hidden = true;
   gpm.innerHTML = `<div class="gpm-box" role="dialog" aria-modal="true" aria-label="Alege cadoul"><div class="gpm-hd"><input type="text" id="gpick-q" placeholder="Caută cadoul… (de exemplu: rose, lion)" autocomplete="off"><button type="button" class="b sm" id="gpick-any">Orice cadou</button><button type="button" class="b sm" id="gpick-x" aria-label="Închide">✕</button></div><p class="hint" id="gpick-note" style="margin:0"></p><div class="gpm-grid" id="gpick-grid"></div></div>`;
   document.body.appendChild(gpm);
   let gTarget = null;
@@ -1042,7 +1062,7 @@
       [!!(ME?.tiktok), 'Contul de TikTok', `@${esc(ME?.tiktok || '')}`, 'conectare'],
       [st === 'live' || LIVE_SEEN, 'Conectat la un live', st === 'live' ? 'Ești conectat acum' : 'Pornește live-ul și apasă Conectează', 'conectare'],
       [MEDIA.length > 0, 'Clipurile, imaginile sau muzica ta', MEDIA.length ? `${MEDIA.length} fișiere` : 'Încarcă-le din Acțiuni', 'actiuni'],
-      [acts > 0 && evs > 0, 'Alerte la cadourile tale', acts ? `${acts} acțiuni, ${evs} pornesc singure` : 'Fă prima acțiune', 'actiuni'],
+      [acts > 0 && evs > 0, 'Alerte la cadourile tale', acts ? `${acts} acțiuni, ${evs} pornesc singure` : 'Fă prima alertă în 3 pași', 'wiz'],
       [false, 'Overlay-urile în TikTok LIVE Studio', 'Copiază linkurile din Overlay-uri', 'overlay'],
     ];
     box.innerHTML = `<div class="sbox">
@@ -1051,7 +1071,7 @@
         <button type="button" class="scard" data-goto="sunete"><small>Sunete</small><strong>${snds}</strong><span>sunete rapide</span></button>
         <button type="button" class="scard" data-goto="overlay"><small>Overlay-uri</small><strong>${overlayList().filter(o => !o.hide).length}</strong><span>gata de pus pe live</span></button>
       </div>
-      <div class="card2"><div class="hd"><b>🚀 Primii pași</b></div><div class="chk">${steps.map(([ok, t, d, go]) => `<div class="${ok ? 'ok' : ''}"><i>${ok ? '✓' : '·'}</i><span><b>${t}</b><br><span class="hint">${d}</span></span><button type="button" class="b sm" data-goto="${go}">Deschide</button></div>`).join('')}</div></div>
+      <div class="card2"><div class="hd"><b>🚀 Primii pași</b></div><div class="chk">${steps.map(([ok, t, d, go]) => `<div class="${ok ? 'ok' : ''}"><i>${ok ? '✓' : '·'}</i><span><b>${t}</b><br><span class="hint">${d}</span></span>${go === 'wiz' ? '<button type="button" class="b sm pri" data-wiz>✨ Alertă nouă</button>' : `<button type="button" class="b sm" data-goto="${go}">Deschide</button>`}</div>`).join('')}</div></div>
       <div class="grid2" style="margin-top:12px">
         <div class="card2"><div class="hd"><b>💡 Ce poți face</b></div><p class="hint">Clipul tău la fiecare cadou, voce care citește chatul, roata norocului, subathon, bătălia echipelor, borcanul cu cadouri, likeathon, puncte și niveluri pentru spectatori, comenzi în chat. Totul gratuit.</p></div>
         <div class="card2"><div class="hd"><b>🧪 Încearcă fără live</b></div><p class="hint">Folosește Simulatorul din dreapta: trimite un cadou, un follow sau un mesaj de probă și vezi ce se întâmplă în overlay-uri.</p></div>
@@ -1146,6 +1166,77 @@
     } catch { alert('Fișierul nu e o salvare de setări a Studio-ului.'); }
   };
   $('#btn-install2').onclick = () => $('#btn-install').click();
+
+  // ------------------------------------------------------------ ✨ Alertă nouă (3 pași, pentru oricine)
+  const wz = document.createElement('div');
+  wz.className = 'gpm wz st'; wz.hidden = true;
+  document.body.appendChild(wz);
+  const W_TRIG = [['gift1', '🎁 Un cadou anume'], ['giftany', '💎 Orice cadou'], ['follow', '💖 Follow'], ['share', '📣 Share'], ['like', '❤️ Like-uri'], ['command', '💬 Comandă în chat'], ['member', '👋 Intră pe live'], ['subscribe', '⭐ Abonat']];
+  const W_TEXT = { gift1: 'Mersi, {user}, pentru {gift}! 🎁', giftany: '{user} a trimis {count}× {gift}! 🔥', follow: 'Bine ai venit, {user}! 💖', share: 'Mersi pentru share, {user}! 📣', like: '{user}, mersi pentru like-uri! ❤️', command: '{user}: {text}', member: 'Salut, {user}! 👋', subscribe: '{user} s-a abonat! ⭐' };
+  function wzMedia() {
+    const vis = MEDIA.filter(m => m.kind !== 'audio');
+    return `<label><input type="radio" name="wzm" value="" checked><div class="th">🚫</div><small>Fără</small></label>` + vis.map(m => `<label><input type="radio" name="wzm" value="${m.id}"><div class="th">${thumb(m)}</div><small title="${esc(m.name)}">${esc(m.name)}</small></label>`).join('');
+  }
+  function openWizard() {
+    wz.innerHTML = `<div class="gpm-box" role="dialog" aria-modal="true" aria-label="Alertă nouă">
+      <div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:18px">✨ Alertă nouă</b><button type="button" class="b sm" data-wzx aria-label="Închide">✕</button></div>
+      <h3><i>1</i> Când pornește?</h3>
+      <div class="wtiles">${W_TRIG.map(([v, l], i) => `<label><input type="radio" name="wzt" value="${v}"${i === 0 ? ' checked' : ''}>${l}</label>`).join('')}</div>
+      <div id="wz-par" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+      <h3><i>2</i> Ce apare și ce se aude?</h3>
+      <div class="wmedia" id="wz-media">${wzMedia()}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><label class="b sm" style="cursor:pointer">⬆ Încarcă un clip, o imagine sau o melodie<input type="file" id="wz-file" accept="image/png,image/jpeg,image/gif,image/webp,video/mp4,video/webm,audio/mpeg,audio/ogg,audio/wav,.mp3,.wav,.ogg,.gif,.mp4,.webm" hidden></label><span class="hint" id="wz-up"></span></div>
+      <div class="grid2"><label class="f">Muzică sau sunet<select id="wz-snd"><option value="s:none">— fără —</option>${sndSel('s:coin')}</select></label>
+        <label class="f">Efect<select id="wz-eff">${opt(EFF, 'confetti')}</select></label></div>
+      <h3><i>3</i> Ce scrie pe ecran?</h3>
+      <label class="f">Text pe ecran (opțional)<input type="text" id="wz-text" maxlength="140"></label>
+      <label class="f">Citit cu voce (opțional)<input type="text" id="wz-tts" maxlength="200" placeholder="de exemplu: Mulțumesc frumos, {user}!"></label>
+      <p class="hint" style="margin:0"><code>{user}</code> = numele spectatorului, <code>{gift}</code> = cadoul, <code>{count}</code> = câte, <code>{text}</code> = ce scrie după comandă.</p>
+      <div class="wfoot"><span class="hint" id="wz-msg" style="margin-right:auto"></span><button type="button" class="b" data-wzx>Renunță</button><button type="button" class="b pri" id="wz-go">✓ Creează și testează</button></div>
+    </div>`;
+    wz.hidden = false; wzPar();
+  }
+  function wzPar() {
+    const t = wz.querySelector('[name=wzt]:checked').value, par = $('#wz-par');
+    par.innerHTML = t === 'gift1' ? `<span style="display:flex;gap:6px;flex:1;min-width:240px"><input type="text" id="wz-gift" list="gift-list" placeholder="Numele cadoului, de exemplu Rose" autocomplete="off"><button type="button" class="b sm gp" data-gpick>🎁 Alege</button></span><label class="tog"><input type="checkbox" id="wz-per"> pentru fiecare cadou din serie</label>`
+      : t === 'giftany' ? `<label class="f" style="max-width:220px">De la câte 💎<input type="number" id="wz-min" min="1" value="1"></label>`
+      : t === 'like' ? `<label class="f" style="max-width:280px">La fiecare … like-uri de la un spectator<input type="number" id="wz-likes" min="10" step="10" value="100"></label>`
+      : t === 'command' ? `<label class="f" style="max-width:220px">Comanda<input type="text" id="wz-cmd" value="!dans" maxlength="30"></label><label class="f" style="max-width:220px">Costă puncte (0 = gratuit)<input type="number" id="wz-cost" min="0" value="0"></label>` : '';
+    const tx = $('#wz-text'); if (!tx.dataset.touched) tx.value = W_TEXT[t];
+  }
+  wz.addEventListener('change', async e => {
+    if (e.target.name === 'wzt') wzPar();
+    if (e.target.id === 'wz-file' && e.target.files[0]) {
+      const f = e.target.files[0]; e.target.value = '';
+      $('#wz-up').textContent = 'Se încarcă…';
+      try {
+        const it = await upload(f); await loadMedia();
+        if (it.kind === 'audio') { $('#wz-snd').innerHTML = `<option value="s:none">— fără —</option>${sndSel('m:' + it.id)}`; }
+        else { $('#wz-media').innerHTML = wzMedia(); const r = wz.querySelector(`[name=wzm][value="${it.id}"]`); if (r) r.checked = true; }
+        $('#wz-up').textContent = `✓ ${it.name} e încărcat și ales.`;
+      } catch (err) { $('#wz-up').textContent = err.message; }
+    }
+  });
+  wz.addEventListener('input', e => { if (e.target.id === 'wz-text') e.target.dataset.touched = '1'; if (e.target.id === 'wz-snd' && e.target.value.startsWith('s:')) window.MRPSound?.play(e.target.value.slice(2), 70); });
+  wz.addEventListener('click', async e => {
+    if (e.target.closest('[data-wzx]') || e.target === wz) { wz.hidden = true; return; }
+    if (!e.target.closest('#wz-go')) return;
+    const t = wz.querySelector('[name=wzt]:checked').value, v = id => ($('#' + id)?.value || '').trim();
+    if (t === 'gift1' && !v('wz-gift')) { $('#wz-msg').textContent = 'Scrie sau alege cadoul.'; $('#wz-gift').focus(); return; }
+    const media = wz.querySelector('[name=wzm]:checked')?.value || null, snd = v('wz-snd'), m = MEDIA.find(x => x.id === media);
+    const name = t === 'gift1' ? `Cadou: ${v('wz-gift')}` : (W_TRIG.find(x => x[0] === t) || [])[1].replace(/^\S+\s/, '');
+    const a = newAction({ name: name.slice(0, 40), media, mediaKind: m?.kind || null, audio: snd.startsWith('m:') ? snd.slice(2) : null, sound: snd.startsWith('s:') ? snd.slice(2) : 'none', text: v('wz-text'), tts: v('wz-tts'), effect: v('wz-eff') || 'none', duration: m?.kind === 'video' || snd.startsWith('m:') ? 0 : 6 });
+    const ev = newEvent({ trigger: t === 'gift1' || t === 'giftany' ? 'gift' : t, gift: t === 'gift1' ? v('wz-gift') : '', perGift: t === 'gift1' && !!$('#wz-per')?.checked, min: t === 'giftany' ? Number(v('wz-min')) || 1 : 1, likes: Number(v('wz-likes')) || 100, command: v('wz-cmd') || '!dans', cost: Number(v('wz-cost')) || 0, userCooldown: t === 'follow' || t === 'member' ? 60 : 0, actions: [a.id] });
+    S.actions.push(a); S.events.push(ev); openActs.add(a.id);
+    drawActs(); drawEvts(); markDirty();
+    wz.hidden = true;
+    goTab('actiuni');
+    await saveIfDirty();
+    await openActPrev(a.screen);
+    try { await api('/api/stream/actiune', { action: 'run', id: a.id }); } catch (err) { note(esc(err.message), 'sys', '⚠️'); }
+    note(`Alerta „${esc(a.name)}” e gata și pornește singură pe live.`, 'sys', '✨');
+  });
+  document.addEventListener('click', e => { if (e.target.closest('[data-wiz]')) openWizard(); });
 
   async function saveIfDirty() { if (JSON.stringify(S) !== SAVED) await $('#btn-save').onclick(); }
 

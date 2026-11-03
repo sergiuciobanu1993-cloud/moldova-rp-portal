@@ -365,6 +365,46 @@
                 <label class="f"><span>Câte iconițe cel mult: <span data-show="fireworks.maxIcons"></span></span><input type="range" min="5" max="80" data-s="fireworks.maxIcons"></label>
                 <p class="hint">Cadourile sar de jos pe tot ecranul, cu poza cadoului. Overlay-ul se pune pe tot ecranul live-ului.</p></div>
             </div>
+
+            <div class="card2" style="margin-top:12px">
+              <div class="hd"><b>⚔️ Bătălia echipelor</b><span id="battle-now" class="pill">oprită</span></div>
+              <p class="hint">Spectatorii aleg o echipă scriind comanda ei în chat. Cadourile din lista echipei îi dau puncte (1 💎 = 1 punct). Câștigă echipa cu cele mai multe puncte la final.</p>
+              <div class="grid3"><label class="f">Titlu<input type="text" data-s="battle.title" maxlength="60"></label>
+                <label class="f">Durata (minute)<input type="number" min="0.5" max="180" step="0.5" data-s="battle.minutes"></label>
+                <label class="f">Puncte pe comandă<input type="number" min="0" max="1000" data-s="battle.cmdPoints"></label></div>
+              <div class="grid2"><label class="f">Puncte la 10 like-uri (0 = like-urile nu contează)<input type="number" min="0" max="1000" data-s="battle.likePoints"></label>
+                <label class="tog" style="align-self:end;min-height:40px"><input type="checkbox" data-s="battle.anyGift"> Orice alt cadou merge la echipa aleasă de spectator</label></div>
+              <div id="teams" style="display:grid;gap:8px"></div>
+              <div style="display:flex;gap:6px;flex-wrap:wrap"><button type="button" class="b sm" id="btn-team-add">+ Echipă</button>
+                <span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap"><button type="button" class="b sm pri" data-act="battle-start">▶ Pornește bătălia</button><button type="button" class="b sm" data-act="battle-add1">+1 min</button><button type="button" class="b sm" data-act="battle-stop">⏹ Termină acum</button><button type="button" class="b sm red" data-act="battle-reset">Golește</button></span></div>
+            </div>
+
+            <div class="grid2" style="margin-top:12px">
+              <div class="card2"><div class="hd"><b>🫙 Borcanul cu cadouri</b><button type="button" class="b sm red" data-act="jar-reset">Golește</button></div>
+                <p class="hint">Fiecare cadou cade în vas și rămâne acolo, cu poza lui.</p>
+                <div class="grid2"><label class="f">Titlu<input type="text" data-s="jar.title" maxlength="60"></label>
+                  <label class="f">Vasul<select data-s="jar.shape"><option value="borcan">🫙 Borcan de sticlă</option><option value="butoi">🛢 Butoi de vin</option><option value="ulcior">🏺 Ulcior de lut</option></select></label></div>
+                <div class="grid2"><label class="f">Câte cadouri încap<input type="number" min="20" max="250" data-s="jar.max"></label>
+                  <label class="f">Doar cadouri de la (💎)<input type="number" min="1" data-s="jar.min"></label></div></div>
+              <div class="card2"><div class="hd"><b>⛲ Fântâna de like-uri</b></div>
+                <p class="hint">Like-urile țâșnesc de jos pe ecran. Din când în când apare și poza celui care dă like.</p>
+                <div class="grid3"><label class="f">Iconița<input type="text" data-s="fountain.emoji" maxlength="8"></label>
+                  <label class="f">O iconiță la … like-uri<input type="number" min="1" max="500" data-s="fountain.perLikes"></label>
+                  <label class="f">Cel mult pe ecran<input type="number" min="10" max="400" data-s="fountain.max"></label></div>
+                <label class="tog"><input type="checkbox" data-s="fountain.avatars"> Arată și pozele spectatorilor</label></div>
+              <div class="card2"><div class="hd"><b>💥 Tunul de cadouri</b></div>
+                <p class="hint">Fiecare cadou e tras cu tunul peste ecran, cu numele celui care l-a trimis.</p>
+                <div class="grid2"><label class="f">Tunuri<select data-s="cannon.side"><option value="both">Două, în ambele colțuri</option><option value="left">Unul, în stânga</option><option value="right">Unul, în dreapta</option></select></label>
+                  <label class="f">Cadouri de la (💎)<input type="number" min="1" data-s="cannon.min"></label></div>
+                <label class="tog"><input type="checkbox" data-s="cannon.names"> Scrie numele lângă cadou</label></div>
+              <div class="card2"><div class="hd"><b>🕒 Ultimii de pe live</b></div>
+                <div class="chips"><label><input type="checkbox" data-s="last.follower"> 💖 Ultimul follower</label><label><input type="checkbox" data-s="last.gifter"> 🎁 Ultimul cadou</label><label><input type="checkbox" data-s="last.sharer"> 📣 Ultimul share</label><label><input type="checkbox" data-s="last.subscriber"> ⭐ Ultimul abonat</label></div>
+                <label class="f">Așezare<select data-s="last.layout"><option value="column">Unul sub altul</option><option value="row">Unul lângă altul</option></select></label></div>
+              <div class="card2"><div class="hd"><b>😂 Emoji din chat</b></div>
+                <p class="hint">Emoji-urile scrise de spectatori în chat zboară pe ecran.</p>
+                <div class="grid2"><label class="f">Mărime (px)<input type="number" min="24" max="160" data-s="emoji.size"></label>
+                  <label class="f">Cel mult dintr-un mesaj<input type="number" min="1" max="10" data-s="emoji.max"></label></div></div>
+            </div>
           </div>
 
           <!-- ASPECT -->
@@ -388,7 +428,7 @@
               <li>Ca să se audă sunetele alertelor în OBS, bifează <b>Control audio via OBS</b>.</li>
             </ol>
             <div class="ovs" id="ovs" style="margin-top:14px"></div>
-            <div class="prev" id="ov-prev" hidden><div class="bar"><span id="ov-prev-name"></span><label class="tog" style="margin-left:auto;font-size:12px"><input type="checkbox" id="ov-demo"> Date de probă</label><button type="button" class="b sm" id="ov-prev-close">Închide</button></div><iframe id="ov-frame" title="Previzualizare overlay"></iframe></div>
+            <div class="prev" id="ov-prev" hidden><div class="bar"><span id="ov-prev-name"></span><span class="hint" id="ov-prev-hint" style="margin-left:10px"></span><label class="tog" style="margin-left:auto;font-size:12px"><input type="checkbox" id="ov-demo" checked> Date de probă</label><button type="button" class="b sm" id="ov-prev-close">Închide</button></div><iframe id="ov-frame" title="Previzualizare overlay"></iframe></div>
             <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button type="button" class="b sm red" id="btn-newkey">🔑 Schimbă linkurile</button><span class="hint">Linkurile vechi se opresc imediat.</span></div>
           </div>
 
@@ -464,7 +504,20 @@
   const setP = (o, p, v) => { const ks = p.split('.'); let x = o; ks.slice(0, -1).forEach(k => { x = x[k] ||= {}; }); x[ks[ks.length - 1]] = v; };
   const SOUNDS = [['coin', 'Monede'], ['pop', 'Pop'], ['whoosh', 'Vâjâit'], ['fanfare', 'Fanfară'], ['laser', 'Laser'], ['bell', 'Clopoțel'], ['drum', 'Tobă'], ['magic', 'Magie'], ['none', 'Fără sunet']];
   $$('[data-sounds]').forEach(sel => { sel.innerHTML = SOUNDS.map(([v, l]) => `<option value="${v}">${l}</option>`).join(''); });
+  function drawTeams() {
+    const t = S.battle.teams;
+    $('#teams').innerHTML = t.map((x, i) => `<div class="goal-row" style="grid-template-columns:50px minmax(0,1fr) 150px minmax(0,1.3fr) auto">
+      <input type="color" data-s="battle.teams.${i}.color" aria-label="Culoarea echipei ${i + 1}">
+      <input type="text" data-s="battle.teams.${i}.name" maxlength="30" placeholder="Numele echipei" aria-label="Numele echipei ${i + 1}">
+      <input type="text" data-s="battle.teams.${i}.command" maxlength="24" placeholder="!comanda" aria-label="Comanda echipei ${i + 1}">
+      <input type="text" data-s="battle.teams.${i}.gifts" list="gift-list" maxlength="200" placeholder="cadourile ei, cu virgulă: Rose, Lion" aria-label="Cadourile echipei ${i + 1}">
+      <button type="button" class="b sm red" data-team-del="${i}"${t.length <= 2 ? ' disabled' : ''} aria-label="Șterge echipa">✕</button></div>`).join('');
+    $('#btn-team-add').disabled = t.length >= 4;
+  }
+  $('#btn-team-add').onclick = () => { read(); const n = S.battle.teams.length; S.battle.teams.push({ name: `Echipa ${n + 1}`, color: ['#ff4d6a', '#4aa3ff', '#3ddc84', '#ffd23f'][n], command: '', gifts: '' }); fill(); };
+  $('#teams').addEventListener('click', e => { const d = e.target.closest('[data-team-del]'); if (!d) return; read(); S.battle.teams.splice(Number(d.dataset.teamDel), 1); fill(); });
   function fill() {
+    drawTeams();
     $$('[data-s]').forEach(el => {
       const v = getP(S, el.dataset.s);
       if (el.type === 'checkbox') el.checked = !!v; else if (v != null) el.value = v;
@@ -503,7 +556,7 @@
 
   // ------------------------------------------------------------ fișiere, acțiuni, evenimente
   let MEDIA = [];
-  const kb = n => n >= 1048576 ? (n / 1048576).toFixed(1).replace('.', ',') + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB';
+  const kb = n => !n ? '0 KB' : n >= 1048576 ? (n / 1048576).toFixed(1).replace('.', ',') + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB';
   const mUrl = id => '/api/stream/media/' + id;
   const KIND_IC = { image: '🖼', video: '🎬', audio: '🎵' };
   async function loadMedia() {
@@ -741,6 +794,12 @@
       ['points', '⭐ Puncte spectatori', '380 × 420', 'Cei mai fideli spectatori, de la un live la altul.'],
       ['fireworks', '🎆 Artificii din cadouri', '1080 × 1920', 'Pe tot ecranul live-ului.'],
       ['rotator', '🔁 Texte care se rotesc', '700 × 90', 'Mesajele tale, pe rând.'],
+      ['battle', '⚔️ Bătălia echipelor', '640 × 300', 'Scorul echipelor, timpul rămas și câștigătorul.'],
+      ['jar', '🫙 Borcanul cu cadouri', '420 × 600', 'Cadourile cad în borcan, butoi sau ulcior și rămân acolo.'],
+      ['fountain', '⛲ Fântâna de like-uri', '1080 × 1920', 'Pe tot ecranul live-ului.'],
+      ['cannon', '💥 Tunul de cadouri', '1080 × 1920', 'Pe tot ecranul live-ului.'],
+      ['last', '🕒 Ultimii de pe live', '420 × 320', 'Ultimul follower, ultimul cadou, ultimul share.'],
+      ['emoji', '😂 Emoji din chat', '1080 × 1920', 'Pe tot ecranul live-ului.'],
     ];
     $('#ovs').innerHTML = list.map(([w, name, size, desc, extra = '']) => `<div class="ov"><div><b>${esc(name)}</b><span class="sz">${size}</span></div>
       <div class="acts"><button type="button" class="b sm" data-copy="${esc(ovUrl(w, extra))}">Copiază</button><button type="button" class="b sm" data-prev="${esc(ovUrl(w, extra))}" data-name="${esc(name)}">Vezi</button></div>
@@ -751,7 +810,11 @@
     if (c) { try { await navigator.clipboard.writeText(c.dataset.copy); c.textContent = 'Copiat ✓'; } catch { c.closest('.ov').querySelector('input').select(); c.textContent = 'Apasă Ctrl+C'; } setTimeout(() => { c.textContent = 'Copiază'; }, 1800); }
     if (p) { $('#ov-prev').hidden = false; $('#ov-prev-name').textContent = p.dataset.name; $('#ov-frame').dataset.src = p.dataset.prev; setPrev(); $('#ov-prev').scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
   });
-  function setPrev() { const f = $('#ov-frame'); f.src = f.dataset.src + ($('#ov-demo').checked ? '&demo=1' : ''); }
+  function setPrev() {
+    const f = $('#ov-frame'), demo = $('#ov-demo').checked;
+    f.src = f.dataset.src + (demo ? '&demo=1' : '');
+    $('#ov-prev-hint').textContent = demo ? 'Arată evenimente de probă.' : 'Arată doar live-ul tău: apasă butoanele de test din stânga (Cadou, Follow, Mesaj…).';
+  }
   $('#ov-demo').onchange = setPrev;
   $('#ov-prev-close').onclick = () => { $('#ov-prev').hidden = true; $('#ov-frame').src = 'about:blank'; };
   $('#btn-newkey').onclick = async () => {
@@ -787,8 +850,18 @@
     b.disabled = false;
   };
   let timerLeft = 0, timerRun = false, timerAt = 0;
+  let BT = null, btAt = 0;
+  function drawBattle(b) { if (b) { BT = b; btAt = Date.now(); } }
+  setInterval(() => {
+    const el = $('#battle-now'); if (!el || !BT || !S) return;
+    const sc = (BT.scores || []).map((v, i) => `${S.battle.teams[i]?.name || ''} ${fmt(v)}`).join(' · ');
+    const left = Math.max(0, Math.ceil((BT.left - (Date.now() - btAt)) / 1000));
+    el.textContent = BT.running ? `▶ ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')} · ${sc}` : BT.winner != null ? `gata · ${sc}` : 'oprită';
+    el.className = 'pill' + (BT.running ? ' live' : '');
+  }, 500);
   function drawState(st) {
     if (!st) return;
+    if (st.battle) drawBattle(st.battle);
     $('#k-viewers').textContent = fmt(st.viewers); $('#k-likes').textContent = fmt(st.likes);
     $('#k-diamonds').textContent = fmt(st.diamonds); $('#k-follows').textContent = fmt(st.follows);
     if (st.timer) setTimer(st.timer);
@@ -826,6 +899,8 @@
     if (e.t === 'milestone') { note(`Ați ajuns la <b>${fmt(e.total)}</b> de like-uri!`, 'gift', '❤️'); speak(e.alert?.tts); return; }
     if (e.t === 'action') { note(`${esc(e.name)}${e.user?.name ? ' · ' + who(e.user) : ''}${e.test ? ' <span style="color:var(--muted)">(test)</span>' : ''}`, 'gift', '⚡'); speak(e.tts); return; }
     if (e.t === 'notice') { note(esc(e.text), 'sys', '⭐'); return; }
+    if (e.t === 'battle') { drawBattle(e.battle); if (e.ended) { const t = S.battle.teams[e.battle.winner]; note(t ? `Bătălia s-a terminat: câștigă <b>${esc(t.name)}</b>!` : 'Bătălia s-a terminat la egalitate.', 'gift', '⚔️'); } return; }
+    if (e.t === 'jar-reset') return;
     if (e.t === 'subscribe') { note(`${who(e.user)} s-a abonat`, 'gift', '⭐'); return; }
     if (e.t === 'wheel') { note(`Roata s-a oprit la <b>${esc(e.label)}</b>${e.by ? ' · ' + esc(e.by) : ''}`, 'gift', '🎡'); return; }
     if (e.t === 'like') {
@@ -877,8 +952,8 @@
     const t = e.target.closest('[data-test]'), a = e.target.closest('[data-act]');
     if (!t && !a) return;
     const btn = t || a;
-    if (a && /reset$/.test(a.dataset.act) && a.dataset.act !== 'timer-reset' && !confirm(a.dataset.act === 'points-reset' ? 'Ștergi toate punctele spectatorilor? Nu se poate anula.' : 'Pornești o sesiune nouă? Contoarele, topul și obiectivele încep de la zero.')) return;
-    if (a?.dataset.act === 'session-new' && !confirm('Pornești o sesiune nouă? Contoarele, topul și obiectivele încep de la zero.')) return;
+    const ASK = { 'points-reset': 'Ștergi toate punctele spectatorilor? Nu se poate anula.', 'session-new': 'Pornești o sesiune nouă? Contoarele, topul, obiectivele și „ultimii” încep de la zero.', 'battle-reset': 'Golești scorul bătăliei?', 'jar-reset': 'Golești borcanul cu cadouri?', 'battle-stop': 'Termini bătălia acum?' };
+    if (a && ASK[a.dataset.act] && !confirm(ASK[a.dataset.act])) return;
     btn.disabled = true;
     try {
       if (t) await api('/api/stream/test', { type: t.dataset.test, gift: t.dataset.gift != null ? Number(t.dataset.gift) : undefined, count: t.dataset.test === 'like' ? 50 : undefined });

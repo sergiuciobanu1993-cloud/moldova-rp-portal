@@ -126,6 +126,40 @@ body.t-arcade .stage .cap{font-size:clamp(14px,2vw,26px);line-height:1.6}
 #flash.go{animation:fl .7s ease-out}
 @keyframes fl{0%{opacity:.85}100%{opacity:0}}
 #fx{position:fixed;inset:0;width:100vw;height:100vh;pointer-events:none;z-index:1}
+/* canvas pe tot overlay-ul (borcan, fântână, tun) */
+#cv{position:fixed;inset:0;width:100vw;height:100vh;display:block}
+.jar-hd{position:fixed;left:0;right:0;top:6px;text-align:center;z-index:2}
+.jar-hd .ttl{margin:0}
+.jar-hd b{font-size:15px}
+/* bătălia echipelor */
+#bt{margin:8px;padding:14px 16px}
+#bt .top{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px}
+#bt .clock{font-weight:700;font-size:22px;font-variant-numeric:tabular-nums}
+#bt .teams{display:grid;gap:10px}
+#bt .tm{position:relative;padding:10px 12px;border-radius:calc(var(--r) * .6);background:color-mix(in srgb,var(--tc) 22%,transparent);border:2px solid color-mix(in srgb,var(--tc) 70%,transparent);transition:transform .25s}
+#bt .tm.hit{transform:scale(1.04)}
+#bt .tm b{display:block;font-size:17px}
+#bt .tm .sc{font-size:30px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.1}
+#bt .tm small{color:var(--sub);font-size:12px}
+#bt .tm .pl{position:absolute;right:10px;top:6px;font-weight:900;color:#fff;animation:plus 1.4s ease-out forwards}
+#bt .rope{display:flex;height:16px;border-radius:99px;overflow:hidden;margin-top:12px;background:rgba(255,255,255,.1)}
+#bt .rope i{display:block;height:100%;transition:width .6s cubic-bezier(.2,.9,.3,1)}
+#bt .win{margin-top:12px;text-align:center;font-size:24px;font-weight:700;animation:alIn .6s both}
+#bt .how{margin-top:10px;color:var(--sub);font-size:12.5px;text-align:center}
+body.t-arcade #bt .tm .sc{font-size:20px}
+/* ultimii */
+#last{display:flex;gap:10px;margin:8px}
+#last.column{flex-direction:column}
+#last .it{display:flex;align-items:center;gap:12px;padding:10px 14px;min-width:0;flex:1}
+#last .it.new{animation:alIn .6s both}
+#last .it .tx{min-width:0}
+#last .it small{display:block;color:var(--accent);font-size:11px;letter-spacing:.1em;text-transform:uppercase;font-weight:700}
+#last .it b{display:block;font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#last .it span{color:var(--sub);font-size:13px}
+#last .gimg{width:22px;height:22px;vertical-align:-5px}
+/* emoji din chat */
+.emo{position:fixed;bottom:-80px;pointer-events:none;animation:emo 5s linear forwards;will-change:transform}
+@keyframes emo{0%{transform:translate(0,0) scale(.6);opacity:0}8%{opacity:1;transform:translate(var(--dx1),-12vh) scale(1)}100%{transform:translate(var(--dx2),-115vh) scale(1.1);opacity:.9}}
 #err{position:fixed;left:8px;bottom:8px;background:#300;color:#fbb;font:12px Inter,sans-serif;padding:6px 10px;border-radius:6px}
 @media (prefers-reduced-motion:reduce){.al,.msg{animation:none}}
 </style>
@@ -477,17 +511,279 @@ body.t-arcade .stage .cap{font-size:clamp(14px,2vw,26px);line-height:1.6}
     };
   });
 
+  // ----------------------------------------------------------- utilitare pentru canvas
+  const imgCache = new Map();
+  function imgOf(url) {
+    if (!safeUrl(url)) return null;
+    if (!imgCache.has(url)) { const im = new Image(); im.referrerPolicy = 'no-referrer'; im.src = url; imgCache.set(url, im); if (imgCache.size > 120) imgCache.delete(imgCache.keys().next().value); }
+    const im = imgCache.get(url); return im.complete && im.naturalWidth ? im : null;
+  }
+  function fullCanvas() {
+    const cv = document.createElement('canvas'); cv.id = 'cv'; document.body.appendChild(cv);
+    const cx = cv.getContext('2d');
+    const fit = () => { cv.width = innerWidth * devicePixelRatio; cv.height = innerHeight * devicePixelRatio; };
+    fit(); addEventListener('resize', fit);
+    return { cv, cx };
+  }
+  const accent = () => getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#ff8a1f';
+  function drawIcon(cx, img, emoji, size) {
+    const im = imgOf(img);
+    if (im) cx.drawImage(im, -size / 2, -size / 2, size, size);
+    else { cx.font = `${size * .9}px serif`; cx.textAlign = 'center'; cx.textBaseline = 'middle'; cx.fillText(emoji || '🎁', 0, size * .04); }
+  }
+
+  // ---- borcanul cu cadouri: cadourile cad și se adună într-un borcan, butoi sau ulcior
+  widgets.jar = (() => {
+    root.innerHTML = '<div class="jar-hd"><p class="ttl"></p><b class="num"></b></div>';
+    const { cv, cx } = fullCanvas();
+    let bodies = [], shapeName = '', total = 0;
+    const d = () => devicePixelRatio;
+    // forma: jumătatea de lățime la înălțimea y (0 = sus, 1 = jos), pentru fiecare vas
+    const SHAPES = {
+      borcan: t => t < .08 ? .34 : .42,
+      butoi: t => .34 + Math.sin(Math.PI * t) * .1,
+      ulcior: t => { const sm = x => x * x * (3 - 2 * x); if (t < .14) return .13 + (.14 - t) * .25; if (t < .4) return .13 + sm((t - .14) / .26) * .3; return .43 - Math.pow((t - .4) / .6, 1.6) * .15; },
+    };
+    const geo = () => { const W0 = cv.width, H0 = cv.height, top = H0 * .14, bot = H0 * .97, cxm = W0 / 2, scale = Math.min(W0, (bot - top) * .95); return { W0, H0, top, bot, cxm, scale }; };
+    function halfW(y, g) { const t = Math.max(0, Math.min(1, (y - g.top) / (g.bot - g.top))); return (SHAPES[shapeName] || SHAPES.borcan)(t) * g.scale; }
+    function add(img, n, dia) {
+      const g = geo(), max = S?.jar?.max || 120;
+      for (let i = 0; i < n; i++) {
+        const r = (16 + Math.min(14, Math.log2(1 + (dia || 1)) * 2)) * d();
+        bodies.push({ x: g.cxm + (Math.random() - .5) * 40 * d(), y: g.top - 40 * d() - i * r * 2.2, vx: (Math.random() - .5) * 3, vy: 0, r, img, rot: Math.random() * 6, vr: (Math.random() - .5) * .2 });
+      }
+      while (bodies.length > max) bodies.shift();
+      total += n; head();
+    }
+    function head() { root.querySelector('.ttl').textContent = S?.jar?.title || ''; root.querySelector('b').textContent = total ? `${fmt(total)} cadouri` : ''; }
+    function vessel(g) {
+      const steps = 40, pts = [];
+      for (let i = 0; i <= steps; i++) { const y = g.top + (g.bot - g.top) * i / steps; pts.push([y, halfW(y, g)]); }
+      cx.save(); cx.lineWidth = 5 * d();
+      const path = () => { cx.beginPath(); pts.forEach(([y, w], i) => i ? cx.lineTo(g.cxm - w, y) : cx.moveTo(g.cxm - w, y)); for (let i = pts.length - 1; i >= 0; i--) cx.lineTo(g.cxm + pts[i][1], pts[i][0]); cx.closePath(); };
+      path();
+      if (shapeName === 'butoi') {
+        cx.fillStyle = 'rgba(120,70,30,.28)'; cx.fill(); cx.strokeStyle = '#7a4a22'; cx.stroke();
+        for (const t of [.12, .36, .64, .88]) { const y = g.top + (g.bot - g.top) * t, w = halfW(y, g); cx.beginPath(); cx.moveTo(g.cxm - w, y); cx.lineTo(g.cxm + w, y); cx.strokeStyle = '#3b3f45'; cx.lineWidth = 7 * d(); cx.stroke(); }
+      } else if (shapeName === 'ulcior') {
+        cx.fillStyle = 'rgba(190,95,50,.22)'; cx.fill(); cx.strokeStyle = '#c0663a'; cx.stroke();
+        const y = g.top + (g.bot - g.top) * .5, w = halfW(y, g); cx.beginPath(); cx.moveTo(g.cxm - w * .9, y); cx.lineTo(g.cxm + w * .9, y); cx.setLineDash([10 * d(), 8 * d()]); cx.strokeStyle = 'rgba(255,220,180,.5)'; cx.lineWidth = 3 * d(); cx.stroke();
+      } else {
+        const gr = cx.createLinearGradient(g.cxm - g.scale * .42, 0, g.cxm + g.scale * .42, 0);
+        gr.addColorStop(0, 'rgba(255,255,255,.16)'); gr.addColorStop(.25, 'rgba(255,255,255,.04)'); gr.addColorStop(.8, 'rgba(255,255,255,.08)'); gr.addColorStop(1, 'rgba(255,255,255,.2)');
+        cx.fillStyle = gr; cx.fill(); cx.strokeStyle = 'rgba(255,255,255,.55)'; cx.stroke();
+        cx.fillStyle = accent(); cx.fillRect(g.cxm - g.scale * .36, g.top - 16 * d(), g.scale * .72, 16 * d());
+      }
+      cx.restore();
+    }
+    function step() {
+      const g = geo(), G = .45 * d();
+      for (const b of bodies) { b.vy += G; b.vx *= .995; b.x += b.vx; b.y += b.vy; b.rot += b.vr; b.vr *= .98; }
+      for (let it = 0; it < 3; it++) {
+        for (let i = 0; i < bodies.length; i++) for (let j = i + 1; j < bodies.length; j++) {
+          const a = bodies[i], b = bodies[j], dx = b.x - a.x, dy = b.y - a.y, dist = Math.hypot(dx, dy), min = a.r + b.r;
+          if (dist > 0 && dist < min) { const p = (min - dist) / 2, nx = dx / dist, ny = dy / dist; a.x -= nx * p; a.y -= ny * p; b.x += nx * p; b.y += ny * p; const rv = (b.vx - a.vx) * nx + (b.vy - a.vy) * ny; if (rv < 0) { const k = rv * .5; a.vx += nx * k; a.vy += ny * k; b.vx -= nx * k; b.vy -= ny * k; } }
+        }
+        for (const b of bodies) {
+          if (b.y + b.r > g.bot) { b.y = g.bot - b.r; b.vy *= -.25; b.vx *= .8; }
+          if (b.y > g.top) { const w = halfW(b.y, g) - b.r; if (b.x < g.cxm - w) { b.x = g.cxm - w; b.vx *= -.3; } if (b.x > g.cxm + w) { b.x = g.cxm + w; b.vx *= -.3; } }
+        }
+      }
+    }
+    function frame() {
+      shapeName = S?.jar?.shape || 'borcan';
+      cx.clearRect(0, 0, cv.width, cv.height);
+      step();
+      const g = geo();
+      vessel(g);
+      for (const b of bodies) { cx.save(); cx.translate(b.x, b.y); cx.rotate(b.rot); drawIcon(cx, b.img, b.d >= 100 ? '💎' : '🎁', b.r * 2); cx.restore(); }
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+    return {
+      draw: head,
+      hello(e) { bodies = []; total = 0; (e.jar || []).forEach((x, i) => setTimeout(() => add(x.img, x.n || 1, x.d), i * 25)); },
+      ev(e) {
+        if (e.t === 'gift' && e.diamonds >= (S?.jar?.min || 1)) add(e.img, Math.min(e.count || 1, 20), e.diamonds / (e.count || 1));
+        if (e.t === 'jar-reset' || e.t === 'reset') { bodies = []; total = 0; head(); }
+      },
+    };
+  });
+
+  // ---- fântâna de like-uri: inimile țâșnesc de jos, cu poza celui care dă like din când în când
+  widgets.fountain = (() => {
+    const { cv, cx } = fullCanvas();
+    let parts = [], acc = 0, run = false, since = 0;
+    function spawn(n, u) {
+      const d = devicePixelRatio, max = S?.fountain?.max || 160;
+      for (let i = 0; i < n && parts.length < max; i++) {
+        const ang = -Math.PI / 2 + (Math.random() - .5) * .9, sp = (11 + Math.random() * 8) * d;
+        parts.push({ x: cv.width / 2 + (Math.random() - .5) * 30 * d, y: cv.height + 10 * d, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp, s: (26 + Math.random() * 20) * d, life: 0, hue: Math.random() * 40 - 20 });
+      }
+      since += n;
+      if (u && S?.fountain?.avatars !== false && safeUrl(u.avatar) && since >= 25 && parts.length < max) { since = 0; parts.push({ x: cv.width / 2, y: cv.height + 10 * d, vx: (Math.random() - .5) * 6 * d, vy: -16 * d, s: 54 * d, life: 0, av: u.avatar, name: u.name }); }
+      if (!run) { run = true; requestAnimationFrame(tick); }
+    }
+    function tick() {
+      const d = devicePixelRatio, G = .3 * d, emo = S?.fountain?.emoji || '❤️';
+      cx.clearRect(0, 0, cv.width, cv.height);
+      parts = parts.filter(p => p.life < 260 && p.y < cv.height + 120 * d);
+      for (const p of parts) {
+        p.life++; p.vy += G; p.x += p.vx; p.y += p.vy;
+        cx.globalAlpha = Math.min(1, p.life / 8) * (p.vy > 0 ? Math.max(0, 1 - (p.life - 60) / 160) : 1);
+        if (p.av) {
+          const im = imgOf(p.av); cx.save(); cx.beginPath(); cx.arc(p.x, p.y, p.s / 2, 0, Math.PI * 2); cx.closePath();
+          cx.lineWidth = 4 * d; cx.strokeStyle = accent(); cx.stroke(); cx.clip(); if (im) cx.drawImage(im, p.x - p.s / 2, p.y - p.s / 2, p.s, p.s); cx.restore();
+        } else { cx.font = `${p.s}px serif`; cx.textAlign = 'center'; cx.textBaseline = 'middle'; cx.fillText(emo, p.x, p.y); }
+      }
+      cx.globalAlpha = 1;
+      if (parts.length) requestAnimationFrame(tick); else { run = false; cx.clearRect(0, 0, cv.width, cv.height); }
+    }
+    return {
+      ev(e) {
+        if (e.t !== 'like') return;
+        acc += e.count || 1;
+        const per = S?.fountain?.perLikes || 5, n = Math.floor(acc / per);
+        if (n) { acc -= n * per; spawn(Math.min(n, 40), e.user); }
+      },
+    };
+  });
+
+  // ---- tunul de cadouri: fiecare cadou e tras cu tunul peste ecran, cu numele celui care l-a trimis
+  widgets.cannon = (() => {
+    const { cv, cx } = fullCanvas();
+    let shots = [], puffs = [], recoil = { left: 0, right: 0 }, run = false, flip = false;
+    const sides = () => { const s2 = S?.cannon?.side || 'both'; return s2 === 'both' ? ['left', 'right'] : [s2]; };
+    function base(side) { const d = devicePixelRatio; return side === 'left' ? { x: 70 * d, y: cv.height - 60 * d, dir: 1 } : { x: cv.width - 70 * d, y: cv.height - 60 * d, dir: -1 }; }
+    function fire(e) {
+      const d = devicePixelRatio, n = Math.min(e.count || 1, 10), sd = sides();
+      for (let i = 0; i < n; i++) setTimeout(() => {
+        const side = sd.length > 1 ? (flip = !flip, flip ? 'left' : 'right') : sd[0], b = base(side);
+        const tx = side === 'left' ? cv.width * (.55 + Math.random() * .35) : cv.width * (.1 + Math.random() * .35), T = 70 + Math.random() * 20;
+        const vx = (tx - b.x) / T, vy = -(cv.height * (.55 + Math.random() * .25)) / (T / 2) * .98;
+        shots.push({ x: b.x + b.dir * 60 * d, y: b.y - 40 * d, vx, vy, g: -vy / (T / 2), img: e.img, name: S?.cannon?.names === false ? '' : e.user?.name || '', s: (44 + Math.min(30, Math.log2(1 + e.diamonds / n) * 4)) * d, rot: 0, life: 0, trail: [] });
+        recoil[side] = 1; puffs.push({ x: b.x + b.dir * 70 * d, y: b.y - 46 * d, r: 8 * d, life: 0, c: '#fff' });
+        play('drum', 30);
+        if (!run) { run = true; requestAnimationFrame(tick); }
+      }, i * 160);
+    }
+    function drawCannon(side) {
+      const d = devicePixelRatio, b = base(side), r = recoil[side];
+      cx.save(); cx.translate(b.x - b.dir * r * 14 * d, b.y); cx.scale(b.dir, 1);
+      cx.save(); cx.rotate(-Math.PI / 5);
+      const gr = cx.createLinearGradient(0, -18 * d, 0, 18 * d); gr.addColorStop(0, '#5d636b'); gr.addColorStop(.5, '#2a2e33'); gr.addColorStop(1, '#14171a');
+      cx.fillStyle = gr; cx.beginPath(); cx.roundRect ? cx.roundRect(-10 * d, -18 * d, 96 * d, 36 * d, 10 * d) : cx.rect(-10 * d, -18 * d, 96 * d, 36 * d); cx.fill();
+      cx.fillStyle = accent(); cx.fillRect(70 * d, -20 * d, 10 * d, 40 * d); cx.fillRect(16 * d, -19 * d, 8 * d, 38 * d);
+      cx.restore();
+      cx.fillStyle = '#6b4325'; cx.beginPath(); cx.arc(0, 18 * d, 26 * d, 0, Math.PI * 2); cx.fill(); cx.strokeStyle = '#2b1a0e'; cx.lineWidth = 5 * d; cx.stroke();
+      cx.fillStyle = accent(); cx.beginPath(); cx.arc(0, 18 * d, 7 * d, 0, Math.PI * 2); cx.fill();
+      cx.restore();
+      recoil[side] *= .85;
+    }
+    function tick() {
+      const d = devicePixelRatio;
+      cx.clearRect(0, 0, cv.width, cv.height);
+      for (const sd of sides()) drawCannon(sd);
+      shots = shots.filter(s2 => s2.life < 200 && s2.y < cv.height + 100 * d);
+      for (const s2 of shots) {
+        s2.life++; s2.vy += s2.g; s2.x += s2.vx; s2.y += s2.vy; s2.rot += .08;
+        s2.trail.push([s2.x, s2.y]); if (s2.trail.length > 14) s2.trail.shift();
+        s2.trail.forEach(([x, y], i) => { cx.globalAlpha = i / 30; cx.fillStyle = accent(); cx.beginPath(); cx.arc(x, y, (i / 14) * 8 * d, 0, Math.PI * 2); cx.fill(); });
+        cx.globalAlpha = 1; cx.save(); cx.translate(s2.x, s2.y); cx.rotate(s2.rot); drawIcon(cx, s2.img, '🎁', s2.s); cx.restore();
+        if (s2.name) { cx.font = `700 ${15 * d}px ${getComputedStyle(document.body).fontFamily}`; cx.textAlign = 'center'; cx.lineWidth = 4 * d; cx.strokeStyle = 'rgba(0,0,0,.75)'; cx.strokeText(s2.name, s2.x, s2.y + s2.s * .75); cx.fillStyle = '#fff'; cx.fillText(s2.name, s2.x, s2.y + s2.s * .75); }
+        if (s2.vy > 0 && s2.y > cv.height * .78 && !s2.boom) { s2.boom = true; for (let i = 0; i < 14; i++) puffs.push({ x: s2.x, y: s2.y, vx: (Math.random() - .5) * 10 * d, vy: (Math.random() - .8) * 10 * d, r: (3 + Math.random() * 4) * d, life: 0, c: accent() }); }
+      }
+      puffs = puffs.filter(p => p.life < 30);
+      for (const p of puffs) { p.life++; p.x += p.vx || 0; p.y += p.vy || 0; if (p.vy != null) p.vy += .4 * d; cx.globalAlpha = 1 - p.life / 30; cx.fillStyle = p.c; cx.beginPath(); cx.arc(p.x, p.y, p.r * (p.vx == null ? 1 + p.life / 4 : 1), 0, Math.PI * 2); cx.fill(); }
+      cx.globalAlpha = 1;
+      if (shots.length || puffs.length || recoil.left > .01 || recoil.right > .01) requestAnimationFrame(tick); else { run = false; cx.clearRect(0, 0, cv.width, cv.height); for (const sd of sides()) drawCannon(sd); }
+    }
+    let shown = false;
+    return {
+      draw() { if (!shown && S) { shown = true; requestAnimationFrame(() => { cx.clearRect(0, 0, cv.width, cv.height); for (const sd of sides()) drawCannon(sd); }); } },
+      ev(e) { if (e.t === 'gift' && e.diamonds >= (S?.cannon?.min || 1)) fire(e); },
+    };
+  });
+
+  // ---- bătălia echipelor
+  widgets.battle = (() => {
+    root.innerHTML = '<div id="bt" class="card"><div class="top"><p class="ttl" style="margin:0"></p><span class="clock num"></span></div><div class="teams"></div><div class="rope"></div><div class="win hide"></div><div class="how"></div></div>';
+    const el = document.getElementById('bt');
+    let B = null, at = 0;
+    const hms = ms => { const s2 = Math.max(0, Math.ceil(ms / 1000)); return `${Math.floor(s2 / 60)}:${String(s2 % 60).padStart(2, '0')}`; };
+    function draw() {
+      const cfg = S?.battle; if (!cfg) return;
+      B = B || ST?.battle || { scores: [], running: false };
+      const teams = cfg.teams, sc = teams.map((_, i) => Number(B.scores?.[i]) || 0), sum = sc.reduce((a, b) => a + b, 0);
+      el.querySelector('.ttl').textContent = cfg.title;
+      el.querySelector('.teams').style.gridTemplateColumns = `repeat(${teams.length}, minmax(0,1fr))`;
+      el.querySelector('.teams').innerHTML = teams.map((t, i) => `<div class="tm" data-i="${i}" style="--tc:${esc(t.color)}"><b>${esc(t.name)}</b><div class="sc">${fmt(sc[i])}</div><small>${sum ? Math.round(sc[i] / sum * 100) : 0}%</small></div>`).join('');
+      el.querySelector('.rope').innerHTML = teams.map((t, i) => `<i style="background:${esc(t.color)};width:${sum ? sc[i] / sum * 100 : 100 / teams.length}%"></i>`).join('');
+      el.querySelector('.how').textContent = teams.map(t => [t.command && `scrie ${t.command}`, t.gifts && `trimite ${t.gifts}`].filter(Boolean).join(' sau ') && `${t.name}: ${[t.command && 'scrie ' + t.command, t.gifts && 'trimite ' + t.gifts].filter(Boolean).join(' sau ')}`).filter(Boolean).join(' · ');
+      const win = el.querySelector('.win');
+      if (!B.running && B.winner != null) { win.classList.remove('hide'); win.innerHTML = B.winner >= 0 && teams[B.winner] ? `🏆 Câștigă <span style="color:${esc(teams[B.winner].color)}">${esc(teams[B.winner].name)}</span>!` : '🤝 Egalitate!'; }
+      else win.classList.add('hide');
+    }
+    setInterval(() => { el.querySelector('.clock').textContent = B?.running ? hms(B.left - (Date.now() - at)) : B?.winner != null ? 'Gata' : ''; }, 250);
+    return {
+      draw() { if (ST?.battle && !B) { B = ST.battle; at = Date.now(); } draw(); },
+      ev(e) {
+        if (e.t !== 'battle') return;
+        B = e.battle; at = Date.now(); draw();
+        if (e.team != null && e.pts) { const tm = el.querySelector(`.tm[data-i="${e.team}"]`); if (tm) { tm.classList.add('hit'); setTimeout(() => tm.classList.remove('hit'), 250); const p2 = document.createElement('span'); p2.className = 'pl'; p2.textContent = '+' + fmt(e.pts); tm.appendChild(p2); setTimeout(() => p2.remove(), 1400); } }
+        if (e.ended) play('fanfare', S?.alerts?.volume);
+      },
+    };
+  });
+
+  // ---- ultimii: ultimul follower, ultimul cadou, ultimul share, ultimul abonat
+  widgets.last = (() => {
+    root.innerHTML = '<div id="last"></div>';
+    const el = document.getElementById('last');
+    let prev = {};
+    const ROWS = [['follower', 'Ultimul follower', '💖'], ['gifter', 'Ultimul cadou', '🎁'], ['sharer', 'Ultimul share', '📣'], ['subscriber', 'Ultimul abonat', '⭐']];
+    function draw() {
+      const cfg = S?.last || {}, L = ST?.last || {};
+      el.className = cfg.layout === 'row' ? '' : 'column';
+      el.innerHTML = ROWS.filter(([k]) => cfg[k] !== false && (k !== 'subscriber' || cfg.subscriber)).map(([k, label, ic]) => {
+        const x = L[k], isNew = x && prev[k] !== x.at;
+        const det = k === 'gifter' && x ? `<span>${x.count > 1 ? x.count + '× ' : ''}${safeUrl(x.img) ? `<img class="gimg" src="${esc(x.img)}" alt="" referrerpolicy="no-referrer">` : '🎁'} ${esc(x.gift || '')}</span>` : '';
+        return `<div class="it card${isNew ? ' new' : ''}">${x ? avatar(x) : `<span class="av">${ic}</span>`}<div class="tx"><small>${ic} ${label}</small><b>${x ? esc(x.name) : '—'}</b>${det}</div></div>`;
+      }).join('');
+      prev = Object.fromEntries(ROWS.map(([k]) => [k, L[k]?.at]));
+    }
+    return { draw };
+  });
+
+  // ---- emoji din chat: emoji-urile scrise de spectatori zboară pe ecran
+  widgets.emoji = (() => {
+    const RE = /\p{Extended_Pictographic}(?:\uFE0F|\u200D\p{Extended_Pictographic})*/gu;
+    return {
+      ev(e) {
+        if (e.t !== 'chat') return;
+        const list = (String(e.text || '').match(RE) || []).slice(0, S?.emoji?.max || 4);
+        list.forEach((em, i) => setTimeout(() => {
+          const sp = document.createElement('span'); sp.className = 'emo'; sp.textContent = em;
+          sp.style.left = (5 + Math.random() * 85) + 'vw'; sp.style.fontSize = (S?.emoji?.size || 64) + 'px';
+          sp.style.setProperty('--dx1', (Math.random() - .5) * 60 + 'px'); sp.style.setProperty('--dx2', (Math.random() - .5) * 200 + 'px');
+          sp.style.animationDuration = (4 + Math.random() * 2) + 's';
+          document.body.appendChild(sp); setTimeout(() => sp.remove(), 6500);
+        }, i * 180));
+      },
+    };
+  });
+
   // ----------------------------------------------------------- pornire
   const factory = widgets[W] || widgets.alerts;
   const w = factory();
   const redraw = () => { applyTheme(); w.draw?.(); };
 
   function onEvent(e) {
-    if (e.t === 'hello') { S = e.settings; ST = e.state; POINTS = e.points || []; redraw(); return; }
+    if (e.t === 'hello') { S = e.settings; ST = e.state; POINTS = e.points || []; redraw(); w.hello?.(e); return; }
     if (e.t === 'settings') { S = e.settings; redraw(); return; }
     if (e.t === 'state') { ST = e.state; w.draw?.(); return; }
     if (e.t === 'points') { POINTS = e.list || []; w.draw?.(); return; }
-    if (e.t === 'reset') { ST = { ...(ST || {}), likes: 0, diamonds: 0, gifts: 0, follows: 0, shares: 0, top: [] }; w.draw?.(); }
+    if (e.t === 'reset') { ST = { ...(ST || {}), likes: 0, diamonds: 0, gifts: 0, follows: 0, shares: 0, top: [], last: {} }; w.draw?.(); }
     if (e.t === 'revoked') { showErr('Linkul acestui overlay a fost schimbat. Ia linkul nou din Studio.'); src?.close(); return; }
     w.ev?.(e);
   }
@@ -506,8 +802,8 @@ body.t-arcade .stage .cap{font-size:clamp(14px,2vw,26px);line-height:1.6}
     if (!KEY) { S = DEMO_SETTINGS(); ST = { likes: 0, diamonds: 0, gifts: 0, follows: 0, shares: 0, viewers: 128, top: [], timer: { running: true, left: 3600_000 } }; redraw(); }
     const names = ['Andrei_md', 'Cristina.22', 'Vlad', 'Mihaela', 'Dorin', 'Ionela', 'Sasha_77'];
     const gifts = [['Trandafir', 1], ['Gogoașă', 30], ['Confetti', 100], ['Leu', 29999]];
-    let i = 0;
-    setInterval(() => {
+    let i = 0, bsc = [0, 0];
+    const tickDemo = () => {
       if (!S) return;
       const u = { id: 'd' + (i % 7), name: names[i % 7], avatar: '' }, k = i++ % 6;
       ST = ST || {};
@@ -518,19 +814,27 @@ body.t-arcade .stage .cap{font-size:clamp(14px,2vw,26px);line-height:1.6}
         ST.top = [...top.values()].sort((a, b) => b.diamonds - a.diamonds);
         onEvent({ t: 'gift', user: u, gift: g[0], img: '', count: c, diamonds: tot, alert: { kind: 'gift', text: `${u.name} a trimis ${c}× ${g[0]}!`, user: u.name, sound: 'coin', duration: 4, volume: 40 } });
         if (W === 'timer') onEvent({ t: 'timer', timer: { running: true, left: 3600_000 }, added: 30 });
-      } else if (k === 1) { ST.follows = (ST.follows || 0) + 1; onEvent({ t: 'follow', user: u, alert: { kind: 'follow', text: `${u.name} te urmărește acum!`, user: u.name, sound: 'pop', duration: 4, volume: 40 } }); }
-      else if (k === 2) onEvent({ t: 'chat', user: u, text: ['Salut! 👋', 'Bravo, live super', '!tts ce faci azi?', 'De unde ești?'][i % 4] });
-      else if (k === 4) { ST.likes = (ST.likes || 0) + 337; }
+        ST.last = { ...(ST.last || {}), gifter: { name: u.name, avatar: '', gift: g[0], img: '', count: c, at: Date.now() } };
+        if (W === 'battle') { const tm = i % 2; bsc[tm] += tot; onEvent({ t: 'battle', battle: { running: true, left: 240000, scores: [...bsc], winner: null }, team: tm, pts: tot, user: u.name }); }
+        if (W === 'actions') onEvent({ t: 'action', screen: Number(P.get('screen')) || 1, name: 'Exemplu', text: `Mersi, ${u.name}, pentru ${g[0]}! 🎉`, user: u, sound: 'magic', volume: 40, duration: 3, effect: 'confetti', position: 'center' });
+      } else if (k === 1) { ST.follows = (ST.follows || 0) + 1; ST.last = { ...(ST.last || {}), follower: { name: u.name, avatar: '', at: Date.now() } }; onEvent({ t: 'follow', user: u, alert: { kind: 'follow', text: `${u.name} te urmărește acum!`, user: u.name, sound: 'pop', duration: 4, volume: 40 } }); }
+      else if (k === 2) onEvent({ t: 'chat', user: u, text: ['Salut! 👋🔥', 'Bravo, live super 😂😂', '!tts ce faci azi? 🎉', 'De unde ești? ❤️'][i % 4] });
+      else if (k === 4) { ST.likes = (ST.likes || 0) + 337; onEvent({ t: 'like', user: u, count: 120 }); }
       else if (k === 5 && W === 'wheel') { const n = S.wheel.segments.length; onEvent({ t: 'wheel', idx: i % n, by: u.name, spinMs: 4000, holdMs: 2500, n }); }
       POINTS = (ST.top || []).map(x => ({ name: x.name, points: x.diamonds * 10 }));
       w.draw?.();
-    }, 2600);
+    };
+    setTimeout(tickDemo, 500);
+    setInterval(tickDemo, 2200);
   }
   function DEMO_SETTINGS() {
     return { theme: { style: P.get('theme') || 'neon', accent: '#ff8a1f', scale: 1 }, alerts: { volume: 40 }, chat: { max: 8, showGifts: true, hideCommands: true, fade: 0 },
       goals: [{ id: 'g1', type: 'likes', title: 'Obiectiv like-uri', target: 5000 }], top: { title: 'Top susținători', count: 5 }, counter: { title: 'Cadouri pe live' },
       wheel: { title: 'Roata norocului', segments: ['10 flotări', 'Shoutout', 'Cântă', 'Încă o tură', 'Glumă', 'Bonus'].map((label, i) => ({ label, color: ['#ff8a1f', '#3ddc84', '#4aa3ff', '#f25f8b', '#b57bff', '#ffd23f'][i] })) },
-      timer: { title: 'Subathon' }, points: { title: 'Puncte', count: 5 }, fireworks: { on: true, maxIcons: 30 }, rotator: { lines: ['Dă follow!', 'Trimite un cadou și învârte roata!'], every: 4 } };
+      timer: { title: 'Subathon' }, points: { title: 'Puncte', count: 5 }, fireworks: { on: true, maxIcons: 30 }, rotator: { lines: ['Dă follow!', 'Trimite un cadou și învârte roata!'], every: 4 },
+      battle: { title: 'Bătălia echipelor', minutes: 5, teams: [{ name: 'Roșii', color: '#ff4d6a', command: '!rosu', gifts: 'Rose' }, { name: 'Albaștrii', color: '#4aa3ff', command: '!albastru', gifts: 'TikTok' }] },
+      jar: { title: 'Borcanul cu cadouri', shape: P.get('shape') || 'borcan', max: 120, min: 1 }, fountain: { emoji: '❤️', perLikes: 5, avatars: true, max: 160 }, cannon: { side: 'both', min: 1, names: true },
+      last: { follower: true, gifter: true, sharer: true, layout: 'column' }, emoji: { size: 64, max: 4 } };
   }
 })();
 </script>

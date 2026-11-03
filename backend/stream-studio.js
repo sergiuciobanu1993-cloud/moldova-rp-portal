@@ -118,6 +118,23 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
     };
   }
 
+  const JAR_SHAPES = ["borcan", "butoi", "ulcior"];
+  const TEAM_COLORS = ["#ff4d6a", "#4aa3ff", "#3ddc84", "#ffd23f"];
+  function normBattle(b = {}) {
+    const def = [{ name: "Roșii", command: "!rosu", gifts: "Rose" }, { name: "Albaștrii", command: "!albastru", gifts: "TikTok" }];
+    const teams = (Array.isArray(b?.teams) ? b.teams : def).slice(0, 4).map((t, i) => {
+      let cmd = str(t?.command, 24).toLowerCase().replace(/\s+/g, "");
+      if (cmd && !cmd.startsWith("!")) cmd = "!" + cmd;
+      return { name: str(t?.name, 30, `Echipa ${i + 1}`), color: color(t?.color, TEAM_COLORS[i]), command: cmd, gifts: str(t?.gifts, 200) };
+    });
+    while (teams.length < 2) teams.push({ name: `Echipa ${teams.length + 1}`, color: TEAM_COLORS[teams.length], command: "", gifts: "" });
+    return {
+      title: str(b?.title, 60, "Bătălia echipelor"), minutes: clampN(b?.minutes, 0.5, 180, 5), teams,
+      cmdPoints: Math.round(clampN(b?.cmdPoints, 0, 1000, 1)), likePoints: Math.round(clampN(b?.likePoints, 0, 1000, 0)),
+      anyGift: bool(b?.anyGift, false),
+    };
+  }
+
   function normalizeSettings(s = {}) {
     const a = s.alerts || {};
     const alert = (x = {}, d) => ({ on: bool(x.on, d.on), sound: sound(x.sound, d.sound), text: str(x.text, 120, d.text), tts: bool(x.tts, false), min: clampN(x.min, 1, 100000, d.min ?? 1), every: clampN(x.every, 50, 1000000, d.every ?? 1000) });
@@ -191,6 +208,13 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
         perShare: clampN(p.perShare, 0, 10000, 10),
       },
       fireworks: { on: bool(s.fireworks?.on, true), maxIcons: clampN(s.fireworks?.maxIcons, 5, 80, 30) },
+      // (03.11.2026) jocuri și widgeturi noi: bătălia echipelor, borcanul, fântâna, tunul, ultimii, emoji din chat
+      battle: normBattle(s.battle),
+      jar: { title: str(s.jar?.title, 60, "Borcanul cu cadouri"), shape: JAR_SHAPES.includes(s.jar?.shape) ? s.jar.shape : "borcan", max: Math.round(clampN(s.jar?.max, 20, 250, 120)), min: Math.round(clampN(s.jar?.min, 1, 100000, 1)) },
+      fountain: { emoji: str(s.fountain?.emoji, 8, "❤️"), perLikes: Math.round(clampN(s.fountain?.perLikes, 1, 500, 5)), avatars: bool(s.fountain?.avatars, true), max: Math.round(clampN(s.fountain?.max, 10, 400, 160)) },
+      cannon: { side: ["left", "right", "both"].includes(s.cannon?.side) ? s.cannon.side : "both", min: Math.round(clampN(s.cannon?.min, 1, 100000, 1)), names: bool(s.cannon?.names, true) },
+      last: { follower: bool(s.last?.follower, true), gifter: bool(s.last?.gifter, true), sharer: bool(s.last?.sharer, true), subscriber: bool(s.last?.subscriber, false), layout: ["row", "column"].includes(s.last?.layout) ? s.last.layout : "column" },
+      emoji: { size: Math.round(clampN(s.emoji?.size, 24, 160, 64)), max: Math.round(clampN(s.emoji?.max, 1, 10, 4)) },
       rotator: { lines: lines.length || Array.isArray(s.rotator?.lines) ? lines : ["Dă follow ca să nu pierzi live-ul!", "Trimite un cadou și învârte roata!", "Scrie !tts mesaj și îl citesc cu voce"], every: clampN(s.rotator?.every, 3, 120, 8) },
       actions, events,
       theme: { style: THEMES.includes(s.theme?.style) ? s.theme.style : "neon", accent: color(s.theme?.accent, "#ff8a1f"), scale: clampN(s.theme?.scale, 0.6, 2, 1) },
@@ -205,12 +229,17 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
   const emptyState = () => ({
     since: Date.now(), likes: 0, diamonds: 0, gifts: 0, follows: 0, shares: 0, viewers: 0, peakViewers: 0,
     top: {}, gifters: {}, timer: { running: false, endsAt: 0, left: 0 }, likeMilestone: 0,
+    last: {}, jar: [], battle: { running: false, endsAt: 0, scores: [], winner: null, team: {} },
   });
   function cleanState(s) {
     const st = { ...emptyState(), ...(s && typeof s === "object" ? s : {}) };
     st.top = st.top && typeof st.top === "object" ? st.top : {};
     st.gifters = st.gifters && typeof st.gifters === "object" ? st.gifters : {};
     st.timer = { running: !!st.timer?.running, endsAt: Number(st.timer?.endsAt) || 0, left: Number(st.timer?.left) || 0 };
+    st.last = st.last && typeof st.last === "object" ? st.last : {};
+    st.jar = Array.isArray(st.jar) ? st.jar.slice(-250) : [];
+    const b = st.battle || {};
+    st.battle = { running: !!b.running, endsAt: Number(b.endsAt) || 0, scores: Array.isArray(b.scores) ? b.scores.map(Number) : [], winner: b.winner ?? null, team: b.team && typeof b.team === "object" ? b.team : {} };
     return st;
   }
 
@@ -227,10 +256,11 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
       uid, key: r.overlay_key, tiktok: r.tiktok, settings: normalizeSettings(r.settings), state: cleanState(r.state),
       clients: new Set(), conn: null, status: "off", statusMsg: "", wanted: false, wantedSince: 0, retryT: null, gen: 0,
       dirty: false, pointsQ: new Map(), likeAcc: new Map(), chatCd: new Map(), ttsCd: new Map(), wheelQ: [], wheelBusyUntil: 0, pushT: null,
-      roomId: null, lastEventAt: 0, evLast: new Map(), evUser: new Map(), likeUser: new Map(),
+      roomId: null, lastEventAt: 0, evLast: new Map(), evUser: new Map(), likeUser: new Map(), battleT: null, battleCd: new Map(),
     };
     hubs.set(uid, h);
     if (h.key) keyToUid.set(h.key, uid);
+    if (h.state.battle.running) battleSchedule(h);
     return h;
   }
 
@@ -243,10 +273,61 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
     const t = h.state.timer;
     return { running: t.running, endsAt: t.running ? t.endsAt : 0, left: t.running ? Math.max(0, t.endsAt - Date.now()) : t.left };
   };
+  const battleView = h => {
+    const b = h.state.battle, n = h.settings.battle.teams.length;
+    return { running: b.running, left: b.running ? Math.max(0, b.endsAt - Date.now()) : 0, scores: Array.from({ length: n }, (_, i) => Number(b.scores[i]) || 0), winner: b.winner };
+  };
   const snapshot = h => ({
     since: h.state.since, likes: h.state.likes, diamonds: h.state.diamonds, gifts: h.state.gifts, follows: h.state.follows,
     shares: h.state.shares, viewers: h.state.viewers, peakViewers: h.state.peakViewers, top: publicTop(h), timer: timerView(h),
+    last: h.state.last, battle: battleView(h),
   });
+
+  // ---------------------------------------------------------------- bătălia echipelor
+  function battleSchedule(h) {
+    clearTimeout(h.battleT);
+    const b = h.state.battle;
+    if (!b.running) return;
+    h.battleT = setTimeout(() => battleEnd(h), Math.max(0, b.endsAt - Date.now()));
+  }
+  function battleEnd(h) {
+    const b = h.state.battle;
+    if (!b.running) return;
+    clearTimeout(h.battleT);
+    b.running = false;
+    const sc = battleView(h).scores, best = Math.max(...sc);
+    const winners = sc.map((v, i) => v === best ? i : -1).filter(i => i >= 0);
+    b.winner = best > 0 && winners.length === 1 ? winners[0] : -1;   // -1 = egalitate
+    broadcast(h, { t: "battle", battle: battleView(h), ended: true });
+    pushState(h);
+  }
+  function battleAction(h, a) {
+    const b = h.state.battle, n = h.settings.battle.teams.length;
+    if (a === "start") { b.running = true; b.endsAt = Date.now() + h.settings.battle.minutes * 60_000; b.scores = Array(n).fill(0); b.winner = null; b.team = {}; battleSchedule(h); }
+    else if (a === "stop") battleEnd(h);
+    else if (a === "add1") b.endsAt = Math.max(Date.now(), b.endsAt + 60_000);
+    else if (a === "reset") { clearTimeout(h.battleT); b.running = false; b.scores = Array(n).fill(0); b.winner = null; b.team = {}; }
+    if (a === "add1") battleSchedule(h);
+    if (a !== "stop") broadcast(h, { t: "battle", battle: battleView(h) });
+    pushState(h);
+  }
+  const giftList = v => String(v || "").split(/[,;\n]/).map(x => giftKey(x)).filter(Boolean);
+  function battleScore(h, team, pts, u) {
+    const b = h.state.battle;
+    if (!b.running || !(pts > 0) || team < 0) return;
+    if (Date.now() > b.endsAt) return battleEnd(h);
+    b.scores[team] = (Number(b.scores[team]) || 0) + pts;
+    if (u?.id) { b.team[u.id] = team; if (Object.keys(b.team).length > 20000) b.team = {}; }
+    broadcast(h, { t: "battle", battle: battleView(h), team, pts, user: u?.name || "" });
+    pushState(h);
+  }
+  function battleGift(h, u, gift, diamonds) {
+    const cfg = h.settings.battle, k = giftKey(gift);
+    let team = cfg.teams.findIndex(t => giftList(t.gifts).includes(k));
+    // orice alt cadou merge la echipa aleasă de spectator (cu comanda) — dacă e pornit
+    if (team < 0 && cfg.anyGift && u?.id && h.state.battle.team[u.id] != null) team = h.state.battle.team[u.id];
+    battleScore(h, team, diamonds, u);
+  }
   const statusView = h => ({ status: h.status, msg: h.statusMsg, tiktok: h.tiktok, wanted: h.wanted, lib: libState.ok, since: h.wantedSince || null });
 
   // un singur „state" la câteva sute de ms, chiar dacă vin sute de like-uri pe secundă
@@ -460,6 +541,14 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
       broadcast(h, { t: "chat", user: u, text: ev.text, tts });
       const m = /^\s*(![^\s]{1,29})\s*(.*)$/.exec(ev.text || "");
       if (m) fireEvents(h, "command", { user: u, cmd: m[1].toLowerCase(), args: m[2].slice(0, 120) });
+      if (m && h.state.battle.running) {
+        const team = cfg.battle.teams.findIndex(t => t.command && t.command === m[1].toLowerCase());
+        if (team >= 0) {
+          if (u.id) h.state.battle.team[u.id] = team;
+          const k = u.id || u.name, last = h.battleCd.get(k) || 0;
+          if (Date.now() - last > 5000) { h.battleCd.set(k, Date.now()); if (h.battleCd.size > 20000) h.battleCd.clear(); battleScore(h, team, cfg.battle.cmdPoints, u); }
+        }
+      }
       const last = h.chatCd.get(u.id) || 0;
       if (Date.now() - last > 10_000) { h.chatCd.set(u.id, Date.now()); addPoints(h, u, cfg.points.perChat); }
       if (h.chatCd.size > 5000) h.chatCd.clear();
@@ -481,6 +570,9 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
       broadcast(h, { t: "gift", user: u, gift: ev.gift, img: ev.img, count: ev.count, diamonds: total, alert });
       fireEvents(h, "gift", { user: u, gift: ev.gift, giftId: ev.giftId, diamonds: total, count: ev.count, img: ev.img });
       if (ev.giftId && !u.test) rememberGift(ev.giftId, ev.gift, ev.diamonds, ev.img);
+      st.last.gifter = { name: u.name, avatar: u.avatar, gift: ev.gift, img: ev.img, count: ev.count, diamonds: total, at: Date.now() };
+      if (total >= cfg.jar.min) { st.jar.push({ img: ev.img, n: Math.min(ev.count, 20), d: ev.diamonds }); if (st.jar.length > 250) st.jar.splice(0, st.jar.length - 250); }
+      battleGift(h, u, ev.gift, total);
       addPoints(h, u, total * cfg.points.perDiamond);
       timerAdd(h, total * cfg.timer.perDiamond);
       if (cfg.wheel.trigger === "gift" && total >= cfg.wheel.minDiamonds) wheelSpin(h, u.name);
@@ -489,6 +581,7 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
     }
     if (ev.type === "follow") {
       st.follows++;
+      st.last.follower = { name: u.name, avatar: u.avatar, at: Date.now() };
       broadcast(h, { t: "follow", user: u, alert: alertOf(h, "follow", { user: u.name }, { avatar: u.avatar, user: u.name }) });
       fireEvents(h, "follow", { user: u });
       addPoints(h, u, cfg.points.perFollow);
@@ -498,6 +591,7 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
     }
     if (ev.type === "share") {
       st.shares++;
+      st.last.sharer = { name: u.name, avatar: u.avatar, at: Date.now() };
       broadcast(h, { t: "share", user: u, alert: alertOf(h, "share", { user: u.name }, { avatar: u.avatar, user: u.name }) });
       fireEvents(h, "share", { user: u });
       addPoints(h, u, cfg.points.perShare);
@@ -511,6 +605,8 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
       return;
     }
     if (ev.type === "subscribe") {
+      st.last.subscriber = { name: u.name, avatar: u.avatar, at: Date.now() };
+      pushState(h);
       broadcast(h, { t: "subscribe", user: u });
       fireEvents(h, "subscribe", { user: u });
       return;
@@ -539,6 +635,7 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
         h.likeUser.set(u.id, b + ev.count);
         if (h.likeUser.size > 20000) h.likeUser.clear();
         fireEvents(h, "like", { user: u, before: b, after: b + ev.count });
+        if (cfg.battle.likePoints && h.state.battle.running && h.state.battle.team[u.id] != null) battleScore(h, h.state.battle.team[u.id], Math.round(ev.count * cfg.battle.likePoints / 10), u);
       }
       pushState(h);
       return;
@@ -819,8 +916,13 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
       const keepTimer = h.state.timer;
       h.state = emptyState(); h.state.timer = keepTimer;
       h.likeAcc.clear(); h.likeUser.clear();
+      clearTimeout(h.battleT);
       pushState(h);
       broadcast(h, { t: "reset" });
+    } else if (a.startsWith("battle-")) {
+      battleAction(h, a.slice(7));
+    } else if (a === "jar-reset") {
+      h.state.jar = []; pushState(h); broadcast(h, { t: "jar-reset" });
     } else if (a === "points-reset") {
       h.pointsQ.clear();
       await pool.query(`DELETE FROM stream_points WHERE user_id = $1`, [h.uid]);
@@ -1006,7 +1108,7 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
     res.flushHeaders?.();
     res.write("retry: 3000\n\n");
     h.clients.add(res);
-    send(res, { t: "hello", settings: h.settings, state: snapshot(h), live: statusView(h), points: await pointsTop(h.uid, 10).catch(() => []), tiktok: h.tiktok });
+    send(res, { t: "hello", settings: h.settings, state: snapshot(h), jar: h.state.jar, live: statusView(h), points: await pointsTop(h.uid, 10).catch(() => []), tiktok: h.tiktok });
     const ping = setInterval(() => { try { res.write(": ping\n\n"); } catch { /* */ } }, 20_000);
     req.on("close", () => { clearInterval(ping); h.clients.delete(res); });
   }));

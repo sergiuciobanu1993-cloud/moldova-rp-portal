@@ -144,6 +144,20 @@
   .trig .add [data-tp]{display:none}
   .trig .add.t-gift [data-tp=gift],.trig .add.t-like [data-tp=like],.trig .add.t-command [data-tp=command]{display:block}
   .warnmini{color:#ffc24b}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .seg button{min-height:32px;padding:0 11px;border:0;background:transparent;color:#cfd3d7;font:800 12px Inter,system-ui,sans-serif;cursor:pointer}
+  .seg button[aria-pressed=true]{background:rgba(255,138,31,.16);color:var(--orange)}
+  .tblwrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px}
+  .atbl{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+  .atbl th{text-align:left;color:var(--muted);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;padding:9px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+  .atbl td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+  .atbl tr:last-child td{border-bottom:0}
+  .atbl tr:hover td{background:rgba(255,255,255,.03)}
+  .atbl .ck{text-align:center;color:var(--green);font-weight:900}
+  .atbl .ds{color:var(--muted);max-width:340px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .atbl .ops{white-space:nowrap}
+  .atbl .ops button{border:0;background:transparent;cursor:pointer;font-size:15px;padding:2px 5px;border-radius:6px}
+  .atbl .ops button:hover{background:rgba(255,255,255,.08)}
   .quick{display:flex;align-items:center;gap:16px;justify-content:space-between;padding:16px 18px;margin-bottom:14px;border-radius:14px;border:1px solid rgba(255,138,31,.45);background:linear-gradient(120deg,rgba(255,138,31,.16),rgba(255,138,31,.03) 60%),var(--panel)}
   .quick b{display:block;font-size:15.5px;margin-bottom:3px}
   .quick span{color:#cfd3d7;font-size:13px}
@@ -374,7 +388,8 @@
             </div>
 
             <div class="card2" style="margin-bottom:12px">
-              <div class="hd"><b>⚡ Acțiuni: ce se întâmplă</b><span style="display:flex;gap:6px"><button type="button" class="b sm" id="btn-examples" hidden>✨ Pune exemple</button><button type="button" class="b sm pri" id="btn-act-add">+ Acțiune nouă</button></span></div>
+              <div class="hd"><b>⚡ Acțiuni: ce se întâmplă</b><span style="display:flex;gap:6px;flex-wrap:wrap"><span class="seg" role="group" aria-label="Cum arată lista"><button type="button" data-aview="card" aria-pressed="true">▤ Carduri</button><button type="button" data-aview="table" aria-pressed="false">☰ Tabel</button></span><button type="button" class="b sm" id="btn-examples" hidden>✨ Pune exemple</button><button type="button" class="b sm pri" id="btn-act-add">+ Acțiune nouă</button></span></div>
+              <div id="acts-table" class="tblwrap" hidden></div>
               <div id="acts" style="display:grid;gap:8px"></div>
               <p class="hint">În texte poți folosi <code>{user}</code> (numele), <code>{gift}</code>, <code>{count}</code>, <code>{diamonds}</code> și, la comenzi, <code>{text}</code> (ce scrie spectatorul după comandă).</p>
             </div>
@@ -626,6 +641,7 @@
                 <button type="button" class="b sm" data-test="follow">💖 Follow</button>
                 <button type="button" class="b sm" data-test="share">📣 Share</button>
                 <button type="button" class="b sm" data-test="subscribe">⭐ Abonat</button>
+                <button type="button" class="b sm" data-test="emote">🌟 Sticker</button>
                 <button type="button" class="b sm" data-test="chat">💬 Mesaj</button>
                 <button type="button" class="b sm" data-test="like">❤️ 50 like-uri</button>
                 <button type="button" class="b sm" data-act="wheel">🎡 Roata</button>
@@ -937,16 +953,48 @@
           <div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="b sm" data-adup="${esc(a.id)}">⧉ Copiază acțiunea</button><button type="button" class="b sm red" data-adel="${esc(a.id)}">Șterge</button></div>
         </div></details>`;
     }).join('') || '<p class="hint">Nicio acțiune încă. Apasă „+ Acțiune nouă” sau „Pune exemple”.</p>';
-    drawMedia();
+    drawMedia(); drawActsTable();
   }
   const evOf = id => (S?.events || []).filter(ev => ev.actions.includes(id));
   function evText(ev) {
     const off = ev.on ? '' : ' (oprit)';
     if (ev.trigger === 'gift') return (ev.gift ? `🎁 ${ev.gift}` : '🎁 orice cadou') + (ev.min > 1 ? ` de la ${ev.min} 💎` : '') + (ev.perGift ? ' (fiecare)' : '') + off;
     if (ev.trigger === 'like') return `❤️ la ${ev.likes} like-uri` + off;
-    if (ev.trigger === 'command') return `💬 ${ev.command}` + (ev.cost ? ` (${ev.cost} puncte)` : '') + off;
-    return ({ follow: '💖 follow', share: '📣 share', member: '👋 intră pe live', subscribe: '⭐ abonat' })[ev.trigger] + off;
+    const w = ev.who && ev.who !== 'all' ? ' · ' + (ev.who === 'user' ? '@' + (ev.whoUser || '?') : (WHO.find(x => x[0] === ev.who) || [])[1].replace(/^\S+\s/, '')) : '';
+    if (ev.trigger === 'command') return `💬 ${ev.command}` + (ev.cost ? ` (${ev.cost} puncte)` : '') + w + off;
+    if (ev.trigger === 'emote') return '🌟 ' + (ev.emote ? 'sticker #' + ev.emote.slice(-5) : 'orice sticker') + w + off;
+    return ({ follow: '💖 follow', share: '📣 share', member: '👋 intră pe live', subscribe: '⭐ abonat', chat: '🗨 orice mesaj', first: '✨ prima activitate' })[ev.trigger] + w + off;
   }
+  let aView = 'card'; try { aView = localStorage.getItem('mrp_studio_aview') || 'card'; } catch { /* */ }
+  function drawActsTable() {
+    const box = $('#acts-table'); if (!box || !S) return;
+    box.hidden = aView !== 'table'; $('#acts').hidden = aView === 'table';
+    $$('[data-aview]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.aview === aView)));
+    if (aView !== 'table') return;
+    const yes = v => v ? '✓' : '';
+    box.innerHTML = `<table class="atbl"><thead><tr><th></th><th>Nume</th><th>Ecran</th><th>Durata</th><th>Puncte</th><th>Imagine</th><th>Clip</th><th>Sunet</th><th>Când pornește</th><th>Descriere</th></tr></thead><tbody>${(S.actions || []).map(a => {
+      const m = MEDIA.find(x => x.id === a.media), evs = evOf(a.id);
+      return `<tr><td class="ops"><button type="button" data-arun="${esc(a.id)}" title="Testează">▶</button><button type="button" data-aedit="${esc(a.id)}" title="Editează">✎</button><button type="button" data-adup="${esc(a.id)}" title="Copiază">⧉</button><button type="button" data-adel="${esc(a.id)}" title="Șterge">🗑</button></td>
+        <td><b>${esc(a.name)}</b></td><td>Ecranul ${a.screen}</td><td>${a.duration ? a.duration + ' s' : 'cât ține'}</td><td>${a.points ? (a.points > 0 ? '+' : '') + a.points : '0'}</td>
+        <td class="ck">${yes(m && m.kind === 'image')}</td><td class="ck">${yes(m && m.kind === 'video')}</td><td class="ck">${yes(a.audio || a.sound !== 'none')}</td>
+        <td>${evs.length ? esc(evs.map(evText).join(', ')) : '<span class="warnmini">⚠ nimic</span>'}</td><td class="ds" title="${esc(actSummary(a))}">${esc(actSummary(a))}</td></tr>`;
+    }).join('') || '<tr><td colspan="10" class="hint">Nicio acțiune încă.</td></tr>'}</tbody></table>`;
+  }
+  document.addEventListener('click', e => {
+    const v = e.target.closest('[data-aview]');
+    if (v) { aView = v.dataset.aview; try { localStorage.setItem('mrp_studio_aview', aView); } catch { /* */ } drawActsTable(); return; }
+    const ed = e.target.closest('[data-aedit]');
+    if (ed) { aView = 'card'; drawActsTable(); openActs.add(ed.dataset.aedit); drawActs(); document.querySelector(`#acts details[data-aid="${ed.dataset.aedit}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+  });
+  $('#acts-table').addEventListener('click', e => {
+    // ▶, ⧉ și 🗑 merg la fel ca pe carduri
+    const b = e.target.closest('[data-arun],[data-adup],[data-adel]'); if (!b) return;
+    const fake = new MouseEvent('click', { bubbles: true });
+    const card = document.createElement('div'); card.hidden = true;
+    const k = b.dataset.arun ? 'arun' : b.dataset.adup ? 'adup' : 'adel';
+    card.innerHTML = `<button data-${k}="${esc(b.dataset[k])}"></button>`; $('#acts').appendChild(card);
+    card.firstChild.dispatchEvent(fake); card.remove();
+  });
   function newAction(over = {}) { return { id: newId('a'), name: 'Acțiune nouă', media: null, audio: null, sound: 'coin', text: 'Mersi, {user}!', tts: '', duration: 6, volume: 80, screen: 1, position: 'center', size: 45, effect: 'confetti', wheel: false, timer: 0, points: 0, ...over }; }
   $('#btn-act-add').onclick = () => { const a = newAction(); S.actions.push(a); openActs.add(a.id); drawActs(); drawEvts(); markDirty(); };
   $('#acts').addEventListener('toggle', e => { const d = e.target.closest('details.act'); if (!d) return; d.open ? openActs.add(d.dataset.aid) : openActs.delete(d.dataset.aid); }, true);
@@ -990,7 +1038,10 @@
     if (del) { const a = S.actions.find(x => x.id === del.dataset.adel); if (!confirm(`Ștergi acțiunea „${a.name}”?`)) return; S.actions = S.actions.filter(x => x !== a); S.events.forEach(ev => { ev.actions = ev.actions.filter(id => id !== a.id); }); drawActs(); drawEvts(); markDirty(); }
   });
 
-  const TRIG = [['gift', '🎁 Primești un cadou'], ['follow', '💖 Cineva te urmărește'], ['share', '📣 Cineva distribuie live-ul'], ['like', '❤️ Like-uri de la un spectator'], ['command', '💬 Comandă în chat'], ['member', '👋 Cineva intră pe live'], ['subscribe', '⭐ Cineva se abonează']];
+  const TRIG = [['gift', '🎁 Primești un cadou'], ['follow', '💖 Cineva te urmărește'], ['share', '📣 Cineva distribuie live-ul'], ['like', '❤️ Like-uri de la un spectator'], ['command', '💬 Comandă în chat'], ['chat', '🗨 Orice mesaj în chat'], ['emote', '🌟 Sticker sau emote (fan club)'], ['member', '👋 Cineva intră pe live'], ['first', '✨ Prima activitate a unui spectator'], ['subscribe', '⭐ Cineva se abonează']];
+  const WHO = [['all', '👥 Oricine'], ['follower', '💖 Doar urmăritorii'], ['subscriber', '⭐ Doar abonații'], ['moderator', '🛡 Doar moderatorii'], ['top', '🏆 Doar top 3 donatori'], ['user', '👤 Doar un anumit spectator']];
+  let EMOTES = [];
+  const emoteChips = (cur, attr) => EMOTES.length ? `<div class="chips" style="width:100%">${EMOTES.slice(0, 16).map(x => `<label title="#${esc(x.id)}"><input type="radio" ${attr} value="${esc(x.id)}"${x.id === cur ? ' checked' : ''}>${x.img ? `<img src="${esc(x.img)}" alt="" style="width:22px;height:22px;object-fit:contain" referrerpolicy="no-referrer">` : '🌟'} #${esc(x.id.slice(-5))}</label>`).join('')}</div>` : '<span class="hint" style="width:100%">Stickerele primite pe live apar aici, ca să le alegi cu un clic.</span>';
   function drawEvts() {
     if (!S) return;
     const acts = S.actions || [];
@@ -998,10 +1049,12 @@
       const t = ev.trigger;
       const params = t === 'gift' ? `<label class="f">Cadoul (gol = orice cadou)<span style="display:flex;gap:6px"><input type="text" data-e="gift" list="gift-list" maxlength="60" value="${esc(ev.gift)}" placeholder="de exemplu: Rose, Lion, TikTok" autocomplete="off"><button type="button" class="b sm gp" data-gpick title="Alege din lista de cadouri TikTok">🎁</button></span></label><img class="giftimg" alt="" hidden referrerpolicy="no-referrer"><label class="f" style="max-width:140px;min-width:110px">De la câte 💎<input type="number" min="1" data-e="min" value="${ev.min}"></label>`
         : t === 'like' ? `<label class="f" style="max-width:260px">La fiecare … like-uri de la același spectator<input type="number" min="10" step="10" data-e="likes" value="${ev.likes}"></label>`
-        : t === 'command' ? `<label class="f" style="max-width:200px">Comanda<input type="text" data-e="command" maxlength="30" value="${esc(ev.command)}" placeholder="!dans"></label><label class="f" style="max-width:200px">Costă puncte (0 = gratuit)<input type="number" min="0" data-e="cost" value="${ev.cost}"></label>` : '';
+        : t === 'command' ? `<label class="f" style="max-width:200px">Comanda<input type="text" data-e="command" maxlength="30" value="${esc(ev.command)}" placeholder="!dans"></label><label class="f" style="max-width:200px">Costă puncte (0 = gratuit)<input type="number" min="0" data-e="cost" value="${ev.cost}"></label>`
+        : t === 'emote' ? `<label class="f" style="max-width:260px">Numărul stickerului (gol = orice)<input type="text" data-e="emote" maxlength="30" value="${esc(ev.emote || '')}" placeholder="de exemplu: 7584905657888246550"></label>${emoteChips(ev.emote, 'data-e="emote" name="em-' + esc(ev.id) + '"')}` : '';
+      const who = `<label class="f" style="max-width:230px">Cine îl poate porni<select data-e="who">${opt(WHO, ev.who || 'all')}</select></label>${ev.who === 'user' ? `<label class="f" style="max-width:200px">Numele spectatorului<input type="text" data-e="whoUser" maxlength="40" value="${esc(ev.whoUser || '')}" placeholder="@nume"></label>` : ''}`;
       return `<div class="evrow${ev.on ? '' : ' off'}" data-eid="${esc(ev.id)}">
         <div class="line"><label class="tog" style="min-height:40px"><input type="checkbox" data-e="on"${ev.on ? ' checked' : ''}> Pornit</label>
-          <label class="f">Când<select data-e="trigger">${opt(TRIG, t)}</select></label>${params}</div>
+          <label class="f">Când<select data-e="trigger">${opt(TRIG, t)}</select></label>${who}${params}</div>
         ${t === 'gift' ? `<label class="tog"><input type="checkbox" data-e="perGift"${ev.perGift ? ' checked' : ''}> Pornește pentru fiecare cadou din serie (5 trandafiri = de 5 ori, cel mult 10)</label>` : ''}
         <div><span class="hint" style="display:block;margin-bottom:6px">Atunci:</span><div class="chips">${acts.map(a => `<label><input type="checkbox" data-e-act="${esc(a.id)}"${ev.actions.includes(a.id) ? ' checked' : ''}> ${esc(a.name)}</label>`).join('') || '<span class="hint">Fă întâi o acțiune, mai sus.</span>'}</div></div>
         <div class="line"><label class="tog" style="min-height:40px"><input type="checkbox" data-e="random"${ev.random ? ' checked' : ''}> Doar una, la întâmplare</label>
@@ -1020,7 +1073,7 @@
     if (e.target.dataset.eAct) { const id = e.target.dataset.eAct; ev.actions = e.target.checked ? [...new Set([...ev.actions, id])].slice(0, 6) : ev.actions.filter(x => x !== id); clearTimeout(window.__actRedraw); window.__actRedraw = setTimeout(drawActs, 300); return; }
     const k = e.target.dataset.e; if (!k) return;
     ev[k] = e.target.type === 'checkbox' ? e.target.checked : e.target.type === 'number' ? Number(e.target.value) : e.target.value;
-    if (k === 'trigger' || k === 'on') drawEvts();
+    if (k === 'trigger' || k === 'on' || k === 'who' || (k === 'emote' && e.target.type === 'radio')) drawEvts();
     if (k === 'gift') giftPreview(r);
     clearTimeout(window.__actRedraw); window.__actRedraw = setTimeout(drawActs, 600);
   });
@@ -1090,7 +1143,8 @@
       <select data-sn="trigger" aria-label="Când">${opt(TRIG, x.trigger)}</select>
       ${x.trigger === 'gift' ? `<span style="display:flex;gap:6px"><input type="text" data-sn="gift" list="gift-list" value="${esc(x.gift)}" placeholder="orice cadou" aria-label="Cadoul"><button type="button" class="b sm gp" data-gpick title="Alege din lista de cadouri TikTok">🎁</button><input type="number" data-sn="min" min="1" value="${x.min}" style="width:80px" aria-label="De la câte diamante" title="de la câte 💎"></span>`
         : x.trigger === 'like' ? `<input type="number" data-sn="likes" min="10" step="10" value="${x.likes}" aria-label="La câte like-uri" title="la fiecare … like-uri">`
-        : x.trigger === 'command' ? `<input type="text" data-sn="command" value="${esc(x.command)}" maxlength="30" aria-label="Comanda">` : '<span class="hint">—</span>'}
+        : x.trigger === 'command' ? `<input type="text" data-sn="command" value="${esc(x.command)}" maxlength="30" aria-label="Comanda">`
+        : x.trigger === 'emote' ? `<input type="text" data-sn="emote" value="${esc(x.emote || '')}" maxlength="30" placeholder="nr. sticker (gol = orice)" aria-label="Numărul stickerului">` : '<span class="hint">—</span>'}
       <select data-sn="src" aria-label="Sunetul">${sndSel(x.src)}</select>
       <input type="number" data-sn="volume" min="0" max="100" value="${x.volume}" aria-label="Volum" title="volum %">
       <input type="text" data-sn="key" maxlength="10" value="${esc(x.key)}" placeholder="tastă" aria-label="Tasta" title="O tastă (de ex. 1 sau F) care pornește sunetul">
@@ -1171,8 +1225,8 @@
   const wz = document.createElement('div');
   wz.className = 'gpm wz st'; wz.hidden = true;
   document.body.appendChild(wz);
-  const W_TRIG = [['gift1', '🎁 Un cadou anume'], ['giftany', '💎 Orice cadou'], ['follow', '💖 Follow'], ['share', '📣 Share'], ['like', '❤️ Like-uri'], ['command', '💬 Comandă în chat'], ['member', '👋 Intră pe live'], ['subscribe', '⭐ Abonat']];
-  const W_TEXT = { gift1: 'Mersi, {user}, pentru {gift}! 🎁', giftany: '{user} a trimis {count}× {gift}! 🔥', follow: 'Bine ai venit, {user}! 💖', share: 'Mersi pentru share, {user}! 📣', like: '{user}, mersi pentru like-uri! ❤️', command: '{user}: {text}', member: 'Salut, {user}! 👋', subscribe: '{user} s-a abonat! ⭐' };
+  const W_TRIG = [['gift1', '🎁 Un cadou anume'], ['giftany', '💎 Orice cadou'], ['follow', '💖 Follow'], ['share', '📣 Share'], ['like', '❤️ Like-uri'], ['command', '💬 Comandă în chat'], ['emote', '🌟 Sticker (fan club)'], ['member', '👋 Intră pe live'], ['first', '✨ Prima activitate'], ['subscribe', '⭐ Abonat']];
+  const W_TEXT = { emote: '{user} a trimis un sticker! 🌟', first: 'Bine ai venit pe live, {user}! ✨', gift1: 'Mersi, {user}, pentru {gift}! 🎁', giftany: '{user} a trimis {count}× {gift}! 🔥', follow: 'Bine ai venit, {user}! 💖', share: 'Mersi pentru share, {user}! 📣', like: '{user}, mersi pentru like-uri! ❤️', command: '{user}: {text}', member: 'Salut, {user}! 👋', subscribe: '{user} s-a abonat! ⭐' };
   function wzMedia() {
     const vis = MEDIA.filter(m => m.kind !== 'audio');
     return `<label><input type="radio" name="wzm" value="" checked><div class="th">🚫</div><small>Fără</small></label>` + vis.map(m => `<label><input type="radio" name="wzm" value="${m.id}"><div class="th">${thumb(m)}</div><small title="${esc(m.name)}">${esc(m.name)}</small></label>`).join('');
@@ -1201,11 +1255,13 @@
     par.innerHTML = t === 'gift1' ? `<span style="display:flex;gap:6px;flex:1;min-width:240px"><input type="text" id="wz-gift" list="gift-list" placeholder="Numele cadoului, de exemplu Rose" autocomplete="off"><button type="button" class="b sm gp" data-gpick>🎁 Alege</button></span><label class="tog"><input type="checkbox" id="wz-per"> pentru fiecare cadou din serie</label>`
       : t === 'giftany' ? `<label class="f" style="max-width:220px">De la câte 💎<input type="number" id="wz-min" min="1" value="1"></label>`
       : t === 'like' ? `<label class="f" style="max-width:280px">La fiecare … like-uri de la un spectator<input type="number" id="wz-likes" min="10" step="10" value="100"></label>`
-      : t === 'command' ? `<label class="f" style="max-width:220px">Comanda<input type="text" id="wz-cmd" value="!dans" maxlength="30"></label><label class="f" style="max-width:220px">Costă puncte (0 = gratuit)<input type="number" id="wz-cost" min="0" value="0"></label>` : '';
+      : t === 'command' ? `<label class="f" style="max-width:220px">Comanda<input type="text" id="wz-cmd" value="!dans" maxlength="30"></label><label class="f" style="max-width:220px">Costă puncte (0 = gratuit)<input type="number" id="wz-cost" min="0" value="0"></label>`
+      : t === 'emote' ? `<label class="f" style="max-width:300px">Numărul stickerului (gol = orice sticker)<input type="text" id="wz-emote" maxlength="30" placeholder="de exemplu: 7584905657888246550"></label>${emoteChips('', 'name="wzem"')}` : '';
     const tx = $('#wz-text'); if (!tx.dataset.touched) tx.value = W_TEXT[t];
   }
   wz.addEventListener('change', async e => {
     if (e.target.name === 'wzt') wzPar();
+    if (e.target.name === 'wzem') $('#wz-emote').value = e.target.value;
     if (e.target.id === 'wz-file' && e.target.files[0]) {
       const f = e.target.files[0]; e.target.value = '';
       $('#wz-up').textContent = 'Se încarcă…';
@@ -1226,7 +1282,7 @@
     const media = wz.querySelector('[name=wzm]:checked')?.value || null, snd = v('wz-snd'), m = MEDIA.find(x => x.id === media);
     const name = t === 'gift1' ? `Cadou: ${v('wz-gift')}` : (W_TRIG.find(x => x[0] === t) || [])[1].replace(/^\S+\s/, '');
     const a = newAction({ name: name.slice(0, 40), media, mediaKind: m?.kind || null, audio: snd.startsWith('m:') ? snd.slice(2) : null, sound: snd.startsWith('s:') ? snd.slice(2) : 'none', text: v('wz-text'), tts: v('wz-tts'), effect: v('wz-eff') || 'none', duration: m?.kind === 'video' || snd.startsWith('m:') ? 0 : 6 });
-    const ev = newEvent({ trigger: t === 'gift1' || t === 'giftany' ? 'gift' : t, gift: t === 'gift1' ? v('wz-gift') : '', perGift: t === 'gift1' && !!$('#wz-per')?.checked, min: t === 'giftany' ? Number(v('wz-min')) || 1 : 1, likes: Number(v('wz-likes')) || 100, command: v('wz-cmd') || '!dans', cost: Number(v('wz-cost')) || 0, userCooldown: t === 'follow' || t === 'member' ? 60 : 0, actions: [a.id] });
+    const ev = newEvent({ trigger: t === 'gift1' || t === 'giftany' ? 'gift' : t, gift: t === 'gift1' ? v('wz-gift') : '', perGift: t === 'gift1' && !!$('#wz-per')?.checked, min: t === 'giftany' ? Number(v('wz-min')) || 1 : 1, likes: Number(v('wz-likes')) || 100, command: v('wz-cmd') || '!dans', cost: Number(v('wz-cost')) || 0, emote: v('wz-emote'), userCooldown: t === 'follow' || t === 'member' ? 60 : 0, actions: [a.id] });
     S.actions.push(a); S.events.push(ev); openActs.add(a.id);
     drawActs(); drawEvts(); markDirty();
     wz.hidden = true;
@@ -1401,6 +1457,7 @@
     if (!st) return;
     if (st.battle) drawBattle(st.battle);
     DROP = st.drop || null; dropAt = Date.now();
+    if (Array.isArray(st.emotes) && st.emotes.length) EMOTES = st.emotes;
     $('#k-viewers').textContent = fmt(st.viewers); $('#k-likes').textContent = fmt(st.likes);
     $('#k-diamonds').textContent = fmt(st.diamonds); $('#k-follows').textContent = fmt(st.follows);
     if (st.timer) setTimer(st.timer);
@@ -1439,6 +1496,7 @@
     if (e.t === 'action') { note(`${esc(e.name)}${e.user?.name ? ' · ' + who(e.user) : ''}${e.test ? ' <span style="color:var(--muted)">(test)</span>' : ''}`, 'gift', '⚡'); speak(e.tts); return; }
     if (e.t === 'notice') { note(esc(e.text), 'sys', '⭐'); return; }
     if (e.t === 'cmdinfo') { note(esc(e.text), 'sys', '⌨️'); return; }
+    if (e.t === 'emote') { if (e.id && !EMOTES.some(x => x.id === e.id)) EMOTES.unshift({ id: e.id, img: e.img }); note(`${who(e.user)} a trimis sticker ${e.img ? `<img src="${esc(e.img)}" alt="" style="width:22px;height:22px;vertical-align:-6px" referrerpolicy="no-referrer">` : '🌟'} <code>#${esc(e.id || '?')}</code>`, '', '🌟'); return; }
     if (e.t === 'sound') { playSound(e.src, e.volume); return; }
     if (e.t === 'battle') { drawBattle(e.battle); if (e.ended) { const t = S.battle.teams[e.battle.winner]; note(t ? `Bătălia s-a terminat: câștigă <b>${esc(t.name)}</b>!` : 'Bătălia s-a terminat la egalitate.', 'gift', '⚔️'); } return; }
     if (e.t === 'jar-reset') return;

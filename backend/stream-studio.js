@@ -87,7 +87,8 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
   const KINDS = ["image", "video", "audio"];
   const EFFECTS = ["none", "confetti", "hearts", "shake", "flash"];
   const POSITIONS = ["center", "top", "bottom", "left", "right"];
-  const TRIGGERS = ["gift", "follow", "share", "like", "command", "member", "subscribe"];
+  const TRIGGERS = ["gift", "follow", "share", "like", "command", "member", "subscribe", "chat", "first", "emote"];
+  const WHO = ["all", "follower", "subscriber", "moderator", "top", "user"];
   const safeId = (v, pre) => String(v || "").replace(/[^\w-]/g, "").slice(0, 16) || pre + crypto.randomBytes(4).toString("hex");
   function normAction(x = {}, i = 0) {
     const media = mediaRef(x.media), audio = mediaRef(x.audio);
@@ -114,6 +115,8 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
       command: cmd || "!dans", cost: Math.round(clampN(x.cost, 0, 10_000_000, 0)),
       cooldown: clampN(x.cooldown, 0, 3600, 0), userCooldown: clampN(x.userCooldown, 0, 3600, 0),
       random: bool(x.random, false),
+      who: WHO.includes(x.who) ? x.who : "all", whoUser: str(x.whoUser, 40).replace(/^@/, "").toLowerCase(),
+      emote: String(x.emote || "").replace(/\D/g, "").slice(0, 30),
       actions: (Array.isArray(x.actions) ? x.actions : []).map(String).filter(id => actionIds.has(id)).slice(0, 6),
     };
   }
@@ -125,6 +128,7 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
     return {
       id: safeId(x.id, "s"), on: bool(x.on, true), trigger: TRIGGERS.includes(x.trigger) ? x.trigger : "gift",
       gift: str(x.gift, 60), min: Math.round(clampN(x.min, 1, 1_000_000, 1)), likes: Math.round(clampN(x.likes, 10, 1_000_000, 100)), command: cmd || "!sunet",
+      emote: String(x.emote || "").replace(/\D/g, "").slice(0, 30),
       src: /^m:[0-9a-f-]{36}$/i.test(src) ? src.toLowerCase() : /^s:\w+$/.test(src) && SOUNDS.includes(src.slice(2)) ? src : "s:coin",
       volume: Math.round(clampN(x.volume, 0, 100, 80)), key: str(x.key, 12).toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 10),
     };
@@ -266,7 +270,7 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
     since: Date.now(), likes: 0, diamonds: 0, gifts: 0, follows: 0, shares: 0, viewers: 0, peakViewers: 0,
     top: {}, gifters: {}, timer: { running: false, endsAt: 0, left: 0 }, likeMilestone: 0,
     last: {}, jar: [], battle: { running: false, endsAt: 0, scores: [], winner: null, team: {} },
-    likers: {}, drop: null,
+    likers: {}, drop: null, emotes: [],
   });
   function cleanState(s) {
     const st = { ...emptyState(), ...(s && typeof s === "object" ? s : {}) };
@@ -319,7 +323,7 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
   const snapshot = h => ({
     since: h.state.since, likes: h.state.likes, diamonds: h.state.diamonds, gifts: h.state.gifts, follows: h.state.follows,
     shares: h.state.shares, viewers: h.state.viewers, peakViewers: h.state.peakViewers, top: publicTop(h), timer: timerView(h),
-    last: h.state.last, battle: battleView(h), likers: topLikers(h), drop: dropView(h),
+    last: h.state.last, battle: battleView(h), likers: topLikers(h), drop: dropView(h), emotes: h.state.emotes || [],
   });
   const topLikers = h => Object.entries(h.state.likers).map(([id, v]) => ({ id, name: v.name, avatar: v.avatar, likes: Math.round(v.likes) }))
     .filter(x => x.likes > 0).sort((a, b) => b.likes - a.likes).slice(0, 15);
@@ -567,6 +571,26 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
     }
     return true;
   }
+  function whoOk(h, e, u) {
+    if (!e.who || e.who === "all") return true;
+    if (!u?.id && !u?.test) return false;
+    if (u.test) return true;   // testele din Studio trec mereu
+    if (e.who === "follower") return !!u.fol;
+    if (e.who === "subscriber") return !!u.sub;
+    if (e.who === "moderator") return !!u.mod;
+    if (e.who === "top") return publicTop(h).slice(0, 3).some(x => x.id === u.id);
+    if (e.who === "user") return !!e.whoUser && (u.id.toLowerCase() === e.whoUser || u.name.toLowerCase() === e.whoUser);
+    return true;
+  }
+  // „prima activitate”: primul lucru făcut de un spectator în sesiunea asta
+  function firstActivity(h, u) {
+    if (!u?.id) return;
+    h.seen ||= new Set();
+    if (h.seen.has(u.id)) return;
+    h.seen.add(u.id);
+    if (h.seen.size > 50000) h.seen.clear();
+    fireEvents(h, "first", { user: u }); fireSounds(h, "first", { user: u });
+  }
   function fireEvents(h, trigger, ctx) {
     const now = Date.now(), uid = ctx.user?.id || "";
     for (const e of h.settings.events) {
@@ -581,7 +605,10 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
         if (times <= 0) continue;
       } else if (trigger === "command") {
         if (ctx.cmd !== e.command) continue;
+      } else if (trigger === "emote") {
+        if (e.emote && e.emote !== String(ctx.emoteId || "")) continue;
       }
+      if (!whoOk(h, e, ctx.user)) continue;
       if (e.cooldown && now - (h.evLast.get(e.id) || 0) < e.cooldown * 1000) continue;
       const uk = e.id + "|" + uid;
       if (e.userCooldown && uid && now - (h.evUser.get(uk) || 0) < e.userCooldown * 1000) continue;
@@ -612,6 +639,7 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
       } else if (trigger === "like") {
         if (Math.floor(ctx.after / x.likes) - Math.floor(ctx.before / x.likes) <= 0) continue;
       } else if (trigger === "command" && ctx.cmd !== x.command) continue;
+      else if (trigger === "emote" && x.emote && x.emote !== String(ctx.emoteId || "")) continue;
       const k = [x.trigger, giftKey(x.gift), x.min, x.likes, x.command].join("|");
       if (!groups.has(k)) groups.set(k, []);
       groups.get(k).push(x);
@@ -679,6 +707,8 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
     if (ev.type === "chat") {
       let tts = ttsText(h, u, ev.text);
       broadcast(h, { t: "chat", user: u, text: ev.text, tts });
+      firstActivity(h, u);
+      fireEvents(h, "chat", { user: u, args: String(ev.text || "").slice(0, 120) }); fireSounds(h, "chat", { user: u });
       const m = /^\s*(![^\s]{1,29})\s*(.*)$/.exec(ev.text || "");
       if (m) {
         const ctx = { user: u, cmd: m[1].toLowerCase(), args: m[2].slice(0, 120) };
@@ -696,6 +726,14 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
       const last = h.chatCd.get(u.id) || 0;
       if (Date.now() - last > 10_000) { h.chatCd.set(u.id, Date.now()); addPoints(h, u, cfg.points.perChat); }
       if (h.chatCd.size > 5000) h.chatCd.clear();
+      return;
+    }
+    if (["gift", "like", "follow", "share", "subscribe"].includes(ev.type)) firstActivity(h, u);
+    if (ev.type === "emote") {
+      firstActivity(h, u);
+      if (ev.img || ev.id) { st.emotes = [{ id: ev.id, img: ev.img }, ...(st.emotes || []).filter(x => x.id !== ev.id)].slice(0, 30); }
+      broadcast(h, { t: "emote", user: u, id: ev.id, img: ev.img });
+      fireEvents(h, "emote", { user: u, emoteId: ev.id }); fireSounds(h, "emote", { user: u, emoteId: ev.id });
       return;
     }
     if (ev.type === "gift") {
@@ -818,6 +856,7 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
   const urlOf = p => {
     if (!p) return "";
     if (typeof p === "string") return p;
+    if (Array.isArray(p)) return String(p[0] || "");
     const list = p.url || p.urls || p.urlList || p.url_list || p.urlListList;
     return Array.isArray(list) ? String(list[0] || "") : "";
   };
@@ -826,7 +865,14 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
     const id = String(first(u.uniqueId, u.unique_id, d?.uniqueId, u.userId, d?.userId, "") || "").slice(0, 60);
     const name = String(first(u.nickname, d?.nickname, id, "spectator")).replace(/[\u0000-\u001f]/g, "").slice(0, 40);
     const avatar = first(u.profilePictureUrl, d?.profilePictureUrl, urlOf(u.profilePicture), urlOf(u.avatarThumb), "");
-    return { id, name, avatar: /^https:\/\//.test(avatar) ? avatar.slice(0, 600) : "" };
+    const ui = d?.userIdentity || u.userIdentity || {};
+    const fr = Number(first(u.followRole, d?.followRole, u.followInfo?.followStatus, 0)) || 0;
+    return {
+      id, name, avatar: /^https:\/\//.test(avatar) ? avatar.slice(0, 600) : "",
+      fol: !!(ui.isFollowerOfAnchor || ui.isMutualFollowingWithAnchor || fr >= 1),
+      sub: !!(ui.isSubscriberOfAnchor || d?.isSubscriber || u.isSubscriber),
+      mod: !!(ui.isModeratorOfAnchor || d?.isModerator || u.isModerator),
+    };
   }
   function nGift(d) {
     const g = d.giftDetails || d.gift || {}, ex = d.extendedGiftInfo || {};
@@ -890,6 +936,12 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
     on("share", d => handle(h, { type: "share", user: nUser(d) }));
     on("member", d => handle(h, { type: "member", user: nUser(d) }));
     on("subscribe", d => handle(h, { type: "subscribe", user: nUser(d) }));
+    on("emote", d => {
+      const e0 = (Array.isArray(d.emoteList) && d.emoteList[0]) || d.emote || d;
+      const em = e0.emote || e0;
+      const img = first(urlOf(d.emoteImageUrl), urlOf(em.image?.imageUrl), urlOf(em.image), urlOf(e0.image?.imageUrl), urlOf(e0.image), "");
+      handle(h, { type: "emote", user: nUser(d), id: String(first(d.emoteId, em.emoteId, e0.emoteId, "") || "").replace(/\D/g, "").slice(0, 30), img: /^https:\/\//.test(img) ? img.slice(0, 600) : "" });
+    });
     on("roomUser", d => handle(h, { type: "viewers", count: Math.max(0, Number(first(d.viewerCount, d.totalUser, d.total, 0)) || 0) }));
     const lost = why => {
       if (gen !== h.gen) return;
@@ -940,6 +992,7 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
     else if (type === "like") handle(h, { type: "like", user, count: clampN(opts.count, 1, 5000, 50), total: 0 });
     else if (type === "viewers") handle(h, { type: "viewers", count: 20 + crypto.randomInt(300) });
     else if (["follow", "share", "member", "subscribe"].includes(type)) handle(h, { type, user });
+    else if (type === "emote") handle(h, { type: "emote", user, id: String(opts.emote || "7584905657888246550").replace(/\D/g, "").slice(0, 30), img: "" });
   }
 
   // ---------------------------------------------------------------- acces
@@ -1051,7 +1104,7 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
     if (list.length >= 15) return res.status(429).json({ error: "Prea multe teste deodată. Mai așteaptă puțin." });
     list.push(now); testHits.set(h.uid, list);
     const type = String(req.body?.type || "");
-    if (!["gift", "chat", "follow", "share", "like", "member", "viewers", "subscribe"].includes(type)) return res.status(400).json({ error: "Tip de test necunoscut." });
+    if (!["gift", "chat", "follow", "share", "like", "member", "viewers", "subscribe", "emote"].includes(type)) return res.status(400).json({ error: "Tip de test necunoscut." });
     testEvent(h, type, req.body || {});
     res.json({ ok: true });
   }));
@@ -1064,7 +1117,7 @@ module.exports = function registerStreamStudio(app, { pool, auth, requireRole, a
     else if (a === "session-new") {
       const keepTimer = h.state.timer;
       h.state = emptyState(); h.state.timer = keepTimer;
-      h.likeAcc.clear(); h.likeUser.clear();
+      h.likeAcc.clear(); h.likeUser.clear(); h.seen?.clear();
       clearTimeout(h.battleT);
       pushState(h);
       broadcast(h, { t: "reset" });

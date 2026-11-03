@@ -134,6 +134,16 @@
   .chips label{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:99px;border:1px solid var(--line);font-size:12.5px;font-weight:700;cursor:pointer;background:var(--panel2)}
   .chips label:has(input:checked){border-color:var(--orange);background:rgba(255,138,31,.12);color:var(--orange)}
   .chips input{width:14px!important;height:14px!important}
+  .trig{border:1px dashed rgba(255,138,31,.45);border-radius:10px;padding:10px;display:grid;gap:8px;background:rgba(255,138,31,.04)}
+  .trig .on{display:flex;flex-wrap:wrap;gap:6px}
+  .trig .on span{display:inline-flex;align-items:center;gap:6px;padding:5px 6px 5px 10px;border-radius:99px;background:rgba(255,138,31,.14);border:1px solid rgba(255,138,31,.5);color:#ffd0a3;font-size:12.5px;font-weight:700}
+  .trig .on button{border:0;background:rgba(0,0,0,.35);color:#ff9b9b;width:22px;height:22px;border-radius:50%;cursor:pointer;font-weight:900}
+  .trig .add{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+  .trig .add select{flex:1 1 200px;min-width:0}
+  .trig .add input{flex:1 1 120px;min-width:0}
+  .trig .add [data-tp]{display:none}
+  .trig .add.t-gift [data-tp=gift],.trig .add.t-like [data-tp=like],.trig .add.t-command [data-tp=command]{display:block}
+  .warnmini{color:#ffc24b}
   .tag{display:inline-block;padding:2px 8px;border-radius:99px;background:rgba(255,255,255,.06);font-size:11px;font-weight:800;color:#cfd3d7;margin-right:4px}
   @media (max-width:980px){.st-app{grid-template-columns:1fr}.st-side{position:static}}
   @media (max-width:640px){.st{padding:0 16px 70px}.st-box{padding:16px}.grid2,.grid3{grid-template-columns:1fr}.goal-row{grid-template-columns:1fr 1fr}.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.prev iframe{height:300px}}
@@ -661,9 +671,18 @@
       const m = MEDIA.find(x => x.id === a.media);
       const sndVal = a.audio ? 'm:' + a.audio : 's:' + a.sound;
       return `<details class="act" data-aid="${esc(a.id)}"${openActs.has(a.id) ? ' open' : ''}><summary>
-        <span class="ic">${m ? thumb(m) : '⚡'}</span><span class="tt"><b>${esc(a.name)}</b><small>${esc(actSummary(a))}</small></span>
+        <span class="ic">${m ? thumb(m) : '⚡'}</span><span class="tt"><b>${esc(a.name)}</b><small>${evOf(a.id).length ? '🎯 ' + esc(evOf(a.id).map(evText).join(', ')) + ' · ' : '<span class="warnmini">⚠ nu pornește la nimic</span> · '}${esc(actSummary(a))}</small></span>
         <button type="button" class="b sm" data-arun="${esc(a.id)}">▶ Testează</button></summary>
         <div class="body">
+          <div class="trig"><b style="font-size:13px">🎯 Pornește când:</b>
+            <div class="on">${evOf(a.id).map(ev => `<span>${esc(evText(ev))}<button type="button" data-tdel="${esc(ev.id)}" data-aid2="${esc(a.id)}" aria-label="Scoate">✕</button></span>`).join('') || '<span class="hint warnmini" style="background:none;border:0;padding:0">Încă nu pornește la nimic. Alege mai jos când să pornească.</span>'}</div>
+            <div class="add t-gift"><select data-t="trigger" aria-label="Când pornește">${opt(TRIG, 'gift')}</select>
+              <input type="text" data-t="gift" data-tp="gift" list="gift-list" maxlength="60" placeholder="Cadoul (gol = orice cadou)" aria-label="Cadoul">
+              <input type="number" data-t="min" data-tp="gift" min="1" placeholder="de la câte 💎 (1)" aria-label="De la câte diamante">
+              <input type="number" data-t="likes" data-tp="like" min="10" step="10" placeholder="la fiecare … like-uri (100)" aria-label="La câte like-uri">
+              <input type="text" data-t="command" data-tp="command" maxlength="30" placeholder="!comanda" aria-label="Comanda">
+              <button type="button" class="b sm pri" data-tadd="${esc(a.id)}">+ Adaugă</button></div>
+          </div>
           <div class="grid2"><label class="f">Numele acțiunii<input type="text" data-a="name" maxlength="40" value="${esc(a.name)}"></label>
             <label class="f">Clip, imagine sau GIF<select data-a="media"><option value="">— fără —</option>${vis.map(x => `<option value="${x.id}"${x.id === a.media ? ' selected' : ''}>${KIND_IC[x.kind]} ${esc(x.name)}</option>`).join('')}</select></label></div>
           <div class="grid2"><label class="f">Muzică sau sunet<select data-a="snd"><option value="s:none"${sndVal === 's:none' ? ' selected' : ''}>— fără —</option>
@@ -686,6 +705,14 @@
     }).join('') || '<p class="hint">Nicio acțiune încă. Apasă „+ Acțiune nouă” sau „Pune exemple”.</p>';
     drawMedia();
   }
+  const evOf = id => (S?.events || []).filter(ev => ev.actions.includes(id));
+  function evText(ev) {
+    const off = ev.on ? '' : ' (oprit)';
+    if (ev.trigger === 'gift') return (ev.gift ? `🎁 ${ev.gift}` : '🎁 orice cadou') + (ev.min > 1 ? ` de la ${ev.min} 💎` : '') + (ev.perGift ? ' (fiecare)' : '') + off;
+    if (ev.trigger === 'like') return `❤️ la ${ev.likes} like-uri` + off;
+    if (ev.trigger === 'command') return `💬 ${ev.command}` + (ev.cost ? ` (${ev.cost} puncte)` : '') + off;
+    return ({ follow: '💖 follow', share: '📣 share', member: '👋 intră pe live', subscribe: '⭐ abonat' })[ev.trigger] + off;
+  }
   function newAction(over = {}) { return { id: newId('a'), name: 'Acțiune nouă', media: null, audio: null, sound: 'coin', text: 'Mersi, {user}!', tts: '', duration: 6, volume: 80, screen: 1, position: 'center', size: 45, effect: 'confetti', wheel: false, timer: 0, points: 0, ...over }; }
   $('#btn-act-add').onclick = () => { const a = newAction(); S.actions.push(a); openActs.add(a.id); drawActs(); drawEvts(); markDirty(); };
   $('#acts').addEventListener('toggle', e => { const d = e.target.closest('details.act'); if (!d) return; d.open ? openActs.add(d.dataset.aid) : openActs.delete(d.dataset.aid); }, true);
@@ -698,9 +725,29 @@
     else if (e.target.type === 'number' || e.target.type === 'range') a[k] = Number(e.target.value);
     else a[k] = e.target.value;
     if (e.target.type === 'range') e.target.previousElementSibling.textContent = k === 'size' ? `Mărimea clipului: ${a.size}% din ecran` : `Volum: ${a.volume}%`;
-    d.querySelector('summary small').textContent = actSummary(a);
+    const evs = evOf(a.id);
+    d.querySelector('summary small').innerHTML = (evs.length ? '🎯 ' + esc(evs.map(evText).join(', ')) + ' · ' : '<span class="warnmini">⚠ nu pornește la nimic</span> · ') + esc(actSummary(a));
     if (k === 'name') { d.querySelector('summary b').textContent = a.name; drawEvts(); }
     if (k === 'media') d.querySelector('summary .ic').innerHTML = thumb(MEDIA.find(x => x.id === a.media)) || '⚡';
+  });
+  $('#acts').addEventListener('change', e => {
+    if (e.target.dataset.t === 'trigger') e.target.closest('.add').className = 'add t-' + e.target.value;
+  });
+  $('#acts').addEventListener('click', e => {
+    const add = e.target.closest('[data-tadd]'), del = e.target.closest('[data-tdel]');
+    if (add) {
+      const row = add.closest('.add'), v = k => row.querySelector(`[data-t=${k}]`).value.trim(), trig = v('trigger');
+      if (trig === 'command' && !v('command')) { row.querySelector('[data-t=command]').focus(); return; }
+      S.events.push(newEvent({ trigger: trig, gift: v('gift'), min: Number(v('min')) || 1, likes: Number(v('likes')) || 100, command: v('command') || '!dans', actions: [add.dataset.tadd], userCooldown: trig === 'follow' || trig === 'member' ? 60 : 0 }));
+      drawActs(); drawEvts(); markDirty();
+      note('Gata. Apasă „Salvează setările” ca să pornească pe live.', 'sys', '🎯');
+    }
+    if (del) {
+      const ev = S.events.find(x => x.id === del.dataset.tdel); if (!ev) return;
+      ev.actions = ev.actions.filter(id => id !== del.dataset.aid2);
+      if (!ev.actions.length) S.events = S.events.filter(x => x !== ev);
+      drawActs(); drawEvts(); markDirty();
+    }
   });
   $('#acts').addEventListener('click', async e => {
     const run = e.target.closest('[data-arun]'), dup = e.target.closest('[data-adup]'), del = e.target.closest('[data-adel]');
@@ -736,16 +783,17 @@
   $('#evts').addEventListener('input', e => {
     const r = e.target.closest('.evrow'); if (!r) return;
     const ev = S.events.find(x => x.id === r.dataset.eid); if (!ev) return;
-    if (e.target.dataset.eAct) { const id = e.target.dataset.eAct; ev.actions = e.target.checked ? [...new Set([...ev.actions, id])].slice(0, 6) : ev.actions.filter(x => x !== id); return; }
+    if (e.target.dataset.eAct) { const id = e.target.dataset.eAct; ev.actions = e.target.checked ? [...new Set([...ev.actions, id])].slice(0, 6) : ev.actions.filter(x => x !== id); clearTimeout(window.__actRedraw); window.__actRedraw = setTimeout(drawActs, 300); return; }
     const k = e.target.dataset.e; if (!k) return;
     ev[k] = e.target.type === 'checkbox' ? e.target.checked : e.target.type === 'number' ? Number(e.target.value) : e.target.value;
     if (k === 'trigger' || k === 'on') drawEvts();
     if (k === 'gift') giftPreview(r);
+    clearTimeout(window.__actRedraw); window.__actRedraw = setTimeout(drawActs, 600);
   });
   $('#evts').addEventListener('click', async e => {
     const t = e.target.closest('[data-etest]'), d = e.target.closest('[data-edel]');
     if (t) { await saveIfDirty(); const ev = S.events.find(x => x.id === t.dataset.etest), a = S.actions.find(x => x.id === ev?.actions?.[0]); if (!ev?.actions?.length) { note('Bifează la eveniment, la „Atunci:”, cel puțin o acțiune, apoi salvează.', 'sys', '⚠️'); return; } await openActPrev(a?.screen || 1); try { await api('/api/stream/actiune', { action: 'event-test', id: t.dataset.etest }); } catch (err) { note(esc(err.message), 'sys', '⚠️'); } }
-    if (d) { S.events = S.events.filter(x => x.id !== d.dataset.edel); drawEvts(); markDirty(); }
+    if (d) { S.events = S.events.filter(x => x.id !== d.dataset.edel); drawEvts(); drawActs(); markDirty(); }
   });
   // exemple pentru început
   $('#btn-examples').onclick = () => {

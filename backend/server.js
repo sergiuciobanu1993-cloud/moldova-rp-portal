@@ -102,7 +102,6 @@ const PANEL_PAGE_ACCESS = {
   "admin-jucatori.html": "admins",
   "admin-craciun.html": "admins",   // (31.10.2026) questurile de Crăciun (tragerea la tombolă: doar fondatorii, în API)
   "admin-clasament.html": "admins", // (31.10.2026) premiile clasamentului săptămânii
-  "admin-streameri.html": "admins", // (03.11.2026) cererile pentru Studio-ul de streaming
 };
 function panelPageRoles(file) {
   const k = PANEL_PAGE_ACCESS[file];
@@ -10610,11 +10609,6 @@ app.post("/api/admin/discord/roluri-bande", auth, requireRole(...FOUNDER_ROLES),
   await logAction(req.user.sub, "discord.gang_roles_sync", "discord", null, { added: run?.added, removed: run?.removed, skipped: run?.skipped || null }, req.ip).catch(() => {});
   res.json({ lastRun: run });
 }));
-
-// (03.11.2026, cerut de Sergiu) Studio de streaming pentru streamerii comunității — vezi backend/stream-studio.js
-try {
-  require("./stream-studio")(app, { pool, auth, requireRole, asyncRoute, logAction, notifyUser, ADMIN_ROLES });
-} catch (err) { console.error("Studio de streaming nepornit:", err.message); }
 
 app.use((err, _req, res, _next) => {
   console.error(err);

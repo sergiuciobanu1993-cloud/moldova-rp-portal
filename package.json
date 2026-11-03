@@ -22,7 +22,6 @@
     "pg": "^8.13.1"
   },
   "optionalDependencies": {
-    "esbuild": "0.28.2",
-    "tiktok-live-connector": ">=1.2.0"
+    "esbuild": "0.28.2"
   }
 }

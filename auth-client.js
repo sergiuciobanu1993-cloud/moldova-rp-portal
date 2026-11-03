@@ -90,7 +90,6 @@ const PANEL_ACCESS = {
   "admin-jucatori.html": PANEL_ADMINS,
   "admin-craciun.html": PANEL_ADMINS,   // (31.10.2026) tragerea la tombolă o fac doar fondatorii (server)
   "admin-clasament.html": PANEL_ADMINS, // (31.10.2026) premiile clasamentului săptămânii
-  "admin-streameri.html": PANEL_ADMINS, // (03.11.2026) cererile pentru Studio-ul de streaming
 };
 function panelRolesFor(file) {
   return PANEL_ACCESS[file] || PANEL_FOUNDERS;   // orice altă pagină admin*.html = doar fondatorii
@@ -125,7 +124,7 @@ function filterPanelNav(role) {
   const side = document.querySelector("aside.side");
   if (!side) return;
   let after = side.querySelector('a[href="admin-vip-shop.html"]');
-  for (const [href, text] of [["admin-craciun.html", "🎄 Crăciun"], ["admin-clasament.html", "🏆 Clasament"], ["admin-sondaje.html", "🗳 Sondaje"], ["admin-streameri.html", "🎥 Streameri"]]) {
+  for (const [href, text] of [["admin-craciun.html", "🎄 Crăciun"], ["admin-clasament.html", "🏆 Clasament"], ["admin-sondaje.html", "🗳 Sondaje"]]) {
     let a = side.querySelector(`a[href="${href}"]`);
     if (!a) {
       a = document.createElement("a");

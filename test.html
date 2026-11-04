@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="ro">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ff8a1f">
+  <meta name="description" content="Testele facțiunilor Moldova RP.">
+  <title>Test — Moldova RP</title><meta name="robots" content="noindex">
+  <link rel="icon" href="assets/favicon.png">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/assets/app/apple-touch-icon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black"><meta name="apple-mobile-web-app-title" content="Moldova RP"><script>try{var wnT=+sessionStorage.getItem("mrp_wn_nav");if(wnT&&Date.now()-wnT<5000)document.documentElement.classList.add("wn-in")}catch(e){}</script><style>/* (31.10.2026) sosirea după cortina de iarnă (tema.js, wnNav): cortina se ridică */html.wn-in::after{content:"";position:fixed;left:0;right:0;top:0;height:calc(100vh + 140px);z-index:2147483000;pointer-events:none;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='-12 -12 24 24'%3E%3Cg fill='none' stroke='%23bfe6ff' stroke-width='1.6' stroke-linecap='round'%3E%3Cpath transform='rotate(0)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3Cpath transform='rotate(60)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3Cpath transform='rotate(120)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3Cpath transform='rotate(180)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3Cpath transform='rotate(240)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3Cpath transform='rotate(300)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3C/g%3E%3C/svg%3E") 50% calc(50vh - 27px)/54px 54px no-repeat,radial-gradient(circle at 30% 40%,#fff 0 1.6px,transparent 2.3px) 0 0/131px 113px,radial-gradient(circle at 70% 20%,rgba(255,255,255,.75) 0 1.1px,transparent 1.8px) 36px 28px/97px 71px,linear-gradient(180deg,#0b1830,#060a12 75%);-webkit-mask-image:linear-gradient(180deg,#000 calc(100% - 140px),transparent);mask-image:linear-gradient(180deg,#000 calc(100% - 140px),transparent);animation:wnIn 1s cubic-bezier(.65,0,.35,1) .2s forwards}@keyframes wnIn{to{transform:translateY(-100%);visibility:hidden}}@media (prefers-reduced-motion:reduce){html.wn-in::after{display:none}}</style><script src="/pwa.js" defer></script>
+<style>
+
+<style>
+/* (04.11.2026) testele facțiunilor (primul: Biroul Șerifului) */
+.tx-wrap{max-width:860px;margin:0 auto}
+.tx-card{border:1px solid var(--line);border-radius:16px;background:var(--panel);padding:22px;margin:0 0 16px}
+.tx-card h2{margin:0 0 8px;font-size:20px}
+.tx-agent{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;font-size:14px}
+.tx-agent b{color:var(--text)}
+.tx-facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:16px 0}
+.tx-facts div{border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:rgba(255,255,255,.02)}
+.tx-facts small{display:block;color:var(--muted);font-size:11px;letter-spacing:.08em;text-transform:uppercase;font-weight:800}
+.tx-facts strong{font-size:22px}
+.tx-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:46px;padding:0 22px;border-radius:12px;border:0;background:var(--orange);color:#0b0b0b;font:inherit;font-weight:900;cursor:pointer}
+.tx-btn:disabled{opacity:.5;cursor:default}
+.tx-btn.ghost{background:transparent;border:1px solid var(--line);color:var(--text)}
+.tx-msg{margin:12px 0 0;padding:12px 14px;border-radius:12px;background:rgba(255,138,31,.08);border:1px solid rgba(255,138,31,.25);line-height:1.55}
+.tx-msg.err{background:rgba(255,92,92,.08);border-color:rgba(255,92,92,.3)}
+.tx-bar{position:sticky;top:0;z-index:5;display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 16px;margin:0 0 14px;border-radius:14px;border:1px solid var(--line);background:rgba(13,15,16,.92);backdrop-filter:blur(8px)}
+.tx-bar .clock{font-size:22px;font-weight:900;font-variant-numeric:tabular-nums}
+.tx-bar .clock.hot{color:#ff6b5b}
+.tx-q{border:1px solid var(--line);border-radius:14px;background:var(--panel);padding:18px;margin:0 0 12px}
+.tx-q.done{border-color:rgba(255,138,31,.35)}
+.tx-q p{margin:0 0 12px;font-weight:800;font-size:16px;line-height:1.45}
+.tx-q p span{color:var(--orange);margin-right:6px}
+.tx-q label{display:flex;gap:10px;align-items:flex-start;padding:11px 12px;border-radius:10px;border:1px solid var(--line);margin:0 0 8px;cursor:pointer;line-height:1.4}
+.tx-q label:hover{border-color:rgba(255,138,31,.4)}
+.tx-q label:has(input:checked){border-color:var(--orange);background:rgba(255,138,31,.08)}
+.tx-q input{margin-top:3px;accent-color:#ff8a1f}
+.tx-res{text-align:center;padding:30px 20px}
+.tx-res .big{font-size:56px;font-weight:900;line-height:1}
+.tx-res .ok{color:#3ddc84}.tx-res .no{color:#ff6b5b}
+.tx-lead table{width:100%;border-collapse:collapse;font-size:13.5px}
+.tx-lead th{text-align:left;color:var(--muted);font-size:11px;letter-spacing:.08em;text-transform:uppercase;padding:8px;border-bottom:1px solid var(--line)}
+.tx-lead td{padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+.tx-scroll{overflow-x:auto}
+.pill2{display:inline-block;padding:3px 9px;border-radius:999px;font-size:11px;font-weight:900}
+.pill2.ok{background:rgba(61,220,132,.14);color:#3ddc84}.pill2.no{background:rgba(255,107,91,.14);color:#ff6b5b}.pill2.wait{background:rgba(255,255,255,.08);color:#bbb}
+.tx-reset{background:transparent;border:1px solid var(--line);border-radius:8px;color:var(--muted);font:inherit;font-size:12px;padding:4px 8px;cursor:pointer}
+.tx-qs li{margin:0 0 10px;line-height:1.45}
+.tx-qs small{color:var(--muted)}
+@media(max-width:640px){.tx-facts{grid-template-columns:1fr 1fr}.tx-card{padding:16px}}
+</style>
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="index.html" aria-label="Moldova RP - Acasă">
+      <img src="assets/logo-128.webp" alt="Moldova RP">
+      <span>MOLDOVA<span class="accent">RP</span></span>
+    </a>
+    <button class="menu-toggle" aria-label="Deschide meniul" aria-expanded="false">☰</button>
+    <nav class="nav">
+      <a href="index.html">Acasă</a>
+      <a href="regulamente.html">Regulamente</a>
+      <a href="index.html#jucatori">Jucători</a>
+      <a href="index.html#factiuni">Facțiuni</a>
+      <a href="legislatie-rutiera.html">Legislație Rutieră</a>
+      <a href="cod-penal.html">Codul Penal</a>
+      <a href="joburi.html">Joburi</a>
+      <a href="index.html#anunturi">Anunțuri</a>
+      <a class="nav-login" href="login.html">Autentificare</a>
+    </nav>
+  </header>
+
+  <main>
+    <div class="page-hero tx-wrap">
+      <a class="back-link" href="index.html">← Înapoi la pagina principală</a>
+      <p class="eyebrow" style="margin-top:22px" id="tx-dept">TEST</p>
+      <h1 id="tx-title">Test</h1>
+    </div>
+    <div class="tx-wrap" id="tx-app"><div class="tx-card"><p class="muted" style="margin:0">Se încarcă…</p></div></div>
+  </main>
+
+  <footer>
+    <div class="footer-brand"><img src="assets/logo-128.webp" alt="Moldova RP"><div><strong>MOLDOVA<span class="accent">RP</span></strong><small>Portal oficial al comunității</small></div></div>
+    <p class="copyright">© 2026 Moldova RP. Toate drepturile rezervate.</p>
+  </footer>
+
+  <script src="app.js"></script>
+<script>
+(() => {
+  const ID = (new URLSearchParams(location.search).get('id') || 'serifi').replace(/[^\w-]/g, '');
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const tok = () => { try { return JSON.parse(localStorage.getItem('mrp_auth') || '{}').token || ''; } catch { return ''; } };
+  const app = document.getElementById('tx-app');
+  async function api(path, body) {
+    const r = await fetch(path, { method: body ? 'POST' : 'GET', headers: { Authorization: 'Bearer ' + tok(), 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+    const d = await r.json().catch(() => ({}));
+    if (r.status === 401) { location.href = 'login.html'; throw new Error('Intră în cont.'); }
+    if (!r.ok) throw new Error(d.error || 'Ceva n-a mers. Încearcă din nou.');
+    return d;
+  }
+  let T = null, ANS = {}, timer = null, endAt = 0, saveT = null;
+  const fmtDate = d => new Date(d).toLocaleString('ro-RO', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+
+  async function load() {
+    if (!tok()) { app.innerHTML = `<div class="tx-card"><h2>Intră în cont</h2><p class="muted">Testul se dă cu contul tău de pe site, legat de personajul din joc.</p><a class="tx-btn" href="login.html">Autentificare</a></div>`; return; }
+    try { T = await api('/api/teste/' + ID); } catch (err) { app.innerHTML = `<div class="tx-card"><p class="tx-msg err">${esc(err.message)}</p></div>`; return; }
+    document.title = T.title + ' — Moldova RP';
+    document.getElementById('tx-title').textContent = T.title;
+    document.getElementById('tx-dept').textContent = (T.dept || 'TEST').toUpperCase();
+    if (T.attempt && !T.attempt.finished) return showQuiz(T.attempt);
+    showStart();
+  }
+  function agentHtml() {
+    const a = T.agent;
+    if (!a) return '';
+    return `<div class="tx-agent">👤 <b>${esc(a.name || '—')}</b>${a.staticId ? `<span>ID <b>${esc(a.staticId)}</b></span>` : ''}${a.grade ? `<span>${esc(a.grade)}</span>` : ''}${a.dept ? `<span class="muted">${esc(a.dept)}</span>` : ''}</div>`;
+  }
+  function showStart() {
+    const a = T.attempt;
+    let action = '';
+    if (a && a.finished) action = resultHtml(a);
+    else if (!T.linked) action = `<p class="tx-msg">Leagă-ți întâi contul de personajul din joc: scrie <b>/leagacont</b> în joc și pune codul pe pagina <a href="cod-penal.html" style="color:var(--orange)">Codul Penal</a> sau în contul tău.</p>`;
+    else if (!T.canTake) action = `<p class="tx-msg err">Testul îl dau doar membrii ${esc(T.dept)}. Personajul legat de contul tău nu e în departament.</p>`;
+    else if (!T.open && !T.staff) action = `<p class="tx-msg">Testul nu e deschis încă. Îl deschide conducerea departamentului la ora stabilită: reîncarcă pagina atunci.</p>`;
+    else action = `${T.staff && !T.member ? '<p class="tx-msg">Ești staff: poți da testul ca probă. Rezultatul tău apare în listă marcat „staff”.</p>' : ''}<p style="margin:14px 0 0"><button type="button" class="tx-btn" id="tx-start">▶ Încep testul</button></p>`;
+    app.innerHTML = `<div class="tx-card">${agentHtml()}
+      <p class="muted" style="margin:12px 0 0;line-height:1.6">${esc(T.intro)}</p>
+      <div class="tx-facts"><div><small>Întrebări</small><strong>${T.count}</strong></div><div><small>Timp</small><strong>${T.minutes} min</strong></div><div><small>Trece cu</small><strong>${T.pass} corecte</strong></div></div>
+      <p class="muted" style="margin:0;font-size:13px">Răspunsurile se salvează singure. Dacă ți se închide pagina, revii și continui, dar timpul curge. La final vezi nota; răspunsurile corecte le vede doar conducerea.</p>
+      ${action}</div>` + (T.lead ? leadHtml() : '');
+    document.getElementById('tx-start')?.addEventListener('click', start);
+    if (T.lead) loadLead();
+  }
+  function resultHtml(a) {
+    return `<div class="tx-res"><p class="muted" style="margin:0 0 8px">Ai terminat testul pe ${esc(fmtDate(a.finished))}</p>
+      <div class="big ${a.passed ? 'ok' : 'no'}">${a.score}/${a.total}</div>
+      <p style="font-size:18px;font-weight:900;margin:10px 0 0" class="${a.passed ? 'ok' : 'no'}">${a.passed ? '✓ Ai trecut testul' : '✕ Nu ai trecut testul'}</p>
+      <p class="muted" style="margin:6px 0 0">Trebuiau cel puțin ${T.pass} răspunsuri corecte.</p></div>`;
+  }
+  async function start() {
+    const b = document.getElementById('tx-start'); b.disabled = true;
+    if (!confirm(`Începi testul? Ai ${T.minutes} de minute și o singură încercare.`)) { b.disabled = false; return; }
+    try { const d = await api(`/api/teste/${ID}/start`, {}); showQuiz(d.attempt); }
+    catch (err) { b.disabled = false; b.insertAdjacentHTML('afterend', `<p class="tx-msg err">${esc(err.message)}</p>`); }
+  }
+  function showQuiz(a) {
+    ANS = {};
+    for (const [k, v] of Object.entries(a.saved || {})) ANS[k] = v;
+    endAt = Date.now() + a.left;
+    // în listă, fiecare întrebare are numărul ei din test (q), ca să știm ce salvăm
+    app.innerHTML = `<div class="tx-bar"><span><b id="tx-done">0</b> / ${a.questions.length} răspunsuri</span><span class="clock" id="tx-clock">--:--</span><button type="button" class="tx-btn" id="tx-send">Trimite testul</button></div>
+      ${a.questions.map((q, n) => `<fieldset class="tx-q" data-q="${q.qid ?? ''}" style="margin:0 0 12px"><p><span>${n + 1}.</span>${esc(q.q)}</p>
+        ${q.o.map(o => `<label><input type="radio" name="q${n}" value="${o.i}" data-n="${n}"> <span>${esc(o.t)}</span></label>`).join('')}</fieldset>`).join('')}
+      <p style="text-align:center;margin:18px 0 0"><button type="button" class="tx-btn" id="tx-send2">Trimite testul</button></p>`;
+    QS = a.questions;
+    // ce era salvat (cheia e numărul întrebării din test)
+    QS.forEach((q, n) => { const v = ANS[q.id]; if (v != null) { const r = app.querySelector(`input[name=q${n}][value="${v}"]`); if (r) r.checked = true; } });
+    count();
+    app.addEventListener('change', e => { const r = e.target.closest('input[type=radio]'); if (!r) return; ANS[QS[Number(r.dataset.n)].id] = Number(r.value); count(); clearTimeout(saveT); saveT = setTimeout(save, 600); });
+    document.getElementById('tx-send').onclick = () => send(false);
+    document.getElementById('tx-send2').onclick = () => send(false);
+    clearInterval(timer); timer = setInterval(tick, 500); tick();
+  }
+  let QS = [];
+  function count() {
+    const n = QS.filter(q => ANS[q.id] != null).length;
+    document.getElementById('tx-done').textContent = n;
+    app.querySelectorAll('.tx-q').forEach((f, i) => f.classList.toggle('done', ANS[QS[i].id] != null));
+  }
+  function tick() {
+    const ms = Math.max(0, endAt - Date.now()), s = Math.ceil(ms / 1000), el = document.getElementById('tx-clock');
+    if (!el) return clearInterval(timer);
+    el.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; el.classList.toggle('hot', s <= 60);
+    if (!ms) { clearInterval(timer); send(true); }
+  }
+  async function save() { try { await api(`/api/teste/${ID}/salveaza`, { answers: ANS }); } catch { /* se reîncearcă la următorul răspuns */ } }
+  let sending = false;
+  async function send(auto) {
+    if (sending) return;
+    const left = QS.filter(q => ANS[q.id] == null).length;
+    if (!auto && !confirm(left ? `Mai ai ${left} întrebări fără răspuns. Trimiți testul așa?` : 'Trimiți testul? Nu mai poți schimba răspunsurile.')) return;
+    sending = true; clearInterval(timer);
+    try { const d = await api(`/api/teste/${ID}/trimite`, { answers: ANS }); T.attempt = d.attempt; showStart(); window.scrollTo(0, 0); }
+    catch (err) { sending = false; alert(err.message); }
+  }
+
+  // ---- conducerea: deschide/închide testul, rezultatele
+  function leadHtml() {
+    return `<div class="tx-card tx-lead"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><h2 style="margin:0">📋 Rezultate (doar conducerea)</h2>
+      <span><span class="pill2 ${T.open ? 'ok' : 'wait'}" id="tx-state">${T.open ? 'DESCHIS' : 'ÎNCHIS'}</span> <button type="button" class="tx-btn ghost" id="tx-toggle" style="min-height:38px">${T.open ? 'Închide testul' : 'Deschide testul'}</button></span></div>
+      <p class="muted" style="margin:8px 0 12px;font-size:13px">Linkul pentru agenți: <b>${esc(location.origin + location.pathname + '?id=' + ID)}</b></p>
+      <div id="tx-lead-body"><p class="muted">Se încarcă…</p></div></div>`;
+  }
+  async function loadLead() {
+    document.getElementById('tx-toggle').onclick = async () => {
+      if (!confirm(T.open ? 'Închizi testul? Cine l-a început își poate termina timpul.' : 'Deschizi testul? Agenții îl pot începe de acum.')) return;
+      try { const d = await api(`/api/teste/${ID}/stare`, { open: !T.open }); T.open = d.open; showStart(); } catch (err) { alert(err.message); }
+    };
+    const box = document.getElementById('tx-lead-body');
+    try {
+      const d = await api(`/api/teste/${ID}/rezultate`);
+      const done = d.items.filter(x => x.finished), passed = done.filter(x => x.passed).length;
+      box.innerHTML = `<p style="margin:0 0 10px">${d.items.length} au început · ${done.length} au terminat · <b style="color:#3ddc84">${passed} au trecut</b></p>
+        <div class="tx-scroll"><table><thead><tr><th>Agent</th><th>Grad</th><th>Nota</th><th>Rezultat</th><th>Terminat</th><th></th></tr></thead><tbody>
+        ${d.items.map(x => `<tr><td><b>${esc(x.name || '—')}</b>${x.staticId ? ` <span class="muted">#${esc(x.staticId)}</span>` : ''}${x.staff ? ' <span class="muted">(staff)</span>' : ''}</td><td>${esc(x.grade || '—')}</td>
+          <td>${x.finished ? `<b>${x.score}/${x.total}</b>` : '—'}</td><td>${x.finished ? `<span class="pill2 ${x.passed ? 'ok' : 'no'}">${x.passed ? 'TRECUT' : 'PICAT'}</span>` : '<span class="pill2 wait">ÎN LUCRU</span>'}</td>
+          <td class="muted">${x.finished ? esc(fmtDate(x.finished)) + ` · ${x.minutes} min` : 'început ' + esc(fmtDate(x.started))}${x.wrong.length ? `<br><small>greșite: ${x.wrong.map(i => i + 1).join(', ')}</small>` : ''}</td>
+          <td><button type="button" class="tx-reset" data-reset="${x.id}" title="Șterge încercarea, ca agentul să poată da testul din nou">↺ Din nou</button></td></tr>`).join('') || '<tr><td colspan="6" class="muted">Nimeni n-a început testul încă.</td></tr>'}
+        </tbody></table></div>
+        <details style="margin-top:14px"><summary style="cursor:pointer;font-weight:800">Întrebările și răspunsurile corecte</summary><ol class="tx-qs" style="margin:12px 0 0;padding-left:22px">
+        ${d.questions.map(q => `<li>${esc(q.q)}<br><b style="color:#3ddc84">✓ ${esc(q.right)}</b> <small>· ${esc(q.src)}${q.wrong ? ` · greșită de ${q.wrong}` : ''}</small></li>`).join('')}</ol></details>`;
+      box.querySelectorAll('[data-reset]').forEach(b => b.onclick = async () => {
+        if (!confirm('Ștergi încercarea acestui agent? Rezultatul lui dispare și poate da testul din nou.')) return;
+        try { await api(`/api/teste/${ID}/stare`, { reset: Number(b.dataset.reset) }); loadLead(); } catch (err) { alert(err.message); }
+      });
+    } catch (err) { box.innerHTML = `<p class="tx-msg err">${esc(err.message)}</p>`; }
+  }
+  load();
+})();
+</script>
+</body>
+</html>

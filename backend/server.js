@@ -4900,23 +4900,47 @@ function weeklyGangMap() {
   }
   return weeklyGangs.map;
 }
+// (04.11.2026) Bug: uneori jocul trimite la intrare o valoare mică (de exemplu 29 de minute) și abia
+// apoi orele adevărate (9.300 de minute); diferența era numărată ca ore jucate în săptămână (154 h în 3 zile).
+// Acum, între două sincronizări, orele unui personaj pot crește cel mult cu timpul trecut între ele
+// (plus 3 minute); un salt mai mare nu e timp jucat, așa că mutăm și „startul" cu el.
+let weeklyLastNote = 0, weeklyRepaired = null;
+// o singură dată după pornire: rândurile din săptămâna de acum cu mai multe minute decât au trecut de luni
+async function repairWeeklyJumps(week) {
+  const since = Math.max(0, Math.floor((Date.now() - chisinauMidnight(week).getTime()) / 60000)) + 5;
+  // întâi încercăm orele de la finalul săptămânii trecute (ultima citire bună), altfel îl pornim de acum
+  const a = await pool.query(
+    `UPDATE weekly_playtime w SET start_minutes = p.last_minutes
+       FROM (SELECT DISTINCT ON (identifier) identifier, last_minutes FROM weekly_playtime WHERE week < $1 ORDER BY identifier, week DESC) p
+      WHERE w.week = $1 AND p.identifier = w.identifier AND w.last_minutes - w.start_minutes > $2
+        AND p.last_minutes <= w.last_minutes AND w.last_minutes - p.last_minutes <= $2 RETURNING w.identifier`, [week, since]);
+  const b = await pool.query(
+    `UPDATE weekly_playtime SET start_minutes = last_minutes WHERE week = $1 AND last_minutes - start_minutes > $2 RETURNING identifier, rp_name`, [week, since]);
+  if (a.rowCount || b.rowCount) console.log(`Clasament: ore imposibile reparate în săptămâna ${week} — ${a.rowCount} după săptămâna trecută, ${b.rowCount} pornite de la zero (${b.rows.map(r => r.rp_name || r.identifier).join(", ")}).`);
+}
 // apelată la fiecare tur de sincronizare (la minut)
 async function noteWeeklyPlaytime(players) {
   await weeklyTables();
   const gangs = weeklyGangMap();
   const week = weekStartOf();
+  if (weeklyRepaired !== week) { weeklyRepaired = week; await repairWeeklyJumps(week).catch(err => console.error("Clasament: reparare:", err.message)); }
+  const now = Date.now();
+  const allowed = (weeklyLastNote ? Math.ceil((now - weeklyLastNote) / 60000) : 5) + 3;
+  weeklyLastNote = now;
   const rows = (players || []).map(pl => {
     const job = String(pl.job || "").toLowerCase();
     const org = WEEK_FACTION_JOBS[job] || gangs.get(String(pl.license)) || null;
     return { id: pl.license, name: (pl.serverName || pl.name || "").toString().slice(0, 64) || null, org, min: playtimeOf(pl) };
   }).filter(r => r.id && Number.isFinite(r.min));
   if (!rows.length) return;
-  const vals = [], params = [week];
-  rows.forEach((r, k) => { params.push(r.id, r.name, r.org, r.min); vals.push(`($${k * 4 + 2}::text,$${k * 4 + 3}::text,$${k * 4 + 4}::text,$${k * 4 + 5}::int)`); });
+  const vals = [], params = [week, allowed];
+  rows.forEach((r, k) => { params.push(r.id, r.name, r.org, r.min); vals.push(`($${k * 4 + 3}::text,$${k * 4 + 4}::text,$${k * 4 + 5}::text,$${k * 4 + 6}::int)`); });
   await pool.query(
     `INSERT INTO weekly_playtime(week, identifier, rp_name, org, start_minutes, last_minutes)
      SELECT $1::date, v.id, v.name, v.org, v.min, v.min FROM (VALUES ${vals.join(",")}) AS v(id, name, org, min)
-     ON CONFLICT (week, identifier) DO UPDATE SET last_minutes = GREATEST(weekly_playtime.last_minutes, EXCLUDED.last_minutes),
+     ON CONFLICT (week, identifier) DO UPDATE SET
+       start_minutes = weekly_playtime.start_minutes + GREATEST(0, EXCLUDED.last_minutes - weekly_playtime.last_minutes - $2::int),
+       last_minutes = GREATEST(weekly_playtime.last_minutes, EXCLUDED.last_minutes),
        rp_name = COALESCE(EXCLUDED.rp_name, weekly_playtime.rp_name), org = EXCLUDED.org, updated_at = NOW()`, params);
 }
 async function weeklyBoard(week) {
@@ -9326,6 +9350,150 @@ async function codPenalAccess(req) {
 app.get("/api/cod-penal/acces", auth, asyncRoute(async (req, res) => {
   res.set("Cache-Control", "no-store");
   res.json(await codPenalAccess(req));
+}));
+
+// ---------------------------------------------------------------------------
+// (04.11.2026, cerut de Sergiu pentru chestorul Biroului Șerifului) Teste pentru facțiuni.
+// Întrebările stau în backend/teste.json (nu se văd public). Testul îl dau doar membrii
+// departamentului (după personajul legat de cont, ca la Codul Penal), o singură dată,
+// în timpul dat. Rezultatele le văd conducerea departamentului (Chestor, Comisar…) și staff-ul;
+// tot ei deschid și închid testul.
+const TESTE = require("./teste.json");
+const TEST_LEAD_RE = /chestor|comisar|sheriff|lider|director|comandant/i;
+let testeReady = null;
+function testeTables() {
+  if (!testeReady) testeReady = pool.query(`
+    CREATE TABLE IF NOT EXISTS teste_state (test_id TEXT PRIMARY KEY, open BOOLEAN NOT NULL DEFAULT FALSE, changed_by UUID REFERENCES users(id) ON DELETE SET NULL, changed_at TIMESTAMPTZ);
+    CREATE TABLE IF NOT EXISTS teste_attempts (
+      id SERIAL PRIMARY KEY, test_id TEXT NOT NULL, user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      agent_name TEXT, static_id TEXT, grade TEXT, staff BOOLEAN NOT NULL DEFAULT FALSE,
+      plan JSONB NOT NULL, answers JSONB, score INT, total INT,
+      started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), finished_at TIMESTAMPTZ, reset_at TIMESTAMPTZ,
+      UNIQUE (test_id, user_id));`).catch(err => { testeReady = null; throw err; });
+  return testeReady;
+}
+// ordinea întrebărilor și a variantelor e amestecată pentru fiecare om
+function testPlan(t) {
+  const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = require("crypto").randomInt(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  return shuffle(t.questions.map((_, i) => i)).map(qi => ({ q: qi, o: shuffle(t.questions[qi].o.map((_, i) => i)) }));
+}
+async function testAccess(req, t) {
+  const acc = await codPenalAccess(req);
+  const member = !!acc.agent && acc.agent.job === t.dept;
+  const lead = acc.staff || (member && TEST_LEAD_RE.test(String(acc.agent.grade || "")));
+  return { ...acc, member, lead, canTake: member || acc.staff };
+}
+const testOf = id => (Object.prototype.hasOwnProperty.call(TESTE, id) ? TESTE[id] : null);
+const attemptView = (t, a, withAnswers) => {
+  if (!a) return null;
+  const left = a.finished_at ? 0 : Math.max(0, new Date(a.started_at).getTime() + t.minutes * 60_000 - Date.now());
+  return {
+    started: a.started_at, finished: a.finished_at, score: a.score, total: a.total, passed: a.score != null ? a.score >= t.pass : null, left,
+    questions: !a.finished_at && withAnswers ? a.plan.map((p, n) => ({ n, id: p.q, q: t.questions[p.q].q, o: p.o.map(i => ({ i, t: t.questions[p.q].o[i] })) })) : undefined,
+    saved: !a.finished_at ? a.answers || {} : undefined,
+  };
+};
+async function finishAttempt(t, a, answers) {
+  const ans = {};
+  for (const p of a.plan) { const v = answers?.[p.q]; if (Number.isInteger(v) && v >= 0 && v < t.questions[p.q].o.length) ans[p.q] = v; }
+  const score = a.plan.filter(p => ans[p.q] === t.questions[p.q].a).length;
+  const { rows } = await pool.query(`UPDATE teste_attempts SET answers = $2, score = $3, total = $4, finished_at = NOW() WHERE id = $1 AND finished_at IS NULL RETURNING *`, [a.id, JSON.stringify(ans), score, a.plan.length]);
+  return rows[0] || a;
+}
+app.get("/api/teste/:id", auth, asyncRoute(async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  const t = testOf(String(req.params.id)); if (!t) return res.status(404).json({ error: "Testul nu există." });
+  await testeTables();
+  const [acc, st, at] = await Promise.all([
+    testAccess(req, t),
+    pool.query(`SELECT open FROM teste_state WHERE test_id = $1`, [req.params.id]),
+    pool.query(`SELECT * FROM teste_attempts WHERE test_id = $1 AND user_id = $2`, [req.params.id, req.user.sub]),
+  ]);
+  let a = at.rows[0] || null;
+  // timpul a expirat cât era plecat: îl închidem cu ce a apucat să salveze
+  if (a && !a.finished_at && Date.now() > new Date(a.started_at).getTime() + (t.minutes + 1) * 60_000) a = await finishAttempt(t, a, a.answers || {});
+  res.json({
+    id: req.params.id, title: t.title, intro: t.intro, dept: t.deptLabel, minutes: t.minutes, pass: t.pass, count: t.questions.length,
+    open: !!st.rows[0]?.open, linked: acc.linked, member: acc.member, lead: acc.lead, canTake: acc.canTake, staff: acc.staff,
+    agent: acc.agent ? { name: acc.agent.name, staticId: acc.agent.staticId, grade: acc.agent.grade, dept: acc.agent.dept } : null,
+    attempt: attemptView(t, a, true),
+  });
+}));
+app.post("/api/teste/:id/start", auth, asyncRoute(async (req, res) => {
+  const t = testOf(String(req.params.id)); if (!t) return res.status(404).json({ error: "Testul nu există." });
+  await testeTables();
+  const acc = await testAccess(req, t);
+  if (!acc.canTake) return res.status(403).json({ error: acc.linked ? `Testul îl dau doar membrii ${t.deptLabel}. Personajul tău legat de cont nu e acolo.` : "Leagă-ți întâi contul de personajul din joc (codul /leagacont)." });
+  const st = await pool.query(`SELECT open FROM teste_state WHERE test_id = $1`, [req.params.id]);
+  if (!st.rows[0]?.open && !acc.staff) return res.status(400).json({ error: "Testul nu e deschis încă. Îl deschide conducerea departamentului." });
+  const ag = acc.agent || {};
+  const { rows } = await pool.query(
+    `INSERT INTO teste_attempts(test_id, user_id, agent_name, static_id, grade, staff, plan) VALUES ($1,$2,$3,$4,$5,$6,$7)
+     ON CONFLICT (test_id, user_id) DO NOTHING RETURNING *`,
+    [req.params.id, req.user.sub, ag.name || req.user.username || null, ag.staticId ? String(ag.staticId) : null, ag.grade || null, !acc.member, JSON.stringify(testPlan(t))]);
+  if (!rows[0]) return res.status(400).json({ error: "Ai început deja testul. Se dă o singură dată." });
+  await logAction(req.user.sub, "test.start", "teste", req.params.id, { static: ag.staticId || null }, req.ip).catch(() => {});
+  res.json({ attempt: attemptView(t, rows[0], true) });
+}));
+// răspunsurile se salvează pe parcurs (dacă pică netul, nu pierde nimic)
+app.post("/api/teste/:id/salveaza", auth, asyncRoute(async (req, res) => {
+  const t = testOf(String(req.params.id)); if (!t) return res.status(404).json({ error: "Testul nu există." });
+  await testeTables();
+  const { rows } = await pool.query(`SELECT * FROM teste_attempts WHERE test_id = $1 AND user_id = $2`, [req.params.id, req.user.sub]);
+  const a = rows[0];
+  if (!a || a.finished_at) return res.status(400).json({ error: "Testul s-a încheiat." });
+  const ans = {};
+  for (const p of a.plan) { const v = req.body?.answers?.[p.q]; if (Number.isInteger(v) && v >= 0 && v < t.questions[p.q].o.length) ans[p.q] = v; }
+  await pool.query(`UPDATE teste_attempts SET answers = $2 WHERE id = $1 AND finished_at IS NULL`, [a.id, JSON.stringify(ans)]);
+  res.json({ ok: true });
+}));
+app.post("/api/teste/:id/trimite", auth, asyncRoute(async (req, res) => {
+  const t = testOf(String(req.params.id)); if (!t) return res.status(404).json({ error: "Testul nu există." });
+  await testeTables();
+  const { rows } = await pool.query(`SELECT * FROM teste_attempts WHERE test_id = $1 AND user_id = $2`, [req.params.id, req.user.sub]);
+  let a = rows[0];
+  if (!a) return res.status(400).json({ error: "Nu ai început testul." });
+  if (!a.finished_at) {
+    // după expirarea timpului (plus un minut) se iau doar răspunsurile salvate până atunci
+    const late = Date.now() > new Date(a.started_at).getTime() + (t.minutes + 1) * 60_000;
+    a = await finishAttempt(t, a, late ? a.answers || {} : req.body?.answers || {});
+    await logAction(req.user.sub, "test.finish", "teste", req.params.id, { score: a.score, total: a.total }, req.ip).catch(() => {});
+  }
+  res.json({ attempt: attemptView(t, a, false) });
+}));
+// conducerea: rezultatele, deschide/închide testul, o nouă încercare pentru cineva
+app.get("/api/teste/:id/rezultate", auth, asyncRoute(async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  const t = testOf(String(req.params.id)); if (!t) return res.status(404).json({ error: "Testul nu există." });
+  await testeTables();
+  const acc = await testAccess(req, t);
+  if (!acc.lead) return res.status(403).json({ error: "Rezultatele le vede doar conducerea departamentului." });
+  const { rows } = await pool.query(`SELECT * FROM teste_attempts WHERE test_id = $1 ORDER BY finished_at DESC NULLS FIRST, started_at DESC`, [req.params.id]);
+  const items = rows.map(a => ({
+    id: a.id, name: a.agent_name, staticId: a.static_id, grade: a.grade, staff: a.staff, started: a.started_at, finished: a.finished_at,
+    score: a.score, total: a.total, passed: a.score != null ? a.score >= t.pass : null,
+    minutes: a.finished_at ? Math.max(1, Math.round((new Date(a.finished_at) - new Date(a.started_at)) / 60000)) : null,
+    wrong: a.finished_at ? a.plan.filter(p => (a.answers || {})[p.q] !== t.questions[p.q].a).map(p => p.q) : [],
+  }));
+  const qs = t.questions.map((q, i) => ({ i, q: q.q, right: q.o[q.a], src: q.src, wrong: items.filter(x => x.finished && x.wrong.includes(i)).length }));
+  res.json({ items, questions: qs, pass: t.pass });
+}));
+app.post("/api/teste/:id/stare", auth, asyncRoute(async (req, res) => {
+  const t = testOf(String(req.params.id)); if (!t) return res.status(404).json({ error: "Testul nu există." });
+  await testeTables();
+  const acc = await testAccess(req, t);
+  if (!acc.lead) return res.status(403).json({ error: "Testul îl deschide doar conducerea departamentului." });
+  if (req.body?.reset) {
+    const id = parseInt(req.body.reset, 10);
+    const { rows } = await pool.query(`DELETE FROM teste_attempts WHERE id = $1 AND test_id = $2 RETURNING agent_name, score`, [id, req.params.id]);
+    if (!rows[0]) return res.status(404).json({ error: "Încercarea nu există." });
+    await logAction(req.user.sub, "test.reset", "teste", req.params.id, { attempt: id, name: rows[0].agent_name, score: rows[0].score }, req.ip).catch(() => {});
+    return res.json({ ok: true });
+  }
+  const open = !!req.body?.open;
+  await pool.query(`INSERT INTO teste_state(test_id, open, changed_by, changed_at) VALUES ($1,$2,$3,NOW()) ON CONFLICT (test_id) DO UPDATE SET open = $2, changed_by = $3, changed_at = NOW()`, [req.params.id, open, req.user.sub]);
+  await logAction(req.user.sub, open ? "test.open" : "test.close", "teste", req.params.id, {}, req.ip).catch(() => {});
+  res.json({ ok: true, open });
 }));
 
 // (01.11.2026) Suspectul din procesul-verbal: agentul scrie ID-ul static, noi îi dăm numele RP.

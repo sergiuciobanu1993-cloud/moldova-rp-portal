@@ -1,0 +1,232 @@
+{
+ "serifi": {
+  "title": "Testul Biroului Șerifului",
+  "dept": "sheriff",
+  "deptLabel": "Biroul Șerifului",
+  "minutes": 25,
+  "pass": 14,
+  "intro": "20 de întrebări din Codul Penal, legislația rutieră, Regulamentul Sheriff-ului, Structurile de Stat și Regulile generale. Ai 25 de minute și o singură încercare.",
+  "questions": [
+   {
+    "q": "Un șofer e prins conducând fără permis (Art. 201). Ce pedeapsă primește?",
+    "o": [
+     "15.000$ amendă și 15 minute de închisoare",
+     "5.000$ amendă, fără închisoare",
+     "15.000$ amendă și permisul suspendat 24 de ore",
+     "20.000$ amendă și 30 de minute de închisoare"
+    ],
+    "a": 0,
+    "src": "Codul Penal, Art. 201"
+   },
+   {
+    "q": "Un șofer merge cu 35 km/h peste limita de viteză. Ce primește (Art. 106.3)?",
+    "o": [
+     "3.000$ și 3 puncte",
+     "7.000$ și 7 puncte",
+     "12.000$ și permisul suspendat 24 de ore",
+     "5.000$ și 5 puncte"
+    ],
+    "a": 1,
+    "src": "Codul Penal, Art. 106.3"
+   },
+   {
+    "q": "Cât timp de închisoare poate da cel mult Biroul Șerifului pentru toate faptele dintr-un incident?",
+    "o": [
+     "30 de minute",
+     "50 de minute",
+     "90 de minute",
+     "120 de minute"
+    ],
+    "a": 1,
+    "src": "Codul Penal, reguli generale"
+   },
+   {
+    "q": "Cum se pedepsește tentativa (fapta începută, dar neterminată)?",
+    "o": [
+     "Cu toată pedeapsa",
+     "Cu jumătate din pedeapsă",
+     "Cu două treimi din pedeapsă",
+     "Nu se pedepsește"
+    ],
+    "a": 1,
+    "src": "Codul Penal, reguli generale"
+   },
+   {
+    "q": "Un civil are la el 2 grame de droguri (Art. 148). Ce se aplică?",
+    "o": [
+     "Amendă între 5.000$ și 20.000$ și confiscarea drogurilor",
+     "30 de minute de închisoare",
+     "Doar un avertisment verbal",
+     "Amendă de 30.000$ și 30 de minute de închisoare"
+    ],
+    "a": 0,
+    "src": "Codul Penal, Art. 148"
+   },
+   {
+    "q": "Care este limita de viteză în oraș?",
+    "o": [
+     "60 km/h",
+     "80 km/h",
+     "100 km/h",
+     "120 km/h"
+    ],
+    "a": 2,
+    "src": "Legislația rutieră, VII"
+   },
+   {
+    "q": "Ce înseamnă culoarea galbenă a semaforului?",
+    "o": [
+     "Poți trece dacă accelerezi",
+     "Pregătire de oprire",
+     "Trec doar vehiculele de urgență",
+     "Prioritate pentru pietoni"
+    ],
+    "a": 1,
+    "src": "Legislația rutieră, II"
+   },
+   {
+    "q": "Care dintre acestea NU este un document obligatoriu la un control rutier?",
+    "o": [
+     "Permisul de conducere",
+     "Asigurarea vehiculului",
+     "Actul de identitate",
+     "Factura de cumpărare a mașinii"
+    ],
+    "a": 3,
+    "src": "Legislația rutieră, XI"
+   },
+   {
+    "q": "Când are voie un șofer să vorbească la telefon în timpul condusului?",
+    "o": [
+     "Oricând, dacă merge încet",
+     "Doar cu un sistem hands-free",
+     "Doar în afara orașului",
+     "Doar pe autostradă"
+    ],
+    "a": 1,
+    "src": "Legislația rutieră, VI"
+   },
+   {
+    "q": "Unde răspunde Biroul Șerifului de ordinea publică?",
+    "o": [
+     "În tot statul, inclusiv în centrul orașului",
+     "În afara limitelor orașului Los Santos (Sandy Shores, Paleto Bay, Grapeseed, Harmony etc.)",
+     "Doar pe autostrăzi",
+     "Doar în zona bazei militare"
+    ],
+    "a": 1,
+    "src": "Regulamentul Sheriff-ului, IV.1.1"
+   },
+   {
+    "q": "Când poate interveni un șerif în interiorul orașului Los Santos?",
+    "o": [
+     "Oricând vrea",
+     "Doar noaptea",
+     "În urmărirea directă a unui suspect venit din zona lui sau la cererea expresă a Poliției",
+     "Doar cu aprobarea FIB"
+    ],
+    "a": 2,
+    "src": "Regulamentul Sheriff-ului, IV.1.2"
+   },
+   {
+    "q": "Din câți adjuncți e format cel puțin un echipaj de patrulare?",
+    "o": [
+     "1",
+     "2",
+     "3",
+     "4"
+    ],
+    "a": 1,
+    "src": "Regulamentul Sheriff-ului, V.1.1"
+   },
+   {
+    "q": "Care este ordinea corectă a escaladării forței?",
+    "o": [
+     "Armă de foc → tazer → somație verbală",
+     "Somație verbală → imobilizare/tazer → armă de foc",
+     "Tazer → somație verbală → armă de foc",
+     "Somație verbală → armă de foc → tazer"
+    ],
+    "a": 1,
+    "src": "Regulamentul Sheriff-ului, I.5.1"
+   },
+   {
+    "q": "Un suspect neînarmat, care nu e un pericol, fuge de la control. Ai voie să tragi în el?",
+    "o": [
+     "Da, dacă a fost somat înainte",
+     "Da, dacă fuge cu mașina",
+     "Nu, e interzis să tragi într-o persoană neînarmată care nu e un pericol direct",
+     "Da, dar doar în picioare"
+    ],
+    "a": 2,
+    "src": "Regulamentul Sheriff-ului, I.5.3"
+   },
+   {
+    "q": "Cui predă Biroul Șerifului cazurile de crimă organizată sau de trafic de arme ori droguri în cantitate mare?",
+    "o": [
+     "Armatei",
+     "FIB-ului, împreună cu probele și documentele",
+     "Guvernului",
+     "Nu le predă, le rezolvă singur"
+    ],
+    "a": 1,
+    "src": "Regulamentul Sheriff-ului, VI.3.1"
+   },
+   {
+    "q": "Cât timp poate sta cel mult în celulă un reținut cu 5 stele (fără mandat sau hotărâre a instanței)?",
+    "o": [
+     "25 de minute",
+     "50 de minute",
+     "75 de minute",
+     "100 de minute"
+    ],
+    "a": 1,
+    "src": "Structuri de Stat, 4.6"
+   },
+   {
+    "q": "Ce număr trebuie să aibă insigna unui șerif?",
+    "o": [
+     "Numărul gradului",
+     "Un număr ales de el",
+     "ID-ul static al jucătorului",
+     "Numărul echipajului"
+    ],
+    "a": 2,
+    "src": "Structuri de Stat, 3.4"
+   },
+   {
+    "q": "Cât timp trebuie păstrat clipul video al unei rețineri?",
+    "o": [
+     "12 ore",
+     "24 de ore",
+     "48 de ore",
+     "7 zile"
+    ],
+    "a": 2,
+    "src": "Structuri de Stat, 5.1"
+   },
+   {
+    "q": "După ce personajul moare, ce trebuie să uite (NLR)?",
+    "o": [
+     "Nimic",
+     "Ultimele 5 minute",
+     "Ultimele 15 minute",
+     "Tot ce s-a întâmplat în ziua respectivă"
+    ],
+    "a": 2,
+    "src": "Reguli generale, 4.5"
+   },
+   {
+    "q": "PowerGaming (principiul 1 la 1): ești singur în fața a doi oameni înarmați. Ce faci?",
+    "o": [
+     "Te lupți, ai dreptul",
+     "Cedezi",
+     "Fugi cu mașina",
+     "Scoți arma primul"
+    ],
+    "a": 1,
+    "src": "Reguli generale, 4.4"
+   }
+  ]
+ }
+}

@@ -9372,8 +9372,10 @@ function testeTables() {
       UNIQUE (test_id, user_id));`).catch(err => { testeReady = null; throw err; });
   return testeReady;
 }
-// ordinea întrebărilor și a variantelor e amestecată pentru fiecare om
+// (05.11.2026, cerut de Sergiu) implicit toți primesc aceleași întrebări, în aceeași ordine
+// (cu variantele în ordinea din teste.json); doar cu "shuffle": true se amestecă pentru fiecare om.
 function testPlan(t) {
+  if (t.shuffle !== true) return t.questions.map((q, qi) => ({ q: qi, o: q.o.map((_, i) => i) }));
   const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = require("crypto").randomInt(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; };
   return shuffle(t.questions.map((_, i) => i)).map(qi => ({ q: qi, o: shuffle(t.questions[qi].o.map((_, i) => i)) }));
 }

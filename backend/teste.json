@@ -10,34 +10,34 @@
    {
     "q": "Un șofer e prins conducând fără permis (Art. 201). Ce pedeapsă primește?",
     "o": [
-     "15.000$ amendă și 15 minute de închisoare",
      "5.000$ amendă, fără închisoare",
      "15.000$ amendă și permisul suspendat 24 de ore",
+     "15.000$ amendă și 15 minute de închisoare",
      "20.000$ amendă și 30 de minute de închisoare"
     ],
-    "a": 0,
+    "a": 2,
     "src": "Codul Penal, Art. 201"
    },
    {
     "q": "Un șofer merge cu 35 km/h peste limita de viteză. Ce primește (Art. 106.3)?",
     "o": [
-     "3.000$ și 3 puncte",
      "7.000$ și 7 puncte",
+     "3.000$ și 3 puncte",
      "12.000$ și permisul suspendat 24 de ore",
      "5.000$ și 5 puncte"
     ],
-    "a": 1,
+    "a": 0,
     "src": "Codul Penal, Art. 106.3"
    },
    {
     "q": "Cât timp de închisoare poate da cel mult Biroul Șerifului pentru toate faptele dintr-un incident?",
     "o": [
      "30 de minute",
-     "50 de minute",
      "90 de minute",
-     "120 de minute"
+     "120 de minute",
+     "50 de minute"
     ],
-    "a": 1,
+    "a": 3,
     "src": "Codul Penal, reguli generale"
    },
    {
@@ -54,12 +54,12 @@
    {
     "q": "Un civil are la el 2 grame de droguri (Art. 148). Ce se aplică?",
     "o": [
-     "Amendă între 5.000$ și 20.000$ și confiscarea drogurilor",
      "30 de minute de închisoare",
+     "Amendă între 5.000$ și 20.000$ și confiscarea drogurilor",
      "Doar un avertisment verbal",
      "Amendă de 30.000$ și 30 de minute de închisoare"
     ],
-    "a": 0,
+    "a": 1,
     "src": "Codul Penal, Art. 148"
    },
    {
@@ -67,21 +67,21 @@
     "o": [
      "60 km/h",
      "80 km/h",
-     "100 km/h",
-     "120 km/h"
+     "120 km/h",
+     "100 km/h"
     ],
-    "a": 2,
+    "a": 3,
     "src": "Legislația rutieră, VII"
    },
    {
     "q": "Ce înseamnă culoarea galbenă a semaforului?",
     "o": [
-     "Poți trece dacă accelerezi",
      "Pregătire de oprire",
+     "Poți trece dacă accelerezi",
      "Trec doar vehiculele de urgență",
      "Prioritate pentru pietoni"
     ],
-    "a": 1,
+    "a": 0,
     "src": "Legislația rutieră, II"
    },
    {
@@ -89,21 +89,21 @@
     "o": [
      "Permisul de conducere",
      "Asigurarea vehiculului",
-     "Actul de identitate",
-     "Factura de cumpărare a mașinii"
+     "Factura de cumpărare a mașinii",
+     "Actul de identitate"
     ],
-    "a": 3,
+    "a": 2,
     "src": "Legislația rutieră, XI"
    },
    {
     "q": "Când are voie un șofer să vorbească la telefon în timpul condusului?",
     "o": [
      "Oricând, dacă merge încet",
-     "Doar cu un sistem hands-free",
      "Doar în afara orașului",
-     "Doar pe autostradă"
+     "Doar pe autostradă",
+     "Doar cu un sistem hands-free"
     ],
-    "a": 1,
+    "a": 3,
     "src": "Legislația rutieră, VI"
    },
    {
@@ -120,56 +120,56 @@
    {
     "q": "Când poate interveni un șerif în interiorul orașului Los Santos?",
     "o": [
+     "În urmărirea directă a unui suspect venit din zona lui sau la cererea expresă a Poliției",
      "Oricând vrea",
      "Doar noaptea",
-     "În urmărirea directă a unui suspect venit din zona lui sau la cererea expresă a Poliției",
      "Doar cu aprobarea FIB"
     ],
-    "a": 2,
+    "a": 0,
     "src": "Regulamentul Sheriff-ului, IV.1.2"
    },
    {
     "q": "Din câți adjuncți e format cel puțin un echipaj de patrulare?",
     "o": [
      "1",
-     "2",
      "3",
+     "2",
      "4"
     ],
-    "a": 1,
+    "a": 2,
     "src": "Regulamentul Sheriff-ului, V.1.1"
    },
    {
     "q": "Care este ordinea corectă a escaladării forței?",
     "o": [
      "Armă de foc → tazer → somație verbală",
-     "Somație verbală → imobilizare/tazer → armă de foc",
      "Tazer → somație verbală → armă de foc",
+     "Somație verbală → imobilizare/tazer → armă de foc",
      "Somație verbală → armă de foc → tazer"
     ],
-    "a": 1,
+    "a": 2,
     "src": "Regulamentul Sheriff-ului, I.5.1"
    },
    {
     "q": "Un suspect neînarmat, care nu e un pericol, fuge de la control. Ai voie să tragi în el?",
     "o": [
+     "Nu, e interzis să tragi într-o persoană neînarmată care nu e un pericol direct",
      "Da, dacă a fost somat înainte",
      "Da, dacă fuge cu mașina",
-     "Nu, e interzis să tragi într-o persoană neînarmată care nu e un pericol direct",
      "Da, dar doar în picioare"
     ],
-    "a": 2,
+    "a": 0,
     "src": "Regulamentul Sheriff-ului, I.5.3"
    },
    {
     "q": "Cui predă Biroul Șerifului cazurile de crimă organizată sau de trafic de arme ori droguri în cantitate mare?",
     "o": [
      "Armatei",
-     "FIB-ului, împreună cu probele și documentele",
      "Guvernului",
-     "Nu le predă, le rezolvă singur"
+     "Nu le predă, le rezolvă singur",
+     "FIB-ului, împreună cu probele și documentele"
     ],
-    "a": 1,
+    "a": 3,
     "src": "Regulamentul Sheriff-ului, VI.3.1"
    },
    {
@@ -188,45 +188,46 @@
     "o": [
      "Numărul gradului",
      "Un număr ales de el",
-     "ID-ul static al jucătorului",
-     "Numărul echipajului"
+     "Numărul echipajului",
+     "ID-ul static al jucătorului"
     ],
-    "a": 2,
+    "a": 3,
     "src": "Structuri de Stat, 3.4"
    },
    {
     "q": "Cât timp trebuie păstrat clipul video al unei rețineri?",
     "o": [
+     "48 de ore",
      "12 ore",
      "24 de ore",
-     "48 de ore",
      "7 zile"
     ],
-    "a": 2,
+    "a": 0,
     "src": "Structuri de Stat, 5.1"
    },
    {
     "q": "Câți oameni și câte mașini trebuie să aibă cel puțin o coloană a statului care transportă materiale (muniție)?",
     "o": [
      "Cel puțin 4 oameni și 2 mașini",
-     "Cel puțin 8 oameni și 4 mașini",
      "Cel puțin 10 oameni și 5 mașini",
+     "Cel puțin 8 oameni și 4 mașini",
      "Cel puțin 20 de oameni și 8 mașini"
     ],
-    "a": 1,
+    "a": 2,
     "src": "Livrări de materiale, 2.1"
    },
    {
     "q": "În ce interval livrările de materiale ale statului nu pot fi atacate (ora sigură)?",
     "o": [
-     "Între 15:00 și 16:00",
      "Între 18:00 și 19:00",
+     "Între 15:00 și 16:00",
      "Între 00:00 și 01:00",
      "Toată ziua, dacă au escortă"
     ],
-    "a": 0,
+    "a": 1,
     "src": "Livrări de materiale, 2.6"
    }
-  ]
+  ],
+  "shuffle": false
  }
 }

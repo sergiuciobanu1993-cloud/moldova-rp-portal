@@ -5,7 +5,7 @@
   "deptLabel": "Biroul Șerifului",
   "minutes": 25,
   "pass": 14,
-  "intro": "20 de întrebări din Codul Penal, legislația rutieră, Regulamentul Sheriff-ului, Structurile de Stat și Regulile generale. Ai 25 de minute și o singură încercare.",
+  "intro": "20 de întrebări din Codul Penal, legislația rutieră, Regulamentul Sheriff-ului, Structurile de Stat și Livrările de materiale. Ai 25 de minute și o singură încercare.",
   "questions": [
    {
     "q": "Un șofer e prins conducând fără permis (Art. 201). Ce pedeapsă primește?",
@@ -206,26 +206,26 @@
     "src": "Structuri de Stat, 5.1"
    },
    {
-    "q": "După ce personajul moare, ce trebuie să uite (NLR)?",
+    "q": "Câți oameni și câte mașini trebuie să aibă cel puțin o coloană a statului care transportă materiale (muniție)?",
     "o": [
-     "Nimic",
-     "Ultimele 5 minute",
-     "Ultimele 15 minute",
-     "Tot ce s-a întâmplat în ziua respectivă"
-    ],
-    "a": 2,
-    "src": "Reguli generale, 4.5"
-   },
-   {
-    "q": "PowerGaming (principiul 1 la 1): ești singur în fața a doi oameni înarmați. Ce faci?",
-    "o": [
-     "Te lupți, ai dreptul",
-     "Cedezi",
-     "Fugi cu mașina",
-     "Scoți arma primul"
+     "Cel puțin 4 oameni și 2 mașini",
+     "Cel puțin 8 oameni și 4 mașini",
+     "Cel puțin 10 oameni și 5 mașini",
+     "Cel puțin 20 de oameni și 8 mașini"
     ],
     "a": 1,
-    "src": "Reguli generale, 4.4"
+    "src": "Livrări de materiale, 2.1"
+   },
+   {
+    "q": "În ce interval livrările de materiale ale statului nu pot fi atacate (ora sigură)?",
+    "o": [
+     "Între 15:00 și 16:00",
+     "Între 18:00 și 19:00",
+     "Între 00:00 și 01:00",
+     "Toată ziua, dacă au escortă"
+    ],
+    "a": 0,
+    "src": "Livrări de materiale, 2.6"
    }
   ]
  }

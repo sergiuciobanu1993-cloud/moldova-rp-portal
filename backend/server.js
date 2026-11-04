@@ -9468,15 +9468,16 @@ app.get("/api/teste/:id/rezultate", auth, asyncRoute(async (req, res) => {
   await testeTables();
   const acc = await testAccess(req, t);
   if (!acc.lead) return res.status(403).json({ error: "Rezultatele le vede doar conducerea departamentului." });
-  const { rows } = await pool.query(`SELECT * FROM teste_attempts WHERE test_id = $1 ORDER BY finished_at DESC NULLS FIRST, started_at DESC`, [req.params.id]);
+  const { rows } = await pool.query(`SELECT * FROM teste_attempts WHERE test_id = $1 OR test_id LIKE $2 ORDER BY finished_at DESC NULLS FIRST, started_at DESC`, [req.params.id, `${req.params.id}:anulat:%`]);
   const items = rows.map(a => ({
     id: a.id, name: a.agent_name, staticId: a.static_id, grade: a.grade, staff: a.staff, started: a.started_at, finished: a.finished_at,
+    annulled: a.test_id !== req.params.id ? a.reset_at : null,
     score: a.score, total: a.total, passed: a.score != null ? a.score >= t.pass : null,
     minutes: a.finished_at ? Math.max(1, Math.round((new Date(a.finished_at) - new Date(a.started_at)) / 60000)) : null,
     wrong: a.finished_at ? a.plan.filter(p => (a.answers || {})[p.q] !== t.questions[p.q].a).map(p => p.q) : [],
   }));
-  const qs = t.questions.map((q, i) => ({ i, q: q.q, right: q.o[q.a], src: q.src, wrong: items.filter(x => x.finished && x.wrong.includes(i)).length }));
-  res.json({ items, questions: qs, pass: t.pass });
+  const qs = t.questions.map((q, i) => ({ i, q: q.q, right: q.o[q.a], src: q.src, wrong: items.filter(x => x.finished && !x.annulled && x.wrong.includes(i)).length }));
+  res.json({ items, questions: qs, pass: t.pass, canReset: acc.staff });
 }));
 app.post("/api/teste/:id/stare", auth, asyncRoute(async (req, res) => {
   const t = testOf(String(req.params.id)); if (!t) return res.status(404).json({ error: "Testul nu există." });
@@ -9484,8 +9485,11 @@ app.post("/api/teste/:id/stare", auth, asyncRoute(async (req, res) => {
   const acc = await testAccess(req, t);
   if (!acc.lead) return res.status(403).json({ error: "Testul îl deschide doar conducerea departamentului." });
   if (req.body?.reset) {
+    // o a doua încercare o aprobă doar staff-ul (nu conducerea departamentului), iar prima nu se șterge:
+    // rămâne în listă ca „anulată", ca să se vadă cine a mai dat testul o dată și ce notă avea
+    if (!acc.staff) return res.status(403).json({ error: "O nouă încercare o aprobă doar staff-ul serverului." });
     const id = parseInt(req.body.reset, 10);
-    const { rows } = await pool.query(`DELETE FROM teste_attempts WHERE id = $1 AND test_id = $2 RETURNING agent_name, score`, [id, req.params.id]);
+    const { rows } = await pool.query(`UPDATE teste_attempts SET test_id = test_id || ':anulat:' || id, reset_at = NOW() WHERE id = $1 AND test_id = $2 RETURNING agent_name, score`, [id, req.params.id]);
     if (!rows[0]) return res.status(404).json({ error: "Încercarea nu există." });
     await logAction(req.user.sub, "test.reset", "teste", req.params.id, { attempt: id, name: rows[0].agent_name, score: rows[0].score }, req.ip).catch(() => {});
     return res.json({ ok: true });

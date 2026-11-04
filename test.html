@@ -202,18 +202,18 @@
     const box = document.getElementById('tx-lead-body');
     try {
       const d = await api(`/api/teste/${ID}/rezultate`);
-      const done = d.items.filter(x => x.finished), passed = done.filter(x => x.passed).length;
-      box.innerHTML = `<p style="margin:0 0 10px">${d.items.length} au început · ${done.length} au terminat · <b style="color:#3ddc84">${passed} au trecut</b></p>
+      const cur = d.items.filter(x => !x.annulled), done = cur.filter(x => x.finished), passed = done.filter(x => x.passed).length;
+      box.innerHTML = `<p style="margin:0 0 10px">${cur.length} au început · ${done.length} au terminat · <b style="color:#3ddc84">${passed} au trecut</b></p>
         <div class="tx-scroll"><table><thead><tr><th>Agent</th><th>Grad</th><th>Nota</th><th>Rezultat</th><th>Terminat</th><th></th></tr></thead><tbody>
-        ${d.items.map(x => `<tr><td><b>${esc(x.name || '—')}</b>${x.staticId ? ` <span class="muted">#${esc(x.staticId)}</span>` : ''}${x.staff ? ' <span class="muted">(staff)</span>' : ''}</td><td>${esc(x.grade || '—')}</td>
-          <td>${x.finished ? `<b>${x.score}/${x.total}</b>` : '—'}</td><td>${x.finished ? `<span class="pill2 ${x.passed ? 'ok' : 'no'}">${x.passed ? 'TRECUT' : 'PICAT'}</span>` : '<span class="pill2 wait">ÎN LUCRU</span>'}</td>
+        ${d.items.map(x => `<tr${x.annulled ? ' style="opacity:.55"' : ''}><td><b>${esc(x.name || '—')}</b>${x.staticId ? ` <span class="muted">#${esc(x.staticId)}</span>` : ''}${x.staff ? ' <span class="muted">(staff)</span>' : ''}</td><td>${esc(x.grade || '—')}</td>
+          <td>${x.finished ? `<b>${x.score}/${x.total}</b>` : '—'}</td><td>${x.annulled ? `<span class="pill2 wait">ANULAT</span><br><small class="muted">a primit o nouă încercare ${esc(fmtDate(x.annulled))}</small>` : x.finished ? `<span class="pill2 ${x.passed ? 'ok' : 'no'}">${x.passed ? 'TRECUT' : 'PICAT'}</span>` : '<span class="pill2 wait">ÎN LUCRU</span>'}</td>
           <td class="muted">${x.finished ? esc(fmtDate(x.finished)) + ` · ${x.minutes} min` : 'început ' + esc(fmtDate(x.started))}${x.wrong.length ? `<br><small>greșite: ${x.wrong.map(i => i + 1).join(', ')}</small>` : ''}</td>
-          <td><button type="button" class="tx-reset" data-reset="${x.id}" title="Șterge încercarea, ca agentul să poată da testul din nou">↺ Din nou</button></td></tr>`).join('') || '<tr><td colspan="6" class="muted">Nimeni n-a început testul încă.</td></tr>'}
+          <td>${d.canReset && !x.annulled ? `<button type="button" class="tx-reset" data-reset="${x.id}" title="Agentul poate da testul încă o dată; încercarea de acum rămâne în listă ca anulată">↺ Din nou</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">Nimeni n-a început testul încă.</td></tr>'}
         </tbody></table></div>
         <details style="margin-top:14px"><summary style="cursor:pointer;font-weight:800">Întrebările și răspunsurile corecte</summary><ol class="tx-qs" style="margin:12px 0 0;padding-left:22px">
         ${d.questions.map(q => `<li>${esc(q.q)}<br><b style="color:#3ddc84">✓ ${esc(q.right)}</b> <small>· ${esc(q.src)}${q.wrong ? ` · greșită de ${q.wrong}` : ''}</small></li>`).join('')}</ol></details>`;
       box.querySelectorAll('[data-reset]').forEach(b => b.onclick = async () => {
-        if (!confirm('Ștergi încercarea acestui agent? Rezultatul lui dispare și poate da testul din nou.')) return;
+        if (!confirm('Îi dai agentului încă o încercare? Nota de acum rămâne în listă, marcată „anulat”.')) return;
         try { await api(`/api/teste/${ID}/stare`, { reset: Number(b.dataset.reset) }); loadLead(); } catch (err) { alert(err.message); }
       });
     } catch (err) { box.innerHTML = `<p class="tx-msg err">${esc(err.message)}</p>`; }

@@ -22,7 +22,7 @@
 // (rămâne cât ții fila deschisă); ?tema=nu o oprește.
 (() => {
   if (window.MRP_TEMA) return;
-  const VER = '20261101i'; // aceeași ca în pwa.js — schimbă-le împreună când modifici tema
+  const VER = '20261105a'; // aceeași ca în pwa.js — schimbă-le împreună când modifici tema
   const root = document.documentElement;
   const ls = {
     get(k) { try { return localStorage.getItem(k); } catch { return null; } },
@@ -1272,7 +1272,8 @@
     wn.mo = new MutationObserver(wnWatch);
     wn.mo.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['hidden', 'class', 'style', 'open'] });
     document.addEventListener('toggle', wnToggle, true);
-    window.addEventListener('click', wnNav);
+    // (05.11.2026, cerut de Sergiu) fără cortina de iarnă la trecerea între pagini: întârzia fiecare link
+    // cu aproape o secundă și site-ul părea greu. wnNav rămâne în fișier, doar nu mai e pornit.
     window.addEventListener('pageshow', wnShow);
   }
   function wnPopStop() {

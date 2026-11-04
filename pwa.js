@@ -12,7 +12,7 @@
 (() => {
   // (01.11.2026) O singură versiune pentru tema.js și CSS-ul temei, aceeași ca VER din tema.js.
   // Înainte CSS-ul de aici rămăsese pe o versiune veche, deci tema se descărca de 2 ori la fiecare pagină.
-  const TV = '20261101i';
+  const TV = '20261105a';
   const TEME = { halloween: '/tema-halloween.css?v=' + TV, iarna: '/tema-iarna.css?v=' + TV };
   try {
     let tema = null;

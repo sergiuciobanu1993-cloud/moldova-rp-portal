@@ -9372,13 +9372,20 @@ function testeTables() {
       UNIQUE (test_id, user_id));`).catch(err => { testeReady = null; throw err; });
   return testeReady;
 }
-// (05.11.2026, cerut de Sergiu) implicit toți primesc aceleași întrebări, în aceeași ordine
-// (cu variantele în ordinea din teste.json); doar cu "shuffle": true se amestecă pentru fiecare om.
 function testPlan(t) {
-  if (t.shuffle !== true) return t.questions.map((q, qi) => ({ q: qi, o: q.o.map((_, i) => i) }));
   const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = require("crypto").randomInt(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; };
-  return shuffle(t.questions.map((_, i) => i)).map(qi => ({ q: qi, o: shuffle(t.questions[qi].o.map((_, i) => i)) }));
+  // (05.11.2026, cerut de Sergiu) fiecare primește alte întrebări: din fiecare capitol („cat") se aleg
+  // la întâmplare câte scrie la „pick"; apoi ordinea întrebărilor și a variantelor se amestecă
+  let idx = t.questions.map((_, i) => i);
+  if (t.pick) {
+    idx = [];
+    for (const [cat, n] of Object.entries(t.pick)) idx.push(...shuffle(t.questions.map((q, i) => (q.cat === cat ? i : -1)).filter(i => i >= 0)).slice(0, n));
+  }
+  const mix = t.shuffle !== false;
+  if (mix) idx = shuffle(idx);
+  return idx.map(qi => ({ q: qi, o: mix ? shuffle(t.questions[qi].o.map((_, i) => i)) : t.questions[qi].o.map((_, i) => i) }));
 }
+const testCount = t => (t.pick ? Object.values(t.pick).reduce((a, b) => a + b, 0) : t.questions.length);
 async function testAccess(req, t) {
   const acc = await codPenalAccess(req);
   const member = !!acc.agent && acc.agent.job === t.dept;
@@ -9415,7 +9422,7 @@ app.get("/api/teste/:id", auth, asyncRoute(async (req, res) => {
   // timpul a expirat cât era plecat: îl închidem cu ce a apucat să salveze
   if (a && !a.finished_at && Date.now() > new Date(a.started_at).getTime() + (t.minutes + 1) * 60_000) a = await finishAttempt(t, a, a.answers || {});
   res.json({
-    id: req.params.id, title: t.title, intro: t.intro, dept: t.deptLabel, minutes: t.minutes, pass: t.pass, count: t.questions.length,
+    id: req.params.id, title: t.title, intro: t.intro, dept: t.deptLabel, minutes: t.minutes, pass: t.pass, count: testCount(t),
     open: !!st.rows[0]?.open, linked: acc.linked, member: acc.member, lead: acc.lead, canTake: acc.canTake, staff: acc.staff,
     agent: acc.agent ? { name: acc.agent.name, staticId: acc.agent.staticId, grade: acc.agent.grade, dept: acc.agent.dept } : null,
     attempt: attemptView(t, a, true),
@@ -9478,7 +9485,10 @@ app.get("/api/teste/:id/rezultate", auth, asyncRoute(async (req, res) => {
     minutes: a.finished_at ? Math.max(1, Math.round((new Date(a.finished_at) - new Date(a.started_at)) / 60000)) : null,
     wrong: a.finished_at ? a.plan.filter(p => (a.answers || {})[p.q] !== t.questions[p.q].a).map(p => p.q) : [],
   }));
-  const qs = t.questions.map((q, i) => ({ i, q: q.q, right: q.o[q.a], src: q.src, wrong: items.filter(x => x.finished && !x.annulled && x.wrong.includes(i)).length }));
+  // de câte ori a picat fiecare întrebare (fiecare om are alt set) și de câte ori s-a greșit
+  const asked = new Map();
+  for (const a of rows) if (a.finished_at && a.test_id === req.params.id) for (const p of a.plan) asked.set(p.q, (asked.get(p.q) || 0) + 1);
+  const qs = t.questions.map((q, i) => ({ i, q: q.q, right: q.o[q.a], src: q.src, asked: asked.get(i) || 0, wrong: items.filter(x => x.finished && !x.annulled && x.wrong.includes(i)).length }));
   res.json({ items, questions: qs, pass: t.pass, canReset: acc.staff });
 }));
 app.post("/api/teste/:id/stare", auth, asyncRoute(async (req, res) => {

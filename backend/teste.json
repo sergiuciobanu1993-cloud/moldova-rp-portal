@@ -5,7 +5,7 @@
   "deptLabel": "Biroul Șerifului",
   "minutes": 25,
   "pass": 14,
-  "intro": "20 de întrebări din Codul Penal, legislația rutieră, Regulamentul Sheriff-ului, Structurile de Stat și Livrările de materiale. Ai 25 de minute și o singură încercare.",
+  "intro": "Fiecare șerif primește alte 20 de întrebări, alese la întâmplare din Codul Penal, legislația rutieră, Regulamentul Sheriff-ului, Structurile de Stat și Livrările de materiale. Ai 25 de minute și o singură încercare.",
   "questions": [
    {
     "q": "Un șofer e prins conducând fără permis (Art. 201). Ce pedeapsă primește?",
@@ -16,7 +16,8 @@
      "20.000$ amendă și 30 de minute de închisoare"
     ],
     "a": 2,
-    "src": "Codul Penal, Art. 201"
+    "src": "Codul Penal, Art. 201",
+    "cat": "cp"
    },
    {
     "q": "Un șofer merge cu 35 km/h peste limita de viteză. Ce primește (Art. 106.3)?",
@@ -27,7 +28,8 @@
      "5.000$ și 5 puncte"
     ],
     "a": 0,
-    "src": "Codul Penal, Art. 106.3"
+    "src": "Codul Penal, Art. 106.3",
+    "cat": "cp"
    },
    {
     "q": "Cât timp de închisoare poate da cel mult Biroul Șerifului pentru toate faptele dintr-un incident?",
@@ -38,7 +40,8 @@
      "50 de minute"
     ],
     "a": 3,
-    "src": "Codul Penal, reguli generale"
+    "src": "Codul Penal, reguli generale",
+    "cat": "cp"
    },
    {
     "q": "Cum se pedepsește tentativa (fapta începută, dar neterminată)?",
@@ -49,7 +52,8 @@
      "Nu se pedepsește"
     ],
     "a": 1,
-    "src": "Codul Penal, reguli generale"
+    "src": "Codul Penal, reguli generale",
+    "cat": "cp"
    },
    {
     "q": "Un civil are la el 2 grame de droguri (Art. 148). Ce se aplică?",
@@ -60,7 +64,8 @@
      "Amendă de 30.000$ și 30 de minute de închisoare"
     ],
     "a": 1,
-    "src": "Codul Penal, Art. 148"
+    "src": "Codul Penal, Art. 148",
+    "cat": "cp"
    },
    {
     "q": "Care este limita de viteză în oraș?",
@@ -71,7 +76,8 @@
      "100 km/h"
     ],
     "a": 3,
-    "src": "Legislația rutieră, VII"
+    "src": "Legislația rutieră, VII",
+    "cat": "rutier"
    },
    {
     "q": "Ce înseamnă culoarea galbenă a semaforului?",
@@ -82,7 +88,8 @@
      "Prioritate pentru pietoni"
     ],
     "a": 0,
-    "src": "Legislația rutieră, II"
+    "src": "Legislația rutieră, II",
+    "cat": "rutier"
    },
    {
     "q": "Care dintre acestea NU este un document obligatoriu la un control rutier?",
@@ -93,7 +100,8 @@
      "Actul de identitate"
     ],
     "a": 2,
-    "src": "Legislația rutieră, XI"
+    "src": "Legislația rutieră, XI",
+    "cat": "rutier"
    },
    {
     "q": "Când are voie un șofer să vorbească la telefon în timpul condusului?",
@@ -104,7 +112,8 @@
      "Doar cu un sistem hands-free"
     ],
     "a": 3,
-    "src": "Legislația rutieră, VI"
+    "src": "Legislația rutieră, VI",
+    "cat": "rutier"
    },
    {
     "q": "Unde răspunde Biroul Șerifului de ordinea publică?",
@@ -115,7 +124,8 @@
      "Doar în zona bazei militare"
     ],
     "a": 1,
-    "src": "Regulamentul Sheriff-ului, IV.1.1"
+    "src": "Regulamentul Sheriff-ului, IV.1.1",
+    "cat": "serif"
    },
    {
     "q": "Când poate interveni un șerif în interiorul orașului Los Santos?",
@@ -126,7 +136,8 @@
      "Doar cu aprobarea FIB"
     ],
     "a": 0,
-    "src": "Regulamentul Sheriff-ului, IV.1.2"
+    "src": "Regulamentul Sheriff-ului, IV.1.2",
+    "cat": "serif"
    },
    {
     "q": "Din câți adjuncți e format cel puțin un echipaj de patrulare?",
@@ -137,7 +148,8 @@
      "4"
     ],
     "a": 2,
-    "src": "Regulamentul Sheriff-ului, V.1.1"
+    "src": "Regulamentul Sheriff-ului, V.1.1",
+    "cat": "serif"
    },
    {
     "q": "Care este ordinea corectă a escaladării forței?",
@@ -148,7 +160,8 @@
      "Somație verbală → armă de foc → tazer"
     ],
     "a": 2,
-    "src": "Regulamentul Sheriff-ului, I.5.1"
+    "src": "Regulamentul Sheriff-ului, I.5.1",
+    "cat": "serif"
    },
    {
     "q": "Un suspect neînarmat, care nu e un pericol, fuge de la control. Ai voie să tragi în el?",
@@ -159,7 +172,8 @@
      "Da, dar doar în picioare"
     ],
     "a": 0,
-    "src": "Regulamentul Sheriff-ului, I.5.3"
+    "src": "Regulamentul Sheriff-ului, I.5.3",
+    "cat": "serif"
    },
    {
     "q": "Cui predă Biroul Șerifului cazurile de crimă organizată sau de trafic de arme ori droguri în cantitate mare?",
@@ -170,7 +184,8 @@
      "FIB-ului, împreună cu probele și documentele"
     ],
     "a": 3,
-    "src": "Regulamentul Sheriff-ului, VI.3.1"
+    "src": "Regulamentul Sheriff-ului, VI.3.1",
+    "cat": "serif"
    },
    {
     "q": "Cât timp poate sta cel mult în celulă un reținut cu 5 stele (fără mandat sau hotărâre a instanței)?",
@@ -181,7 +196,8 @@
      "100 de minute"
     ],
     "a": 1,
-    "src": "Structuri de Stat, 4.6"
+    "src": "Structuri de Stat, 4.6",
+    "cat": "structuri"
    },
    {
     "q": "Ce număr trebuie să aibă insigna unui șerif?",
@@ -192,7 +208,8 @@
      "ID-ul static al jucătorului"
     ],
     "a": 3,
-    "src": "Structuri de Stat, 3.4"
+    "src": "Structuri de Stat, 3.4",
+    "cat": "structuri"
    },
    {
     "q": "Cât timp trebuie păstrat clipul video al unei rețineri?",
@@ -203,7 +220,8 @@
      "7 zile"
     ],
     "a": 0,
-    "src": "Structuri de Stat, 5.1"
+    "src": "Structuri de Stat, 5.1",
+    "cat": "structuri"
    },
    {
     "q": "Câți oameni și câte mașini trebuie să aibă cel puțin o coloană a statului care transportă materiale (muniție)?",
@@ -214,7 +232,8 @@
      "Cel puțin 20 de oameni și 8 mașini"
     ],
     "a": 2,
-    "src": "Livrări de materiale, 2.1"
+    "src": "Livrări de materiale, 2.1",
+    "cat": "livrari"
    },
    {
     "q": "În ce interval livrările de materiale ale statului nu pot fi atacate (ora sigură)?",
@@ -225,9 +244,365 @@
      "Toată ziua, dacă au escortă"
     ],
     "a": 1,
-    "src": "Livrări de materiale, 2.6"
+    "src": "Livrări de materiale, 2.6",
+    "cat": "livrari"
+   },
+   {
+    "q": "Un șofer refuză să oprească sau să coboare din mașină la cererea agentului (Art. 118). Ce amendă primește?",
+    "o": [
+     "5.000$",
+     "10.000$",
+     "20.000$",
+     "50.000$"
+    ],
+    "a": 1,
+    "src": "Codul Penal, Art. 118",
+    "cat": "cp"
+   },
+   {
+    "q": "Un șofer pleacă de la locul accidentului (Art. 202). Ce pedeapsă primește?",
+    "o": [
+     "10.000$, fără închisoare",
+     "20.000$ și 15 minute de închisoare",
+     "30.000$ și 30 de minute de închisoare",
+     "5.000$ și permisul suspendat 24 de ore"
+    ],
+    "a": 1,
+    "src": "Codul Penal, Art. 202",
+    "cat": "cp"
+   },
+   {
+    "q": "Un civil e prins cu o armă ilegală din Categoria I.1/I.2 (Art. 801). Ce pedeapsă primește?",
+    "o": [
+     "20.000$ și 15 minute",
+     "50.000$ și 30 de minute",
+     "70.000$ și 50 de minute",
+     "100.000$ și 60 de minute"
+    ],
+    "a": 1,
+    "src": "Codul Penal, Art. 801",
+    "cat": "cp"
+   },
+   {
+    "q": "Un șofer merge cu 80 km/h peste limită (Art. 106.6). Ce primește?",
+    "o": [
+     "9.000$ și 9 puncte",
+     "12.000$ și permisul suspendat 24 de ore",
+     "15.000$ și permisul suspendat 48 de ore",
+     "20.000$ și permisul suspendat 72 de ore"
+    ],
+    "a": 2,
+    "src": "Codul Penal, Art. 106.6",
+    "cat": "cp"
+   },
+   {
+    "q": "Ce pedeapsă prevede furtul simplu (Art. 401)?",
+    "o": [
+     "10.000$ și 10 minute",
+     "20.000$ și 20 de minute",
+     "30.000$ și 30 de minute",
+     "40.000$ și 40 de minute"
+    ],
+    "a": 1,
+    "src": "Codul Penal, Art. 401",
+    "cat": "cp"
+   },
+   {
+    "q": "Cât primește cel mult complicele (cel care doar ajută la faptă)?",
+    "o": [
+     "Jumătate din pedeapsă",
+     "Două treimi din pedeapsă",
+     "Toată pedeapsa",
+     "Nu se pedepsește"
+    ],
+    "a": 1,
+    "src": "Codul Penal, reguli generale",
+    "cat": "cp"
+   },
+   {
+    "q": "Un șofer conduce fără asigurare auto (Art. 109). Ce amendă primește?",
+    "o": [
+     "5.000$",
+     "10.000$",
+     "15.000$",
+     "25.000$"
+    ],
+    "a": 2,
+    "src": "Codul Penal, Art. 109",
+    "cat": "cp"
+   },
+   {
+    "q": "Care este limita de viteză în afara orașului?",
+    "o": [
+     "90 km/h",
+     "100 km/h",
+     "120 km/h",
+     "160 km/h"
+    ],
+    "a": 2,
+    "src": "Legislația rutieră, VII",
+    "cat": "rutier"
+   },
+   {
+    "q": "Care este limita de viteză pe autostradă?",
+    "o": [
+     "120 km/h",
+     "160 km/h",
+     "180 km/h",
+     "200 km/h"
+    ],
+    "a": 3,
+    "src": "Legislația rutieră, VII",
+    "cat": "rutier"
+   },
+   {
+    "q": "Cu ce viteză poți merge cel mult când tragi o remorcă?",
+    "o": [
+     "30 km/h",
+     "50 km/h",
+     "80 km/h",
+     "100 km/h"
+    ],
+    "a": 1,
+    "src": "Legislația rutieră, VII",
+    "cat": "rutier"
+   },
+   {
+    "q": "Pe ce parte se face legal depășirea?",
+    "o": [
+     "Pe dreapta",
+     "Pe stânga",
+     "Pe oricare parte, dacă e liber",
+     "Pe acostament"
+    ],
+    "a": 1,
+    "src": "Legislația rutieră, V",
+    "cat": "rutier"
+   },
+   {
+    "q": "Ce te obligă indicatorul STOP?",
+    "o": [
+     "Să reduci viteza și să treci dacă e liber",
+     "Să oprești complet înainte de intersecție",
+     "Să claxonezi înainte de intersecție",
+     "Să cedezi doar pietonilor"
+    ],
+    "a": 1,
+    "src": "Legislația rutieră, I",
+    "cat": "rutier"
+   },
+   {
+    "q": "Cine îl înlocuiește pe Sheriff când lipsește?",
+    "o": [
+     "Căpitanul",
+     "Undersheriff-ul",
+     "Locotenentul cu cea mai mare vechime",
+     "Șeful Poliției"
+    ],
+    "a": 1,
+    "src": "Regulamentul Sheriff-ului, II.2.5",
+    "cat": "serif"
+   },
+   {
+    "q": "Care este formula de somare la oprirea unui vehicul sau a unei persoane?",
+    "o": [
+     "„Poliția! Mâinile sus!”",
+     "„Biroul Sheriff-ului! Stai pe loc / Oprește vehiculul!”",
+     "„Control! Coborâți imediat!”",
+     "„FIB! Nu mișca!”"
+    ],
+    "a": 1,
+    "src": "Regulamentul Sheriff-ului, I.6.1",
+    "cat": "serif"
+   },
+   {
+    "q": "Ce nu are voie să facă un Cadet?",
+    "o": [
+     "Să meargă la Academie",
+     "Să patruleze singur sau să poarte armă de foc fără instructor",
+     "Să poarte uniforma",
+     "Să depună jurământul"
+    ],
+    "a": 1,
+    "src": "Regulamentul Sheriff-ului, II.2.1",
+    "cat": "serif"
+   },
+   {
+    "q": "Cine are voie să poarte pistolul din dotare și în afara serviciului?",
+    "o": [
+     "Orice adjunct",
+     "Ofițerii, de la Locotenent în sus",
+     "Doar Cadeții",
+     "Nimeni"
+    ],
+    "a": 1,
+    "src": "Regulamentul Sheriff-ului, I.4.5–4.6",
+    "cat": "serif"
+   },
+   {
+    "q": "Ce faci dacă ești reținut de Poliție, FIB sau Armată?",
+    "o": [
+     "Nu spui nimănui",
+     "Raportezi imediat unui superior din BȘ și spui motivul",
+     "Pleci din Biroul Șerifului",
+     "Chemi colegii să te elibereze"
+    ],
+    "a": 1,
+    "src": "Regulamentul Sheriff-ului, I.4.7",
+    "cat": "serif"
+   },
+   {
+    "q": "Când se întrerupe o urmărire (pursuit)?",
+    "o": [
+     "Niciodată, până la prinderea suspectului",
+     "Când pune grav în pericol viața civililor sau pierzi controlul mașinii",
+     "După 5 minute",
+     "Când suspectul intră în oraș"
+    ],
+    "a": 1,
+    "src": "Regulamentul Sheriff-ului, V.4.2",
+    "cat": "serif"
+   },
+   {
+    "q": "Un incident are loc la limita dintre oraș și zona Șerifilor. Cine intervine?",
+    "o": [
+     "Doar Poliția",
+     "Doar Biroul Șerifului",
+     "Prima structură ajunsă; preluarea cazului se stabilește de comun acord",
+     "FIB"
+    ],
+    "a": 2,
+    "src": "Regulamentul Sheriff-ului, IV.2.1",
+    "cat": "serif"
+   },
+   {
+    "q": "Cât poate fi cel mult o mită, fără o situație RP aprobată?",
+    "o": [
+     "10.000$",
+     "50.000$",
+     "100.000$",
+     "Oricât"
+    ],
+    "a": 2,
+    "src": "Structuri de Stat, 1.4",
+    "cat": "structuri"
+   },
+   {
+    "q": "Cât poate dura cel mult un interogatoriu?",
+    "o": [
+     "15 minute",
+     "30 de minute",
+     "60 de minute",
+     "Fără limită"
+    ],
+    "a": 2,
+    "src": "Structuri de Stat, 7.5",
+    "cat": "structuri"
+   },
+   {
+    "q": "S-a tras în agenți de pe teritoriul unei bande. Când pot intra acolo?",
+    "o": [
+     "Oricând, oricâți",
+     "În cel mult 15 minute de la primul foc, cu cel puțin 10 oameni",
+     "Doar cu aprobarea Guvernului",
+     "Niciodată"
+    ],
+    "a": 1,
+    "src": "Structuri de Stat, 6.1",
+    "cat": "structuri"
+   },
+   {
+    "q": "Ce trebuie făcut înainte ca un angajat al statului să fie băgat în celulă?",
+    "o": [
+     "Nimic special",
+     "Să fie chemat procurorul, care confirmă încălcarea",
+     "Să fie anunțat Guvernul",
+     "Să plătească o cauțiune"
+    ],
+    "a": 1,
+    "src": "Structuri de Stat, 4.8",
+    "cat": "structuri"
+   },
+   {
+    "q": "Cine poate scoate urmărirea (stelele) dată unui jucător?",
+    "o": [
+     "Orice agent",
+     "Doar cel care a dat-o (sau instanța, procuratura ori staff-ul)",
+     "Doar Sheriff-ul",
+     "Jucătorul, dacă plătește"
+    ],
+    "a": 1,
+    "src": "Structuri de Stat, 4.7",
+    "cat": "structuri"
+   },
+   {
+    "q": "Cu câți angajați se merge cel puțin la un jaf (afacere, bancă)?",
+    "o": [
+     "1",
+     "2",
+     "4",
+     "6"
+    ],
+    "a": 1,
+    "src": "Structuri de Stat, 10.2",
+    "cat": "structuri"
+   },
+   {
+    "q": "În ce interval se pot face livrările de materiale ale statului?",
+    "o": [
+     "Oricând",
+     "Între 15:00 și 00:00",
+     "Între 08:00 și 20:00",
+     "Doar noaptea"
+    ],
+    "a": 1,
+    "src": "Livrări de materiale, 2.8",
+    "cat": "livrari"
+   },
+   {
+    "q": "O livrare a statului e atacată. Ai voie să chemi întăriri?",
+    "o": [
+     "Da, oricând",
+     "Nu (excepție: un nou atac asupra aceleiași livrări)",
+     "Da, dar doar de la Armată",
+     "Doar dacă e ora sigură"
+    ],
+    "a": 1,
+    "src": "Livrări de materiale, 2.3",
+    "cat": "livrari"
+   },
+   {
+    "q": "Cât timp se păstrează clipurile filmate la o livrare a statului?",
+    "o": [
+     "24 de ore",
+     "48 de ore",
+     "72 de ore",
+     "7 zile"
+    ],
+    "a": 2,
+    "src": "Livrări de materiale, 2.4",
+    "cat": "livrari"
+   },
+   {
+    "q": "Cu ce se fac livrările de materiale?",
+    "o": [
+     "Cu elicopterul, ca să fie mai sigur",
+     "Doar pe drum, pe pământ",
+     "Cu avionul",
+     "Cu barca"
+    ],
+    "a": 1,
+    "src": "Livrări de materiale, 1.11",
+    "cat": "livrari"
    }
   ],
-  "shuffle": false
+  "shuffle": true,
+  "pick": {
+   "cp": 5,
+   "rutier": 4,
+   "serif": 6,
+   "structuri": 3,
+   "livrari": 2
+  }
  }
 }

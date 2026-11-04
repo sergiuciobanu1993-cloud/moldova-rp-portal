@@ -3732,7 +3732,7 @@ app.get("/api/admin/afaceri", auth, requireRole(...FOUNDER_ROLES), asyncRoute(as
   for (const s of assets.stores || []) put(bizKeyOf("magazin", s.stationId), { name: String(s.name || "").trim() || null, ownerId: s.ownerIdentifier, sold: Number.isFinite(Number(s.money ?? s.sold ?? s.balance)) && (s.money ?? s.sold ?? s.balance) != null ? Number(s.money ?? s.sold ?? s.balance) : null });
   for (const b of assets.businesses || []) if (b.job && !WEEK_FACTION_JOBS[b.job]) put(bizKeyOf("firma", b.job), { name: b.jobLabel || b.job, ownerName: b.creator || null });
   const since = `NOW() - INTERVAL '${days} days'`;
-  const [fond, fondSold, fuel, af, afSold] = await Promise.all([
+  const [fond, fondSold, fuel, af, afSold, shop] = await Promise.all([
     // firme: conturile society_* din „fond" (fără facțiunile de stat)
     pool.query(`SELECT lower(substring(details->>'cont' from '^society_(.+)$')) AS job,
         SUM(GREATEST(${BIZ_DELTA}, 0)) AS intrari, SUM(GREATEST(-${BIZ_DELTA}, 0)) AS iesiri,
@@ -3755,6 +3755,10 @@ app.get("/api/admin/afaceri", auth, requireRole(...FOUNDER_ROLES), asyncRoute(as
     pool.query(`SELECT DISTINCT ON (details->>'tip', details->>'id') details->>'tip' AS tip, details->>'id' AS id, COALESCE(${BIZ_NUM("sold_dupa")}, ${BIZ_NUM("sold")}) AS sold, at
       FROM game_logs WHERE category = 'afacere' AND at > NOW() - INTERVAL '120 days' AND COALESCE(${BIZ_NUM("sold_dupa")}, ${BIZ_NUM("sold")}) IS NOT NULL
       ORDER BY details->>'tip', details->>'id', at DESC`),
+    // (04.11.2026) magazine: ce au plătit jucătorii („magazin: market_32 · burger x3", de la vx_magazine)
+    pool.query(`SELECT substring(details->>'motiv' from '^magazin: (?:market_|nr\. )?([0-9]+)') AS nr,
+        SUM(ABS(COALESCE(${BIZ_NUM("suma")}, ${BIZ_NUM("delta")}, 0))) AS vanzari, COUNT(*)::int AS n, MAX(at) AS ultima
+      FROM game_logs WHERE category = 'money' AND at > ${since} AND details->>'motiv' LIKE 'magazin: %' AND details->>'cale' = 'remove' GROUP BY 1`),
   ]);
   const later = (a, b) => (!a ? b : !b ? a : new Date(a) > new Date(b) ? a : b);
   for (const r of fond.rows) {
@@ -3769,6 +3773,11 @@ app.get("/api/admin/afaceri", auth, requireRole(...FOUNDER_ROLES), asyncRoute(as
     const b = put(`benzinarie:${r.nr}`, {});
     b.vanzari += Number(r.vanzari) || 0; b.intrari += Number(r.vanzari) || 0; b.miscari += r.n; b.ultima = later(b.ultima, r.ultima);
   }
+  for (const r of shop.rows) {
+    if (!r.nr) continue;
+    const b = put(`magazin:${r.nr}`, {});
+    b.vanzari += Number(r.vanzari) || 0; b.intrari += Number(r.vanzari) || 0; b.miscari += r.n; b.ultima = later(b.ultima, r.ultima);
+  }
   let afN = 0;
   for (const r of af.rows) {
     const b = put(bizKeyOf(r.tip, r.id), {}); if (!b) continue;
@@ -3776,8 +3785,8 @@ app.get("/api/admin/afaceri", auth, requireRole(...FOUNDER_ROLES), asyncRoute(as
     afN += r.n;
     const op = bizOp(r.op), sum = Number(r.suma) || 0, d = Number(r.delta) || 0;
     if (op === "depunere") b.depuneri += sum; else if (op === "retragere") b.retrageri += sum;
-    else if (op === "vanzare" && b.tip !== "benzinarie") b.vanzari += sum;   // la benzinării vânzările le avem deja de la pompă
-    if (op !== "vanzare" || b.tip !== "benzinarie") { if (d > 0) b.intrari += d; else b.iesiri += -d; }
+    // vânzările benzinăriilor și ale magazinelor le avem deja de la jucătorii care plătesc
+    if (op !== "vanzare") { if (d > 0) b.intrari += d; else b.iesiri += -d; }
     b.miscari += r.n; b.ultima = later(b.ultima, r.ultima);
   }
   for (const r of afSold.rows) { const b = put(bizKeyOf(r.tip, r.id), {}); if (b && (b.sold == null || b.tip !== "firma")) { b.sold = Number(r.sold); b.soldAt = r.at; } }
@@ -3807,6 +3816,7 @@ app.get("/api/admin/afaceri/:key/miscari", auth, requireRole(...FOUNDER_ROLES), 
   parts.push(`(category = 'afacere' AND lower(details->>'id') = ANY(${p(afIds)}::text[]))`);
   if (tip === "firma") parts.push(`(category = 'fond' AND lower(details->>'cont') = ${p(`society_${id}`)})`);
   if (tip === "benzinarie") parts.push(`(category = 'money' AND details->>'motiv' ~ ${p(`^benzinarie: nr\\. ${id}( |$)`)})`);
+  if (tip === "magazin") parts.push(`(category = 'money' AND details->>'cale' = 'remove' AND details->>'motiv' ~ ${p(`^magazin: (market_|nr\\. )?${id}( |$)`)})`);
   let where = `(${parts.join(" OR ")}) AND at > NOW() - INTERVAL '120 days'`;
   if (op === "depunere") where += ` AND ((category = 'afacere' AND lower(details->>'op') IN ('depunere','deposit','add')) OR (category = 'fond' AND details->>'resursa' = 'r_boss' AND ${BIZ_DELTA} > 0))`;
   if (op === "retragere") where += ` AND ((category = 'afacere' AND lower(details->>'op') IN ('retragere','withdraw','remove')) OR (category = 'fond' AND details->>'resursa' = 'r_boss' AND ${BIZ_DELTA} < 0))`;
@@ -3822,7 +3832,7 @@ app.get("/api/admin/afaceri/:key/miscari", auth, requireRole(...FOUNDER_ROLES), 
     const who = { name: r.rp_name || idn?.name || r.player || null, static: d.static ?? d.contraparteStatic ?? idn?.static ?? null, player: r.player || null };
     if (r.category === "money") {
       const s = Math.abs(num(d.suma) ?? num(d.delta) ?? 0);
-      return { at: r.at, op: "vanzare", suma: s, delta: s, sold: null, who, text: String(d.motiv || "").replace(/^benzinarie:\s*/, "") };
+      return { at: r.at, op: "vanzare", suma: s, delta: s, sold: null, who, text: String(d.motiv || "").replace(/^(benzinarie|magazin):\s*(market_\d+\s*·\s*)?/, "").replace(/\s*·\s*m\d+$/, "") };
     }
     const delta = num(d.delta) ?? (d.cale === "remove" ? -1 : 1) * (num(d.suma) ?? 0);
     if (r.category === "fond") {

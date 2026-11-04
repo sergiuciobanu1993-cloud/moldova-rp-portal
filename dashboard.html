@@ -106,6 +106,12 @@
     <span id="notify-msg" class="muted"></span>
   </div>
 </section>
+<!-- (05.11.2026) testul Biroului Șerifului: îl văd doar șerifii (personajul legat) și staff-ul -->
+<section class="panel" id="test-serifi" style="margin-top:20px;border-color:rgba(255,138,31,.45)" hidden>
+  <div class="head"><h2>⭐ Testul Biroului Șerifului</h2><span id="test-serifi-state">—</span></div>
+  <p class="muted" style="margin:0 0 14px" id="test-serifi-text">20 de întrebări, 25 de minute, o singură încercare.</p>
+  <a class="btn-ghost" href="test.html?id=serifi" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none" id="test-serifi-btn">Deschide testul →</a>
+</section>
 <!-- (04.11.2026, cerut de Sergiu) M Customs: platforma noastră pentru streameri, pe site separat -->
 <section class="panel" style="margin-top:20px">
   <div class="head"><h2>🎥 M Customs</h2><span>Pentru streameri TikTok LIVE</span></div>
@@ -965,6 +971,29 @@ document.getElementById('streamer-copy-btn').addEventListener('click', async () 
     box.innerHTML = list.length ? list.map(x => `<div class="event"><b>${esc(day(x.t))}</b><div><strong>${x.link ? `<a href="${esc(x.link)}">${esc(x.title)}</a>` : esc(x.title)}</strong><small>${esc((x.text || '').slice(0, 140))}</small></div></div>`).join('')
       : '<div class="event"><b>—</b><div><strong>Nimic nou încă</strong><small>Aici apar tichetele, insignele, locurile din clasament și cutiile deschise.</small></div></div>';
   });
+})();
+</script>
+<script>
+// (05.11.2026) cardul testului pentru șerifi: apare doar dacă serverul zice că îl poți da sau că ești în conducere/staff
+(async () => {
+  try {
+    if (!getAuth()?.token) return;
+    const r = await apiFetch('/api/teste/serifi');
+    if (!r.ok) return;
+    const d = await r.json();
+    if (!d.canTake && !d.lead) return;
+    const box = document.getElementById('test-serifi');
+    const a = d.attempt;
+    document.getElementById('test-serifi-state').textContent = a && a.finished ? (a.passed ? '✓ trecut' : '✕ picat') : d.open ? '🟢 deschis acum' : '⏳ încă închis';
+    document.getElementById('test-serifi-text').textContent = a && a.finished
+      ? `Ai dat testul: ${a.score}/${a.total}.` + (d.lead ? ' Rezultatele tuturor sunt pe pagina testului.' : '')
+      : a && !a.finished ? 'Ai început testul și nu l-ai trimis: intră și termină-l, timpul curge.'
+      : d.lead ? `${d.count} întrebări, ${d.minutes} de minute, o singură încercare. Tu îl deschizi și vezi rezultatele tuturor pe pagina testului.`
+      : d.open ? `${d.count} întrebări, ${d.minutes} de minute, o singură încercare. Trece cine are cel puțin ${d.pass} corecte.`
+      : `${d.count} întrebări, ${d.minutes} de minute, o singură încercare. Se deschide când anunță conducerea.`;
+    if (a && a.finished && !d.lead) document.getElementById('test-serifi-btn').textContent = 'Vezi rezultatul →';
+    box.hidden = false;
+  } catch { /* fără card */ }
 })();
 </script>
 </body></html>

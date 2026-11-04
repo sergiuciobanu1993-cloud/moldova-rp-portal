@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Afaceri — Admin Moldova RP</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="admin.css"><link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/assets/app/apple-touch-icon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black"><meta name="apple-mobile-web-app-title" content="Moldova RP"><script src="/pwa.js" defer></script><meta name="theme-color" content="#090a0b">
+</head>
+<body>
+<aside class="side"><a class="brand" href="index.html"><img src="assets/logo-128.webp" alt=""><b>MOLDOVA<span>RP</span></b></a><p>ADMINISTRAȚIE</p><a href="admin.html">▦ Dashboard</a><a href="admin-utilizatori.html">👤 Utilizatori</a><a href="admin-jucatori.html">♙ Jucători</a><a href="admin-cauta.html">🔎 Caută jucător</a><a href="admin-financiar.html">◆ Facțiuni</a><a class="sel" href="admin-afaceri.html">🏪 Afaceri</a><a href="admin-sanctiuni.html">⚠ Sancțiuni</a><a>▤ Reclamații</a><a>⚖ CK</a><a href="admin-regulamente.html">📚 Regulamente</a><a href="admin-continut.html">📝 Conținut pagini</a><a href="admin-anunturi.html">◉ Anunțuri</a><a href="admin-actualizari.html">🆕 Actualizări</a><a href="admin-tichete.html">🎫 Tichete</a><a href="vip-shop.html">🎁 VIP Shop</a><a href="admin-vip-shop.html">🛠 Editor VIP Shop</a><a href="admin-loguri.html">🗂 Loguri</a><a href="admin-kill-logs.html">🔪 Kill Logs</a><a>⌁ Audit Logs</a><a href="admin-txadmin.html" id="nav-txadmin">🖥 txAdmin</a><a class="back" href="dashboard.html">← Contul meu</a><a class="back" href="index.html">← Site public</a></aside>
+<main>
+<header><div><small>PANEL ADMINISTRATIV</small><h1>Afaceri</h1></div><a class="admin" href="dashboard.html" title="Înapoi la contul meu" style="text-decoration:none"><span id="admin-name">…</span> <i></i></a></header>
+<p class="muted" style="margin:-14px 0 16px;line-height:1.6;max-width:900px">Benzinăriile, magazinele și firmele de pe server: câți bani au, ce a intrat și ce a ieșit, cine a pus și cine a scos. Apasă pe o afacere ca să-i vezi toate mișcările de bani.</p>
+<p id="biz-note" class="biz-note" hidden></p>
+
+<section class="metrics">
+  <article><small>BANI ÎN AFACERI</small><strong id="m-sold">—</strong><em id="m-sold-n">soldul știut</em></article>
+  <article><small>ÎNCASĂRI</small><strong id="m-in">—</strong><em class="per">în perioada aleasă</em></article>
+  <article><small>BANI PUȘI DE PROPRIETARI</small><strong id="m-dep">—</strong><em class="per">în perioada aleasă</em></article>
+  <article><small>BANI SCOȘI DE PROPRIETARI</small><strong id="m-ret">—</strong><em class="per" style="color:var(--orange)">în perioada aleasă</em></article>
+</section>
+
+<section class="tablebox">
+  <div class="title biz-title">
+    <h2>Toate afacerile</h2>
+    <div class="biz-tools">
+      <input type="search" id="biz-q" class="filter-select" placeholder="Caută afacere sau proprietar" aria-label="Caută afacere sau proprietar">
+      <select id="biz-tip" class="filter-select" aria-label="Tipul afacerii"><option value="">Toate tipurile</option><option value="benzinarie">⛽ Benzinării</option><option value="magazin">🛒 Magazine</option><option value="firma">🏢 Firme</option></select>
+      <select id="biz-days" class="filter-select" aria-label="Perioada"><option value="1">Ultimele 24 de ore</option><option value="7" selected>Ultimele 7 zile</option><option value="30">Ultimele 30 de zile</option><option value="90">Ultimele 90 de zile</option></select>
+      <button type="button" id="biz-refresh">↻ Actualizează</button>
+    </div>
+  </div>
+  <table id="biz-table"><thead><tr><th>AFACERE</th><th>PROPRIETAR</th><th class="r">BANI ACUM</th><th class="r">INTRĂRI</th><th class="r">IEȘIRI</th><th class="r">PUȘI</th><th class="r">SCOȘI</th><th>ULTIMA MIȘCARE</th></tr></thead>
+  <tbody id="biz-body"><tr><td colspan="8">Se încarcă…</td></tr></tbody></table>
+</section>
+
+<section class="tablebox" id="det" hidden>
+  <div class="title biz-title">
+    <div><h2 id="det-name">—</h2><small class="muted" id="det-sub"></small></div>
+    <div class="biz-tools" id="det-ops" role="group" aria-label="Ce mișcări arăți">
+      <button type="button" class="chip on" data-op="">Toate</button><button type="button" class="chip" data-op="depunere">Puși</button><button type="button" class="chip" data-op="retragere">Scoși</button><button type="button" class="chip" data-op="vanzare">Vânzări</button>
+    </div>
+  </div>
+  <table><thead><tr><th>CÂND</th><th>CINE</th><th>CE</th><th class="r">SUMA</th><th class="r">SOLD DUPĂ</th><th>DETALII</th></tr></thead>
+  <tbody id="det-body"></tbody></table>
+  <div class="det-foot"><span class="muted" id="det-count"></span><span><button type="button" class="btn-ghost" id="det-prev">← Mai noi</button> <button type="button" class="btn-ghost" id="det-next">Mai vechi →</button></span></div>
+</section>
+</main>
+<style>
+.biz-note{background:rgba(255,138,31,.08);border:1px solid rgba(255,138,31,.25);border-radius:12px;padding:12px 16px;margin:0 0 18px;line-height:1.6;max-width:1100px}
+.biz-title{flex-wrap:wrap;gap:12px}
+.biz-tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.biz-tools .filter-select{min-width:0}
+#biz-q{width:230px}
+th.r,td.r{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+#biz-body tr{cursor:pointer}
+#biz-body tr.on{background:rgba(255,138,31,.09);box-shadow:inset 3px 0 0 var(--orange)}
+#biz-body tr:hover{background:rgba(255,138,31,.06)}
+.bn{font-weight:800;color:var(--text);font-size:13px}
+.bt{display:block;color:var(--muted);font-size:11px}
+.plus{color:var(--green)!important}.minus{color:#ff7a6b!important}
+td .na{color:#666}
+.title button.chip{background:transparent;border:1px solid var(--line);border-radius:999px;padding:6px 12px;font:inherit;font-weight:800;font-size:12px;color:#9da2a8;cursor:pointer;box-shadow:none}
+.title button.chip:hover{transform:none;background:rgba(255,255,255,.05)}
+.title button.chip.on{border-color:var(--orange);color:var(--orange);background:rgba(255,138,31,.1)}
+.op{display:inline-block;padding:3px 9px;border-radius:999px;font-size:10px;font-weight:900;letter-spacing:.04em;background:rgba(255,255,255,.07);color:#bbb}
+.op.depunere{background:rgba(66,223,138,.14);color:var(--green)}
+.op.retragere{background:rgba(255,122,107,.14);color:#ff7a6b}
+.op.vanzare,.op.intrare{background:rgba(120,170,255,.14);color:#7db2ff}
+.det-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:14px 22px;border-top:1px solid var(--line);flex-wrap:wrap}
+.det-foot .btn-ghost{padding:7px 12px}
+.det-foot .btn-ghost:disabled{opacity:.4;cursor:default}
+@media(max-width:800px){#biz-q{width:100%}}
+</style>
+<script src="auth-client.js"></script>
+<script>
+const esc = s => (s ?? '').toString().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+const money = n => n == null ? '<span class="na">—</span>' : Math.round(Number(n)).toLocaleString('ro-RO') + '$';
+const sumOr = n => Number(n) ? money(n) : '<span class="na">0$</span>';
+const when = d => { if (!d) return '<span class="na">—</span>'; const t = new Date(d), s = (Date.now() - t) / 1000; if (s < 3600) return `acum ${Math.max(1, Math.floor(s / 60))} min`; if (s < 86400) return `acum ${Math.floor(s / 3600)} h`; return t.toLocaleString('ro-RO', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); };
+const TIP = { benzinarie: ['⛽', 'Benzinărie'], magazin: ['🛒', 'Magazin'], firma: ['🏢', 'Firmă'] };
+const OPS = { depunere: 'PUȘI', retragere: 'SCOȘI', vanzare: 'VÂNZARE', intrare: 'INTRARE', iesire: 'IEȘIRE', marfa: 'MARFĂ', salariu: 'SALARIU', taxa: 'TAXĂ' };
+let LIST = [], CUR = null, PAGE = 1, OP = '';
+const bizName = b => b.name || (b.tip === 'firma' ? b.id : `${TIP[b.tip][1]} nr. ${b.id}`);
+
+async function load() {
+  const btn = document.getElementById('biz-refresh'); btn.disabled = true;
+  try {
+    const r = await apiFetch('/api/admin/afaceri?days=' + document.getElementById('biz-days').value);
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'Nu am putut încărca afacerile.');
+    LIST = d.list || [];
+    const note = document.getElementById('biz-note');
+    const bits = [];
+    if (!d.gameLogs) bits.push('<b>Soldul benzinăriilor și al magazinelor și cine pune sau scoate bani din ele</b> apar aici după ce jocul începe să trimită logurile de afaceri. Până atunci vezi soldul și mișcările firmelor (din fondurile lor) și vânzările de combustibil ale benzinăriilor.');
+    if (!d.assetsOnline) bits.push(`Lista afacerilor e ultima salvată${d.assetsSavedAt ? ' (' + esc(new Date(d.assetsSavedAt).toLocaleString('ro-RO')) + ')' : ''}: serverul de joc nu răspunde acum.`);
+    note.innerHTML = bits.join('<br>'); note.hidden = !bits.length;
+    document.querySelectorAll('.metrics .per').forEach(e => { e.textContent = document.getElementById('biz-days').selectedOptions[0].textContent.toLowerCase(); });
+    draw();
+  } catch (err) { document.getElementById('biz-body').innerHTML = `<tr><td colspan="8">${esc(err.message)}</td></tr>`; }
+  btn.disabled = false;
+}
+function draw() {
+  const q = document.getElementById('biz-q').value.trim().toLowerCase(), tip = document.getElementById('biz-tip').value;
+  const list = LIST.filter(b => (!tip || b.tip === tip) && (!q || [bizName(b), b.ownerName, b.id, b.ownerStatic].some(v => String(v ?? '').toLowerCase().includes(q))));
+  const known = list.filter(b => b.sold != null);
+  document.getElementById('m-sold').textContent = Math.round(known.reduce((s, b) => s + b.sold, 0)).toLocaleString('ro-RO') + '$';
+  document.getElementById('m-sold-n').textContent = `știut la ${known.length} din ${list.length} afaceri`;
+  document.getElementById('m-in').textContent = Math.round(list.reduce((s, b) => s + b.intrari, 0)).toLocaleString('ro-RO') + '$';
+  document.getElementById('m-dep').textContent = Math.round(list.reduce((s, b) => s + b.depuneri, 0)).toLocaleString('ro-RO') + '$';
+  document.getElementById('m-ret').textContent = Math.round(list.reduce((s, b) => s + b.retrageri, 0)).toLocaleString('ro-RO') + '$';
+  document.getElementById('biz-body').innerHTML = list.map(b => `<tr data-key="${esc(b.key)}"${CUR?.key === b.key ? ' class="on"' : ''}>
+    <td><span class="bn">${TIP[b.tip][0]} ${esc(bizName(b))}</span><span class="bt">${TIP[b.tip][1]}${b.tip !== 'firma' ? ' nr. ' + esc(b.id) : ''}</span></td>
+    <td>${b.ownerName ? esc(b.ownerName) + (b.ownerStatic ? ` <span class="muted">#${esc(b.ownerStatic)}</span>` : '') : b.hasOwner ? '<span class="na">necunoscut încă</span>' : '<span class="na">—</span>'}</td>
+    <td class="r">${money(b.sold)}</td><td class="r plus">${sumOr(b.intrari)}</td><td class="r minus">${sumOr(b.iesiri)}</td>
+    <td class="r">${sumOr(b.depuneri)}</td><td class="r">${sumOr(b.retrageri)}</td><td>${when(b.ultima)}</td></tr>`).join('') || '<tr><td colspan="8">Nicio afacere găsită.</td></tr>';
+}
+async function openBiz(key, page = 1) {
+  const b = LIST.find(x => x.key === key); if (!b) return;
+  CUR = b; PAGE = page;
+  const box = document.getElementById('det'); box.hidden = false;
+  document.getElementById('det-name').textContent = `${TIP[b.tip][0]} ${bizName(b)}`;
+  document.getElementById('det-sub').textContent = `${TIP[b.tip][1]}${b.tip !== 'firma' ? ' nr. ' + b.id : ''}${b.ownerName ? ' · proprietar ' + b.ownerName : ''}${b.sold != null ? ' · sold ' + Math.round(b.sold).toLocaleString('ro-RO') + '$' : ''} · ultimele 120 de zile`;
+  document.querySelectorAll('#biz-body tr').forEach(tr => tr.classList.toggle('on', tr.dataset.key === key));
+  const body = document.getElementById('det-body'); body.innerHTML = '<tr><td colspan="6">Se încarcă…</td></tr>';
+  try {
+    const r = await apiFetch(`/api/admin/afaceri/${encodeURIComponent(key)}/miscari?page=${page}${OP ? '&op=' + OP : ''}`);
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'Nu am putut încărca mișcările.');
+    body.innerHTML = d.items.map(x => `<tr><td>${esc(new Date(x.at).toLocaleString('ro-RO'))}</td>
+      <td>${x.who.name ? esc(x.who.name) + (x.who.static ? ` <span class="muted">#${esc(x.who.static)}</span>` : '') : '<span class="na">automat</span>'}</td>
+      <td><span class="op ${esc(x.op)}">${esc(OPS[x.op] || x.op.toUpperCase())}</span></td>
+      <td class="r ${x.delta < 0 ? 'minus' : 'plus'}">${x.delta < 0 ? '−' : '+'}${money(x.suma)}</td>
+      <td class="r">${money(x.sold)}</td><td class="muted">${esc(x.text || '')}</td></tr>`).join('') || `<tr><td colspan="6">${b.tip === 'magazin' && !OP ? 'Încă nu avem mișcări pentru acest magazin: apar după ce jocul trimite logurile de afaceri.' : 'Nicio mișcare.'}</td></tr>`;
+    document.getElementById('det-count').textContent = d.total ? `${d.total.toLocaleString('ro-RO')} mișcări · pagina ${d.page} din ${d.pages}` : '';
+    document.getElementById('det-prev').disabled = d.page <= 1;
+    document.getElementById('det-next').disabled = d.page >= d.pages;
+  } catch (err) { body.innerHTML = `<tr><td colspan="6">${esc(err.message)}</td></tr>`; }
+  if (page === 1) box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+document.getElementById('biz-body').addEventListener('click', e => { const tr = e.target.closest('tr[data-key]'); if (tr) { OP = ''; document.querySelectorAll('#det-ops .chip').forEach(c => c.classList.toggle('on', !c.dataset.op)); openBiz(tr.dataset.key); } });
+document.getElementById('det-ops').addEventListener('click', e => { const c = e.target.closest('.chip'); if (!c || !CUR) return; OP = c.dataset.op; document.querySelectorAll('#det-ops .chip').forEach(x => x.classList.toggle('on', x === c)); openBiz(CUR.key); });
+document.getElementById('det-prev').onclick = () => CUR && openBiz(CUR.key, PAGE - 1);
+document.getElementById('det-next').onclick = () => CUR && openBiz(CUR.key, PAGE + 1);
+document.getElementById('biz-q').addEventListener('input', draw);
+document.getElementById('biz-tip').addEventListener('change', draw);
+document.getElementById('biz-days').addEventListener('change', load);
+document.getElementById('biz-refresh').addEventListener('click', load);
+(async () => {
+  const me = await requireRole('co-fondator', 'owner');
+  if (!me) return;
+  document.getElementById('admin-name').textContent = me.username;
+  load();
+})();
+</script>
+</body></html>

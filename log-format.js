@@ -14,6 +14,7 @@
     vehicle_acquired: 'Vehicul nou',
     transfer: 'Transfer bancar', schimb: 'Schimb (meniul G)', amenda: 'Amendă', factura: 'Factură',
     fond: 'Fond facțiune', banda_fond: 'Fond bandă', banda_membru: 'Membri bandă / familie',
+    afacere: 'Bani afacere',
     admin: 'Acțiune staff',
     discord: 'Discord',
   };
@@ -23,7 +24,7 @@
     item_buy: 'info', item_craft: 'info', item_transfer: 'info', item_obtained: 'info', item_drop: 'warn',
     item_pickup: 'info', item_primit: 'info', depozit: 'info',
     vehicle_acquired: 'info',
-    transfer: 'warn', schimb: 'warn', amenda: 'info', factura: 'info', fond: 'info', banda_fond: 'warn', banda_membru: 'warn',
+    transfer: 'warn', schimb: 'warn', amenda: 'info', factura: 'info', fond: 'info', banda_fond: 'warn', banda_membru: 'warn', afacere: 'warn',
     admin: 'warn',
     discord: 'info',
   };
@@ -611,6 +612,18 @@
         if (act === 'dat_afara') return `<strong>a fost dat afară</strong> din ${org}${g(d.grad_vechi || d.grad) ? ` <span class="muted">(era</span> ${g(d.grad_vechi || d.grad)}<span class="muted">)</span>` : ''}${by}${why}`;
         if (act === 'grad') return `gradul în ${org}: ${g(d.grad_vechi) || '<span class="muted">?</span>'} → ${g(d.grad_nou || d.grad) || '<span class="muted">?</span>'}${by}${why}`;
         return `${escapeHtml(act || 'schimbare')} în ${org}${by}${why}`;
+      }
+      // (04.11.2026) banii unei afaceri (benzinărie, magazin, firmă): cine a pus, cine a scos, vânzări
+      case 'afacere': {
+        const TIP = { benzinarie: 'benzinăria', magazin: 'magazinul', firma: 'firma' };
+        const OP = { depunere: ['a pus', 'în'], retragere: ['a scos', 'din'], vanzare: ['vânzare de', 'în'], marfa: ['marfă cumpărată cu', 'din'], salariu: ['salariu plătit de', 'din'], taxa: ['taxă de', 'din'] };
+        const op = String(d.op || '').toLowerCase();
+        const [verb, prep] = OP[op] || [escapeHtml(op || 'mișcare'), 'la'];
+        const tip = TIP[String(d.tip || '').toLowerCase()] || 'afacerea';
+        const name = d.nume || d.id || '?';
+        const why = d.motiv || d.comentariu ? ` <span class="muted">(${escapeHtml(String(d.motiv || d.comentariu))})</span>` : '';
+        const sold = typeof d.sold_dupa === 'number' ? ` <span class="muted">· sold: ${typeof d.sold_inainte === 'number' ? fmtSum(d.sold_inainte) + ' → ' : ''}${fmtSum(d.sold_dupa)}</span>` : '';
+        return `${verb} <strong>${fmtSum(d.suma ?? d.delta)}</strong> ${prep} ${tip} <strong>${escapeHtml(String(name))}</strong>${why}${sold}`;
       }
       case 'admin': {
         const parts = [];

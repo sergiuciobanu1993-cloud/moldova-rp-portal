@@ -3688,6 +3688,156 @@ app.get("/api/admin/live/assets", auth, requireRole(...ADMIN_ROLES), asyncRoute(
 }));
 
 // ---------------------------------------------------------------------------
+// (04.11.2026, cerut de Sergiu) Afaceri: benzinării, magazine și firme (conturi
+// society ale joburilor care nu sunt facțiuni de stat). Câți bani au, ce a intrat,
+// ce a ieșit, cine a pus și cine a scos. Totul din copia logurilor (game_logs):
+//  - firmele: logurile „fond" (contul society_<job>, cu sold după fiecare mișcare);
+//  - benzinăriile: vânzările de combustibil („benzinarie: nr. N" la jucătorul care plătește);
+//  - toate: categoria nouă „afacere", când o trimite jocul (depuneri, retrageri, vânzări,
+//    marfă, salarii) — vezi mesajul pentru coleg; până atunci soldul benzinăriilor și
+//    al magazinelor e necunoscut.
+const BIZ_NUM = k => `(CASE WHEN details->>'${k}' ~ '^-?[0-9]+(\\.[0-9]+)?$' THEN (details->>'${k}')::numeric END)`;
+const BIZ_DELTA = `COALESCE(${BIZ_NUM("delta")}, CASE WHEN details->>'cale' = 'remove' THEN -1 ELSE 1 END * ${BIZ_NUM("suma")}, 0)`;
+// la „afacere": semnul vine din delta, altfel din operație (retragere, marfă, salarii, taxe = bani ieșiți)
+const BIZ_AF_DELTA = `COALESCE(${BIZ_NUM("delta")}, CASE WHEN lower(details->>'op') IN ('retragere','withdraw','remove','marfa','aprovizionare','stock','cumparare_marfa','salariu','salary','taxa','tax') OR details->>'cale' = 'remove' THEN -1 ELSE 1 END * ABS(COALESCE(${BIZ_NUM("suma")}, 0)))`;
+const BIZ_OPS = {
+  depunere: "depunere", deposit: "depunere", add: "depunere",
+  retragere: "retragere", withdraw: "retragere", remove: "retragere",
+  vanzare: "vanzare", sale: "vanzare", sell: "vanzare", incasare: "vanzare",
+  marfa: "marfa", aprovizionare: "marfa", stock: "marfa", cumparare_marfa: "marfa",
+  salariu: "salariu", salary: "salariu", taxa: "taxa", tax: "taxa",
+};
+const bizOp = v => BIZ_OPS[String(v || "").toLowerCase()] || (v ? String(v).toLowerCase().slice(0, 30) : "alta");
+const bizKeyOf = (tip, id) => {
+  const t = /benzin|gas|fuel/i.test(tip) ? "benzinarie" : /magaz|store|market|shop/i.test(tip) ? "magazin" : "firma";
+  const raw = String(id ?? "").trim();
+  const n = t === "firma" ? raw.replace(/^society_/, "").toLowerCase() : (/(\d+)\s*$/.exec(raw) || [])[1] || raw.toLowerCase();
+  return n ? `${t}:${n}` : null;
+};
+async function bizIdentities(ids) {
+  const list = [...new Set(ids.filter(Boolean).map(String))];
+  if (!list.length) return new Map();
+  const { rows } = await pool.query(`SELECT identifier, rp_name, static_id FROM game_identities WHERE identifier = ANY($1::text[])`, [list]).catch(() => ({ rows: [] }));
+  return new Map(rows.map(r => [r.identifier, { name: r.rp_name || null, static: r.static_id || null }]));
+}
+
+app.get("/api/admin/afaceri", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  const days = [1, 7, 30, 90].includes(Number(req.query.days)) ? Number(req.query.days) : 7;
+  let assets = await fetchAssets({});
+  if (!assets.online || !["businesses", "gasStations", "stores"].some(k => (assets[k] || []).length)) assets = (await loadLiveSnapshot("assets")) || assets;
+  const biz = new Map();
+  const put = (key, o) => { if (!key) return null; const b = biz.get(key) || { key, tip: key.split(":")[0], id: key.split(":")[1], name: null, ownerId: null, ownerName: null, sold: null, soldAt: null, intrari: 0, iesiri: 0, depuneri: 0, retrageri: 0, vanzari: 0, miscari: 0, ultima: null }; Object.assign(b, Object.fromEntries(Object.entries(o).filter(([, v]) => v != null && v !== ""))); biz.set(key, b); return b; };
+  for (const g of assets.gasStations || []) put(bizKeyOf("benzinarie", g.stationId), { name: String(g.name || "").trim() || null, ownerId: g.ownerIdentifier, sold: Number.isFinite(Number(g.money ?? g.sold ?? g.balance)) && (g.money ?? g.sold ?? g.balance) != null ? Number(g.money ?? g.sold ?? g.balance) : null });
+  for (const s of assets.stores || []) put(bizKeyOf("magazin", s.stationId), { name: String(s.name || "").trim() || null, ownerId: s.ownerIdentifier, sold: Number.isFinite(Number(s.money ?? s.sold ?? s.balance)) && (s.money ?? s.sold ?? s.balance) != null ? Number(s.money ?? s.sold ?? s.balance) : null });
+  for (const b of assets.businesses || []) if (b.job && !WEEK_FACTION_JOBS[b.job]) put(bizKeyOf("firma", b.job), { name: b.jobLabel || b.job, ownerName: b.creator || null });
+  const since = `NOW() - INTERVAL '${days} days'`;
+  const [fond, fondSold, fuel, af, afSold] = await Promise.all([
+    // firme: conturile society_* din „fond" (fără facțiunile de stat)
+    pool.query(`SELECT lower(substring(details->>'cont' from '^society_(.+)$')) AS job,
+        SUM(GREATEST(${BIZ_DELTA}, 0)) AS intrari, SUM(GREATEST(-${BIZ_DELTA}, 0)) AS iesiri,
+        SUM(CASE WHEN details->>'resursa' = 'r_boss' AND ${BIZ_DELTA} > 0 THEN ${BIZ_DELTA} ELSE 0 END) AS depuneri,
+        SUM(CASE WHEN details->>'resursa' = 'r_boss' AND ${BIZ_DELTA} < 0 THEN -${BIZ_DELTA} ELSE 0 END) AS retrageri,
+        COUNT(*)::int AS n, MAX(at) AS ultima
+      FROM game_logs WHERE category = 'fond' AND at > ${since} AND details->>'cont' LIKE 'society\\_%' GROUP BY 1`),
+    pool.query(`SELECT DISTINCT ON (job) job, sold, at FROM (
+        SELECT lower(substring(details->>'cont' from '^society_(.+)$')) AS job, ${BIZ_NUM("sold")} AS sold, at
+        FROM game_logs WHERE category = 'fond' AND at > NOW() - INTERVAL '120 days' AND details->>'cont' LIKE 'society\\_%') x
+      WHERE sold IS NOT NULL ORDER BY job, at DESC`),
+    // benzinării: ce au plătit jucătorii la pompă („benzinarie: nr. 8 · 71 L Regular")
+    pool.query(`SELECT substring(details->>'motiv' from '^benzinarie: nr\\. ([0-9]+)') AS nr,
+        SUM(ABS(COALESCE(${BIZ_NUM("suma")}, ${BIZ_NUM("delta")}, 0))) AS vanzari, COUNT(*)::int AS n, MAX(at) AS ultima
+      FROM game_logs WHERE category = 'money' AND at > ${since} AND details->>'motiv' LIKE 'benzinarie: nr. %' GROUP BY 1`),
+    // categoria nouă „afacere" (când o trimite jocul)
+    pool.query(`SELECT details->>'tip' AS tip, details->>'id' AS id, details->>'op' AS op,
+        SUM(ABS(COALESCE(${BIZ_NUM("suma")}, ${BIZ_NUM("delta")}, 0))) AS suma, SUM(${BIZ_AF_DELTA}) AS delta, COUNT(*)::int AS n, MAX(at) AS ultima, MAX(details->>'nume') AS nume
+      FROM game_logs WHERE category = 'afacere' AND at > ${since} GROUP BY 1, 2, 3`),
+    pool.query(`SELECT DISTINCT ON (details->>'tip', details->>'id') details->>'tip' AS tip, details->>'id' AS id, COALESCE(${BIZ_NUM("sold_dupa")}, ${BIZ_NUM("sold")}) AS sold, at
+      FROM game_logs WHERE category = 'afacere' AND at > NOW() - INTERVAL '120 days' AND COALESCE(${BIZ_NUM("sold_dupa")}, ${BIZ_NUM("sold")}) IS NOT NULL
+      ORDER BY details->>'tip', details->>'id', at DESC`),
+  ]);
+  const later = (a, b) => (!a ? b : !b ? a : new Date(a) > new Date(b) ? a : b);
+  for (const r of fond.rows) {
+    if (!r.job || WEEK_FACTION_JOBS[r.job]) continue;
+    const b = put(`firma:${r.job}`, {});
+    b.intrari += Number(r.intrari) || 0; b.iesiri += Number(r.iesiri) || 0; b.depuneri += Number(r.depuneri) || 0; b.retrageri += Number(r.retrageri) || 0;
+    b.miscari += r.n; b.ultima = later(b.ultima, r.ultima);
+  }
+  for (const r of fondSold.rows) { if (!r.job || WEEK_FACTION_JOBS[r.job]) continue; const b = put(`firma:${r.job}`, {}); if (b.sold == null) { b.sold = Number(r.sold); b.soldAt = r.at; } }
+  for (const r of fuel.rows) {
+    if (!r.nr) continue;
+    const b = put(`benzinarie:${r.nr}`, {});
+    b.vanzari += Number(r.vanzari) || 0; b.intrari += Number(r.vanzari) || 0; b.miscari += r.n; b.ultima = later(b.ultima, r.ultima);
+  }
+  let afN = 0;
+  for (const r of af.rows) {
+    const b = put(bizKeyOf(r.tip, r.id), {}); if (!b) continue;
+    if (!b.name && r.nume) b.name = String(r.nume).slice(0, 60);
+    afN += r.n;
+    const op = bizOp(r.op), sum = Number(r.suma) || 0, d = Number(r.delta) || 0;
+    if (op === "depunere") b.depuneri += sum; else if (op === "retragere") b.retrageri += sum;
+    else if (op === "vanzare" && b.tip !== "benzinarie") b.vanzari += sum;   // la benzinării vânzările le avem deja de la pompă
+    if (op !== "vanzare" || b.tip !== "benzinarie") { if (d > 0) b.intrari += d; else b.iesiri += -d; }
+    b.miscari += r.n; b.ultima = later(b.ultima, r.ultima);
+  }
+  for (const r of afSold.rows) { const b = put(bizKeyOf(r.tip, r.id), {}); if (b && (b.sold == null || b.tip !== "firma")) { b.sold = Number(r.sold); b.soldAt = r.at; } }
+  const who = await bizIdentities([...biz.values()].map(b => b.ownerId));
+  const list = [...biz.values()].map(b => {
+    const o = who.get(b.ownerId);
+    const { ownerId, ...rest } = b;
+    return { ...rest, ownerName: o?.name || b.ownerName || null, ownerStatic: o?.static || null, hasOwner: !!ownerId };
+  }).sort((a, b) => ({ benzinarie: 0, magazin: 1, firma: 2 }[a.tip] - { benzinarie: 0, magazin: 1, firma: 2 }[b.tip]) || (Number(a.id) - Number(b.id)) || String(a.id).localeCompare(String(b.id)));
+  res.json({ days, list, gameLogs: afN > 0, assetsOnline: !!assets.online && !assets.snapshot, assetsSavedAt: assets.savedAt || null });
+}));
+
+// Mișcările unei afaceri: cine, ce, cât, soldul după
+app.get("/api/admin/afaceri/:key/miscari", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  const m = /^(benzinarie|magazin|firma):([a-z0-9_.-]{1,40})$/i.exec(String(req.params.key || ""));
+  if (!m) return res.status(400).json({ error: "Afacere necunoscută." });
+  const tip = m[1].toLowerCase(), id = m[2].toLowerCase();
+  if (tip === "firma" && WEEK_FACTION_JOBS[id]) return res.status(400).json({ error: "Facțiunile de stat sunt în pagina Facțiuni." });
+  const page = Math.max(1, Math.min(200, parseInt(req.query.page, 10) || 1)), size = 60;
+  const op = ["depunere", "retragere", "vanzare"].includes(req.query.op) ? req.query.op : "";
+  const params = [];
+  const p = v => { params.push(v); return `$${params.length}`; };
+  const parts = [];
+  // categoria „afacere": id-ul poate veni ca „gas_station_8", „8" sau numele jobului
+  const afIds = tip === "firma" ? [id, `society_${id}`] : [id, tip === "benzinarie" ? `gas_station_${id}` : `market_${id}`];
+  parts.push(`(category = 'afacere' AND lower(details->>'id') = ANY(${p(afIds)}::text[]))`);
+  if (tip === "firma") parts.push(`(category = 'fond' AND lower(details->>'cont') = ${p(`society_${id}`)})`);
+  if (tip === "benzinarie") parts.push(`(category = 'money' AND details->>'motiv' ~ ${p(`^benzinarie: nr\\. ${id}( |$)`)})`);
+  let where = `(${parts.join(" OR ")}) AND at > NOW() - INTERVAL '120 days'`;
+  if (op === "depunere") where += ` AND ((category = 'afacere' AND lower(details->>'op') IN ('depunere','deposit','add')) OR (category = 'fond' AND details->>'resursa' = 'r_boss' AND ${BIZ_DELTA} > 0))`;
+  if (op === "retragere") where += ` AND ((category = 'afacere' AND lower(details->>'op') IN ('retragere','withdraw','remove')) OR (category = 'fond' AND details->>'resursa' = 'r_boss' AND ${BIZ_DELTA} < 0))`;
+  if (op === "vanzare") where += ` AND ((category = 'afacere' AND lower(details->>'op') IN ('vanzare','sale','sell','incasare')) OR category = 'money')`;
+  const [rows, cnt] = await Promise.all([
+    pool.query(`SELECT id, category, player, identifier, rp_name, details, at FROM game_logs WHERE ${where} ORDER BY at DESC, id DESC LIMIT ${size} OFFSET ${(page - 1) * size}`, params),
+    pool.query(`SELECT COUNT(*)::int AS n FROM game_logs WHERE ${where}`, params),
+  ]);
+  const ids = await bizIdentities(rows.rows.map(r => r.identifier));
+  const num = v => (v == null || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
+  const items = rows.rows.map(r => {
+    const d = r.details || {}, idn = ids.get(r.identifier);
+    const who = { name: r.rp_name || idn?.name || r.player || null, static: d.static ?? d.contraparteStatic ?? idn?.static ?? null, player: r.player || null };
+    if (r.category === "money") {
+      const s = Math.abs(num(d.suma) ?? num(d.delta) ?? 0);
+      return { at: r.at, op: "vanzare", suma: s, delta: s, sold: null, who, text: String(d.motiv || "").replace(/^benzinarie:\s*/, "") };
+    }
+    const delta = num(d.delta) ?? (d.cale === "remove" ? -1 : 1) * (num(d.suma) ?? 0);
+    if (r.category === "fond") {
+      const o = d.resursa === "r_boss" ? (delta < 0 ? "retragere" : "depunere") : delta < 0 ? "iesire" : "intrare";
+      return { at: r.at, op: o, suma: Math.abs(delta), delta, sold: num(d.sold), who, text: (LogFormat ? LogFormat.fundReason?.(d)?.text : null) || String(d.motiv || d.resursa || "") };
+    }
+    const o = bizOp(d.op);
+    const sign = ["retragere", "marfa", "salariu", "taxa"].includes(o) ? -1 : 1;
+    const dl = num(d.delta) ?? sign * Math.abs(num(d.suma) ?? 0);
+    return { at: r.at, op: o, suma: Math.abs(dl), delta: dl, sold: num(d.sold_dupa) ?? num(d.sold), who, text: String(d.motiv || d.comentariu || "") };
+  });
+  res.json({ items, total: cnt.rows[0].n, page, pages: Math.max(1, Math.ceil(cnt.rows[0].n / size)) });
+}));
+
+// ---------------------------------------------------------------------------
 // Profilul unui jucător — pagina cerută explicit ("apesi pe player și se
 // deschide pagina cu toată informația lui"). Combină TOATE sursele deja
 // folosite separat în alte pagini, într-un singur rezumat:

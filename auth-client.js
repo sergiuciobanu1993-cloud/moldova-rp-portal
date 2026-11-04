@@ -123,6 +123,14 @@ function filterPanelNav(role) {
 (function addXmasPanelLink() {
   const side = document.querySelector("aside.side");
   if (!side) return;
+  // (04.11.2026) „🏪 Afaceri", lângă Facțiuni (banii benzinăriilor, magazinelor și firmelor)
+  const fin = side.querySelector('a[href="admin-financiar.html"]');
+  if (fin && !side.querySelector('a[href="admin-afaceri.html"]')) {
+    const b = document.createElement("a");
+    b.href = "admin-afaceri.html"; b.textContent = "🏪 Afaceri";
+    if (location.pathname.endsWith("admin-afaceri.html")) b.className = "sel";
+    fin.after(b);
+  }
   let after = side.querySelector('a[href="admin-vip-shop.html"]');
   for (const [href, text] of [["admin-craciun.html", "🎄 Crăciun"], ["admin-clasament.html", "🏆 Clasament"], ["admin-sondaje.html", "🗳 Sondaje"]]) {
     let a = side.querySelector(`a[href="${href}"]`);

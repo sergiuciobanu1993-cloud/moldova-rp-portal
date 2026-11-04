@@ -5,10 +5,10 @@
   "deptLabel": "Biroul Șerifului",
   "minutes": 25,
   "pass": 14,
-  "intro": "Fiecare șerif primește alte 20 de întrebări, alese la întâmplare din Codul Penal, legislația rutieră, Regulamentul Sheriff-ului, Structurile de Stat și Livrările de materiale. Ai 25 de minute și o singură încercare.",
+  "intro": "Fiecare șerif primește alte 20 de întrebări, alese la întâmplare. Ai 25 de minute și o singură încercare.",
   "questions": [
    {
-    "q": "Un șofer e prins conducând fără permis (Art. 201). Ce pedeapsă primește?",
+    "q": "Un șofer e prins conducând fără permis. Ce pedeapsă primește?",
     "o": [
      "5.000$ amendă, fără închisoare",
      "15.000$ amendă și permisul suspendat 24 de ore",
@@ -20,7 +20,7 @@
     "cat": "cp"
    },
    {
-    "q": "Un șofer merge cu 35 km/h peste limita de viteză. Ce primește (Art. 106.3)?",
+    "q": "Un șofer merge cu 35 km/h peste limita de viteză. Ce primește?",
     "o": [
      "7.000$ și 7 puncte",
      "3.000$ și 3 puncte",
@@ -56,7 +56,7 @@
     "cat": "cp"
    },
    {
-    "q": "Un civil are la el 2 grame de droguri (Art. 148). Ce se aplică?",
+    "q": "Un civil are la el 2 grame de droguri. Ce se aplică?",
     "o": [
      "30 de minute de închisoare",
      "Amendă între 5.000$ și 20.000$ și confiscarea drogurilor",
@@ -248,7 +248,7 @@
     "cat": "livrari"
    },
    {
-    "q": "Un șofer refuză să oprească sau să coboare din mașină la cererea agentului (Art. 118). Ce amendă primește?",
+    "q": "Un șofer refuză să oprească sau să coboare din mașină la cererea agentului. Ce amendă primește?",
     "o": [
      "5.000$",
      "10.000$",
@@ -260,7 +260,7 @@
     "cat": "cp"
    },
    {
-    "q": "Un șofer pleacă de la locul accidentului (Art. 202). Ce pedeapsă primește?",
+    "q": "Un șofer pleacă de la locul accidentului. Ce pedeapsă primește?",
     "o": [
      "10.000$, fără închisoare",
      "20.000$ și 15 minute de închisoare",
@@ -272,7 +272,7 @@
     "cat": "cp"
    },
    {
-    "q": "Un civil e prins cu o armă ilegală din Categoria I.1/I.2 (Art. 801). Ce pedeapsă primește?",
+    "q": "Un civil e prins cu o armă ilegală din Categoria I.1/I.2. Ce pedeapsă primește?",
     "o": [
      "20.000$ și 15 minute",
      "50.000$ și 30 de minute",
@@ -284,7 +284,7 @@
     "cat": "cp"
    },
    {
-    "q": "Un șofer merge cu 80 km/h peste limită (Art. 106.6). Ce primește?",
+    "q": "Un șofer merge cu 80 km/h peste limită. Ce primește?",
     "o": [
      "9.000$ și 9 puncte",
      "12.000$ și permisul suspendat 24 de ore",
@@ -296,7 +296,7 @@
     "cat": "cp"
    },
    {
-    "q": "Ce pedeapsă prevede furtul simplu (Art. 401)?",
+    "q": "Ce pedeapsă primește cineva prins la furt simplu?",
     "o": [
      "10.000$ și 10 minute",
      "20.000$ și 20 de minute",
@@ -320,7 +320,7 @@
     "cat": "cp"
    },
    {
-    "q": "Un șofer conduce fără asigurare auto (Art. 109). Ce amendă primește?",
+    "q": "Un șofer conduce fără asigurare auto. Ce amendă primește?",
     "o": [
      "5.000$",
      "10.000$",

@@ -9470,13 +9470,14 @@ app.post("/api/teste/:id/trimite", auth, asyncRoute(async (req, res) => {
   }
   res.json({ attempt: attemptView(t, a, false) });
 }));
-// conducerea: rezultatele, deschide/închide testul, o nouă încercare pentru cineva
+// staff: rezultatele și o nouă încercare; conducerea departamentului: deschide/închide testul
 app.get("/api/teste/:id/rezultate", auth, asyncRoute(async (req, res) => {
   res.set("Cache-Control", "no-store");
   const t = testOf(String(req.params.id)); if (!t) return res.status(404).json({ error: "Testul nu există." });
   await testeTables();
   const acc = await testAccess(req, t);
-  if (!acc.lead) return res.status(403).json({ error: "Rezultatele le vede doar conducerea departamentului." });
+  // (05.11.2026) notele și răspunsurile corecte le vede doar staff-ul; conducerea departamentului doar deschide/închide testul
+  if (!acc.staff) return res.status(403).json({ error: "Rezultatele și răspunsurile le vede doar staff-ul serverului." });
   const { rows } = await pool.query(`SELECT * FROM teste_attempts WHERE test_id = $1 OR test_id LIKE $2 ORDER BY finished_at DESC NULLS FIRST, started_at DESC`, [req.params.id, `${req.params.id}:anulat:%`]);
   const items = rows.map(a => ({
     id: a.id, name: a.agent_name, staticId: a.static_id, grade: a.grade, staff: a.staff, started: a.started_at, finished: a.finished_at,

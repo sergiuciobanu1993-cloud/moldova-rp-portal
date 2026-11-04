@@ -129,7 +129,7 @@
     app.innerHTML = `<div class="tx-card">${agentHtml()}
       <p class="muted" style="margin:12px 0 0;line-height:1.6">${esc(T.intro)}</p>
       <div class="tx-facts"><div><small>Întrebări</small><strong>${T.count}</strong></div><div><small>Timp</small><strong>${T.minutes} min</strong></div><div><small>Trece cu</small><strong>${T.pass} corecte</strong></div></div>
-      <p class="muted" style="margin:0;font-size:13px">Răspunsurile se salvează singure. Dacă ți se închide pagina, revii și continui, dar timpul curge. La final vezi nota; răspunsurile corecte le vede doar conducerea.</p>
+      <p class="muted" style="margin:0;font-size:13px">Răspunsurile se salvează singure. Dacă ți se închide pagina, revii și continui, dar timpul curge. La final vezi nota; răspunsurile corecte le vede doar staff-ul.</p>
       ${action}</div>` + (T.lead ? leadHtml() : '');
     document.getElementById('tx-start')?.addEventListener('click', start);
     if (T.lead) loadLead();
@@ -189,16 +189,17 @@
 
   // ---- conducerea: deschide/închide testul, rezultatele
   function leadHtml() {
-    return `<div class="tx-card tx-lead"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><h2 style="margin:0">📋 Rezultate (doar conducerea)</h2>
+    return `<div class="tx-card tx-lead"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><h2 style="margin:0">${T.staff ? '📋 Rezultate (doar staff)' : '🔑 Deschiderea testului'}</h2>
       <span><span class="pill2 ${T.open ? 'ok' : 'wait'}" id="tx-state">${T.open ? 'DESCHIS' : 'ÎNCHIS'}</span> <button type="button" class="tx-btn ghost" id="tx-toggle" style="min-height:38px">${T.open ? 'Închide testul' : 'Deschide testul'}</button></span></div>
       <p class="muted" style="margin:8px 0 12px;font-size:13px">Linkul pentru agenți: <b>${esc(location.origin + location.pathname + '?id=' + ID)}</b></p>
-      <div id="tx-lead-body"><p class="muted">Se încarcă…</p></div></div>`;
+      <div id="tx-lead-body">${T.staff ? '<p class="muted">Se încarcă…</p>' : '<p class="muted" style="margin:0">Tu deschizi și închizi testul. Notele și răspunsurile le vede doar staff-ul serverului.</p>'}</div></div>`;
   }
   async function loadLead() {
     document.getElementById('tx-toggle').onclick = async () => {
       if (!confirm(T.open ? 'Închizi testul? Cine l-a început își poate termina timpul.' : 'Deschizi testul? Agenții îl pot începe de acum.')) return;
       try { const d = await api(`/api/teste/${ID}/stare`, { open: !T.open }); T.open = d.open; showStart(); } catch (err) { alert(err.message); }
     };
+    if (!T.staff) return;
     const box = document.getElementById('tx-lead-body');
     try {
       const d = await api(`/api/teste/${ID}/rezultate`);

@@ -288,6 +288,7 @@
 </div>
 
 <script src="auth-client.js"></script>
+<script src="vehicle-models.js"></script>
 <script>
 // (06.11.2026) „Contul meu": secțiunile se schimbă după #adresă (#vehicule, #setari…),
 // fără reîncărcarea paginii; meniul contului din dreapta-sus și butonul de copiat ID-ul.
@@ -444,6 +445,12 @@ async function loadCarCatalog() {
       walk(await r.json());
     }
   } catch { /* fără catalog: arătăm doar numărul de înmatriculare */ }
+  // (06.11.2026) restul mașinilor de pe server (vehicle-models.js): codul e și numele pozei
+  for (const code of window.MRP_VEHICLE_MODELS || []) {
+    const m = String(code).toLowerCase(), h = joaat(m);
+    if (!map.has(h)) map.set(h, { model: m, label: m });
+    if (!map.has(m)) map.set(m, { model: m, label: m });
+  }
   return (carCatalog = map);
 }
 function carInfo(v) {

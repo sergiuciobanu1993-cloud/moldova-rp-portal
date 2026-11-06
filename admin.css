@@ -143,3 +143,88 @@ body.modal-open{overflow:hidden}
 #kills-table th:nth-child(3),#kills-table td:nth-child(3){width:110px;word-break:break-word}
 #kills-table th:nth-child(4),#kills-table td:nth-child(4){width:auto;word-break:break-word}
 #kills-table th:nth-child(5),#kills-table td:nth-child(5){width:150px;white-space:nowrap}
+
+/* ==========================================================================
+   (06.11.2026) Panoul, varianta nouă: meniul sus pe tab-uri (vezi setupPanelTop
+   în auth-client.js), conținutul centrat pe toată lățimea, tabele și butoane
+   mai curate. Meniul vechi din stânga rămâne în pagină, dar ascuns.
+   ========================================================================== */
+:root{--bg:#0a0b0d;--panel:#111317;--panel2:#16191e;--chip:#181b20;--chip-h:#1f2329;--line:rgba(255,255,255,.075);--line2:rgba(255,255,255,.12);--text:#f3f4f6;--muted:#8d939b;--orange:#ff8a1f;--orange2:#ffa24a;--grad:linear-gradient(135deg,#ffa24a,#ff7a14)}
+body.ptop-on{display:block;background:radial-gradient(1200px 500px at 50% -220px,rgba(255,138,31,.07),transparent 70%),var(--bg)}
+body.ptop-on .side,body.ptop-on .side-toggle,body.ptop-on .side-backdrop{display:none!important}
+body.ptop-on main{margin:0 auto;width:100%;max-width:1440px;padding:30px clamp(16px,3vw,40px) 64px}
+body.ptop-on main>header .admin{display:none}
+body.ptop-on main>header{margin-bottom:24px}
+body.ptop-on main>header h1{font-size:30px;letter-spacing:-.025em;text-wrap:balance}
+
+/* bara de sus */
+.ptop{position:sticky;top:0;z-index:30;background:rgba(10,11,13,.86);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+.ptop.site-header{background:rgba(10,11,13,.86);border-bottom:1px solid var(--line)}
+.ptop-in{max-width:1440px;margin:0 auto;padding:0 clamp(16px,3vw,40px);display:flex;align-items:center;gap:14px}
+.ptop>.ptop-in{min-height:64px}
+.ptop-brand{display:flex;align-items:center;gap:10px;flex:none;margin-right:8px}
+.ptop-brand img{width:32px;height:32px}
+.ptop-brand span{display:flex;flex-direction:column;line-height:1.1}
+.ptop-brand b{font-size:15px;font-weight:950;letter-spacing:.01em}
+.ptop-brand em{font-style:normal;color:var(--orange)}
+.ptop-brand small{font-size:9.5px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin-top:2px}
+.ptop-groups{display:flex;gap:6px;flex:1;min-width:0;overflow-x:auto;scrollbar-width:none;padding:10px 0}
+.ptop-groups::-webkit-scrollbar{display:none}
+.ptab{display:inline-flex;align-items:center;gap:8px;flex:none;padding:9px 14px;border-radius:10px;border:1px solid var(--line);background:var(--chip);color:#b4b9c0;font-weight:700;font-size:13px;transition:background .15s ease,border-color .15s ease,color .15s ease}
+.ptab:hover{background:var(--chip-h);color:#fff;border-color:var(--line2)}
+.ptab.sel{background:rgba(255,138,31,.12);border-color:rgba(255,138,31,.45);color:var(--orange2)}
+.pi{width:16px;height:16px;flex:none}
+.ptop-me{position:relative;flex:none;margin-left:auto}
+.ptop-acc{display:flex;align-items:center;gap:10px;padding:5px 12px 5px 5px;border-radius:999px;border:1px solid var(--line);background:var(--chip);color:var(--text);font:inherit;cursor:pointer;transition:border-color .15s ease,background .15s ease}
+.ptop-acc:hover,.ptop-acc[aria-expanded="true"]{border-color:var(--line2);background:var(--chip-h)}
+.ptop-acc .av{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;background:var(--grad);color:#1a0f02;font-weight:950;font-size:14px}
+.ptop-acc .who{display:flex;flex-direction:column;align-items:flex-start;line-height:1.15;max-width:150px}
+.ptop-acc .who b{font-size:12.5px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ptop-acc .who small{font-size:10.5px;color:var(--muted)}
+.ptop-acc .chev{width:14px;height:14px;color:var(--muted)}
+.ptop-menu{position:absolute;right:0;top:calc(100% + 8px);min-width:190px;padding:6px;border-radius:12px;background:#15181d;border:1px solid var(--line2);box-shadow:0 18px 50px rgba(0,0,0,.55);display:flex;flex-direction:column;z-index:5}
+.ptop-menu[hidden]{display:none}
+.ptop-menu a,.ptop-menu button{display:block;text-align:left;padding:10px 12px;border-radius:8px;color:#d6d9dd;font:inherit;font-weight:700;font-size:12.5px;background:none;border:0;cursor:pointer}
+.ptop-menu a:hover,.ptop-menu button:hover{background:var(--chip-h);color:#fff}
+.ptop-menu button{color:#ff8a8a;border-top:1px solid var(--line);border-radius:0 0 8px 8px;margin-top:4px}
+/* rândul al doilea: paginile grupei */
+.ptop-sub{border-top:1px solid var(--line);background:rgba(255,255,255,.012)}
+.ptop-sub .ptop-in{gap:6px;min-height:50px;overflow-x:auto;scrollbar-width:none}
+.ptop-sub .ptop-in::-webkit-scrollbar{display:none}
+.ptop-gl{flex:none;font-size:9.5px;font-weight:900;letter-spacing:.16em;text-transform:uppercase;color:#6d737b;margin-right:6px}
+.pchip{flex:none;padding:7px 13px;border-radius:9px;border:1px solid transparent;color:#a3a9b1;font-weight:700;font-size:12.5px;transition:background .15s ease,color .15s ease}
+.pchip:hover{background:var(--chip);color:#fff}
+.pchip.sel{background:var(--grad);color:#1a0f02;box-shadow:0 6px 18px rgba(255,138,31,.22)}
+.ptab:focus-visible,.pchip:focus-visible,.ptop-acc:focus-visible,.ptop-menu a:focus-visible,.ptop-menu button:focus-visible{outline:2px solid var(--orange);outline-offset:2px}
+
+/* carduri, tabele, butoane */
+body.ptop-on .tablebox,body.ptop-on .formbox,body.ptop-on .metrics article{border-radius:16px;border-color:var(--line);box-shadow:0 1px 0 rgba(255,255,255,.03) inset,0 18px 40px rgba(0,0,0,.28)}
+body.ptop-on .title{padding:20px 22px 16px}
+body.ptop-on .title h2{font-size:16px;letter-spacing:-.01em}
+body.ptop-on th{color:#737a83;font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;background:rgba(255,255,255,.015)}
+body.ptop-on th,body.ptop-on td{padding:14px 20px;border-top:1px solid var(--line)}
+body.ptop-on td{color:#cfd3d8;font-size:12.5px}
+body.ptop-on tbody tr:hover{background:rgba(255,255,255,.025)}
+/* butoanele dintr-un rând de tabel: celula rămâne celulă (cu display:flex linia de jos ieșea strâmbă) */
+td.rowactions{display:table-cell;white-space:nowrap}
+td.rowactions>*+*{margin-left:8px}
+body.ptop-on .rowactions button{border-radius:8px;padding:6px 12px;background:var(--chip)}
+body.ptop-on .btn-primary,body.ptop-on .title button{background:var(--grad);border-radius:10px;color:#1a0f02}
+body.ptop-on .btn-ghost{border-radius:10px;background:var(--chip)}
+body.ptop-on .pill{border-radius:7px;padding:4px 9px;font-size:9.5px;letter-spacing:.06em}
+body.ptop-on .field input,body.ptop-on .field textarea,body.ptop-on .field select,body.ptop-on .filter-select{border-radius:10px;background:#0c0d10}
+body.ptop-on .metrics small{color:#7b818a}
+
+@media(max-width:900px){
+  .ptop-brand span{display:none}
+  .ptop-acc .who,.ptop-acc .chev{display:none}
+  .ptop-acc{padding:4px}
+}
+@media(max-width:600px){
+  .ptop>.ptop-in{flex-wrap:wrap;gap:8px;padding-top:10px}
+  .ptop-groups{order:3;flex-basis:100%;padding:0 0 10px}
+  .ptab{padding:8px 12px}
+  body.ptop-on main{padding-top:22px}
+  body.ptop-on main>header h1{font-size:25px}
+}
+@media(prefers-reduced-motion:reduce){.ptab,.pchip,.ptop-acc{transition:none}}

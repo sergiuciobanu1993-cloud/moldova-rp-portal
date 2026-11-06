@@ -1425,7 +1425,9 @@ app.get("/api/admin/live/jobs", auth, requireRole(...ADMIN_ROLES), asyncRoute(as
 const GAME_LOG_CATEGORIES = ["chat", "command", "connect", "disconnect", "death", "money", "money_vehicle_deposit", "money_vehicle_withdraw", "item_buy", "item_craft", "item_transfer", "item_obtained", "item_drop", "item_pickup", "vehicle_acquired", "item_primit", "depozit",
   // (14.10.2026) scrise de resursele VX: transferuri bancare, schimb din meniul G,
   // amenzi, facturi, fondurile facțiunilor (vx_traseu) și fondurile bandelor
-  "transfer", "schimb", "amenda", "factura", "fond", "banda_fond", "banda_membru"];
+  "transfer", "schimb", "amenda", "factura", "fond", "banda_fond", "banda_membru",
+  // (06.11.2026) banii din benzinării / magazine / firme (când o trimite jocul) — înainte, filtrul arăta toate logurile
+  "afacere"];
 // "discord" (23.09.2026) — a treia sursă, vezi botul de citit canale Discord
 // mai jos (pollDiscordLogs) și fetchDiscordLogsPage.
 const LOG_CATEGORIES = [...GAME_LOG_CATEGORIES, "admin", "discord"];
@@ -8529,7 +8531,6 @@ async function searchPlayers(rawQ, limit = 10) {
     });
   }
   for (const pl of online) {
-    if (out.length >= limit) break;
     if (pl.license && seenLicenses.has(pl.license)) continue;
     const sid = staticIdOf(pl);
     const hit = (isNum && (String(pl.id) === q || sid === q))
@@ -8547,7 +8548,6 @@ async function searchPlayers(rawQ, limit = 10) {
   // Rezultatele din baza jocului (inclusiv offline, fără cont pe site).
   // Identificatorul îl folosim doar ca să nu dublăm pe cineva deja găsit.
   for (const g of gameHits) {
-    if (out.length >= limit) break;
     if (g.identifier && seenLicenses.has(g.identifier)) continue;
     if (g.identifier) seenLicenses.add(g.identifier);
     out.push({
@@ -8559,7 +8559,16 @@ async function searchPlayers(rawQ, limit = 10) {
               last_seen: g.lastSeen || null },
     });
   }
-  return out.slice(0, limit);
+  // (06.11.2026) cine se potrivește exact iese primul: ID-ul din joc (dinamic), apoi ID-ul static,
+  // apoi numele întreg, apoi cei online; restul rămân în ordinea de până acum. Înainte, la „12",
+  // jucătorul online cu ID 12 ieșea ultimul, după toți cei care aveau „12" în nume.
+  const rank = r => {
+    if (isNum && r.online && String(r.server_id) === q) return 0;
+    if (isNum && String(r.static_id || "") === q) return 1;
+    if ([r.rp_name, r.display_name].some(n => String(n || "").toLowerCase() === lower)) return 2;
+    return r.online ? 3 : 4;
+  };
+  return out.map((r, i) => [rank(r), i, r]).sort((a, b) => a[0] - b[0] || a[1] - b[1]).map(x => x[2]).slice(0, limit);
 }
 
 app.get("/api/players/search", auth, asyncRoute(async (req, res) => {

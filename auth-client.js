@@ -201,6 +201,91 @@ function wireLogout(selector) {
   });
 }
 
+// (06.11.2026, cerut de Sergiu) Panoul are acum meniul sus, pe tab-uri: rândul de sus
+// are grupele (Prezentare, Jucători, Moderare, Loguri, Economie, Conținut), iar rândul
+// de dedesubt paginile grupei deschise. Linkurile le luăm din meniul vechi din stânga
+// (aside.side, rămas în pagină dar ascuns), ca să rămână aceleași reguli de acces
+// (filterPanelNav) și aceleași linkuri puse de aici (Afaceri, Crăciun, Clasament, Sondaje).
+const PANEL_GROUPS = [
+  { id: "prez", label: "Prezentare", icon: "grid", pages: ["admin.html", "admin-txadmin.html"] },
+  { id: "juc", label: "Jucători", icon: "users", pages: ["admin-cauta.html", "admin-jucatori.html", "admin-utilizatori.html", "admin-financiar.html"] },
+  { id: "mod", label: "Moderare", icon: "shield", pages: ["admin-tichete.html", "admin-sanctiuni.html"] },
+  { id: "log", label: "Loguri", icon: "list", pages: ["admin-loguri.html", "admin-kill-logs.html"] },
+  { id: "eco", label: "Economie", icon: "coins", pages: ["admin-afaceri.html", "admin-vip-shop.html", "vip-shop.html", "admin-clasament.html", "admin-craciun.html"] },
+  { id: "con", label: "Conținut", icon: "doc", pages: ["admin-anunturi.html", "admin-actualizari.html", "admin-regulamente.html", "admin-continut.html", "admin-sondaje.html"] },
+];
+const PANEL_ROLE_LABEL = { owner: "Fondator", "co-fondator": "Co-fondator", admin: "Admin", moderator: "Moderator" };
+const PANEL_ICONS = {
+  grid: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+  users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.6 3.2-5.5 6.5-5.5s5.9 1.9 6.5 5.5"/><path d="M16 4.8a3.3 3.3 0 0 1 0 6.4M18.5 14.8c1.7.8 2.7 2.5 3 5.2"/>',
+  shield: '<path d="M12 3l7.5 3v5.5c0 4.6-3.1 8.2-7.5 9.5-4.4-1.3-7.5-4.9-7.5-9.5V6z"/><path d="M8.8 12l2.2 2.2 4.4-4.4"/>',
+  list: '<path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1.2"/><circle cx="4.5" cy="12" r="1.2"/><circle cx="4.5" cy="18" r="1.2"/>',
+  coins: '<ellipse cx="9" cy="7" rx="6" ry="3"/><path d="M3 7v5c0 1.7 2.7 3 6 3s6-1.3 6-3V7"/><path d="M9 15v2c0 1.7 2.7 3 6 3s6-1.3 6-3v-5c0-1.6-2.4-2.9-5.5-3"/>',
+  doc: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/>',
+  chev: '<path d="M6 9l6 6 6-6"/>',
+};
+const panelIcon = (k, cls) => `<svg class="${cls || "pi"}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${PANEL_ICONS[k] || ""}</svg>`;
+(function setupPanelTop() {
+  const side = document.querySelector("aside.side");
+  if (!side || !document.body) return;
+  const here = location.pathname.split("/").pop() || "admin.html";
+  const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const bar = document.createElement("div");
+  // „site-header": beculețele temei de iarnă (tema.js) se agață sub bara asta, ca pe site
+  bar.className = "ptop site-header";
+  bar.setAttribute("role", "navigation");
+  bar.setAttribute("aria-label", "Panou admin");
+  document.body.prepend(bar);
+  document.body.classList.add("ptop-on");
+  let menuOpen = false;
+  function who() {
+    const a = getAuth()?.user || {};
+    const el = document.getElementById("admin-name");
+    const t = el && el.textContent.trim();
+    const name = t && t !== "…" ? t : (a.display_name || a.username || "Staff");
+    return { name, role: PANEL_ROLE_LABEL[a.role] || "Staff" };
+  }
+  function render() {
+    const links = [...side.querySelectorAll(":scope > a[href]:not(.brand):not(.back)")].filter(a => a.style.display !== "none");
+    const items = links.map(a => {
+      const href = a.getAttribute("href");
+      return { href, file: href.split(/[?#]/)[0], label: a.textContent.replace(/^[^\p{L}\p{N}]+/u, "").trim(), id: a.id || "" };
+    });
+    const groups = PANEL_GROUPS.map(g => ({ ...g, items: [] }));
+    for (const it of items) (groups.find(g => g.pages.includes(it.file)) || groups[0]).items.push(it);
+    for (const g of groups) g.items.sort((x, y) => (g.pages.indexOf(x.file) + 99) % 99 - (g.pages.indexOf(y.file) + 99) % 99);
+    const shown = groups.filter(g => g.items.length);
+    const cur = shown.find(g => g.items.some(i => i.file === here)) || shown[0];
+    const me = who();
+    bar.innerHTML = `<div class="ptop-in">
+      <a class="ptop-brand" href="${esc(panelHomeFor(getAuth()?.user?.role))}"><img src="assets/logo-128.webp" alt=""><span><b>MOLDOVA<em>RP</em></b><small>Panou admin</small></span></a>
+      <nav class="ptop-groups">${shown.map(g => `<a class="ptab${g === cur ? " sel" : ""}" href="${esc(g.items.find(i => i.file === here) ? here : g.items[0].href)}"${g === cur ? ' aria-current="true"' : ""}>${panelIcon(g.icon)}<span>${esc(g.label)}</span></a>`).join("")}</nav>
+      <div class="ptop-me">
+        <button type="button" class="ptop-acc" aria-haspopup="menu" aria-expanded="${menuOpen}"><span class="av">${esc(me.name.charAt(0).toUpperCase())}</span><span class="who"><b>${esc(me.name)}</b><small>${esc(me.role)}</small></span>${panelIcon("chev", "pi chev")}</button>
+        <div class="ptop-menu" role="menu"${menuOpen ? "" : " hidden"}><a role="menuitem" href="dashboard.html">Contul meu</a><a role="menuitem" href="index.html">Site public</a><button type="button" role="menuitem" data-out>Ieși din cont</button></div>
+      </div></div>
+      ${cur ? `<div class="ptop-sub"><div class="ptop-in"><span class="ptop-gl">${esc(cur.label)}</span>${cur.items.map(i => `<a class="pchip${i.file === here ? " sel" : ""}" href="${esc(i.href)}"${i.id ? ` data-id="${esc(i.id)}"` : ""}${i.file === here ? ' aria-current="page"' : ""}>${esc(i.label)}</a>`).join("")}</div></div>` : ""}`;
+    // titlul mic de deasupra numelui paginii: grupa în care ești
+    const small = document.querySelector("main > header small");
+    if (small && cur && /^PANEL ADMINISTRATIV$/i.test(small.textContent.trim())) small.textContent = cur.label.toUpperCase();
+  }
+  let queued = false;
+  const later = () => { if (!queued) { queued = true; requestAnimationFrame(() => { queued = false; render(); }); } };
+  render();
+  // gradul confirmat de server (filterPanelNav), linkuri adăugate de pagini, numele contului
+  new MutationObserver(later).observe(side, { subtree: true, childList: true, attributes: true, attributeFilter: ["style", "href"] });
+  const nameEl = document.getElementById("admin-name");
+  if (nameEl) new MutationObserver(later).observe(nameEl, { childList: true, characterData: true, subtree: true });
+  bar.addEventListener("click", e => {
+    if (e.target.closest(".ptop-acc")) { menuOpen = !menuOpen; render(); return; }
+    if (e.target.closest("[data-out]")) { clearAuth(); location.href = "login.html"; }
+  });
+  document.addEventListener("click", e => { if (menuOpen && !e.target.closest(".ptop-me")) { menuOpen = false; render(); } });
+  document.addEventListener("keydown", e => { if (menuOpen && e.key === "Escape") { menuOpen = false; render(); bar.querySelector(".ptop-acc")?.focus(); } });
+  // pe telefon: grupa și pagina deschisă rămân la vedere în rândurile care se derulează
+  requestAnimationFrame(() => bar.querySelectorAll(".ptab.sel, .pchip.sel").forEach(el => el.scrollIntoView({ block: "nearest", inline: "center" })));
+})();
+
 // Meniu mobil pentru panoul de admin. Sidebar-ul fix (.side) e complet ascuns
 // sub 600px lățime (vezi admin.css) — fără asta, staff-ul n-ar avea NICIO
 // cale să navigheze între paginile de admin de pe telefon. Centralizat aici
@@ -209,7 +294,7 @@ function wireLogout(selector) {
 // (login/dashboard), nu face nimic.
 (function setupMobileSidebar() {
   const side = document.querySelector(".side");
-  if (!side) return;
+  if (!side || document.querySelector(".ptop")) return;   // (06.11.2026) cu meniul de sus nu mai e nevoie de sertar
 
   const toggle = document.createElement("button");
   toggle.type = "button";

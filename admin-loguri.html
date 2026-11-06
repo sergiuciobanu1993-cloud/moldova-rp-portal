@@ -10,10 +10,24 @@
   .lg-tabs{display:flex;gap:6px;margin:-8px 0 16px;flex-wrap:wrap}
   .lg-tabs button{background:var(--panel);border:1px solid var(--line);color:#9da2a8;border-radius:9px;padding:10px 16px;font:inherit;font-weight:800;cursor:pointer}
   .lg-tabs button[aria-selected="true"]{color:#fff;border-color:rgba(255,138,31,.55);box-shadow:inset 0 -2px 0 var(--orange)}
+  .lg-cats{display:flex;flex-wrap:wrap;gap:8px;padding:2px 22px 12px}
+  .lg-cat{display:inline-flex;align-items:center;gap:8px;padding:9px 14px;border-radius:10px;border:1px solid var(--line);background:var(--chip,#181b20);color:#d3d7dc;font:inherit;font-weight:800;font-size:12.5px;cursor:pointer;transition:background .15s ease,border-color .15s ease}
+  .lg-cat svg{width:16px;height:16px;flex:none;color:var(--c)}
+  .lg-cat:hover{background:var(--chip-h,#1f2329);border-color:var(--line2,rgba(255,255,255,.12))}
+  .lg-cat[aria-pressed="true"]{background:var(--grad,#ff8a1f);border-color:transparent;color:#1a0f02;box-shadow:0 8px 22px rgba(255,138,31,.22)}
+  .lg-cat[aria-pressed="true"] svg{color:#1a0f02}
+  .lg-cat:focus-visible,.lg-sub:focus-visible{outline:2px solid var(--orange);outline-offset:2px}
+  .lg-subcats{display:flex;flex-wrap:wrap;gap:6px;margin:0 22px 14px;padding:10px;border-radius:12px;border:1px solid var(--line);background:rgba(255,255,255,.015)}
+  .lg-subcats[hidden]{display:none}
+  .lg-sub{padding:6px 12px;border-radius:8px;border:1px solid transparent;background:none;color:#a3a9b1;font:inherit;font-weight:700;font-size:12px;cursor:pointer}
+  .lg-sub:hover{background:var(--chip,#181b20);color:#fff}
+  .lg-sub[aria-pressed="true"]{background:rgba(255,138,31,.13);border-color:rgba(255,138,31,.45);color:var(--orange2,#ffa24a)}
+  .lg-cat-select[hidden]{display:none!important}
   .lg-filters{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;padding:0 22px 16px}
   .lg-filters label{display:flex;flex-direction:column;gap:4px;font-size:9px;font-weight:900;letter-spacing:.1em;color:#777}
   .lg-filters .grow{flex:1 1 260px}
   .lg-filters .grow input{width:100%}
+  .lg-filters label .filter-select{font-size:12.5px;font-weight:500;letter-spacing:0;color:var(--text);min-height:38px}
   .lg-check{flex-direction:row!important;align-items:center;gap:7px!important;font-size:12px!important;letter-spacing:0!important;color:var(--text)!important;font-weight:700!important;padding:8px 10px;border:1px solid var(--line);border-radius:8px;cursor:pointer}
   .lg-check input{accent-color:#ff6b6b}
   .lg-banner{margin:0 22px 14px;padding:10px 14px;border-radius:10px;background:rgba(255,138,31,.07);border:1px solid rgba(255,138,31,.25);font-size:12px;line-height:1.7}
@@ -70,11 +84,14 @@
 
 <section class="tablebox" id="panel-logs">
   <div class="title"><h2>Activitate</h2><button id="refresh-btn" type="button">Reîmprospătează</button></div>
+  <!-- (06.11.2026) categoriile ca butoane: grupele sus, categoriile grupei dedesubt (alese în lista ascunsă #f-category) -->
+  <div class="lg-cats" id="lg-cats" role="group" aria-label="Categorie"></div>
+  <div class="lg-subcats" id="lg-subcats" role="group" aria-label="Categoria din grupă" hidden></div>
   <div class="lg-filters">
     <label class="grow">JUCĂTOR
       <input id="f-player" class="filter-select" placeholder="Nume RP, #ID static, licență sau nume FiveM" autocomplete="off">
     </label>
-    <label>CATEGORIE
+    <label class="lg-cat-select" hidden>CATEGORIE
       <select id="f-category" class="filter-select">
         <option value="">Toate categoriile</option>
         <option value="money">Bani (cash / bancă)</option>
@@ -274,6 +291,61 @@ function scheduleReload() { clearTimeout(debounceTimer); debounceTimer = setTime
 document.getElementById('f-player').addEventListener('input', scheduleReload);
 ['f-category', 'f-from', 'f-to', 'f-suspect'].forEach(id => document.getElementById(id).addEventListener('change', () => loadLogs(1)));
 document.getElementById('refresh-btn').addEventListener('click', () => loadLogs(currentPage));
+
+// ---- (06.11.2026) Categoriile ca butoane --------------------------------------------
+// Grupa aleasă alege prima ei categorie; dedesubt apar celelalte categorii ale grupei.
+// Valoarea rămâne în lista ascunsă #f-category, deci restul paginii merge ca înainte.
+(function logCategoryChips() {
+  const sel = document.getElementById('f-category'), top = document.getElementById('lg-cats'), sub = document.getElementById('lg-subcats');
+  const I = {
+    all: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+    coins: '<ellipse cx="9" cy="7" rx="6" ry="3"/><path d="M3 7v5c0 1.7 2.7 3 6 3s6-1.3 6-3V7"/><path d="M9 15v2c0 1.7 2.7 3 6 3s6-1.3 6-3v-5c0-1.6-2.4-2.9-5.5-3"/>',
+    box: '<path d="M21 8l-9-5-9 5 9 5z"/><path d="M3 8v8l9 5 9-5V8M12 13v8"/>',
+    building: '<path d="M4 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16M16 9h2a2 2 0 0 1 2 2v10M2 21h20"/><path d="M8 7h4M8 11h4M8 15h4"/>',
+    scale: '<path d="M12 3v18M7 21h10M5 7h14"/><path d="M5 7l-3 7a3.5 3.5 0 0 0 6 0zM19 7l-3 7a3.5 3.5 0 0 0 6 0z"/>',
+    car: '<path d="M5 17h14M3 13l2.2-5.2A2 2 0 0 1 7 6.5h10a2 2 0 0 1 1.8 1.3L21 13v4a1 1 0 0 1-1 1h-1M3 13v4a1 1 0 0 0 1 1h1M3 13h18"/><circle cx="7.5" cy="17.5" r="1.5"/><circle cx="16.5" cy="17.5" r="1.5"/>',
+    skull: '<path d="M12 3a8 8 0 0 0-8 8c0 2.6 1.2 4.4 3 5.5V20h10v-3.5c1.8-1.1 3-2.9 3-5.5a8 8 0 0 0-8-8z"/><circle cx="9" cy="11.5" r="1.6"/><circle cx="15" cy="11.5" r="1.6"/><path d="M10 20v-2M14 20v-2"/>',
+    chat: '<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/><path d="M8.5 12h.01M12 12h.01M15.5 12h.01"/>',
+    plug: '<path d="M9 3v5M15 3v5M6 8h12v3a6 6 0 0 1-12 0zM12 17v4"/>',
+    shield: '<path d="M12 3l7.5 3v5.5c0 4.6-3.1 8.2-7.5 9.5-4.4-1.3-7.5-4.9-7.5-9.5V6z"/><path d="M8.8 12l2.2 2.2 4.4-4.4"/>',
+    discord: '<path d="M8 7.5c2.6-.8 5.4-.8 8 0M8.5 17c2.3.7 4.7.7 7 0"/><path d="M7 6.5L5.5 7C4 10 3.6 13 4 16l3 2 1.2-2M17 6.5l1.5.5C20 10 20.4 13 20 16l-3 2-1.2-2"/><circle cx="9.5" cy="12.5" r="1.2"/><circle cx="14.5" cy="12.5" r="1.2"/>',
+  };
+  const GROUPS = [
+    { label: 'Toate', ic: 'all', c: '#ff8a1f', cats: [''] },
+    { label: 'Bani', ic: 'coins', c: '#3ddc84', cats: ['money', 'transfer', 'schimb', 'money_vehicle_deposit', 'money_vehicle_withdraw'] },
+    { label: 'Iteme', ic: 'box', c: '#7db2ff', cats: ['item_transfer', 'item_primit', 'depozit', 'item_drop', 'item_pickup', 'item_obtained', 'item_buy', 'item_craft'] },
+    { label: 'Facțiuni & afaceri', ic: 'building', c: '#c08bff', cats: ['fond', 'banda_fond', 'afacere', 'banda_membru'] },
+    { label: 'Amenzi & facturi', ic: 'scale', c: '#ffd166', cats: ['amenda', 'factura'] },
+    { label: 'Vehicule', ic: 'car', c: '#5fd4d0', cats: ['vehicle_acquired'] },
+    { label: 'Morți', ic: 'skull', c: '#ff6b6b', cats: ['death'] },
+    { label: 'Chat & comenzi', ic: 'chat', c: '#aab3bf', cats: ['chat', 'command'] },
+    { label: 'Conectări', ic: 'plug', c: '#6fc2ff', cats: ['connect', 'disconnect'] },
+    { label: 'Staff (Luxu)', ic: 'shield', c: '#ffa24a', cats: ['admin'] },
+    { label: 'Discord', ic: 'discord', c: '#8c9eff', cats: ['discord'] },
+  ];
+  const opt = {};
+  for (const o of sel.options) opt[o.value] = o.textContent.trim();
+  // orice categorie din listă care nu e într-o grupă ajunge la „Toate" ca să nu se piardă
+  const known = new Set(GROUPS.flatMap(g => g.cats));
+  const extra = Object.keys(opt).filter(v => v && !known.has(v));
+  if (extra.length) GROUPS.push({ label: 'Altele', ic: 'all', c: '#8d939b', cats: extra });
+  for (const g of GROUPS) g.cats = g.cats.filter(v => v in opt);
+  const svg = k => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${I[k] || ''}</svg>`;
+  const short = t => t.replace(/\s*\(.*\)\s*$/, '');
+  function paint() {
+    const v = sel.value;
+    const g = GROUPS.find(x => x.cats.includes(v)) || GROUPS[0];
+    top.innerHTML = GROUPS.filter(x => x.cats.length).map((x, i) => `<button type="button" class="lg-cat" data-g="${GROUPS.indexOf(x)}" style="--c:${x.c}" aria-pressed="${x === g}">${svg(x.ic)}${escapeHtml(x.label)}</button>`).join('');
+    sub.hidden = g.cats.length < 2;
+    sub.innerHTML = g.cats.length < 2 ? '' : g.cats.map(c => `<button type="button" class="lg-sub" data-c="${escapeHtml(c)}" title="${escapeHtml(opt[c])}" aria-pressed="${c === v}">${escapeHtml(short(opt[c]))}</button>`).join('');
+  }
+  function pick(v) { if (sel.value === v) return; sel.value = v; sel.dispatchEvent(new Event('change')); }
+  top.addEventListener('click', e => { const b = e.target.closest('[data-g]'); if (b) pick(GROUPS[+b.dataset.g].cats[0]); });
+  sub.addEventListener('click', e => { const b = e.target.closest('[data-c]'); if (b) pick(b.dataset.c); });
+  sel.addEventListener('change', paint);
+  paint();
+})();
+
 
 // ---- Traseul banilor -------------------------------------------------------------
 const ACC = { cash: 'cash', bank: 'bancă', black: 'murdari' };

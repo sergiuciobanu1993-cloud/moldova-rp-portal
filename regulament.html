@@ -123,6 +123,7 @@
         <article class="prose-box prose">
           <div class="prose-meta"><span class="tag">${r.category}</span><span>·</span><span>Versiune ${r.version}</span><span>·</span><span>Actualizat ${new Date(r.updated_at).toLocaleDateString('ro-RO')}</span></div>
           <h1>${r.title}</h1>
+          ${slug === 'sanctiuni-oficiale' ? '<p style="margin:0 0 20px"><a href="calculator-sanctiuni.html" style="display:inline-flex;align-items:center;gap:8px;padding:11px 16px;border-radius:12px;background:var(--orange);color:#0b0b0b;font-weight:900;text-decoration:none">🧮 Calculator de sancțiuni: caută abaterea și adună minutele</a></p>' : ''}
           <div class="prose-body">${body}</div>
         </article>`;
     } catch {

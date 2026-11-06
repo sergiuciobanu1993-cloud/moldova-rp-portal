@@ -6,6 +6,13 @@
 <main>
 <header><div><small>PANEL ADMINISTRATIV</small><h1>Sancțiuni</h1></div><a class="admin" href="dashboard.html" title="Înapoi la contul meu" style="text-decoration:none"><span id="admin-name">…</span> <i></i></a></header>
 
+<!-- (06.11.2026) calculatorul de sancțiuni (sanctiuni-calc.js): abaterile din „Sancțiuni oficiale" -->
+<section class="formbox" id="calc-box" style="margin-top:0">
+  <h2>Calculator de sancțiuni</h2>
+  <p class="muted" style="margin:-8px 0 16px">Caută abaterea, apasă <b>+</b> la fiecare, iar minutele de jail și warn-urile se adună. „Pune în formular” completează sancțiunea nouă de mai jos cu motivul calculat. Jail-ul îl dai tot din joc.</p>
+  <div id="sc-admin"></div>
+</section>
+
 <section class="tablebox">
   <div class="title">
     <h2>Sancțiuni</h2>
@@ -68,6 +75,7 @@
 </main>
 <script src="auth-client.js"></script>
 <script src="player-profile-modal.js"></script>
+<script src="sanctiuni-calc.js"></script>
 <script>
 const TYPE_LABEL = { ban: 'Ban', mute: 'Mute', kick: 'Kick', warn: 'Avertisment' };
 const TYPE_PILL = { ban: 'warn', mute: 'info', kick: 'off', warn: 'off' };
@@ -151,6 +159,15 @@ function hideForm() {
 }
 
 document.getElementById('new-btn').addEventListener('click', showForm);
+// calculatorul completează formularul: motivul cu minutele și warn-urile; tipul „Avertisment” dacă are warn
+SanctiuniCalc.mount(document.getElementById('sc-admin'), {
+  onApply: t => {
+    showForm();
+    document.getElementById('f-reason').value = t.reason;
+    if (t.warns) document.getElementById('f-type').value = 'warn';
+    document.getElementById('f-player-search').focus();
+  },
+});
 document.getElementById('cancel-btn').addEventListener('click', hideForm);
 
 document.getElementById('punish-form').addEventListener('submit', async (e) => {

@@ -127,7 +127,7 @@
     <section class="panel ch-card"><div class="head"><h2>Statistică generală</h2></div><dl class="ch-stats" id="ch-stats"><div><dt>Se încarcă…</dt><dd></dd></div></dl></section>
   </div>
   <div class="ch-col">
-    <section class="panel ch-card"><div class="head"><h2>Vehicule <span class="ch-count" id="ch-veh-n"></span></h2><a class="ch-more" href="#vehicule">Vezi toate →</a></div><div class="ch-cars" id="ch-cars"><p class="muted" style="margin:0">Se încarcă…</p></div></section>
+    <section class="panel ch-card"><div class="head"><h2>Vehicule <span class="ch-count" id="ch-veh-n"></span></h2><a class="ch-more" href="#vehicule">Vezi toate →</a></div><div class="ch-carwrap"><button type="button" class="ch-arr l" id="ch-arr-l" aria-label="Mașinile din stânga" hidden>‹</button><div class="ch-cars" id="ch-cars"><p class="muted" style="margin:0">Se încarcă…</p></div><button type="button" class="ch-arr r" id="ch-arr-r" aria-label="Mașinile din dreapta" hidden>›</button></div></section>
     <div class="ch-pair">
       <section class="panel ch-card"><div class="head"><h2>Realizări &amp; progres</h2></div><div class="ch-prog" id="ch-progress"><p class="muted" style="margin:0">Se încarcă…</p></div></section>
       <section class="panel ch-card"><div class="head"><h2>Activitate recentă</h2><a class="ch-more" href="#activitate">Vezi tot →</a></div>
@@ -487,6 +487,18 @@ function setBanner(vehicles) {
   img.onload = () => { img.hidden = false; document.getElementById('ch-banner').classList.add('has-car'); };
   img.src = srcs[0];
 }
+// săgețile caruselului de mașini (în locul barei de derulare)
+function chCarArrows() {
+  const row = document.getElementById('ch-cars'), l = document.getElementById('ch-arr-l'), r = document.getElementById('ch-arr-r');
+  const upd = () => { const max = row.scrollWidth - row.clientWidth - 2; l.hidden = row.scrollLeft <= 2; r.hidden = row.scrollLeft >= max; };
+  if (!row.dataset.arrows) {
+    row.dataset.arrows = '1';
+    const go = d => row.scrollBy({ left: d * Math.max(200, row.clientWidth * 0.8), behavior: 'smooth' });
+    l.addEventListener('click', () => go(-1)); r.addEventListener('click', () => go(1));
+    row.addEventListener('scroll', upd, { passive: true }); addEventListener('resize', upd);
+  }
+  requestAnimationFrame(upd);
+}
 const statRow = (k, v) => `<div><dt>${escapeHtml(k)}</dt><dd>${v}</dd></div>`;
 function emptyNote(t) { return `<p class="muted" style="margin:0">${t}</p>`; }
 
@@ -557,8 +569,11 @@ async function loadProfileExtra() {
     ].join('');
     // vehicule
     setText('ch-veh-n', vehicles.length ? `(${vehicles.length})` : '');
-    document.getElementById('ch-cars').innerHTML = vehicles.length ? vehicles.slice(0, 6).map(carCard).join('') : emptyNote(src ? 'Niciun vehicul încă.' : 'Mașinile apar după prima ta conectare pe server.');
-    document.getElementById('ch-cars-all').innerHTML = vehicles.length ? vehicles.map(carCard).join('') : emptyNote('Niciun vehicul.');
+    // întâi mașinile pe care le recunoaștem (cu poză), apoi celelalte
+    const sorted = [...vehicles].sort((x, y) => (carInfo(y).model ? 1 : 0) - (carInfo(x).model ? 1 : 0));
+    document.getElementById('ch-cars').innerHTML = vehicles.length ? sorted.slice(0, 10).map(carCard).join('') : emptyNote(src ? 'Niciun vehicul încă.' : 'Mașinile apar după prima ta conectare pe server.');
+    document.getElementById('ch-cars-all').innerHTML = vehicles.length ? sorted.map(carCard).join('') : emptyNote('Niciun vehicul.');
+    chCarArrows();
     setText('ch-veh-note', vehicles.length ? `${vehicles.length} ${vehicles.length === 1 ? 'vehicul' : 'vehicule'}` : '');
     setBanner(vehicles);
     // proprietăți, facțiune, sancțiuni, activitate (aceleași blocuri ca înainte)

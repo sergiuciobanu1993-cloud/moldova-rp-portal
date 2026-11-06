@@ -450,7 +450,9 @@ function carInfo(v) {
   const raw = String(v.name || '').trim();
   const m = /^model #(-?\d+)$/i.exec(raw);
   const hit = m ? carCatalog?.get(Number(m[1])) : carCatalog?.get(raw.toLowerCase());
-  return { label: hit ? hit.label : (m || !raw ? 'Vehicul' : raw), model: hit ? hit.model : null, plate: v.plate || '' };
+  // (06.11.2026) uneori jocul trimite direct codul de spawn („boss429"): căutăm poza după el
+  const code = !hit && !m && /^[a-z0-9_]{2,24}$/i.test(raw) ? raw.toLowerCase() : null;
+  return { label: hit ? hit.label : (m || !raw ? 'Vehicul' : raw), model: hit ? hit.model : code, plate: v.plate || '' };
 }
 const CAR_CDN = 'https://r2.fivemanage.com/gi0w8W6O9hhBekF3oXfQ3/vehicule/';
 function carPics(model) { const k = encodeURIComponent(model); return [`assets/vip-cars-hd/${k}.webp`, `assets/vip-cars/${k}.webp`, `${CAR_CDN}${k}.webp`]; }

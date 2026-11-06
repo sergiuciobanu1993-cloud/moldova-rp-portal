@@ -10588,7 +10588,36 @@ app.put("/api/admin/content/:id", auth, requireRole(...FOUNDER_ROLES), asyncRout
   res.json(rows[0]);
 }));
 
+// (06.11.2026) Tichetele în panou, varianta nouă: prioritatea tichetului și notițele interne
+// (le vede doar staff-ul, nu ajung niciodată la jucători — rutele publice nu citesc ticket_notes).
+const TICKET_PRIORITIES = ["low", "normal", "high", "urgent"];
+let ticketExtrasReady = null;
+function ticketExtras() {
+  if (!ticketExtrasReady) ticketExtrasReady = pool.query(`
+    ALTER TABLE tickets ADD COLUMN IF NOT EXISTS priority VARCHAR(16) NOT NULL DEFAULT 'normal';
+    CREATE TABLE IF NOT EXISTS ticket_notes (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      ticket_id UUID NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+      author_id UUID REFERENCES users(id) ON DELETE SET NULL,
+      message TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+    CREATE INDEX IF NOT EXISTS ticket_notes_ticket ON ticket_notes(ticket_id, created_at);`).catch(err => { ticketExtrasReady = null; throw err; });
+  return ticketExtrasReady;
+}
+app.post("/api/admin/tickets/:id/note", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
+  await ticketExtras();
+  const message = String(req.body?.message || "").trim().slice(0, 4000);
+  if (!message) return res.status(400).json({ error: "Notița e goală." });
+  const t = await pool.query("SELECT id FROM tickets WHERE id=$1", [req.params.id]);
+  if (!t.rows[0]) return res.status(404).json({ error: "Tichetul nu există." });
+  const { rows } = await pool.query(
+    `INSERT INTO ticket_notes(ticket_id, author_id, message) VALUES ($1,$2,$3) RETURNING id, message, created_at`, [req.params.id, req.user.sub, message]);
+  await logAction(req.user.sub, "ticket.note", "ticket", req.params.id, null, req.ip);
+  res.status(201).json(rows[0]);
+}));
+
 app.get("/api/admin/tickets", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
+  await ticketExtras().catch(() => {});
   const status = req.query.status;
   const { rows } = await pool.query(
     `SELECT t.*, u.username submitted_by, a.username assigned_username,
@@ -10628,7 +10657,15 @@ app.get("/api/admin/tickets/:id", auth, requireRole(...MOD_ROLES), asyncRoute(as
     [req.params.id]
   );
   const reportedUserId = await reportedUserIdOf(rows[0]);
-  res.json({ ...rows[0], replies: tagTicketReplies(replies.rows, rows[0], reportedUserId) });
+  // (06.11.2026) notițele interne ale staff-ului
+  let notes = [];
+  try {
+    await ticketExtras();
+    notes = (await pool.query(
+      `SELECT n.id, n.message, n.created_at, u.username author FROM ticket_notes n LEFT JOIN users u ON u.id = n.author_id
+       WHERE n.ticket_id = $1 ORDER BY n.created_at ASC`, [req.params.id])).rows;
+  } catch { /* fără notițe */ }
+  res.json({ ...rows[0], replies: tagTicketReplies(replies.rows, rows[0], reportedUserId), notes });
 }));
 
 // Staff poate schimba status/asignare ȘI corecta conținutul (subiect/
@@ -10637,7 +10674,12 @@ app.get("/api/admin/tickets/:id", auth, requireRole(...MOD_ROLES), asyncRoute(as
 // până acum.
 app.put("/api/admin/tickets/:id", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
   const { id } = req.params;
-  const { status, assigned_to, subject, description, evidence_url, category } = req.body;
+  const { status, assigned_to, subject, description, evidence_url, category, priority } = req.body;
+  if (priority !== undefined) {
+    if (!TICKET_PRIORITIES.includes(priority)) return res.status(400).json({ error: "Prioritate invalidă." });
+    await ticketExtras();
+    await pool.query("UPDATE tickets SET priority=$1, updated_at=NOW() WHERE id=$2", [priority, id]);
+  }
   const allowedStatuses = ["open", "in_progress", "resolved", "closed"];
   // (21.09.2026, cerut explicit) staff poate corecta și categoria unui tichet
   // — de exemplu dacă jucătorul a ales-o greșit la creare — nu doar status.

@@ -6,200 +6,350 @@
 .msg.reported b{color:#9dbcff}
 .msg .msg-ev{display:inline-block;margin-top:8px;color:var(--orange);font-weight:800;font-size:12.5px}
 </style>
+<style>
+/* (06.11.2026) Tichetele, varianta nouă: lista cu filtre și pagina tichetului ca în modelul cerut */
+.tk-filters{display:flex;flex-wrap:wrap;gap:8px;padding:0 22px 16px}
+.tk-f{padding:8px 14px;border-radius:10px;border:1px solid var(--line);background:var(--chip,#181b20);color:#c7cbd1;font:inherit;font-weight:800;font-size:12.5px;cursor:pointer}
+.tk-f:hover{border-color:var(--line2,rgba(255,255,255,.12));color:#fff}
+.tk-f[aria-pressed="true"]{background:var(--grad);border-color:transparent;color:#1a0f02}
+.tk-f b{margin-left:6px;opacity:.75}
+tr.tk-row{cursor:pointer}
+tr.tk-row:hover{background:rgba(255,138,31,.06)!important}
+.tk-subj{font-weight:800;color:#fff}
+.tk-no{color:var(--muted);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px}
+.tk-prio{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:7px;font-size:10px;font-weight:900;letter-spacing:.05em;border:1px solid}
+.tk-prio.low{color:#8d939b;border-color:rgba(255,255,255,.12)}
+.tk-prio.normal{color:#7db2ff;border-color:rgba(125,178,255,.35);background:rgba(125,178,255,.08)}
+.tk-prio.high{color:#ffb35c;border-color:rgba(255,179,92,.45);background:rgba(255,179,92,.08)}
+.tk-prio.urgent{color:#ff7272;border-color:rgba(255,114,114,.5);background:rgba(255,114,114,.1)}
+#tk-view[hidden],#tk-list[hidden]{display:none}
+.tk-back{display:inline-flex;align-items:center;gap:6px;margin:0 0 14px;padding:8px 13px;border-radius:10px;border:1px solid var(--line);background:var(--chip,#181b20);color:#d6d9dd;font:inherit;font-weight:800;font-size:12.5px;cursor:pointer}
+.tk-back:hover{border-color:rgba(255,138,31,.5);color:var(--orange2,#ffa24a)}
+.tk-head{position:relative;display:flex;align-items:center;gap:18px;flex-wrap:wrap;padding:20px 22px;border-radius:16px;border:1px solid rgba(255,138,31,.32);background:radial-gradient(600px 160px at 100% 0,rgba(255,138,31,.14),transparent 70%),linear-gradient(135deg,#17120d,var(--panel));overflow:hidden}
+.tk-ic{flex:none;width:52px;height:52px;border-radius:14px;display:grid;place-items:center;background:rgba(255,138,31,.14);border:1px solid rgba(255,138,31,.4);color:var(--orange2,#ffa24a)}
+.tk-ic svg,.tk-card h3 svg,.tk-fact svg,.tk-act svg{fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.tk-ic svg{width:26px;height:26px}
+.tk-title{flex:1 1 280px;min-width:0}
+.tk-title h1{margin:0;font-size:24px;letter-spacing:-.02em;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.tk-title p{margin:4px 0 0;color:#c9cdd2;font-size:14px;overflow-wrap:anywhere}
+.tk-facts{display:flex;flex-wrap:wrap;gap:0}
+.tk-fact{display:flex;align-items:center;gap:10px;padding:0 18px;border-left:1px solid var(--line)}
+.tk-fact:first-child{border-left:0}
+.tk-fact svg{width:20px;height:20px;color:#8d939b;flex:none}
+.tk-fact small{display:block;color:var(--muted);font-size:11px}
+.tk-fact b{display:block;font-size:13px}
+.tk-fact .muted{font-size:11px}
+.tk-grid{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:16px;margin-top:16px;align-items:start}
+.tk-col{display:flex;flex-direction:column;gap:16px;min-width:0}
+.tk-card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px 20px}
+.tk-card h3{margin:0;display:flex;align-items:center;gap:9px;font-size:15px}
+.tk-card h3 svg{width:18px;height:18px;color:var(--orange2,#ffa24a)}
+.tk-card-h{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+.tk-wait{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:8px;font-size:11px;font-weight:900;border:1px solid rgba(255,179,92,.45);background:rgba(255,179,92,.08);color:#ffb35c}
+.tk-wait.ok{border-color:rgba(61,220,132,.4);background:rgba(61,220,132,.08);color:var(--green)}
+.tk-desc{margin:0;padding:14px 16px;border-radius:12px;border:1px solid var(--line);background:#0c0d10;color:#d8dbdf;line-height:1.7;white-space:pre-wrap;overflow-wrap:anywhere}
+.tk-about{margin:12px 0 0}
+.tk-ev{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
+.tk-ev.one{grid-template-columns:minmax(0,640px)}
+.tk-thread{display:flex;flex-direction:column;gap:10px}
+.tk-msg{display:flex;gap:12px;align-items:flex-start}
+.tk-av{flex:none;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:#22262c;color:#d6d9dd;font-weight:900;font-size:13px}
+.tk-msg.staff .tk-av{background:var(--grad);color:#1a0f02}
+.tk-msg.reported .tk-av{background:rgba(127,168,255,.25);color:#9dbcff}
+.tk-bub{flex:1;min-width:0;padding:11px 14px;border-radius:12px;border:1px solid var(--line);background:#0e1013}
+.tk-msg.staff .tk-bub{border-color:rgba(255,138,31,.35);background:rgba(255,138,31,.05)}
+.tk-msg.reported .tk-bub{border-color:rgba(127,168,255,.35);background:rgba(127,168,255,.05)}
+.tk-bub b{font-size:12.5px}
+.tk-bub b em{font-style:normal;color:var(--muted);font-weight:700;margin-left:6px;font-size:11px}
+.tk-bub p{margin:5px 0 0;color:#d6d9dd;font-size:13.5px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere}
+.tk-bub small{display:block;margin-top:6px;color:var(--muted);font-size:11px}
+.tk-bub .me-box{margin-top:10px;max-width:560px}
+.tk-note-list{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}
+.tk-note{padding:10px 13px;border-radius:10px;border:1px dashed rgba(255,210,90,.35);background:rgba(255,210,90,.05);font-size:13px;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere}
+.tk-note small{display:block;color:var(--muted);font-size:11px;margin-top:5px;white-space:normal}
+.tk-ta{width:100%;min-height:96px;resize:vertical;padding:12px 14px;border-radius:12px;border:1px solid var(--line2,rgba(255,255,255,.12));background:#0c0d10;color:var(--text);font:inherit;font-size:13.5px;line-height:1.55;outline:0}
+.tk-ta:focus{border-color:var(--orange);box-shadow:0 0 0 3px rgba(255,138,31,.12)}
+.tk-ta.note{min-height:64px;border-style:dashed}
+.tk-row-btns{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px}
+.tk-row-btns .grow{flex:1}
+.tk-send{display:inline-flex;align-items:center;gap:8px;padding:11px 18px;border:0;border-radius:11px;background:var(--grad);color:#1a0f02;font:inherit;font-weight:900;font-size:13px;cursor:pointer;box-shadow:0 10px 24px rgba(255,138,31,.22)}
+.tk-send:disabled{opacity:.6;cursor:default}
+.tk-sel{padding:10px 12px;border-radius:10px;border:1px solid var(--line2,rgba(255,255,255,.12));background:#0c0d10;color:var(--text);font:inherit;font-size:12.5px;font-weight:700}
+.tk-info{margin:0;display:flex;flex-direction:column}
+.tk-info>div{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 0;border-top:1px solid var(--line)}
+.tk-info>div:first-child{border-top:0;padding-top:0}
+.tk-info dt{color:var(--muted);font-size:12.5px}
+.tk-info dd{margin:0;font-weight:800;font-size:13px;text-align:right;min-width:0;overflow-wrap:anywhere}
+.tk-info .tk-sel{padding:6px 9px;font-size:12px}
+.tk-acts{display:flex;flex-direction:column;gap:8px}
+.tk-act{display:flex;align-items:center;gap:10px;width:100%;padding:11px 13px;border-radius:11px;border:1px solid var(--line);background:#0e1013;color:#e3e5e8;font:inherit;font-weight:800;font-size:13px;cursor:pointer;text-align:left}
+.tk-act svg{width:17px;height:17px;flex:none}
+.tk-act:hover{border-color:var(--line2,rgba(255,255,255,.14));background:#15181d}
+.tk-act.ok{border-color:rgba(61,220,132,.35);color:var(--green)}
+.tk-act.ok:hover{background:rgba(61,220,132,.08)}
+.tk-act.danger{border-color:rgba(255,92,92,.35);color:#ff8a8a}
+.tk-act.danger:hover{background:rgba(255,92,92,.08)}
+.tk-act:disabled{opacity:.45;cursor:default}
+.tk-act[hidden]{display:none}
+.tk-evlink{display:inline-flex;align-items:center;gap:6px;margin-top:8px;padding:5px 10px;border-radius:8px;border:1px solid rgba(255,138,31,.4);color:var(--orange2,#ffa24a);font-weight:800;font-size:12px;text-decoration:none}
+.tk-evlink:hover{background:rgba(255,138,31,.08)}
+.tk-msgline{margin:8px 0 0;font-size:12px;color:var(--muted)}
+.tk-msgline.err{color:#ff8a8a}
+@media(max-width:1100px){.tk-grid{grid-template-columns:1fr}.tk-fact{padding:0 14px 0 0;border-left:0}}
+</style>
 </head>
 <body>
 <aside class="side"><a class="brand" href="index.html"><img src="assets/logo-128.webp" alt=""><b>MOLDOVA<span>RP</span></b></a><p>ADMINISTRAȚIE</p><a href="admin.html">▦ Dashboard</a><a href="admin-utilizatori.html">👤 Utilizatori</a><a href="admin-jucatori.html">♙ Jucători</a><a href="admin-cauta.html">🔎 Caută jucător</a><a href="admin-financiar.html">◆ Facțiuni</a><a href="admin-sanctiuni.html">⚠ Sancțiuni</a><a>▤ Reclamații</a><a>⚖ CK</a><a href="admin-regulamente.html">📚 Regulamente</a><a href="admin-continut.html">📝 Conținut pagini</a><a href="admin-anunturi.html">◉ Anunțuri</a><a href="admin-actualizari.html">🆕 Actualizări</a><a class="sel" href="admin-tichete.html">🎫 Tichete</a><a href="vip-shop.html">🎁 VIP Shop</a><a href="admin-vip-shop.html">🛠 Editor VIP Shop</a><a href="admin-loguri.html">🗂 Loguri</a><a href="admin-kill-logs.html">🔪 Kill Logs</a><a>⌁ Audit Logs</a><a href="admin-txadmin.html" id="nav-txadmin">🖥 txAdmin</a><a class="back" href="dashboard.html">← Contul meu</a><a class="back" href="index.html">← Site public</a></aside>
 <main>
-<header><div><small>PANEL ADMINISTRATIV</small><h1>Tichete</h1></div><a class="admin" href="dashboard.html" title="Înapoi la contul meu" style="text-decoration:none"><span id="admin-name">…</span> <i></i></a></header>
+<header><div><small>PANEL ADMINISTRATIV</small><h1 id="tk-h1">Tichete</h1></div><a class="admin" href="dashboard.html" title="Înapoi la contul meu" style="text-decoration:none"><span id="admin-name">…</span> <i></i></a></header>
 
-<section class="tablebox">
-  <div class="title">
-    <h2>Toate tichetele</h2>
-    <select id="status-filter" class="filter-select">
-      <option value="">Toate statusurile</option>
-      <option value="open">Deschise</option>
-      <option value="in_progress">În lucru</option>
-      <option value="resolved">Rezolvate</option>
-      <option value="closed">Închise</option>
-    </select>
+<section class="tablebox" id="tk-list">
+  <div class="title"><h2>Toate tichetele</h2><span class="muted" id="tk-count"></span></div>
+  <div class="tk-filters" id="tk-filters" role="group" aria-label="Status">
+    <button type="button" class="tk-f" data-s="" aria-pressed="true">Toate</button>
+    <button type="button" class="tk-f" data-s="open" aria-pressed="false">Deschise</button>
+    <button type="button" class="tk-f" data-s="in_progress" aria-pressed="false">În lucru</button>
+    <button type="button" class="tk-f" data-s="resolved" aria-pressed="false">Rezolvate</button>
+    <button type="button" class="tk-f" data-s="closed" aria-pressed="false">Închise</button>
   </div>
-  <table><thead><tr><th>SUBIECT</th><th>JUCĂTOR</th><th>CATEGORIE</th><th>STATUS</th><th>ASIGNAT</th><th>ACTUALIZAT</th><th>ACȚIUNI</th></tr></thead>
-  <tbody id="list-body"><tr><td colspan="7">Se încarcă…</td></tr></tbody></table>
+  <div style="overflow-x:auto"><table><thead><tr><th>TICHET</th><th>JUCĂTOR</th><th>CATEGORIE</th><th>PRIORITATE</th><th>STATUS</th><th>PRELUAT DE</th><th>ACTUALIZAT</th></tr></thead>
+  <tbody id="list-body"><tr><td colspan="7">Se încarcă…</td></tr></tbody></table></div>
 </section>
 
-<section class="formbox" id="detail-box" hidden>
-  <h2 id="detail-title">Tichet</h2>
-  <div class="ticket-meta">
-    <span class="pill" id="detail-status"></span>
-    <span id="detail-category"></span>
-    <span>·</span>
-    <span id="detail-submitted"></span>
-    <span>·</span>
-    <span id="detail-date"></span>
-  </div>
-  <p id="detail-reported" hidden></p>
-  <p id="detail-description" class="ticket-desc"></p>
-  <p id="detail-evidence"></p>
-  <div class="rowactions" style="margin-bottom:16px">
-    <button type="button" id="detail-delete-btn" class="danger">Șterge tichetul</button>
-  </div>
-
-  <div class="formgrid" style="margin:16px 0">
-    <div class="field">
-      <label>Schimbă status</label>
-      <select id="detail-status-select">
-        <option value="open">Deschis</option>
-        <option value="in_progress">În lucru</option>
-        <option value="resolved">Rezolvat</option>
-        <option value="closed">Închis</option>
-      </select>
+<div id="tk-view" hidden>
+  <button type="button" class="tk-back" id="tk-back">← Toate tichetele</button>
+  <section class="tk-head">
+    <span class="tk-ic"><svg viewBox="0 0 24 24"><path d="M4 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4z"/><path d="M14 5v12" stroke-dasharray="2 2.5"/></svg></span>
+    <div class="tk-title"><h1><span id="tk-no">Tichet</span> <span class="pill" id="detail-status"></span></h1><p id="detail-title">—</p></div>
+    <div class="tk-facts">
+      <div class="tk-fact"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c.8-4 4-6 8-6s7.2 2 8 6"/></svg><div><small>Jucător</small><b id="tk-player">—</b></div></div>
+      <div class="tk-fact"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg><div><small>Categorie</small><b id="detail-category">—</b></div></div>
+      <div class="tk-fact"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><div><small>Creat</small><b id="detail-date">—</b></div></div>
     </div>
-    <div class="field">
-      <label>Schimbă categorie</label>
-      <select id="detail-category-select">
-        <option value="general">General</option>
-        <option value="bug">Bug / problemă tehnică</option>
-        <option value="reclamatie">Reclamație jucător</option>
-        <option value="ban_appeal">Contestație sancțiune</option>
-      </select>
+  </section>
+
+  <div class="tk-grid">
+    <div class="tk-col">
+      <section class="tk-card">
+        <div class="tk-card-h"><h3><svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg>Descrierea tichetului</h3><span class="tk-wait" id="tk-wait">Așteaptă răspuns</span></div>
+        <p class="tk-desc" id="detail-description"></p>
+        <p class="tk-about" id="detail-reported" hidden></p>
+      </section>
+      <section class="tk-card" id="tk-ev-card" hidden>
+        <div class="tk-card-h"><h3><svg viewBox="0 0 24 24"><path d="M21.4 11.1l-9 9a5.5 5.5 0 0 1-7.8-7.8l9-9a3.7 3.7 0 0 1 5.2 5.2l-9 9a1.8 1.8 0 0 1-2.6-2.6l8.3-8.3"/></svg>Dovezi atașate <span class="muted" id="tk-ev-n"></span></h3></div>
+        <div class="tk-ev" id="tk-ev"></div>
+      </section>
+      <section class="tk-card">
+        <div class="tk-card-h"><h3><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Conversația <span class="muted" id="tk-rep-n"></span></h3></div>
+        <div class="tk-thread" id="detail-replies"></div>
+      </section>
+      <section class="tk-card">
+        <div class="tk-card-h"><h3><svg viewBox="0 0 24 24"><path d="M12 3l7.5 3v5.5c0 4.6-3.1 8.2-7.5 9.5-4.4-1.3-7.5-4.9-7.5-9.5V6z"/></svg>Notițe interne <span class="muted">(le vede doar staff-ul)</span></h3></div>
+        <div class="tk-note-list" id="tk-notes"></div>
+        <textarea class="tk-ta note" id="tk-note" maxlength="4000" placeholder="Ce ai verificat, ce urmează… Jucătorii nu văd notițele."></textarea>
+        <div class="tk-row-btns"><span class="grow tk-msgline" id="tk-note-msg"></span><button type="button" class="btn-ghost" id="tk-note-save">Salvează notița</button></div>
+      </section>
+      <section class="tk-card">
+        <form id="reply-form">
+          <div class="tk-card-h"><h3><svg viewBox="0 0 24 24"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/></svg>Răspunde jucătorului</h3></div>
+          <textarea class="tk-ta" id="reply-message" required maxlength="4000" placeholder="Scrie un răspuns către jucător…"></textarea>
+          <div class="tk-row-btns">
+            <button type="submit" class="tk-send" id="tk-send"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/></svg>Trimite răspunsul</button>
+            <span class="grow tk-msgline" id="detail-msg"></span>
+            <label class="muted" for="detail-status-select" style="font-size:12px">Status</label>
+            <select id="detail-status-select" class="tk-sel">
+              <option value="open">Deschis</option>
+              <option value="in_progress">În lucru</option>
+              <option value="resolved">Rezolvat</option>
+              <option value="closed">Închis</option>
+            </select>
+          </div>
+        </form>
+      </section>
     </div>
+    <aside class="tk-col">
+      <section class="tk-card">
+        <div class="tk-card-h"><h3><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5h.01"/></svg>Informații generale</h3></div>
+        <dl class="tk-info">
+          <div><dt>Jucător</dt><dd id="tk-i-player">—</dd></div>
+          <div><dt>Categorie</dt><dd><select id="detail-category-select" class="tk-sel">
+            <option value="general">General</option>
+            <option value="bug">Bug / problemă tehnică</option>
+            <option value="reclamatie">Reclamație jucător</option>
+            <option value="ban_appeal">Contestație sancțiune</option>
+          </select></dd></div>
+          <div><dt>Prioritate</dt><dd><select id="tk-priority" class="tk-sel">
+            <option value="low">Scăzută</option>
+            <option value="normal">Normală</option>
+            <option value="high">Ridicată</option>
+            <option value="urgent">Urgentă</option>
+          </select></dd></div>
+          <div><dt>Status</dt><dd><span class="pill" id="tk-i-status"></span></dd></div>
+          <div><dt>Preluat de</dt><dd id="tk-i-assigned">—</dd></div>
+          <div><dt>Creat</dt><dd id="tk-i-created">—</dd></div>
+          <div><dt>Ultima modificare</dt><dd id="tk-i-updated">—</dd></div>
+        </dl>
+      </section>
+      <section class="tk-card">
+        <div class="tk-card-h"><h3><svg viewBox="0 0 24 24"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg>Acțiuni rapide</h3></div>
+        <div class="tk-acts">
+          <button type="button" class="tk-act" id="tk-take"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="4"/><path d="M2 21c.7-4 3.5-6 7-6 1.5 0 2.8.3 3.9 1M16 19l2 2 4-4"/></svg>Preiau eu tichetul</button>
+          <button type="button" class="tk-act ok" id="tk-resolve"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8.5 12.5l2.5 2.5 5-5"/></svg>Marchează ca rezolvat</button>
+          <button type="button" class="tk-act" id="tk-close"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Închide tichetul</button>
+          <button type="button" class="tk-act" id="tk-reopen" hidden><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>Redeschide tichetul</button>
+          <button type="button" class="tk-act danger" id="detail-delete-btn"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13M9 7V4h6v3"/></svg>Șterge tichetul</button>
+        </div>
+        <p class="tk-msgline" id="tk-act-msg"></p>
+      </section>
+    </aside>
   </div>
-
-  <div class="thread" id="detail-replies"></div>
-
-  <form id="reply-form">
-    <div class="field wide"><label>Răspuns</label><textarea id="reply-message" required placeholder="Scrie un răspuns către jucător..."></textarea></div>
-    <p class="formmsg" id="detail-msg" hidden></p>
-    <div class="formactions">
-      <button type="submit" class="btn-primary">Trimite răspuns</button>
-      <button type="button" class="btn-ghost" id="detail-close-btn">Închide</button>
-    </div>
-  </form>
-</section>
-
+</div>
 </main>
 <script src="auth-client.js"></script>
+<script src="media-embed.js"></script>
 <script>
 const esc = s => (s ?? '').toString().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-let currentTicketId = null;
-
+let currentTicketId = null, current = null, me = null, statusFilter = '';
 const STATUS_LABEL = { open: 'DESCHIS', in_progress: 'ÎN LUCRU', resolved: 'REZOLVAT', closed: 'ÎNCHIS' };
 const STATUS_PILL = { open: 'warn', in_progress: 'info', resolved: 'on', closed: 'off' };
 const CATEGORY_LABEL = { general: 'General', bug: 'Bug / problemă tehnică', reclamatie: 'Reclamație jucător', ban_appeal: 'Contestație sancțiune' };
-
-function fmtDate(d) { return new Date(d).toLocaleString('ro-RO'); }
+const PRIO_LABEL = { low: 'SCĂZUTĂ', normal: 'NORMALĂ', high: 'RIDICATĂ', urgent: 'URGENTĂ' };
+const STAFF_ROLES = ['moderator', 'admin', 'co-fondator', 'owner'];
+const fmtDate = d => new Date(d).toLocaleString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(',', ' ·');
+// numărul scurt al tichetului (din id): #A1B2C3
+const ticketNo = id => '#' + String(id || '').replace(/-/g, '').slice(0, 6).toUpperCase();
+const isStaffReply = r => r.author_kind === 'staff' || STAFF_ROLES.includes(r.author_role);
 
 async function loadList() {
   const tbody = document.getElementById('list-body');
-  const status = document.getElementById('status-filter').value;
   try {
-    const res = await apiFetch(`/api/admin/tickets${status ? '?status=' + status : ''}`);
+    const res = await apiFetch(`/api/admin/tickets${statusFilter ? '?status=' + statusFilter : ''}`);
     if (!res.ok) throw new Error();
     const items = await res.json();
+    document.getElementById('tk-count').textContent = items.length ? `${items.length} ${items.length === 1 ? 'tichet' : 'tichete'}` : '';
     tbody.innerHTML = items.length ? items.map(t => `
-      <tr>
-        <td>${esc(t.subject)}</td>
-        <td>${esc(t.submitted_by)}</td>
-        <td>${CATEGORY_LABEL[t.category] || t.category}</td>
-        <td><span class="pill ${STATUS_PILL[t.status] || 'off'}">${STATUS_LABEL[t.status] || t.status}</span></td>
-        <td>${t.assigned_username || '—'}</td>
+      <tr class="tk-row" data-open="${esc(t.id)}" tabindex="0">
+        <td><span class="tk-subj">${esc(t.subject)}</span><br><span class="tk-no">${ticketNo(t.id)}</span></td>
+        <td>${esc(t.submitted_by)}${t.reported_display ? `<br><small class="muted">despre: ${esc(t.reported_display)}</small>` : ''}</td>
+        <td>${esc(CATEGORY_LABEL[t.category] || t.category)}</td>
+        <td><span class="tk-prio ${esc(t.priority || 'normal')}">${PRIO_LABEL[t.priority] || PRIO_LABEL.normal}</span></td>
+        <td><span class="pill ${STATUS_PILL[t.status] || 'off'}">${STATUS_LABEL[t.status] || esc(t.status)}</span></td>
+        <td>${esc(t.assigned_username || '—')}</td>
         <td>${fmtDate(t.updated_at)}</td>
-        <td class="rowactions">
-          <button data-open="${t.id}">Deschide</button>
-          <button data-del="${t.id}" class="danger">Șterge</button>
-        </td>
-      </tr>`).join('') : '<tr><td colspan="7">Niciun tichet încă.</td></tr>';
-
-    tbody.querySelectorAll('[data-open]').forEach(btn => btn.addEventListener('click', () => openTicket(btn.dataset.open)));
-    tbody.querySelectorAll('[data-del]').forEach(btn => btn.addEventListener('click', async () => {
-      if (!confirm('Ștergi definitiv acest tichet? Acțiunea nu poate fi anulată.')) return;
-      try {
-        const res = await apiFetch(`/api/admin/tickets/${btn.dataset.del}`, { method: 'DELETE' });
-        if (!res.ok) throw new Error();
-        if (currentTicketId === btn.dataset.del) {
-          document.getElementById('detail-box').hidden = true;
-          currentTicketId = null;
-        }
-        loadList();
-      } catch {
-        alert('Nu am putut șterge tichetul. Încearcă din nou.');
-      }
-    }));
+      </tr>`).join('') : '<tr><td colspan="7" class="muted">Niciun tichet aici.</td></tr>';
+    tbody.querySelectorAll('[data-open]').forEach(tr => {
+      tr.addEventListener('click', () => openTicket(tr.dataset.open));
+      tr.addEventListener('keydown', e => { if (e.key === 'Enter') openTicket(tr.dataset.open); });
+    });
   } catch {
     tbody.innerHTML = '<tr><td colspan="7">Nu am putut încărca tichetele.</td></tr>';
   }
 }
 
-async function openTicket(id) {
-  const res = await apiFetch(`/api/admin/tickets/${id}`);
-  if (!res.ok) return;
-  const t = await res.json();
-  currentTicketId = t.id;
+function showList() {
+  currentTicketId = current = null;
+  document.getElementById('tk-view').hidden = true;
+  document.getElementById('tk-list').hidden = false;
+  document.getElementById('tk-h1').textContent = 'Tichete';
+  history.replaceState(null, '', location.pathname);
+  loadList();
+}
 
-  document.getElementById('detail-title').textContent = t.subject;
-  document.getElementById('detail-status').textContent = STATUS_LABEL[t.status] || t.status;
-  document.getElementById('detail-status').className = `pill ${STATUS_PILL[t.status] || 'off'}`;
-  document.getElementById('detail-category').textContent = CATEGORY_LABEL[t.category] || t.category;
-  document.getElementById('detail-submitted').textContent = `deschis de ${t.submitted_by}`;
-  document.getElementById('detail-date').textContent = fmtDate(t.created_at);
-  const reportedEl = document.getElementById('detail-reported');
-  if (t.reported_display) {
-    reportedEl.innerHTML = `<span class="reported-pill">🎯 Tichet despre: ${esc(t.reported_display)}${t.reported_rp_name || t.reported_static_id ? ` <small>— personaj: ${esc(t.reported_rp_name || '?')}${t.reported_static_id ? ` #${esc(t.reported_static_id)}` : ''}</small>` : ''}${!t.reported_player_id ? ' <small>(negăsit automat în baza de date — verifică manual)</small>' : ''}</span>`;
-    reportedEl.hidden = false;
-  } else {
-    reportedEl.hidden = true;
-  }
-  document.getElementById('detail-description').textContent = t.description;
-  document.getElementById('detail-evidence').innerHTML = t.evidence_url
-    ? `<a href="${esc(t.evidence_url)}" target="_blank" rel="noopener noreferrer">🔗 Vezi dovada atașată</a>`
-    : '';
+async function openTicket(id) {
+  const res = await apiFetch(`/api/admin/tickets/${encodeURIComponent(id)}`);
+  if (!res.ok) { alert('Tichetul nu mai există.'); return; }
+  const t = await res.json();
+  current = t; currentTicketId = t.id;
+  history.replaceState(null, '', '?id=' + encodeURIComponent(t.id));
+  document.getElementById('tk-list').hidden = true;
+  document.getElementById('tk-view').hidden = false;
+  render(t);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function render(t) {
+  const set = (id, v) => { document.getElementById(id).textContent = v; };
+  set('tk-no', 'Tichet ' + ticketNo(t.id));
+  set('detail-title', t.subject);
+  for (const id of ['detail-status', 'tk-i-status']) { const el = document.getElementById(id); el.textContent = STATUS_LABEL[t.status] || t.status; el.className = `pill ${STATUS_PILL[t.status] || 'off'}`; }
+  set('tk-player', t.submitted_by); set('tk-i-player', t.submitted_by);
+  set('detail-category', CATEGORY_LABEL[t.category] || t.category);
+  set('detail-date', fmtDate(t.created_at)); set('tk-i-created', fmtDate(t.created_at)); set('tk-i-updated', fmtDate(t.updated_at));
+  set('tk-i-assigned', t.assigned_username || 'nimeni încă');
   document.getElementById('detail-status-select').value = t.status;
   document.getElementById('detail-category-select').value = t.category;
-
-  document.getElementById('detail-replies').innerHTML = t.replies.length
-    ? t.replies.map(r => `
-        <div class="msg ${r.author_kind === 'staff' || ['moderator','admin','co-fondator','owner'].includes(r.author_role) ? 'staff' : r.author_kind === 'reported' ? 'reported' : ''}">
-          <b>${esc(r.author)}${replyTag(r)}</b>
-          <span>${esc(r.message)}</span>
-          ${r.evidence_url ? `<a class="msg-ev" href="${esc(r.evidence_url)}" target="_blank" rel="noopener noreferrer">🔗 Dovadă atașată</a>` : ''}
-          <small>${fmtDate(r.created_at)}</small>
-        </div>`).join('')
-    : '<p class="muted">Niciun răspuns încă.</p>';
-
-  document.getElementById('detail-box').hidden = false;
-  document.getElementById('detail-box').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  document.getElementById('tk-priority').value = t.priority || 'normal';
+  set('detail-description', t.description);
+  const rep = document.getElementById('detail-reported');
+  rep.hidden = !t.reported_display;
+  if (t.reported_display) rep.innerHTML = `<span class="reported-pill">🎯 Tichet despre: ${esc(t.reported_display)}${t.reported_rp_name || t.reported_static_id ? ` <small>· personaj: ${esc(t.reported_rp_name || '?')}${t.reported_static_id ? ` #${esc(t.reported_static_id)}` : ''}</small>` : ''}</span>`;
+  // cine a scris ultimul: dacă nu staff-ul, tichetul așteaptă răspuns
+  const last = t.replies[t.replies.length - 1];
+  const done = ['resolved', 'closed'].includes(t.status);
+  const wait = document.getElementById('tk-wait');
+  wait.textContent = done ? '✓ ' + (t.status === 'resolved' ? 'Rezolvat' : 'Închis') : (last && isStaffReply(last) ? 'Așteaptă jucătorul' : '● Așteaptă răspuns');
+  wait.className = 'tk-wait' + (done || (last && isStaffReply(last)) ? ' ok' : '');
+  // dovezile: a tichetului + cele din răspunsuri, ca playere
+  const ev = [];
+  if (t.evidence_url) ev.push({ url: t.evidence_url, title: 'Dovada din tichet' });
+  t.replies.forEach(r => { if (r.evidence_url) ev.push({ url: r.evidence_url, title: 'Trimisă de ' + r.author }); });
+  const evHtml = ev.map(e => window.MediaEmbed ? MediaEmbed.html(e.url, e.title) : `<a href="${esc(e.url)}" target="_blank" rel="noopener noreferrer">${esc(e.url)}</a>`).join('');
+  document.getElementById('tk-ev-card').hidden = !ev.length;
+  document.getElementById('tk-ev').className = 'tk-ev' + (ev.length === 1 ? ' one' : '');
+  document.getElementById('tk-ev').innerHTML = evHtml;
+  set('tk-ev-n', ev.length ? `(${ev.length})` : '');
+  set('tk-rep-n', t.replies.length ? `(${t.replies.length})` : '');
+  document.getElementById('detail-replies').innerHTML = t.replies.length ? t.replies.map(r => {
+    const kind = isStaffReply(r) ? 'staff' : r.author_kind === 'reported' ? 'reported' : '';
+    return `<div class="tk-msg ${kind}"><span class="tk-av">${esc((r.author || '?').charAt(0).toUpperCase())}</span><div class="tk-bub">
+      <b>${esc(r.author)}<em>${replyTag(r)}</em></b><p>${esc(r.message)}</p>
+      ${r.evidence_url ? `<a class="tk-evlink" href="#tk-ev-card">📎 A atașat o dovadă (e la „Dovezi atașate”)</a>` : ''}
+      <small>${fmtDate(r.created_at)}</small></div></div>`;
+  }).join('') : '<p class="muted" style="margin:0">Niciun răspuns încă.</p>';
+  document.getElementById('tk-notes').innerHTML = (t.notes || []).map(n => `<div class="tk-note">${esc(n.message)}<small>${esc(n.author || 'staff')} · ${fmtDate(n.created_at)}</small></div>`).join('');
+  // acțiunile rapide după starea tichetului
+  document.getElementById('tk-take').disabled = !!(me && t.assigned_to === me.id);
+  document.getElementById('tk-take').lastChild.textContent = me && t.assigned_to === me.id ? 'Tichetul e la tine' : 'Preiau eu tichetul';
+  document.getElementById('tk-resolve').hidden = t.status === 'resolved';
+  document.getElementById('tk-close').hidden = t.status === 'closed';
+  document.getElementById('tk-reopen').hidden = !done;
+  document.getElementById('tk-act-msg').textContent = '';
 }
 
 // (25.10.2026) eticheta autorului unui răspuns: staff / autorul tichetului / persoana reclamată
 function replyTag(r) {
-  if (r.author_kind === 'staff' || ['moderator','admin','co-fondator','owner'].includes(r.author_role)) return ' (staff)';
-  if (r.author_kind === 'author') return ' (autorul tichetului)';
-  if (r.author_kind === 'reported') return ' (persoana reclamată)';
+  if (isStaffReply(r)) return 'staff';
+  if (r.author_kind === 'author') return 'autorul tichetului';
+  if (r.author_kind === 'reported') return 'persoana reclamată';
   return '';
 }
 
-document.getElementById('status-filter').addEventListener('change', loadList);
-document.getElementById('detail-close-btn').addEventListener('click', () => {
-  document.getElementById('detail-box').hidden = true;
-  currentTicketId = null;
-});
-
-document.getElementById('detail-status-select').addEventListener('change', async (e) => {
+async function update(body, okText) {
   if (!currentTicketId) return;
-  await apiFetch(`/api/admin/tickets/${currentTicketId}`, {
-    method: 'PUT', body: JSON.stringify({ status: e.target.value })
-  });
+  const msg = document.getElementById('tk-act-msg');
+  try {
+    const res = await apiFetch(`/api/admin/tickets/${currentTicketId}`, { method: 'PUT', body: JSON.stringify(body) });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(d.error || 'Nu am putut salva.');
+    await openTicket(currentTicketId);
+    if (okText) { msg.className = 'tk-msgline'; msg.textContent = '✓ ' + okText; }
+  } catch (err) { msg.className = 'tk-msgline err'; msg.textContent = err.message; }
+}
+
+document.getElementById('tk-filters').addEventListener('click', e => {
+  const b = e.target.closest('[data-s]'); if (!b) return;
+  statusFilter = b.dataset.s;
+  document.querySelectorAll('.tk-f').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
   loadList();
 });
-
-document.getElementById('detail-category-select').addEventListener('change', async (e) => {
-  if (!currentTicketId) return;
-  await apiFetch(`/api/admin/tickets/${currentTicketId}`, {
-    method: 'PUT', body: JSON.stringify({ category: e.target.value })
-  });
-  document.getElementById('detail-category').textContent = CATEGORY_LABEL[e.target.value] || e.target.value;
-  loadList();
-});
+document.getElementById('tk-back').addEventListener('click', showList);
+document.getElementById('detail-status-select').addEventListener('change', e => update({ status: e.target.value }, 'Status schimbat.'));
+document.getElementById('detail-category-select').addEventListener('change', e => update({ category: e.target.value }, 'Categorie schimbată.'));
+document.getElementById('tk-priority').addEventListener('change', e => update({ priority: e.target.value }, 'Prioritate schimbată.'));
+document.getElementById('tk-take').addEventListener('click', () => me && update({ assigned_to: me.id, ...(current?.status === 'open' ? { status: 'in_progress' } : {}) }, 'L-ai preluat.'));
+document.getElementById('tk-resolve').addEventListener('click', () => update({ status: 'resolved' }, 'Marcat ca rezolvat. Jucătorul a fost anunțat.'));
+document.getElementById('tk-close').addEventListener('click', () => { if (confirm('Închizi tichetul? Jucătorii nu mai pot răspunde.')) update({ status: 'closed' }, 'Tichet închis.'); });
+document.getElementById('tk-reopen').addEventListener('click', () => update({ status: 'in_progress' }, 'Tichet redeschis.'));
 
 document.getElementById('detail-delete-btn').addEventListener('click', async () => {
   if (!currentTicketId) return;
@@ -207,45 +357,55 @@ document.getElementById('detail-delete-btn').addEventListener('click', async () 
   try {
     const res = await apiFetch(`/api/admin/tickets/${currentTicketId}`, { method: 'DELETE' });
     if (!res.ok) throw new Error();
-    document.getElementById('detail-box').hidden = true;
-    currentTicketId = null;
-    loadList();
+    showList();
   } catch {
     alert('Nu am putut șterge tichetul. Încearcă din nou.');
   }
 });
 
+document.getElementById('tk-note-save').addEventListener('click', async () => {
+  const ta = document.getElementById('tk-note'), msg = document.getElementById('tk-note-msg');
+  const message = ta.value.trim();
+  if (!message || !currentTicketId) return;
+  try {
+    const res = await apiFetch(`/api/admin/tickets/${currentTicketId}/note`, { method: 'POST', body: JSON.stringify({ message }) });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(d.error || 'Nu am putut salva notița.');
+    ta.value = '';
+    await openTicket(currentTicketId);
+    msg.className = 'grow tk-msgline'; msg.textContent = '✓ Notiță salvată';
+  } catch (err) { msg.className = 'grow tk-msgline err'; msg.textContent = err.message; }
+});
+
 document.getElementById('reply-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   if (!currentTicketId) return;
-  const msg = document.getElementById('detail-msg');
-  msg.hidden = true;
+  const msg = document.getElementById('detail-msg'), btn = document.getElementById('tk-send');
+  msg.textContent = '';
   const message = document.getElementById('reply-message').value.trim();
   if (!message) return;
+  btn.disabled = true;
   try {
-    const res = await apiFetch(`/api/admin/tickets/${currentTicketId}/replies`, {
-      method: 'POST', body: JSON.stringify({ message })
-    });
+    const res = await apiFetch(`/api/admin/tickets/${currentTicketId}/replies`, { method: 'POST', body: JSON.stringify({ message }) });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Trimiterea a eșuat.');
     document.getElementById('reply-message').value = '';
     await openTicket(currentTicketId);
-    loadList();
+    document.getElementById('detail-msg').className = 'grow tk-msgline';
+    document.getElementById('detail-msg').textContent = '✓ Trimis. Jucătorul primește notificare.';
   } catch (err) {
-    msg.textContent = err.message;
-    msg.className = 'formmsg error';
-    msg.hidden = false;
+    msg.className = 'grow tk-msgline err'; msg.textContent = err.message;
   }
+  btn.disabled = false;
 });
 
 (async () => {
-  const me = await requireRole('moderator', 'admin', 'co-fondator', 'owner');
+  me = await requireRole('moderator', 'admin', 'co-fondator', 'owner');
   if (!me) return;
   document.getElementById('admin-name').textContent = me.username;
-  loadList();
   // (01.10.2026) Link direct din mesajele pe Discord: admin-tichete.html?id=<tichet>
   const openId = new URLSearchParams(location.search).get('id');
-  if (openId && /^[\w-]{1,64}$/.test(openId)) openTicket(openId);
+  if (openId && /^[\w-]{1,64}$/.test(openId)) openTicket(openId); else loadList();
 })();
 </script>
 </body></html>

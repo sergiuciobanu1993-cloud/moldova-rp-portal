@@ -130,6 +130,9 @@ body.cont .head span{font-size:11.5px}
 .ch-view[hidden]{display:none}
 .ch-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.6fr);gap:16px;align-items:start}
 .ch-grid+.panel,.ch-grid+section{margin-top:16px!important}
+/* (06.11.2026) între cardurile unei secțiuni rămâne mereu spațiu (ex. testul șerifilor deasupra grilei) */
+.ch-view>*{margin-top:0!important}
+.ch-view>:not([hidden])~:not([hidden]){margin-top:16px!important}
 .ch-col{display:flex;flex-direction:column;gap:16px;min-width:0}
 .ch-pair{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start}
 .ch-more{flex:none;padding:6px 11px;border-radius:9px;border:1px solid rgba(255,138,31,.45);color:var(--orange2);font-weight:800;font-size:12px}

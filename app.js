@@ -170,7 +170,23 @@ if (factionGrid) {
   // merg direct pe ramura generică innerHTML de mai jos.
   const LIST_RENDERERS = {
     highlights_items: (container, items) => {
-      const pill = (it, hidden) => `<span class="highlight-pill"${hidden ? ' aria-hidden="true"' : ''}><span class="highlight-pill-icon">${escapeHtml(it.icon)}</span><span>${escapeHtml(it.title)}</span></span>`;
+      // (06.11.2026) fiecare bandă duce undeva: linkul din editor (câmpul URL) sau, dacă e gol, pagina potrivită după titlu
+      const guess = t => {
+        const x = String(t || '').toLowerCase();
+        if (/discord/.test(x)) return 'https://discord.gg/moldovaroleplay';
+        if (/fac[țt]iun/.test(x)) return 'index.html#factiuni';
+        if (/meseri|job|econom|cazino|afacer|zbor/.test(x)) return 'joburi.html';
+        if (/vehicul|ma[șs]in|vip/.test(x)) return 'vip-shop.html';
+        if (/regul|roleplay/.test(x)) return 'regulamente.html';
+        if (/update|actualiz/.test(x)) return 'index.html#actualizari';
+        if (/comunitat|juc[ăa]tor/.test(x)) return 'index.html#jucatori';
+        return 'index.html#despre';
+      };
+      const pill = (it, hidden) => {
+        const href = /^(https?:\/\/|[\w-]+\.html|#)/.test(it.url || '') ? it.url : guess(it.title);
+        const ext = /^https?:/.test(href) ? ' target="_blank" rel="noopener noreferrer"' : '';
+        return `<a class="highlight-pill" href="${escapeHtml(href)}"${ext}${hidden ? ' aria-hidden="true" tabindex="-1"' : ''}><span class="highlight-pill-icon">${escapeHtml(it.icon)}</span><span>${escapeHtml(it.title)}</span></a>`;
+      };
       container.innerHTML = items.map(it => pill(it, false)).join('') + items.map(it => pill(it, true)).join('');
     },
     guide_list: (container, items) => {

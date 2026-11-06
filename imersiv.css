@@ -50,3 +50,11 @@
 .hero-vip-cta::after{content:'';position:absolute;inset:0;background:linear-gradient(110deg,transparent 40%,rgba(255,255,255,.22) 50%,transparent 60%);background-size:260% 100%;background-position:140% 0;animation:hero-vip-shine 4.5s ease-in-out 1.2s infinite;pointer-events:none}
 @keyframes hero-vip-shine{0%,55%{background-position:140% 0}100%{background-position:-60% 0}}
 @media (prefers-reduced-motion:reduce){.hero-vip-cta::after{animation:none}}
+
+/* (06.11.2026) „Deschide un tichet" în albastru, ca să nu se confunde cu VIP Shop (auriu) */
+.hero-ticket-cta:not(.hero-vip-cta){border-color:rgba(95,184,255,.55);background:linear-gradient(135deg,rgba(64,150,255,.24),rgba(64,150,255,.06));box-shadow:0 12px 30px rgba(40,120,255,.14)}
+.hero-ticket-cta:not(.hero-vip-cta):hover{border-color:#5fb8ff;background:linear-gradient(135deg,rgba(64,150,255,.34),rgba(64,150,255,.1))}
+.hero-ticket-cta:not(.hero-vip-cta):focus-visible{outline-color:#5fb8ff}
+.hero-ticket-cta:not(.hero-vip-cta) .hero-ticket-icon{background:linear-gradient(145deg,#7cc4ff,#2f7cf6);box-shadow:0 6px 16px rgba(47,124,246,.35)}
+.hero-ticket-cta:not(.hero-vip-cta) small{color:#c7d8ea}
+.hero-ticket-cta:not(.hero-vip-cta) .hero-ticket-arrow{color:#7cc4ff}

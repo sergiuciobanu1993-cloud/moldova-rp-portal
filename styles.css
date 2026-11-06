@@ -57,6 +57,8 @@ a{color:inherit;text-decoration:none}.site-header{height:78px;position:fixed;z-i
    background instead of hard-cutting the pills. */
 /* (06.11.2026) fără linie și fără fundal separat sub banda de sus: se leagă direct de prima secțiune */
 .highlights-marquee{position:relative;padding:102px 0 30px;background:transparent;overflow:hidden}
+/* umbra închisă din spatele textului din hero începe treptat, fără margine tăiată sub bandă */
+.hero-overlay{-webkit-mask-image:linear-gradient(180deg,transparent,#000 120px);mask-image:linear-gradient(180deg,transparent,#000 120px)}
 .highlights-marquee-head{max-width:1180px;margin:0 auto 24px;padding:0 24px;display:flex;align-items:end;justify-content:space-between;gap:20px;flex-wrap:wrap}
 .highlights-marquee-head h2{margin:4px 0 0;font-size:27px}
 .highlights-marquee-viewport{overflow:hidden;-webkit-mask-image:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent);mask-image:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent)}
@@ -125,3 +127,17 @@ footer{border-top:1px solid var(--line);padding:38px 8vw;display:grid;grid-templ
 .edit-fab:hover{transform:translateY(-2px)}
 .edit-fab:focus-visible{outline:2px solid #fff;outline-offset:3px}
 @media print{.edit-fab{display:none}}
+
+/* (06.11.2026) caseta din dreapta (server online, VIP Shop, tichet) mai transparentă */
+.hero-status{background:rgba(11,12,13,.52)}
+/* butoanele Discord / Magazin / TikTok: plăcuțe 3D (cu sigla oficială, dacă e pusă în assets/social/) */
+.hero-social a{position:relative;background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(255,255,255,.02));box-shadow:0 1px 0 rgba(255,255,255,.08) inset,0 -3px 0 rgba(0,0,0,.35) inset,0 8px 18px rgba(0,0,0,.35);transform-style:preserve-3d}
+.hero-social a:hover{transform:translateY(-3px) perspective(400px) rotateX(8deg)}
+.hero-social-logo{width:30px;height:30px;object-fit:contain;filter:drop-shadow(0 4px 6px rgba(0,0,0,.45));transition:transform .18s ease}
+.hero-social a:hover .hero-social-logo{transform:translateZ(14px) scale(1.08)}
+.hero-social a.s-discord{background:linear-gradient(180deg,rgba(88,101,242,.32),rgba(88,101,242,.1));border-color:rgba(120,132,255,.45)}
+.hero-social a.s-tiktok{background:linear-gradient(180deg,rgba(255,255,255,.07),rgba(0,0,0,.25));border-color:rgba(37,244,238,.3);box-shadow:-2px 0 0 rgba(37,244,238,.25),2px 0 0 rgba(254,44,85,.25),0 -3px 0 rgba(0,0,0,.35) inset,0 8px 18px rgba(0,0,0,.35)}
+/* benzile de sus: fiecare duce la pagina ei */
+a.highlight-pill{color:inherit;text-decoration:none;cursor:pointer;transition:border-color .15s ease,transform .15s ease}
+a.highlight-pill:hover{border-color:rgba(255,138,31,.6);transform:translateY(-2px)}
+a.highlight-pill:focus-visible{outline:2px solid var(--orange);outline-offset:2px}

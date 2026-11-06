@@ -271,7 +271,9 @@ function lowerInlineScripts(html) {
 // (01.11.2026) Raportul de erori: un mic script pus singur la începutul fiecărei pagini. Când o
 // pagină crapă la un jucător, trimite eroarea la /api/erori-client (cel mult 5 pe pagină, doar din
 // scripturile noastre, nu din extensiile browserului). Le vezi în Admin → Dashboard → Erori pe site.
-const CLIENT_ERROR_SNIPPET = `<script>(function(){var n=0,s={};function f(m,src,l,c,st){try{m=String(m||'').slice(0,300);if(!m||n>=5||/ResizeObserver loop|^Script error|Failed to fetch|NetworkError|Load failed|AbortError|aborted/i.test(m))return;src=String(src||'');st=String(st||'');var o=location.origin;if(src&&src.indexOf(o)!==0)return;if(/-extension:\\/\\//.test(src+st))return;var k=m+'|'+src+'|'+l;if(s[k])return;s[k]=1;n++;var b=JSON.stringify({message:m,source:src.split(o).join(''),line:l|0,col:c|0,stack:st.slice(0,1500).split(o).join(''),page:location.pathname});if(navigator.sendBeacon)navigator.sendBeacon('/api/erori-client',b)}catch(e){}}addEventListener('error',function(e){if(e.target&&e.target!==window)return;f(e.message,e.filename,e.lineno,e.colno,e.error&&e.error.stack)},true);addEventListener('unhandledrejection',function(e){var r=e.reason||{};f(r.message||String(e.reason),'',0,0,r.stack)})})();</script>`;
+// (06.11.2026) nu raportăm din browserele prea vechi (fără ?. și ??: acolo tot site-ul crapă cu
+// „Unexpected token", nu e o greșeală de-a noastră) și nici erorile extensiilor (runtime.sendMessage…).
+const CLIENT_ERROR_SNIPPET = `<script>(function(){try{new Function('var a;return a?.b??1')}catch(e){return}var n=0,s={};function f(m,src,l,c,st){try{m=String(m||'').slice(0,300);if(!m||n>=5||/ResizeObserver loop|^Script error|Failed to fetch|NetworkError|Load failed|AbortError|aborted|runtime\\.sendMessage|Extension context|message port closed|Tab not found/i.test(m))return;src=String(src||'');st=String(st||'');var o=location.origin;if(src&&src.indexOf(o)!==0)return;if(/-extension:\\/\\//.test(src+st))return;var k=m+'|'+src+'|'+l;if(s[k])return;s[k]=1;n++;var b=JSON.stringify({message:m,source:src.split(o).join(''),line:l|0,col:c|0,stack:st.slice(0,1500).split(o).join(''),page:location.pathname});if(navigator.sendBeacon)navigator.sendBeacon('/api/erori-client',b)}catch(e){}}addEventListener('error',function(e){if(e.target&&e.target!==window)return;f(e.message,e.filename,e.lineno,e.colno,e.error&&e.error.stack)},true);addEventListener('unhandledrejection',function(e){var r=e.reason||{};if(String(r.stack||'').indexOf(location.origin)<0)return;f(r.message||String(e.reason),'',0,0,r.stack)})})();</script>`;
 // (01.11.2026) Linkul unui regulament anume (regulament.html?slug=…) pus pe Discord / Facebook
 // arată titlul și începutul lui, nu doar „Regulament — Moldova RP". Lista se ține 5 minute.
 let regulationPreviews = { at: 0, map: null };
@@ -8106,6 +8108,13 @@ function clientErrorTables() {
 }
 const clientErrorHits = new Map();
 let clientErrorInserts = 0;
+// Chrome/Edge sub 80, Firefox sub 74, Safari sub 14: nu știu ?. / ?? și nu rulează deloc scripturile site-ului
+function clientBrowserTooOld(ua) {
+  ua = String(ua || "");
+  const v = re => { const m = re.exec(ua); return m ? parseInt(m[1], 10) : null; };
+  const chrome = v(/(?:Chrome|Chromium|CriOS)\/(\d+)/), firefox = v(/(?:Firefox|FxiOS)\/(\d+)/), safari = /Safari\//.test(ua) && chrome == null ? v(/Version\/(\d+)/) : null;
+  return (chrome != null && chrome < 80) || (firefox != null && firefox < 74) || (safari != null && safari < 14);
+}
 app.post("/api/erori-client", express.text({ type: () => true, limit: "8kb" }), asyncRoute(async (req, res) => {
   res.status(204).end();
   const now = Date.now(), ip = String(req.headers["x-forwarded-for"] || req.ip || "").split(",")[0].trim(), recent = (clientErrorHits.get(ip) || []).filter(t => now - t < 60_000);
@@ -8118,6 +8127,9 @@ app.post("/api/erori-client", express.text({ type: () => true, limit: "8kb" }), 
   const clip = (v, n) => String(v ?? "").slice(0, n);
   const message = clip(b.message, 300).trim();
   if (!message) return;
+  // (06.11.2026) paginile vechi din cache trimit încă și astea: extensii de browser și browsere prea vechi
+  if (/runtime\.sendMessage|Extension context|message port closed|Tab not found/i.test(message)) return;
+  if (clientBrowserTooOld(req.headers["user-agent"])) return;
   const source = clip(b.source, 200), line = Math.max(0, Math.min(1e7, parseInt(b.line, 10) || 0)), col = Math.max(0, Math.min(1e7, parseInt(b.col, 10) || 0));
   const key = require("crypto").createHash("sha1").update(`${message}|${source.split("?")[0]}|${line}`).digest("hex").slice(0, 24);
   await clientErrorTables();

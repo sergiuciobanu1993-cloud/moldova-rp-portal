@@ -862,12 +862,44 @@ async function fetchFivemStatus() {
   }
 }
 
+// (06.11.2026) Recordul de jucători online (cel mai mare număr văzut vreodată), ținut în
+// site_records; pornește de la recordul anunțat (141, pe 27.10.2026 seara).
+let siteRecordsReady = null;
+function siteRecords() {
+  if (!siteRecordsReady) siteRecordsReady = pool.query(`
+    CREATE TABLE IF NOT EXISTS site_records (key TEXT PRIMARY KEY, value INT NOT NULL, at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+    INSERT INTO site_records(key, value, at) VALUES ('online_record', 141, '2026-10-27T19:00:00Z') ON CONFLICT (key) DO NOTHING;`).catch(err => { siteRecordsReady = null; throw err; });
+  return siteRecordsReady;
+}
+let onlineRecordSeen = 0;
+function noteOnlineRecord(n) {
+  n = Math.floor(Number(n) || 0);
+  if (n <= onlineRecordSeen) return;
+  onlineRecordSeen = n;
+  siteRecords().then(() => pool.query(
+    `UPDATE site_records SET value = $1, at = NOW() WHERE key = 'online_record' AND value < $1`, [n])).catch(() => {});
+}
+// Cifrele de pe prima pagină: recordul online și câte conturi are site-ul (ținute 5 minute)
+let repereCache = { at: 0, data: null };
+app.get("/api/repere", asyncRoute(async (_req, res) => {
+  res.set("Cache-Control", "public, max-age=120");
+  if (repereCache.data && Date.now() - repereCache.at < 5 * 60_000) return res.json(repereCache.data);
+  await siteRecords();
+  const [rec, acc] = await Promise.all([
+    pool.query(`SELECT value, at FROM site_records WHERE key = 'online_record'`),
+    pool.query(`SELECT COUNT(*)::int AS n FROM users`),
+  ]);
+  repereCache = { at: Date.now(), data: { record: rec.rows[0] ? { players: rec.rows[0].value, at: rec.rows[0].at } : null, accounts: acc.rows[0]?.n || 0 } };
+  res.json(repereCache.data);
+}));
+
 app.get("/api/server-status", asyncRoute(async (_req, res) => {
   const age = Date.now() - fivemCache.fetchedAt;
   if (fivemCache.data && age < FIVEM_CACHE_MS) return res.json(fivemCache.data);
   try {
     const data = await fetchFivemStatus();
     fivemCache = { data, fetchedAt: Date.now() };
+    if (data.online) noteOnlineRecord(data.players);
     res.json(data);
   } catch {
     if (fivemCache.data) return res.json({ ...fivemCache.data, stale: true });
@@ -1108,6 +1140,7 @@ async function syncPlayerSnapshots() {
     noteNewbieSeen(detail.players).catch(err => console.error("Jucători noi (mașina 50h):", err.message));
     // (01.11.2026) recompensele pe ore (6–30 noiembrie)
     noteHourEventSeen(detail.players).catch(err => console.error("Recompense pe ore:", err.message));
+    noteOnlineRecord((detail.players || []).length);
     // (31.10.2026) clasamentul săptămânii — orele jucate în săptămâna curentă
     noteWeeklyPlaytime(detail.players).catch(err => console.error("Clasamentul săptămânii:", err.message));
 
@@ -8655,6 +8688,7 @@ app.get("/api/tickets", auth, asyncRoute(async (req, res) => {
   const { rows } = await pool.query(
     `SELECT t.id,t.subject,t.category,t.status,t.evidence_url,t.created_at,t.updated_at,
             (t.user_id=$1) AS is_own, u.username submitted_by,
+            COALESCE(rp.user_id = $1, false) AS is_reported,
             rp.id reported_player_id, t.reported_player_label,
             COALESCE(rp.display_name, t.reported_player_label) reported_display
      FROM tickets t

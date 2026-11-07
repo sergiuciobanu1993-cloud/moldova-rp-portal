@@ -204,9 +204,17 @@ if (factionGrid) {
         </a>`).join('');
     },
     videos: (container, items) => {
+      // (07.11.2026) clipurile YouTube: poza clipului + buton play; playerul se încarcă abia la click
+      // (pagina se deschide mai repede și nu mai apare bara YouTube în altă limbă).
+      const ytId = u => { try { const x = new URL(u); return x.searchParams.get('v') || (/\/(?:embed|shorts|live)\/([\w-]{6,})/.exec(x.pathname) || /^\/([\w-]{6,})$/.exec(x.hostname === 'youtu.be' ? x.pathname : '') || [])[1] || ''; } catch { return ''; } };
+      const videoEmbed = (url, title) => {
+        const id = ytId(url);
+        if (!id) return `<iframe src="${escapeHtml(url)}" title="${escapeHtml(title)}" loading="lazy" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
+        return `<button type="button" class="yt-lite" data-yt="${escapeHtml(id)}" aria-label="Pornește clipul: ${escapeHtml(title)}"><img src="https://i.ytimg.com/vi/${escapeHtml(id)}/hqdefault.jpg" alt="" loading="lazy"><span class="yt-play" aria-hidden="true"></span></button>`;
+      };
       container.innerHTML = items.map(it => `
         <div class="video-job-card">
-          <div class="video-job-embed"><iframe src="${escapeHtml(it.url)}" title="${escapeHtml(it.title)}" loading="lazy" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>
+          <div class="video-job-embed">${videoEmbed(it.url, it.title)}</div>
           <div class="video-job-body"><h3>${escapeHtml(it.title)}</h3><p>${escapeHtml(it.text)}</p></div>
         </div>`).join('');
     }
@@ -469,3 +477,16 @@ window.mrpEditButton = function (page, slug) {
 if (['index', 'joburi', 'ghid-factiuni', 'legislatie-rutiera'].includes(document.body.dataset.contentPage)) {
   window.mrpEditButton(document.body.dataset.contentPage);
 }
+
+// (07.11.2026) .yt-lite: la click, poza clipului e înlocuită cu playerul YouTube (pornește singur).
+document.addEventListener('click', e => {
+  const b = e.target.closest && e.target.closest('.yt-lite[data-yt]');
+  if (!b) return;
+  const f = document.createElement('iframe');
+  f.src = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(b.dataset.yt)}?autoplay=1&rel=0&hl=ro`;
+  f.title = (b.getAttribute('aria-label') || '').replace(/^Pornește clipul:\s*/, '');
+  f.allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen';
+  f.allowFullscreen = true;
+  f.referrerPolicy = 'strict-origin-when-cross-origin';
+  b.replaceWith(f);
+});

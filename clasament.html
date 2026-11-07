@@ -39,7 +39,7 @@
   .lb-table th{text-align:left;color:var(--muted);font-size:10px;letter-spacing:.12em;font-weight:800;padding:10px 12px;border-bottom:1px solid var(--line)}
   .lb-table td{padding:12px;border-bottom:1px solid var(--line);font-size:14px}
   .lb-table tr:last-child td{border-bottom:0}
-  .lb-table td.r{text-align:right;font-weight:800}
+  .lb-table td.r{text-align:right;font-weight:800;white-space:nowrap}
   .lb-table th.r{text-align:right}
   .lb-rank{display:inline-grid;place-items:center;width:30px;height:30px;border-radius:8px;background:rgba(255,255,255,.05);font-weight:900;font-size:13px}
   .lb-table tr.top1 .lb-rank{background:#f2b84b;color:#111}.lb-table tr.top2 .lb-rank{background:#c9d1d9;color:#111}.lb-table tr.top3 .lb-rank{background:#cd7f4b;color:#111}
@@ -48,6 +48,22 @@
   .lb-scroll{overflow-x:auto}
   .lb-rules{margin:0;padding-left:18px;color:var(--muted);line-height:1.8;font-size:13px}
   .lb-rules b{color:var(--text)}
+  /* (07.11.2026) podium pentru primii 3 din săptămâna asta */
+  .lb-pod{display:grid;grid-template-columns:1fr 1.15fr 1fr;align-items:end;gap:12px;margin:4px 0 18px}
+  .lb-step{position:relative;display:flex;flex-direction:column;align-items:center;text-align:center;gap:6px;padding:18px 12px 16px;border-radius:14px 14px 10px 10px;border:1px solid var(--line);background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.01));min-width:0}
+  .lb-step .pm{font-size:30px;line-height:1}
+  .lb-step strong{font-size:15px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .lb-step strong a,.lb-step strong button{max-width:100%}
+  .lb-step small{color:var(--muted);font-size:12px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .lb-step .v{font-weight:900;font-size:18px;font-variant-numeric:tabular-nums}
+  .lb-step .base{align-self:stretch;margin-top:6px;border-radius:8px;display:grid;place-items:center;font-weight:900;font-size:22px;color:#111}
+  .lb-step.p1{order:2;border-color:rgba(242,184,75,.55);background:radial-gradient(circle at 50% 0,rgba(242,184,75,.22),transparent 70%),linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.01));box-shadow:0 18px 40px -18px rgba(242,184,75,.45)}
+  .lb-step.p1 .pm{font-size:40px}.lb-step.p1 strong{font-size:17px}.lb-step.p1 .v{color:#f2b84b;font-size:22px}
+  .lb-step.p1 .base{height:58px;background:linear-gradient(180deg,#f7cd6f,#d99a2b)}
+  .lb-step.p2{order:1}.lb-step.p2 .base{height:40px;background:linear-gradient(180deg,#dfe5ea,#a9b3bc)}
+  .lb-step.p3{order:3}.lb-step.p3 .base{height:28px;background:linear-gradient(180deg,#e09a66,#b06a39)}
+  .lb-rest{margin:0 0 8px;color:var(--muted);font-size:11px;font-weight:800;letter-spacing:.12em}
+  @media (max-width:640px){.lb-pod{gap:8px}.lb-step{padding:14px 6px 12px}.lb-step strong{font-size:13px;white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow-wrap:anywhere}.lb-step .v{white-space:nowrap}.lb-step.p1 strong{font-size:14px}.lb-step .v{font-size:14px}.lb-step.p1 .v{font-size:16px}.lb-step .pm{font-size:24px}.lb-step.p1 .pm{font-size:32px}}
   @media (max-width:640px){.lb{padding:0 18px 70px}.lb-box{padding:16px}.lb-table td{padding:10px 8px;font-size:13px}.lb-hide-sm{display:none}}
   </style>
 </head>
@@ -68,7 +84,7 @@
       <a href="index.html#anunturi">Anunțuri</a>
       <a class="nav-login" href="login.html">Autentificare</a>
     </nav>
-  </header>
+  </header><script src="site-nav.js"></script>
 
   <main>
     <div class="page-hero">
@@ -141,15 +157,23 @@
   let data = null, tab = 'jucatori';
   function table() {
     const box = document.getElementById('lb-table');
-    const rows = tab === 'jucatori' ? data.players : tab === 'factiuni' ? data.factions : (data.quests || []);
+    let rows = tab === 'jucatori' ? data.players : tab === 'factiuni' ? data.factions : (data.quests || []);
     if (!rows.length) { box.innerHTML = '<p class="lb-empty">Încă nu s-a strâns nimic săptămâna asta. Intră pe server și fii primul! 🎮</p>'; return; }
     const cls = i => i < 3 ? ` class="top${i + 1}"` : '';
-    if (tab === 'jucatori') box.innerHTML = `<table class="lb-table"><thead><tr><th>LOC</th><th>JUCĂTOR</th><th class="lb-hide-sm">FACȚIUNE</th><th class="r">ORE JUCATE</th></tr></thead><tbody>${
-      rows.map((r, i) => `<tr${cls(i)}><td><span class="lb-rank">${i + 1}</span></td><td>${nm(r)}</td><td class="lb-hide-sm lb-org">${esc(r.org || '—')}</td><td class="r">${hours(r.minutes)}</td></tr>`).join('')}</tbody></table>`;
-    else if (tab === 'factiuni') box.innerHTML = `<table class="lb-table"><thead><tr><th>LOC</th><th>FACȚIUNE</th><th class="r lb-hide-sm">MEMBRI ACTIVI</th><th class="r">ORE ÎN TOTAL</th></tr></thead><tbody>${
-      rows.map((r, i) => `<tr${cls(i)}><td><span class="lb-rank">${i + 1}</span></td><td>${esc(r.name)}</td><td class="r lb-hide-sm">${r.active}</td><td class="r">${hours(r.minutes)}</td></tr>`).join('')}</tbody></table>`;
-    else box.innerHTML = `<table class="lb-table"><thead><tr><th>LOC</th><th>JUCĂTOR</th><th class="r">PUNCTE</th></tr></thead><tbody>${
-      rows.map((r, i) => `<tr${cls(i)}><td><span class="lb-rank">${i + 1}</span></td><td>${nm(r)}</td><td class="r">${r.points}</td></tr>`).join('')}</tbody></table>`;
+    // podium: primii 3 mari, sus; tabelul de dedesubt continuă de la locul 4
+    const pName = r => tab === 'factiuni' ? esc(r.name) : nm(r);
+    const pSub = r => tab === 'jucatori' ? esc(r.org || '') : tab === 'factiuni' ? `${r.active} membri activi` : '';
+    const pVal = r => tab === 'questuri' ? `${r.points} puncte` : hours(r.minutes);
+    const pod = `<div class="lb-pod">${rows.slice(0, 3).map((r, i) => `<div class="lb-step p${i + 1}"><span class="pm" aria-hidden="true">${['🥇', '🥈', '🥉'][i]}</span><strong>${pName(r)}</strong>${pSub(r) ? `<small>${pSub(r)}</small>` : ''}<span class="v">${pVal(r)}</span><span class="base" aria-label="Locul ${i + 1}">${i + 1}</span></div>`).join('')}</div>`;
+    rows = rows.slice(3);
+    if (!rows.length) { box.innerHTML = pod; return; }
+    const off = 3;
+    if (tab === 'jucatori') box.innerHTML = pod + `<p class="lb-rest">RESTUL CLASAMENTULUI</p><table class="lb-table"><thead><tr><th>LOC</th><th>JUCĂTOR</th><th class="lb-hide-sm">FACȚIUNE</th><th class="r">ORE JUCATE</th></tr></thead><tbody>${
+      rows.map((r, i) => `<tr><td><span class="lb-rank">${i + 1 + off}</span></td><td>${nm(r)}</td><td class="lb-hide-sm lb-org">${esc(r.org || '—')}</td><td class="r">${hours(r.minutes)}</td></tr>`).join('')}</tbody></table>`;
+    else if (tab === 'factiuni') box.innerHTML = pod + `<p class="lb-rest">RESTUL CLASAMENTULUI</p><table class="lb-table"><thead><tr><th>LOC</th><th>FACȚIUNE</th><th class="r lb-hide-sm">MEMBRI ACTIVI</th><th class="r">ORE ÎN TOTAL</th></tr></thead><tbody>${
+      rows.map((r, i) => `<tr><td><span class="lb-rank">${i + 1 + off}</span></td><td>${esc(r.name)}</td><td class="r lb-hide-sm">${r.active}</td><td class="r">${hours(r.minutes)}</td></tr>`).join('')}</tbody></table>`;
+    else box.innerHTML = pod + `<p class="lb-rest">RESTUL CLASAMENTULUI</p><table class="lb-table"><thead><tr><th>LOC</th><th>JUCĂTOR</th><th class="r">PUNCTE</th></tr></thead><tbody>${
+      rows.map((r, i) => `<tr><td><span class="lb-rank">${i + 1 + off}</span></td><td>${nm(r)}</td><td class="r">${r.points}</td></tr>`).join('')}</tbody></table>`;
   }
   function render() {
     document.getElementById('lb-week').innerHTML = `Săptămâna <b>${day(data.week.start)} – ${day(data.week.end)}</b>`;

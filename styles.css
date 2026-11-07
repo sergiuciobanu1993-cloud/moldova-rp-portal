@@ -91,6 +91,14 @@ a{color:inherit;text-decoration:none}.site-header{height:78px;position:fixed;z-i
 .video-job-card:hover{border-color:rgba(255,138,31,.4);transform:translateY(-3px)}
 .video-job-embed{position:relative;padding-bottom:56.25%;height:0;overflow:hidden;background:#000}
 .video-job-embed iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+.yt-lite{position:absolute;inset:0;width:100%;height:100%;padding:0;border:0;background:#000;cursor:pointer;display:block}
+.yt-lite img{width:100%;height:100%;object-fit:cover;display:block;opacity:.88;transition:opacity .2s,transform .35s ease}
+.yt-lite:hover img,.yt-lite:focus-visible img{opacity:1;transform:scale(1.03)}
+.yt-lite::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent 55%,rgba(0,0,0,.45))}
+.yt-play{position:absolute;left:50%;top:50%;z-index:1;width:64px;height:64px;margin:-32px 0 0 -32px;border-radius:50%;background:rgba(255,138,31,.92);box-shadow:0 8px 28px rgba(0,0,0,.45),0 0 0 6px rgba(255,138,31,.18);transition:transform .2s}
+.yt-play::before{content:"";position:absolute;left:26px;top:20px;border-style:solid;border-width:12px 0 12px 19px;border-color:transparent transparent transparent #fff}
+.yt-lite:hover .yt-play{transform:scale(1.08)}
+.yt-lite:focus-visible{outline:2px solid var(--orange);outline-offset:-2px}
 .video-job-body{padding:18px 20px 22px}
 .video-job-body h3{margin:0 0 8px;font-size:17px}
 .video-job-body p{margin:0;color:var(--muted);font-size:12.5px;line-height:1.6}

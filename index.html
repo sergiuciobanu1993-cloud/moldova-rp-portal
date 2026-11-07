@@ -365,7 +365,7 @@ i.sk{height:12px;margin:4px 0}
           <div class="hc-body">
             <span class="hc-eyebrow">NOIEMBRIE · PREMII PE ORE</span>
             <h2 id="hr-title">Joacă în noiembrie, <b>primești premii</b>.</h2>
-            <p id="hr-text">Orele jucate între 6 și 30 noiembrie se adună pe contul tău, pe toate personajele. La fiecare prag ceri premiul de aici, iar staff-ul ți-l dă în joc.</p>
+            <p id="hr-text">Orele jucate între 6 și 30 noiembrie se adună pe contul tău, pe toate personajele. La fiecare prag ceri premiul de aici și îl ridici din joc cu /recompense.</p>
             <div class="hr-tiers" id="hr-tiers"></div>
             <div class="hc-me" id="hr-me"></div>
           </div>
@@ -807,7 +807,7 @@ async function hourRewardsCard() {
     // (01.11.2026) Sergiu: cardul se vede de acum, cu „În curând” și ceasul până la start
     card.classList.add('soon');
     document.querySelector('#hr-card .hc-eyebrow').textContent = 'ÎN CURÂND · PREMII PE ORE';
-    document.getElementById('hr-text').textContent = `Din ${day(ev.start)} până pe ${day(ev.end)}, orele jucate se adună pe contul tău, pe toate personajele. La fiecare prag îți ceri premiul de aici, iar staff-ul ți-l dă în joc.`;
+    document.getElementById('hr-text').textContent = `Din ${day(ev.start)} până pe ${day(ev.end)}, orele jucate se adună pe contul tău, pe toate personajele. La fiecare prag îți ceri premiul de aici și îl ridici din joc cu /recompense.`;
     const me0 = document.getElementById('hr-me');
     const startAt = Date.parse(ev.start);
     const tick = () => {
@@ -820,7 +820,7 @@ async function hourRewardsCard() {
     const timer = setInterval(tick, 1000); tick();
   }
   else if (ev.ended) document.getElementById('hr-text').textContent = `Perioada s-a încheiat pe ${day(ev.end)}. Dacă ai ajuns la un prag, îți poți cere premiul până pe ${day(ev.claimUntil)}.`;
-  const STATE = { locked: '', ready: 'Poți cere', pending: '✓ Cerut', given: '✓ Primit', rejected: 'Respins', closed: 'Închis' };
+  const STATE = { locked: '', ready: 'Poți cere', pending: '✓ Cerut', given: '✓ La /recompense', rejected: 'Respins', closed: 'Închis' };
   const tiersHtml = tiers => tiers.map(t => `<div class="hr-tier ${t.state || ''}"><b>${t.hours} ore</b><span>${esc(t.prize)}</span>${STATE[t.state] ? `<em>${STATE[t.state]}</em>` : ''}${t.state === 'ready' ? `<button type="button" class="hc-btn solid" data-hr-claim="${t.hours}">Cere premiul</button>` : ''}</div>`).join('');
   const box = document.getElementById('hr-tiers'), me = document.getElementById('hr-me');
   box.innerHTML = tiersHtml(ev.tiers);
@@ -844,7 +844,11 @@ async function hourRewardsCard() {
         const r = await fetch('/api/ore-jucate/cere', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${auth.token}` }, body: JSON.stringify({ tier: Number(btn.dataset.hrClaim) }) });
         const j = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(j.error || 'Nu a mers. Încearcă din nou.');
-        load();
+        const t = (j.tiers || []).find(x => x.hours === Number(btn.dataset.hrClaim));
+        await load();
+        me.insertAdjacentHTML('beforeend', t && t.state === 'given'
+          ? '<div style="color:#3ddc84;margin-top:6px">🎁 Premiul te așteaptă în joc: intră pe server și scrie <b>/recompense</b>.</div>'
+          : '<div style="color:#ffb46b;margin-top:6px">Cererea e trimisă. Staff-ul îți dă premiul în joc cât de curând.</div>');
       } catch (e) { btn.disabled = false; btn.textContent = 'Cere premiul'; me.insertAdjacentHTML('beforeend', `<div style="color:#ff9b6b;margin-top:6px">${esc(e.message)}</div>`); }
     }));
   }

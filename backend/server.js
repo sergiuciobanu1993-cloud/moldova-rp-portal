@@ -7198,9 +7198,9 @@ const HOUR_EVENT = {
   end: "2026-11-30T21:59:59.000Z",     // 30 noiembrie, 23:59
   claimUntil: "2026-12-07T21:59:59.000Z",
   tiers: [
-    { hours: 25, prize: "$75.000 în bancă" },
-    { hours: 50, prize: "$150.000 în bancă" },
-    { hours: 100, prize: "1.500 coins" },
+    { hours: 25, prize: "$75.000 în bancă", grant: { type: "cash", account: "bank", amount: 75000 } },
+    { hours: 50, prize: "$150.000 în bancă", grant: { type: "cash", account: "bank", amount: 150000 } },
+    { hours: 100, prize: "1.500 coins", grant: { type: "coins", amount: 1500 } },
   ],
 };
 const hourEventNow = () => {
@@ -7296,11 +7296,30 @@ app.post("/api/ore-jucate/cere", auth, asyncRoute(async (req, res) => {
     throw err;
   }
   await logAction(req.user.sub, "hour_event.claim", "hour_event", identifier, { tier: tier.hours, minutes: st.minutes, prize: tier.prize }, req.ip);
+  // (07.11.2026, cerut de Sergiu) premiul pleacă singur în joc, la /recompense (aceeași rută ca premiile
+  // clasamentului, cu „ref" unic ca jocul să nu-l dea de două ori). Dacă jocul nu-l primește, cererea
+  // rămâne „în așteptare" și o dă staff-ul ca până acum.
+  let auto = false;
+  if (tier.grant) {
+    const r = await vipShopAdminRequest("POST", "/rewards/grant", {
+      identifier, ...tier.grant, label: `Premiu pentru ${tier.hours} de ore jucate (noiembrie)`, source: "ore-jucate", ref: `ore-${st.license}-${tier.hours}`,
+    }).catch(err => ({ ok: false, status: 0, data: { error: err.message } }));
+    if (r.ok) {
+      auto = true;
+      await pool.query(`UPDATE hour_event_claims SET status = 'given', note = 'Trimis automat la /recompense', handled_at = NOW() WHERE license = $1 AND tier = $2`, [st.license, tier.hours]);
+      notifyUser(req.user.sub, { type: "hour_event", title: `🎁 ${tier.prize} te așteaptă la /recompense`, message: `Premiul pentru ${tier.hours} de ore jucate e în joc: intră pe server și scrie /recompense ca să-l ridici.`, link: "index.html", external: true }).catch(() => {});
+    } else {
+      console.warn(`Ore jucate: premiul nu a plecat singur (HTTP ${r.status}, ${JSON.stringify(r.data || {}).slice(0, 200)}) — rămâne pentru staff.`);
+    }
+  }
   (async () => {
-    const title = `⏱️ Cerere nouă: ${tier.hours} de ore jucate`;
-    const message = `**${who || "un jucător"}**${identity?.staticId ? ` #${identity.staticId}` : ""} a cerut **${tier.prize}** (${Math.floor(st.minutes / 60)}h jucate în noiembrie). Dă-i premiul în joc, apoi bifează „Am dat”.`;
+    const title = auto ? `⏱️ Premiu pe ore trimis automat: ${tier.hours} de ore` : `⏱️ Cerere nouă: ${tier.hours} de ore jucate`;
+    const message = auto
+      ? `**${who || "un jucător"}**${identity?.staticId ? ` #${identity.staticId}` : ""} a primit **${tier.prize}** la /recompense (${Math.floor(st.minutes / 60)}h jucate în noiembrie). Nu trebuie făcut nimic.`
+      : `**${who || "un jucător"}**${identity?.staticId ? ` #${identity.staticId}` : ""} a cerut **${tier.prize}** (${Math.floor(st.minutes / 60)}h jucate în noiembrie). Dă-i premiul în joc, apoi bifează „Am dat”.`;
     const link = "admin-vip-shop.html#ore-jucate";
-    await postStaffChannel({ title, message, link, color: 0x42df8a, mentionAdmins: true });
+    await postStaffChannel({ title, message, link, color: 0x42df8a, mentionAdmins: !auto });
+    if (auto) return;
     const a = await pool.query(`SELECT u.id FROM users u JOIN roles r ON r.id = u.role_id WHERE r.name = ANY($1::text[]) AND u.is_active`, [ADMIN_ROLES]);
     await Promise.all(a.rows.map(r => notifyUser(r.id, { type: "hour_event_claim", title, message: message.replace(/\*\*/g, ""), link })));
   })().catch(err => console.warn("Notificare staff (recompense pe ore) eșuată:", err.message));

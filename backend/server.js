@@ -5260,7 +5260,11 @@ function profileTables() {
       CREATE TABLE IF NOT EXISTS public_profiles (
         user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
         slug TEXT UNIQUE NOT NULL, enabled BOOLEAN NOT NULL DEFAULT TRUE,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW());`).catch(err => { profilesReady = null; throw err; });
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+      ALTER TABLE public_profiles ADD COLUMN IF NOT EXISTS bio TEXT;
+      ALTER TABLE public_profiles ADD COLUMN IF NOT EXISTS banner TEXT;
+      ALTER TABLE public_profiles ADD COLUMN IF NOT EXISTS fav_car TEXT;
+      ALTER TABLE public_profiles ADD COLUMN IF NOT EXISTS shown_badges TEXT[];`).catch(err => { profilesReady = null; throw err; });
   }
   return profilesReady;
 }
@@ -5277,14 +5281,74 @@ async function profileFreeSlug(base, userId) {
   }
   return `${base}-${Date.now().toString(36)}`;
 }
+// (07.11.2026) Setări profil: banner, descriere (bio), mașina favorită și 3 insigne alese.
+// Se văd în Contul meu și pe profilul public. Bannerele sunt teme fixe (profil-teme.css);
+// „auriu" e doar pentru Premium. Mașina favorită trebuie să fie în garajul personajului.
+const PROFILE_BANNERS = ["portocaliu", "noapte", "neon", "padure", "iarna", "moldova", "apus", "istorie", "auriu"];
+const PROFILE_BIO_MAX = 160;
+const PROFILE_BIO_BLOCK = /(https?:\/\/|www\.|discord\.gg|\.(com|ro|md|ru|net|gg)\b|\bpul[aeiă]|pizd|\bmuie\b|\bfut[uie]|\bcurv|coaie|\bsugi\b|blya|\bсука|хуй|пизд|бля)/i;
+function profileJoaat(str) {
+  let h = 0; const s = String(str).toLowerCase();
+  for (let i = 0; i < s.length; i++) { h = (h + s.charCodeAt(i)) >>> 0; h = (h + (h << 10)) >>> 0; h = (h ^ (h >>> 6)) >>> 0; }
+  h = (h + (h << 3)) >>> 0; h = (h ^ (h >>> 11)) >>> 0; h = (h + (h << 15)) >>> 0;
+  return h;
+}
+// mașinile personajului (din joc, dacă e online; altfel ultima fișă salvată)
+async function profileVehicles(identifier) {
+  if (!identifier) return [];
+  const detail = await getPlayersDetail().catch(() => ({ players: [] }));
+  const live = (detail.players || []).find(p => p.license === identifier);
+  if (live && Array.isArray(live.vehicles)) return live.vehicles;
+  const { rows } = await pool.query(`SELECT data FROM game_players_cache WHERE identifier = $1`, [identifier]).catch(() => ({ rows: [] }));
+  const v = rows[0]?.data?.vehicles;
+  return Array.isArray(v) ? v : [];
+}
+function profileOwnsCar(vehicles, model) {
+  const h = profileJoaat(model), signed = h | 0;
+  return vehicles.some(v => {
+    const n = String(v?.name || v?.model || "").trim().toLowerCase();
+    if (n === model) return true;
+    const m = /^model #(-?\d+)$/.exec(n);
+    return !!m && (Number(m[1]) === h || Number(m[1]) === signed);
+  });
+}
+// insignele câștigate: Premium, Top al săptămânii (pe categorie) și cele de Crăciun
+const PROFILE_TOP_LABEL = { jucatori: "orele jucate", factiuni: "facțiunea săptămânii", questuri: "questurile de Crăciun" };
+async function profileBadgeList(userId, identifier) {
+  await weeklyTables();
+  const [wins, xrows, premium] = await Promise.all([
+    pool.query(`SELECT category, rank FROM weekly_winners WHERE user_id = $1 OR ($2::text IS NOT NULL AND identifier = $2)`, [userId, identifier || null]).then(x => x.rows).catch(() => []),
+    xmasRows(userId).catch(() => []),
+    identifier ? fetchPremiumStatus(identifier).catch(() => null) : null,
+  ]);
+  const out = [];
+  if (premium && premium.active) out.push({ id: "premium", icon: "⭐", title: "Premium", sub: "abonament activ" });
+  const byCat = {};
+  wins.forEach(w => { (byCat[w.category] = byCat[w.category] || []).push(w.rank); });
+  for (const [c, ranks] of Object.entries(byCat)) {
+    const best = Math.min(...ranks);
+    out.push({ id: `top-${c}`, icon: ["🥇", "🥈", "🥉"][best - 1] || "🏆", title: "Top al săptămânii" + (ranks.length > 1 ? ` ×${ranks.length}` : ""), sub: `cel mai bun loc: ${best} · ${PROFILE_TOP_LABEL[c] || c}` });
+  }
+  if (xrows.length) {
+    const today = xmasToday();
+    const clock = { today, inSeason: today >= XMAS.start && today <= XMAS.end, test: false, active: today >= XMAS.start && today <= XMAS.end, ended: today > XMAS.end, adventDay: null };
+    xmasSummary(xrows, clock).badges.forEach(b => out.push({ id: `xmas-${b.id}`, icon: b.icon, title: b.title, sub: `Crăciun ${XMAS.year}` }));
+  }
+  return { list: out, premium: !!(premium && premium.active) };
+}
 const profileCache = new Map(); // slug -> { at, data }
 app.get("/api/me/profil-public", auth, asyncRoute(async (req, res) => {
   res.set("Cache-Control", "no-store");
   await profileTables();
   const { rows } = await pool.query(
-    `SELECT u.game_identifier, pp.slug, pp.enabled FROM users u LEFT JOIN public_profiles pp ON pp.user_id = u.id WHERE u.id = $1`, [req.user.sub]);
+    `SELECT u.game_identifier, pp.slug, pp.enabled, pp.bio, pp.banner, pp.fav_car, pp.shown_badges FROM users u LEFT JOIN public_profiles pp ON pp.user_id = u.id WHERE u.id = $1`, [req.user.sub]);
   const r = rows[0] || {};
-  res.json({ linked: !!r.game_identifier, enabled: !!(r.slug && r.enabled), slug: r.slug || null });
+  const badges = await profileBadgeList(req.user.sub, r.game_identifier).catch(() => ({ list: [], premium: false }));
+  res.json({
+    linked: !!r.game_identifier, enabled: !!(r.slug && r.enabled), slug: r.slug || null,
+    bio: r.bio || "", banner: r.banner || "portocaliu", favCar: r.fav_car || null, shownBadges: r.shown_badges || [],
+    badges: badges.list, premium: badges.premium, banners: PROFILE_BANNERS, bioMax: PROFILE_BIO_MAX,
+  });
 }));
 app.put("/api/me/profil-public", auth, asyncRoute(async (req, res) => {
   await profileTables();
@@ -5306,13 +5370,46 @@ app.put("/api/me/profil-public", auth, asyncRoute(async (req, res) => {
   await logAction(req.user.sub, "profile.public", "public_profile", slug, { enabled }, req.ip);
   res.json({ ok: true, enabled, slug });
 }));
+app.put("/api/me/profil-setari", auth, asyncRoute(async (req, res) => {
+  await profileTables();
+  const body = req.body || {};
+  const { rows } = await pool.query(`SELECT game_identifier, game_identifier_name, username FROM users WHERE id = $1`, [req.user.sub]);
+  const u = rows[0];
+  if (!u) return res.status(404).json({ error: "Contul nu există." });
+  const bio = String(body.bio ?? "").replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/\s{2,}/g, " ").trim();
+  if (bio.length > PROFILE_BIO_MAX) return res.status(400).json({ error: `Descrierea poate avea cel mult ${PROFILE_BIO_MAX} de caractere.` });
+  if (bio && PROFILE_BIO_BLOCK.test(bio)) return res.status(400).json({ error: "Descrierea nu poate conține linkuri sau cuvinte urâte." });
+  const badgeInfo = await profileBadgeList(req.user.sub, u.game_identifier).catch(() => ({ list: [], premium: false }));
+  const banner = PROFILE_BANNERS.includes(body.banner) ? body.banner : "portocaliu";
+  if (banner === "auriu" && !badgeInfo.premium) return res.status(400).json({ error: "Bannerul auriu e doar pentru jucătorii cu Premium." });
+  let favCar = body.favCar ? String(body.favCar).toLowerCase().trim() : null;
+  if (favCar) {
+    if (!/^[a-z0-9_]{2,24}$/.test(favCar)) return res.status(400).json({ error: "Mașina aleasă nu e validă." });
+    if (!profileOwnsCar(await profileVehicles(u.game_identifier), favCar)) return res.status(400).json({ error: "Mașina aleasă nu e în garajul personajului tău." });
+  }
+  const own = new Set(badgeInfo.list.map(b => b.id));
+  const shown = [...new Set(Array.isArray(body.shownBadges) ? body.shownBadges.map(String) : [])].filter(id => own.has(id)).slice(0, 3);
+  const ex = await pool.query(`SELECT slug FROM public_profiles WHERE user_id = $1`, [req.user.sub]);
+  let slug = ex.rows[0]?.slug;
+  if (!slug) {
+    slug = await profileFreeSlug(profileSlugBase(u.game_identifier_name || u.username), req.user.sub);
+    await pool.query(`INSERT INTO public_profiles(user_id, slug, enabled, bio, banner, fav_car, shown_badges) VALUES ($1,$2,false,$3,$4,$5,$6)`,
+      [req.user.sub, slug, bio || null, banner, favCar, shown]);
+  } else {
+    await pool.query(`UPDATE public_profiles SET bio = $2, banner = $3, fav_car = $4, shown_badges = $5, updated_at = NOW() WHERE user_id = $1`,
+      [req.user.sub, bio || null, banner, favCar, shown]);
+  }
+  profileCache.delete(slug);
+  await logAction(req.user.sub, "profile.settings", "public_profile", slug, { bio, banner, favCar, shown }, req.ip);
+  res.json({ ok: true, bio, banner, favCar, shownBadges: shown });
+}));
 app.get("/api/profil/:slug", asyncRoute(async (req, res) => {
   await profileTables();
   const slug = String(req.params.slug || "").toLowerCase().slice(0, 40);
   const hit = profileCache.get(slug);
   if (hit && Date.now() - hit.at < 60_000) { res.set("Cache-Control", "public, max-age=60"); return res.json(hit.data); }
   const { rows } = await pool.query(
-    `SELECT pp.user_id, u.created_at, u.game_identifier, u.game_identifier_name
+    `SELECT pp.user_id, pp.bio, pp.banner, pp.fav_car, pp.shown_badges, u.created_at, u.game_identifier, u.game_identifier_name
        FROM public_profiles pp JOIN users u ON u.id = pp.user_id WHERE pp.slug = $1 AND pp.enabled`, [slug]);
   const r = rows[0];
   if (!r || !r.game_identifier) return res.status(404).json({ error: "Profilul nu există sau nu e public." });
@@ -5347,6 +5444,10 @@ app.get("/api/profil/:slug", asyncRoute(async (req, res) => {
     wins: wins.map(w => ({ week: w.week, category: w.category, rank: w.rank })),
     xmas: { year: XMAS.year, badges: xmasBadges },
     premium: !!(premium && premium.active),
+    bio: r.bio || "",
+    banner: PROFILE_BANNERS.includes(r.banner) && (r.banner !== "auriu" || (premium && premium.active)) ? r.banner : "portocaliu",
+    favCar: r.fav_car || null,
+    shownBadges: r.shown_badges || [],
   };
   profileCache.set(slug, { at: Date.now(), data });
   if (profileCache.size > 2000) profileCache.clear();

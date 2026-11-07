@@ -13,6 +13,7 @@
   <title>Profil de jucător — Moldova RP</title>
   <link rel="icon" href="assets/favicon.png">
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="profil-teme.css">
   <link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/assets/app/apple-touch-icon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black"><meta name="apple-mobile-web-app-title" content="Moldova RP"><script>try{var wnT=+sessionStorage.getItem("mrp_wn_nav");if(wnT&&Date.now()-wnT<5000)document.documentElement.classList.add("wn-in")}catch(e){}</script><style>/* (31.10.2026) sosirea după cortina de iarnă (tema.js, wnNav): cortina se ridică */html.wn-in::after{content:"";position:fixed;left:0;right:0;top:0;height:calc(100vh + 140px);z-index:2147483000;pointer-events:none;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='-12 -12 24 24'%3E%3Cg fill='none' stroke='%23bfe6ff' stroke-width='1.6' stroke-linecap='round'%3E%3Cpath transform='rotate(0)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3Cpath transform='rotate(60)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3Cpath transform='rotate(120)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3Cpath transform='rotate(180)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3Cpath transform='rotate(240)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3Cpath transform='rotate(300)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3C/g%3E%3C/svg%3E") 50% calc(50vh - 27px)/54px 54px no-repeat,radial-gradient(circle at 30% 40%,#fff 0 1.6px,transparent 2.3px) 0 0/131px 113px,radial-gradient(circle at 70% 20%,rgba(255,255,255,.75) 0 1.1px,transparent 1.8px) 36px 28px/97px 71px,linear-gradient(180deg,#0b1830,#060a12 75%);-webkit-mask-image:linear-gradient(180deg,#000 calc(100% - 140px),transparent);mask-image:linear-gradient(180deg,#000 calc(100% - 140px),transparent);animation:wnIn 1s cubic-bezier(.65,0,.35,1) .2s forwards}@keyframes wnIn{to{transform:translateY(-100%);visibility:hidden}}@media (prefers-reduced-motion:reduce){html.wn-in::after{display:none}}</style><script src="/pwa.js" defer></script>
   <style>
   /* (31.10.2026) Profilul public al jucătorului (/api/profil/:slug) */
@@ -41,11 +42,24 @@
   .pf-badge .ic{font-size:26px;line-height:1;flex:none}
   .pf-badge strong{display:block;font-size:14px}
   .pf-badge small{color:var(--muted);font-size:12px}
+  /* (07.11.2026) bannerul, descrierea, mașina favorită și insignele alese (Setări profil) */
+  .pf-cover{position:relative;height:210px;border-radius:18px 18px 0 0;overflow:hidden;border:1px solid var(--line);border-bottom:0}
+  .pf-cover::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,transparent 40%,rgba(16,18,20,.92))}
+  .pf-cover img{position:absolute;right:3%;bottom:-5%;height:118%;max-width:60%;object-fit:contain;z-index:0;filter:drop-shadow(0 18px 30px rgba(0,0,0,.6))}
+  .pf-cover + .pf-card{margin-top:-16px;border-radius:0 0 18px 18px;position:relative}
+  .pf-bio{margin:12px 0 0;max-width:62ch;color:#d6d9dd;font-size:15px;line-height:1.55;overflow-wrap:anywhere}
+  .pf-chip.sb{border-color:rgba(255,210,122,.4);background:rgba(255,210,122,.08);color:#ffe2a6}
+  .pf-badge.feat{border-color:rgba(255,210,122,.45);background:rgba(255,210,122,.06)}
+  .pf-car-l{position:absolute;left:24px;bottom:28px;z-index:1;display:flex;flex-direction:column;gap:2px;color:#fff;text-shadow:0 2px 6px rgba(0,0,0,.7)}
+  .pf-car-l small{font-size:10px;font-weight:900;letter-spacing:.16em;color:#ffb46b}
+  .pf-car-l b{font-size:16px}
+  @media (max-width:760px){.pf-cover{height:150px}.pf-car-l{left:16px;bottom:22px}}
   .pf-empty{color:var(--muted);margin:0}
   .pf-missing{max-width:640px;margin:0 auto;padding:40px 24px 120px;text-align:center}
   .pf-missing p{color:var(--muted)}
   .pf-note{margin:0;color:var(--muted);font-size:13px}
   @media (max-width:760px){.pf-card{grid-template-columns:auto 1fr}.pf-share{grid-column:1/-1;flex-direction:row;flex-wrap:wrap}.pf-stats{grid-template-columns:1fr}.pf-av{width:72px;height:72px;font-size:28px;border-radius:18px}}
+  @media (max-width:560px){.pf-car-l{top:14px;bottom:auto}.pf-card{grid-template-columns:1fr;gap:14px;padding:20px}.pf-av{width:60px;height:60px;font-size:22px;border-radius:16px;margin-top:-50px;position:relative;box-shadow:0 0 0 4px #121416,0 14px 34px rgba(255,138,31,.25)}}
   </style>
 </head>
 <body>
@@ -72,10 +86,12 @@
     </div>
 
     <div class="pf" id="pf" aria-busy="true">
+      <div class="pf-cover bn-portocaliu" id="pf-cover"><img id="pf-car" alt="" hidden><div class="pf-car-l" id="pf-car-l" hidden><small>MAȘINA FAVORITĂ</small><b id="pf-car-n"></b></div></div>
       <section class="pf-card">
         <div class="pf-av" id="pf-av" aria-hidden="true">…</div>
         <div>
           <h1 id="pf-name">Se încarcă…</h1>
+          <p class="pf-bio" id="pf-bio" hidden></p>
           <div class="pf-meta" id="pf-meta"></div>
         </div>
         <div class="pf-share">
@@ -88,7 +104,7 @@
         <h2>Insigne</h2>
         <div class="pf-badges" id="pf-badges"></div>
       </section>
-      <p class="pf-note">Profilul îl face public jucătorul, din Contul meu. Banii, mașinile și sancțiunile nu apar aici.</p>
+      <p class="pf-note">Profilul îl face public jucătorul, din Contul meu. Banii și sancțiunile nu apar aici; dintre mașini apare doar cea favorită, dacă jucătorul o alege.</p>
     </div>
     <div class="pf-missing" id="pf-missing" hidden>
       <h1>Profilul nu există</h1>
@@ -126,6 +142,17 @@
       document.title = p.name + ' — Moldova RP';
       $('pf-av').textContent = p.name.split(/\s+/).filter(Boolean).slice(0, 2).map(function (w) { return w[0]; }).join('').toUpperCase() || '?';
       $('pf-name').textContent = p.name;
+      // bannerul, descrierea și mașina favorită
+      var cover = $('pf-cover');
+      cover.className = 'pf-cover bn-' + (p.banner || 'portocaliu');
+      if (p.bio) { $('pf-bio').textContent = p.bio; $('pf-bio').hidden = false; }
+      if (p.favCar && /^[a-z0-9_]{2,24}$/.test(p.favCar)) {
+        var k = encodeURIComponent(p.favCar), srcs = ['assets/vip-cars-hd/' + k + '.webp', 'assets/vip-cars/' + k + '.webp', 'https://r2.fivemanage.com/gi0w8W6O9hhBekF3oXfQ3/vehicule/' + k + '.webp'], si = 0, car = $('pf-car');
+        car.onerror = function () { si++; if (si < srcs.length) car.src = srcs[si]; else car.hidden = true; };
+        car.onload = function () { car.hidden = false; $('pf-car-l').hidden = false; };
+        car.src = srcs[0];
+        $('pf-car-n').textContent = p.favCar.toUpperCase();
+      }
       var meta = [];
       meta.push(p.online ? '<span class="pf-chip on"><span class="pf-dot"></span>Online acum</span>' : '<span class="pf-chip"><span class="pf-dot"></span>' + esc(ago(p.lastSeen)) + '</span>');
       if (p.faction) meta.push('<span class="pf-chip">🛡 ' + esc(p.faction.name) + (p.faction.grade ? ' · ' + esc(p.faction.grade) : '') + '</span>');
@@ -141,11 +168,15 @@
       (p.wins || []).forEach(function (w) { (byCat[w.category] = byCat[w.category] || []).push(w); });
       Object.keys(byCat).forEach(function (c) {
         var list = byCat[c], best = Math.min.apply(null, list.map(function (w) { return w.rank; }));
-        b.push(['🏆', 'Top al săptămânii' + (list.length > 1 ? ' ×' + list.length : ''), (MEDAL[best - 1] || '') + ' cel mai bun loc: ' + best + ' · ' + (CAT[c] || c)]);
+        b.push(['🏆', 'Top al săptămânii' + (list.length > 1 ? ' ×' + list.length : ''), (MEDAL[best - 1] || '') + ' cel mai bun loc: ' + best + ' · ' + (CAT[c] || c), 'top-' + c, MEDAL[best - 1] || '🏆']);
       });
-      ((p.xmas && p.xmas.badges) || []).forEach(function (x) { b.push([x.icon, x.title, 'Crăciun ' + p.xmas.year]); });
-      if (p.premium) b.push(['⭐', 'Premium', 'abonament activ']);
-      $('pf-badges').innerHTML = b.length ? b.map(function (x) { return '<div class="pf-badge"><span class="ic" aria-hidden="true">' + x[0] + '</span><div><strong>' + esc(x[1]) + '</strong><small>' + esc(x[2]) + '</small></div></div>'; }).join('') : '<p class="pf-empty">Încă nicio insignă. Se câștigă în clasamentul săptămânii și la questurile de Crăciun.</p>';
+      ((p.xmas && p.xmas.badges) || []).forEach(function (x) { b.push([x.icon, x.title, 'Crăciun ' + p.xmas.year, 'xmas-' + x.id, x.icon]); });
+      if (p.premium) b.push(['⭐', 'Premium', 'abonament activ', 'premium', '⭐']);
+      // insignele alese de jucător (cel mult 3): primele în listă și lângă nume
+      var shown = (p.shownBadges || []).filter(function (id) { return b.some(function (x) { return x[3] === id; }); });
+      b.sort(function (x, y) { var a = shown.indexOf(x[3]), c = shown.indexOf(y[3]); return (a < 0 ? 9 : a) - (c < 0 ? 9 : c); });
+      if (shown.length) $('pf-meta').innerHTML += b.filter(function (x) { return shown.indexOf(x[3]) >= 0; }).map(function (x) { return '<span class="pf-chip sb">' + x[4] + ' ' + esc(x[1]) + '</span>'; }).join('');
+      $('pf-badges').innerHTML = b.length ? b.map(function (x) { return '<div class="pf-badge' + (shown.indexOf(x[3]) >= 0 ? ' feat' : '') + '"><span class="ic" aria-hidden="true">' + x[0] + '</span><div><strong>' + esc(x[1]) + '</strong><small>' + esc(x[2]) + '</small></div></div>'; }).join('') : '<p class="pf-empty">Încă nicio insignă. Se câștigă în clasamentul săptămânii și la questurile de Crăciun.</p>';
       $('pf').setAttribute('aria-busy', 'false');
     }).catch(missing);
     $('pf-copy').addEventListener('click', function () {

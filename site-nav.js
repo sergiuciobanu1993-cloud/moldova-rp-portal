@@ -44,7 +44,8 @@
   // (07.11.2026) venit din „Contul meu" (dashboard.html pune mrp_back_cont = secțiunea de unde ai plecat):
   // apare butonul „Înapoi la cont" sus, până te întorci în cont
   let back = null;
-  try { back = user ? sessionStorage.getItem("mrp_back_cont") : null; } catch { /* fără sessionStorage */ }
+  // pe Acasă nu: acolo contul e la un click, pe numele din dreapta
+  try { back = user && here !== "index.html" ? sessionStorage.getItem("mrp_back_cont") : null; } catch { /* fără sessionStorage */ }
   const backHref = back != null ? "dashboard.html" + (/^#[\w-]+$/.test(back) ? back : "") : "";
 
   const h = document.createElement("header");

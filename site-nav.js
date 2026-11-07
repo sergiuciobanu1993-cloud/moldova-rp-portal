@@ -151,10 +151,13 @@
     if (!me) return;
     const n = me.display_name || me.username;
     if (n) { h.querySelector(".mrp-acc b").textContent = n; }
-    if (me.discord_id && /^\w+$/.test(me.discord_avatar || "")) {
+    // (07.11.2026) poza pusă în Contul meu → Setări are prioritate față de cea de Discord
+    const src = me.avatar_url || (me.discord_id && /^\w+$/.test(me.discord_avatar || "")
+      ? `https://cdn.discordapp.com/avatars/${encodeURIComponent(me.discord_id)}/${encodeURIComponent(me.discord_avatar)}.png?size=64` : "");
+    if (src) {
       const im = new Image();
       im.onload = () => { const av = h.querySelector(".mrp-av"); av.textContent = ""; im.style.cssText = "width:100%;height:100%;border-radius:50%;object-fit:cover"; av.appendChild(im); };
-      im.alt = ""; im.src = `https://cdn.discordapp.com/avatars/${encodeURIComponent(me.discord_id)}/${encodeURIComponent(me.discord_avatar)}.png?size=64`;
+      im.alt = ""; im.src = src;
     }
   }).catch(() => {});
 })();

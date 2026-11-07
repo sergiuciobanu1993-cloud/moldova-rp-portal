@@ -5434,13 +5434,26 @@ app.post("/api/admin/profil/:slug/descriere", auth, requireRole(...MOD_ROLES), a
   notifyUser(r.user_id, { type: "profil", title: action === "deblocheaza" ? "Descrierea e deblocată" : "Descrierea ta a fost ștearsă", message: msg, link: "/dashboard.html#setari" });
   res.json({ ok: true, bioLocked: action === "deblocheaza" ? false : action === "blocheaza" || !!r.bio_locked });
 }));
+app.post("/api/admin/profil/:slug/poza", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
+  await profileTables(); await avatarTables();
+  const slug = String(req.params.slug || "").toLowerCase().slice(0, 40);
+  const reason = String(req.body?.reason || "").trim().slice(0, 200);
+  const { rows } = await pool.query(`SELECT user_id FROM public_profiles WHERE slug = $1`, [slug]);
+  if (!rows[0]) return res.status(404).json({ error: "Profilul nu există." });
+  const del = await pool.query(`DELETE FROM user_avatars WHERE user_id = $1`, [rows[0].user_id]);
+  if (!del.rowCount) return res.status(400).json({ error: "Jucătorul nu are o poză încărcată (folosește poza de Discord)." });
+  profileCache.delete(slug);
+  await logAction(req.user.sub, "profile.avatar.staff_delete", "public_profile", slug, { reason: reason || null }, req.ip);
+  notifyUser(rows[0].user_id, { type: "profil", title: "Poza ta de profil a fost ștearsă", message: `Staff-ul ți-a șters poza de profil${reason ? ` (motiv: ${reason})` : " pentru că nu respecta regulile"}. Poți pune alta în Contul meu → Setări.`, link: "/dashboard.html#setari" });
+  res.json({ ok: true });
+}));
 app.get("/api/profil/:slug", asyncRoute(async (req, res) => {
   await profileTables();
   const slug = String(req.params.slug || "").toLowerCase().slice(0, 40);
   const hit = profileCache.get(slug);
   if (hit && Date.now() - hit.at < 60_000) { res.set("Cache-Control", "public, max-age=60"); return res.json(hit.data); }
   const { rows } = await pool.query(
-    `SELECT pp.user_id, pp.bio, pp.bio_locked, pp.banner, pp.fav_car, pp.shown_badges, u.created_at, u.game_identifier, u.game_identifier_name
+    `SELECT pp.user_id, pp.bio, pp.bio_locked, pp.banner, pp.fav_car, pp.shown_badges, u.created_at, u.game_identifier, u.game_identifier_name, u.discord_id, u.discord_avatar
        FROM public_profiles pp JOIN users u ON u.id = pp.user_id WHERE pp.slug = $1 AND pp.enabled`, [slug]);
   const r = rows[0];
   if (!r || !r.game_identifier) return res.status(404).json({ error: "Profilul nu există sau nu e public." });
@@ -5480,11 +5493,24 @@ app.get("/api/profil/:slug", asyncRoute(async (req, res) => {
     banner: PROFILE_BANNERS.includes(r.banner) && (r.banner !== "auriu" || (premium && premium.active)) ? r.banner : "portocaliu",
     favCar: r.fav_car || null,
     shownBadges: r.shown_badges || [],
+    avatar: (await avatarUrlFor(r.user_id).catch(() => null))
+      || (r.discord_id && /^\w+$/.test(r.discord_avatar || "") ? `https://cdn.discordapp.com/avatars/${r.discord_id}/${r.discord_avatar}.png?size=256` : null),
   };
   profileCache.set(slug, { at: Date.now(), data });
   if (profileCache.size > 2000) profileCache.clear();
   res.set("Cache-Control", "public, max-age=60");
   res.json(data);
+}));
+// (07.11.2026) Ce vehicule au jucătorii (doar numele modelului și la câți jucători apare),
+// ca să găsim mașinile fără poză pe site. Fără nume de jucători, numere sau alte date.
+app.get("/api/admin/vehicule-nume", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (_req, res) => {
+  const { rows } = await pool.query(`
+    SELECT name, COUNT(DISTINCT who)::int AS players FROM (
+      SELECT g.identifier AS who, v->>'name' AS name FROM game_players_cache g, jsonb_array_elements(CASE WHEN jsonb_typeof(g.data->'vehicles') = 'array' THEN g.data->'vehicles' ELSE '[]'::jsonb END) v
+      UNION ALL
+      SELECT p.id::text AS who, v->>'name' AS name FROM players p, jsonb_array_elements(CASE WHEN jsonb_typeof(p.last_vehicles) = 'array' THEN p.last_vehicles ELSE '[]'::jsonb END) v
+    ) t WHERE name IS NOT NULL AND name <> '' GROUP BY name ORDER BY players DESC, name`);
+  res.set("Cache-Control", "no-store").json({ vehicles: rows });
 }));
 app.get("/api/admin/clasament", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (_req, res) => {
   await weeklyTables();
@@ -8147,6 +8173,54 @@ async function discordLinkRedirect(req, code, nonce) {
   }
 }
 
+// (07.11.2026) Poza de profil încărcată de jucător (Contul meu → Setări). Se micșorează în
+// browser la 256×256 (WebP/JPEG/PNG, sub 300 KB) și se ține în baza de date, ca pozele de la concurs.
+// Fără poză proprie se folosește în continuare poza de Discord.
+let avatarsReady = null;
+function avatarTables() {
+  if (!avatarsReady) {
+    avatarsReady = pool.query(`CREATE TABLE IF NOT EXISTS user_avatars (
+      user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, mime TEXT NOT NULL, image BYTEA NOT NULL,
+      bytes INT NOT NULL, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW());`).catch(err => { avatarsReady = null; throw err; });
+  }
+  return avatarsReady;
+}
+const AVATAR_MAX_BYTES = 300 * 1024;
+async function avatarUrlFor(userId) {
+  await avatarTables();
+  const { rows } = await pool.query(`SELECT EXTRACT(EPOCH FROM updated_at)::bigint AS v FROM user_avatars WHERE user_id = $1`, [userId]);
+  return rows[0] ? `/api/avatar/${userId}?v=${rows[0].v}` : null;
+}
+app.get("/api/avatar/:id", asyncRoute(async (req, res) => {
+  await avatarTables();
+  const id = String(req.params.id || "");
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return res.status(404).send("Nu există.");
+  const { rows } = await pool.query(`SELECT mime, image FROM user_avatars WHERE user_id = $1`, [id]);
+  if (!rows[0]) return res.status(404).send("Nu există.");
+  res.set("Cache-Control", "public, max-age=604800, immutable").type(rows[0].mime).send(rows[0].image);
+}));
+app.put("/api/me/avatar", auth, asyncRoute(async (req, res) => {
+  await avatarTables();
+  const m = String(req.body?.image || "").match(/^data:image\/(jpeg|webp|png);base64,([A-Za-z0-9+/=]+)$/);
+  if (!m) return res.status(400).json({ error: "Alege o poză (JPG, PNG sau WebP)." });
+  const buf = Buffer.from(m[2], "base64");
+  const mime = imageMime(buf);
+  if (!mime) return res.status(400).json({ error: "Fișierul nu e o poză validă." });
+  if (buf.length > AVATAR_MAX_BYTES) return res.status(400).json({ error: "Poza e prea mare. Încearcă alta." });
+  await pool.query(`INSERT INTO user_avatars(user_id, mime, image, bytes) VALUES ($1,$2,$3,$4)
+    ON CONFLICT (user_id) DO UPDATE SET mime = EXCLUDED.mime, image = EXCLUDED.image, bytes = EXCLUDED.bytes, updated_at = NOW()`,
+    [req.user.sub, mime, buf, buf.length]);
+  profileCache.clear();
+  await logAction(req.user.sub, "profile.avatar", "user", req.user.sub, { bytes: buf.length }, req.ip);
+  res.json({ ok: true, avatarUrl: await avatarUrlFor(req.user.sub) });
+}));
+app.delete("/api/me/avatar", auth, asyncRoute(async (req, res) => {
+  await avatarTables();
+  await pool.query(`DELETE FROM user_avatars WHERE user_id = $1`, [req.user.sub]);
+  profileCache.clear();
+  await logAction(req.user.sub, "profile.avatar.delete", "user", req.user.sub, {}, req.ip);
+  res.json({ ok: true });
+}));
 app.get("/api/me", auth, asyncRoute(async (req, res) => {
   const { rows } = await pool.query(
     `SELECT u.id,u.username,u.email,r.name db_role,(u.password_hash IS NOT NULL) has_password,
@@ -8193,8 +8267,9 @@ app.get("/api/me", auth, asyncRoute(async (req, res) => {
     );
     referrals = refRows;
   }
+  const avatar_url = await avatarUrlFor(row.id).catch(() => null);
   res.json({
-    ...row, role: req.user.role, dbRole: row.db_role, hasPassword: row.has_password,
+    ...row, avatar_url, role: req.user.role, dbRole: row.db_role, hasPassword: row.has_password,
     referralCode: row.referral_code, referralCount: row.referral_count, referrals,
     gameLinked: row.game_linked, gameName: row.game_identifier_name,
     notifications: {

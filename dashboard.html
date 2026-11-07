@@ -13,6 +13,17 @@
 .ch-bio[hidden],.ch-shown[hidden]{display:none!important}
 .ch-shown{display:inline-flex;flex-wrap:wrap;gap:6px}
 .ch-sb{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:999px;border:1px solid rgba(255,210,122,.35);background:rgba(255,210,122,.08);color:#ffe2a6;font-size:11.5px;font-weight:800;white-space:nowrap}
+.ps-ava-row{display:flex;align-items:center;gap:16px}
+.ps-ava{flex:none;width:84px;height:84px;border-radius:50%;overflow:hidden;display:grid;place-items:center;background:linear-gradient(145deg,#ffb15a,#ff8a1f 55%,#d9600a);color:#1a0f02;font-weight:950;font-size:28px;box-shadow:0 0 0 3px rgba(255,138,31,.35)}
+.ps-ava img{width:100%;height:100%;object-fit:cover;display:block}
+.ps-ava-act{display:flex;flex-direction:column;align-items:flex-start;gap:6px;min-width:0}
+.ps-up{display:inline-flex;align-items:center;padding:10px 16px;border-radius:11px;background:linear-gradient(135deg,#ffa24a,#ff7a14);color:#1a0f02;font-weight:900;font-size:13px;cursor:pointer}
+.ps-up:focus-within{outline:2px solid #ffa24a;outline-offset:2px}
+.ps-up.busy{opacity:.6;pointer-events:none}
+body.cont .panel button.ps-link,.ps-link{background:none;border:0;padding:0;color:#ffa24a;font:800 12.5px Inter,system-ui,sans-serif;cursor:pointer;text-decoration:underline}
+.ps-link[hidden]{display:none}
+.ps-ava-act small{color:#8f949a;font-size:11.5px}
+.ps-ava-act small.err{color:#ff8a8a}.ps-ava-act small.ok{color:#3ddc84}
 .ps-grid{display:grid;grid-template-columns:minmax(0,1fr) 340px;min-width:0;gap:24px;align-items:start}
 .ps-form h3{display:flex;align-items:baseline;gap:8px;margin:18px 0 9px;font-size:13px;font-weight:900;letter-spacing:.02em}
 .ps-form h3:first-child{margin-top:4px}
@@ -263,6 +274,15 @@
 <section class="panel ps" id="ps-panel" hidden><div class="head"><h2>Cum arată profilul tău</h2><span>în Contul meu și pe profilul public</span></div>
   <div class="ps-grid">
     <div class="ps-form">
+      <h3>Poza de profil</h3>
+      <div class="ps-ava-row">
+        <div class="ps-ava" id="ps-ava" aria-hidden="true"></div>
+        <div class="ps-ava-act">
+          <label class="ps-up"><input type="file" id="ps-ava-file" accept="image/png,image/jpeg,image/webp" hidden>Încarcă o poză</label>
+          <button type="button" class="ps-link" id="ps-ava-del" hidden>Folosește poza de Discord</button>
+          <small id="ps-ava-msg">JPG, PNG sau WebP. O tăiem pătrat și o micșorăm automat.</small>
+        </div>
+      </div>
       <h3>Banner</h3>
       <div class="bn-pick" id="ps-banners" role="radiogroup" aria-label="Banner"></div>
       <h3><label for="ps-bio">Descriere</label> <small id="ps-bio-n">0/160</small></h3>
@@ -537,6 +557,16 @@ function carCard(v) {
   let pic = CAR_ICON;
   if (c.model) { const [a, ...rest] = carPics(c.model); pic = `<img src="${escapeHtml(a)}" data-srcs="${escapeHtml(rest.join('|'))}" alt="" loading="lazy" onerror="chCarFallback(this)">${CAR_ICON}`; }
   return `<div class="ch-car${c.model ? '' : ' no-pic'}"><div class="ch-car-pic">${pic}</div><div class="ch-car-foot"><b title="${escapeHtml(c.label)}">${escapeHtml(c.label)}</b>${c.plate ? `<span class="ch-plate">${escapeHtml(c.plate)}</span>` : ''}</div></div>`;
+}
+// pune poza în antet (mare) și în butonul contului (mic); fără URL → inițialele
+function setAvatar(url) {
+  const av = document.getElementById('profile-avatar'), sm = document.getElementById('ch-acc-av');
+  const reset = () => { av.textContent = window.chAvatarInitials || '--'; av.classList.remove('has-img'); sm.textContent = (window.chAvatarInitials || '·').charAt(0); sm.classList.remove('has-img'); };
+  if (!url) { reset(); return; }
+  const im = new Image();
+  im.onload = () => { av.textContent = ''; av.appendChild(im); av.classList.add('has-img'); sm.textContent = ''; sm.appendChild(im.cloneNode()); sm.classList.add('has-img'); };
+  im.onerror = reset;
+  im.alt = ''; im.src = url;
 }
 function setBanner(vehicles) {
   window.chVehicles = vehicles || [];
@@ -959,15 +989,13 @@ async function loadStreamerIngameLog() {
     setText('ch-acc-av', name.charAt(0).toUpperCase());
     const roleLabel = ROLE_LABEL[me.role] || ROLE_LABEL[me.dbRole];
     if (roleLabel) { const r = document.getElementById('ch-role'); r.textContent = roleLabel; r.hidden = false; }
-    if (me.discord_id && me.discord_avatar && /^[\w]+$/.test(me.discord_avatar)) {
-      const url = `https://cdn.discordapp.com/avatars/${encodeURIComponent(me.discord_id)}/${encodeURIComponent(me.discord_avatar)}.png?size=256`;
-      const im = new Image();
-      im.onload = () => {
-        const av = document.getElementById('profile-avatar'); av.textContent = ''; av.appendChild(im); av.classList.add('has-img');
-        const sm = document.getElementById('ch-acc-av'); sm.textContent = ''; sm.appendChild(im.cloneNode()); sm.classList.add('has-img');
-      };
-      im.alt = ''; im.src = url;
-    }
+    // (07.11.2026) poza încărcată în Setări are prioritate; altfel poza de Discord
+    window.chDiscordAvatar = me.discord_id && me.discord_avatar && /^[\w]+$/.test(me.discord_avatar)
+      ? `https://cdn.discordapp.com/avatars/${encodeURIComponent(me.discord_id)}/${encodeURIComponent(me.discord_avatar)}.png?size=256` : null;
+    window.chAvatarInitials = name.slice(0, 2).toUpperCase();
+    window.chAvatarUrl = me.avatar_url || null;
+    setAvatar(me.avatar_url || window.chDiscordAvatar);
+    if (window.chAvatarReady) window.chAvatarReady();
 
     if (['moderator', 'admin', 'co-fondator', 'owner'].includes(me.role)) {
       // (03.10.2026) fiecare grad intră pe prima pagină din panou la care are acces
@@ -1453,6 +1481,57 @@ document.getElementById('streamer-copy-btn').addEventListener('click', async () 
     $('ps-badges-n').textContent = `${st.shown.length} din 3 alese`;
   }
   function renderAll() { renderBanners(); renderCars(); renderBadges(); preview(); }
+
+  // ---- poza de profil: se taie pătrat, se micșorează la 256×256 în browser și se trimite
+  function paintAva() {
+    const box = $('ps-ava'), url = window.chAvatarUrl || window.chDiscordAvatar;
+    box.innerHTML = url ? `<img src="${esc(url)}" alt="">` : esc(window.chAvatarInitials || '--');
+    $('ps-ava-del').hidden = !window.chAvatarUrl;
+    $('ps-ava-del').textContent = window.chDiscordAvatar ? 'Folosește poza de Discord' : 'Șterge poza';
+  }
+  window.chAvatarReady = paintAva;
+  function avaMsg(t, cls) { const m = $('ps-ava-msg'); m.textContent = t; m.className = cls || ''; }
+  function shrink(file) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file), img = new Image();
+      img.onload = () => {
+        const side = Math.min(img.naturalWidth, img.naturalHeight), c = document.createElement('canvas');
+        c.width = c.height = 256;
+        const x = c.getContext('2d'); x.imageSmoothingQuality = 'high';
+        x.drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, 256, 256);
+        URL.revokeObjectURL(url);
+        let data = c.toDataURL('image/webp', 0.86);
+        if (!/^data:image\/webp/.test(data)) data = c.toDataURL('image/jpeg', 0.86);
+        resolve(data);
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Fișierul nu e o poză validă.')); };
+      img.src = url;
+    });
+  }
+  $('ps-ava-file').addEventListener('change', async e => {
+    const f = e.target.files && e.target.files[0]; e.target.value = '';
+    if (!f) return;
+    if (!/^image\/(png|jpeg|webp)$/.test(f.type)) return avaMsg('Alege o poză JPG, PNG sau WebP.', 'err');
+    if (f.size > 15 * 1024 * 1024) return avaMsg('Poza e prea mare (maxim 15 MB).', 'err');
+    const up = document.querySelector('.ps-up'); up.classList.add('busy'); avaMsg('Se încarcă…');
+    try {
+      const image = await shrink(f);
+      const r = await apiFetch('/api/me/avatar', { method: 'PUT', body: JSON.stringify({ image }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || 'Nu am putut salva poza.');
+      window.chAvatarUrl = d.avatarUrl; setAvatar(d.avatarUrl); paintAva(); avaMsg('Poza e pusă ✓', 'ok');
+    } catch (err) { avaMsg(err.message, 'err'); }
+    up.classList.remove('busy');
+  });
+  $('ps-ava-del').addEventListener('click', async () => {
+    avaMsg('Se șterge…');
+    try {
+      const r = await apiFetch('/api/me/avatar', { method: 'DELETE' });
+      if (!r.ok) throw new Error('Nu am putut șterge poza.');
+      window.chAvatarUrl = null; setAvatar(window.chDiscordAvatar); paintAva(); avaMsg(window.chDiscordAvatar ? 'Acum se vede poza de Discord.' : 'Poza a fost ștearsă.', 'ok');
+    } catch (err) { avaMsg(err.message, 'err'); }
+  });
+  paintAva();
 
   $('ps-banners').addEventListener('change', e => { if (e.target.name === 'ps-bn') { st.banner = e.target.value; preview(); } });
   $('ps-bio').addEventListener('input', preview);

@@ -189,7 +189,7 @@ body.cont #activity .event b{flex:none;width:52px;color:var(--orange2);font-size
 .ch-log small{color:var(--muted);font-size:11.5px;white-space:nowrap;font-variant-numeric:tabular-nums}
 
 /* formularele din secțiunile de cont */
-body.cont .panel button:not(.btn-ghost):not(.ch-copy):not(.ch-notif):not(.ch-linkbtn):not(.ch-arr):not(.ps-car):not(.ps-badge){background:var(--grad);border:0;border-radius:10px;padding:10px 16px;font:inherit;font-weight:900;font-size:13px;color:#1a0f02;cursor:pointer}
+body.cont .panel button:not(.btn-ghost):not(.ch-copy):not(.ch-notif):not(.ch-linkbtn):not(.ch-arr):not(.ps-car):not(.ps-badge):not(.ps-link){background:var(--grad);border:0;border-radius:10px;padding:10px 16px;font:inherit;font-weight:900;font-size:13px;color:#1a0f02;cursor:pointer}
 body.cont .panel button:disabled{opacity:.55;cursor:default}
 body.cont .btn-ghost{border-radius:10px;background:var(--chip)}
 body.cont .btn-ghost:hover{border-color:rgba(255,138,31,.5);color:var(--orange2)}

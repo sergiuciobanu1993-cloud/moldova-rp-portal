@@ -380,9 +380,23 @@ function renderPerks() {
           ${p.off ? '<span class="off-tag">Oprit</span>' : p.soon ? soonTag : got ? '' : `<span class="lock" aria-label="blocat">🔒</span>`}
         </div>`).join('')}</div>
     </div>`;
-  }).join('') + (showUpTo < ms.length ? `<button type="button" class="road-more" id="road-more">Arată tot drumul · încă ${plural(ms.length - showUpTo, 'prag', 'praguri')}, până la ${plural(ms[ms.length - 1][0], 'zi', 'zile')}</button>` : '');
+  }).join('') + (showUpTo < ms.length ? `<button type="button" class="road-more" id="road-more" aria-expanded="false"></button>` : '');
   const rm = document.getElementById('road-more');
-  if (rm) rm.addEventListener('click', () => { document.getElementById('road').classList.add('all'); rm.remove(); });
+  if (rm) {
+    const road = document.getElementById('road');
+    const label = () => {
+      const open = road.classList.contains('all');
+      rm.setAttribute('aria-expanded', String(open));
+      rm.textContent = open ? 'Ascunde pragurile de mai departe ▴' : `Arată tot drumul · încă ${plural(ms.length - showUpTo, 'prag', 'praguri')}, până la ${plural(ms[ms.length - 1][0], 'zi', 'zile')} ▾`;
+    };
+    label();
+    rm.addEventListener('click', () => {
+      const open = road.classList.toggle('all');
+      label();
+      // la închidere, rămâi la butonul pe care l-ai apăsat (altfel pagina sare)
+      if (!open) rm.scrollIntoView({ block: 'center' });
+    });
+  }
   document.getElementById('rule-burn').textContent = `Bonusurile se opresc. Zilele adunate scad încet, cu ${D.burnPerDay === 1 ? 'una' : D.burnPerDay} pe zi, până reactivezi. Le reiei de unde ai rămas.`;
 }
 

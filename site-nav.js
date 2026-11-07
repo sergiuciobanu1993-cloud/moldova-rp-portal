@@ -160,4 +160,7 @@
       im.alt = ""; im.src = src;
     }
   }).catch(() => {});
+  // (07.11.2026) fundalul animat (logo, 0,5 MB) se descarcă abia după ce pagina s-a încărcat de tot
+  const wm = () => setTimeout(() => document.documentElement.classList.add("wm-anim"), 1200);
+  if (document.readyState === "complete") wm(); else addEventListener("load", wm, { once: true });
 })();

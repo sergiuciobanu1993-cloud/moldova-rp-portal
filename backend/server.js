@@ -4434,10 +4434,24 @@ async function loginInfoFor(userId) {
 // Necesită un cont de site cu display_name setat (vine din players.display_name,
 // populat la prima sincronizare cu jocul) — dacă nu există încă, răspundem
 // degradat, nu cu eroare.
+// (07.11.2026) viteza: fișa personajului (cea mai lentă cerere din Contul meu, ~0,5 s) se ține
+// 15 secunde pe cont; două cereri deodată (două file deschise) folosesc același răspuns.
+const meProfileCache = new Map(); // userId -> { at, p }
 app.get("/api/me/profile", auth, asyncRoute(async (req, res) => {
+  const uid = req.user.sub;
+  let hit = meProfileCache.get(uid);
+  if (!hit || Date.now() - hit.at > 15_000) {
+    hit = { at: Date.now(), p: meProfileBuild(uid) };
+    meProfileCache.set(uid, hit);
+    if (meProfileCache.size > 3000) meProfileCache.clear();
+    hit.p.catch(() => meProfileCache.delete(uid));
+  }
+  res.json(await hit.p);
+}));
+async function meProfileBuild(uid) {
   const { rows } = await pool.query(
     `SELECT p.display_name, u.game_identifier, u.game_identifier_name
-     FROM users u LEFT JOIN players p ON p.user_id = u.id WHERE u.id = $1 LIMIT 1`, [req.user.sub]);
+     FROM users u LEFT JOIN players p ON p.user_id = u.id WHERE u.id = $1 LIMIT 1`, [uid]);
   const row = rows[0] || {};
   // Cont legat prin /leagacont (28.09.2026): căutăm personajul după
   // identificatorul exact. Numele pentru loguri/sancțiuni e numele din joc
@@ -4446,13 +4460,13 @@ app.get("/api/me/profile", auth, asyncRoute(async (req, res) => {
     const detail = await getPlayersDetail();
     const live = (detail.players || []).find(p => p.license === row.game_identifier);
     const name = live?.name || row.game_identifier_name || row.display_name;
-    const profile = await buildPlayerProfile(name, { userId: req.user.sub, identifier: row.game_identifier });
-    return res.json({ hasGameProfile: true, linked: true, identifier: row.game_identifier, ...profile });
+    const profile = await buildPlayerProfile(name, { userId: uid, identifier: row.game_identifier });
+    return { hasGameProfile: true, linked: true, identifier: row.game_identifier, ...profile };
   }
-  if (!row.display_name) return res.json({ hasGameProfile: false, linked: false });
+  if (!row.display_name) return { hasGameProfile: false, linked: false };
   const profile = await buildPlayerProfile(row.display_name);
-  res.json({ hasGameProfile: true, linked: false, ...profile });
-}));
+  return { hasGameProfile: true, linked: false, ...profile };
+}
 
 // ---------------------------------------------------------------------------
 // (31.10.2026, cerut de Sergiu) Questurile de Crăciun de pe site.
@@ -5892,6 +5906,7 @@ app.post("/api/cont/leaga-joc", auth, asyncRoute(async (req, res) => {
     `UPDATE users SET game_identifier = $1, game_identifier_name = $2 WHERE id = $3`,
     [result.identifier, result.name || null, req.user.sub]
   );
+  meProfileCache.delete(req.user.sub);
   await ensurePlayerRow(req.user.sub).catch(() => {});
   res.json({ ok: true, name: result.name || null });
 }));
@@ -5921,6 +5936,7 @@ app.post("/api/cont/leaga-discord", auth, asyncRoute(async (req, res) => {
     `UPDATE users SET game_identifier = $1, game_identifier_name = $2 WHERE id = $3`,
     [hit.identifier, hit.rpName || null, req.user.sub]
   );
+  meProfileCache.delete(req.user.sub);
   await ensurePlayerRow(req.user.sub).catch(() => {});
   await logAction(req.user.sub, "account.link_game_discord", "user", req.user.sub, { identifier: hit.identifier, rpName: hit.rpName }, req.ip);
   res.json({ ok: true, name: hit.rpName || null });
@@ -5928,6 +5944,7 @@ app.post("/api/cont/leaga-discord", auth, asyncRoute(async (req, res) => {
 
 app.post("/api/cont/dezleaga-joc", auth, asyncRoute(async (req, res) => {
   await pool.query(`UPDATE users SET game_identifier = NULL, game_identifier_name = NULL WHERE id = $1`, [req.user.sub]);
+  meProfileCache.delete(req.user.sub);
   res.json({ ok: true });
 }));
 
@@ -8443,7 +8460,15 @@ const HOME_BUNDLE_PATHS = ["/api/content/index", "/api/regulations", "/api/tema"
 let homeBundle = { at: 0, data: null, pending: null };
 app.get("/api/acasa", asyncRoute(async (_req, res) => {
   res.set("Cache-Control", "no-store");
-  if (homeBundle.data && Date.now() - homeBundle.at < 10_000) return res.json(homeBundle.data);
+  // (07.11.2026) viteza: pachetul de date de pe Acasă se reface în fundal. Până la 2 minute vechime
+  // îl trimitem imediat (cel vechi) și cerem unul nou pentru următorii vizitatori; doar dacă e mai
+  // vechi de atât (de ex. după o pauză lungă), vizitatorul așteaptă pachetul nou.
+  const age = Date.now() - homeBundle.at;
+  if (homeBundle.data && age < 10_000) return res.json(homeBundle.data);
+  if (homeBundle.data && age < 120_000) { refreshHomeBundle().catch(() => {}); return res.json(homeBundle.data); }
+  res.json(await refreshHomeBundle());
+}));
+function refreshHomeBundle() {
   if (!homeBundle.pending) {
     homeBundle.pending = (async () => {
       const out = {};
@@ -8458,8 +8483,8 @@ app.get("/api/acasa", asyncRoute(async (_req, res) => {
       return out;
     })().catch(err => { homeBundle.pending = null; throw err; });
   }
-  res.json(await homeBundle.pending);
-}));
+  return homeBundle.pending;
+}
 
 // după orice modificare din Admin → Anunțuri, lista se citește din nou imediat
 app.use("/api/admin/announcements", (req, res, next) => {

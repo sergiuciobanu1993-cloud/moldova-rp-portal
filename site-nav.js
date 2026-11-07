@@ -41,6 +41,11 @@
   const staff = user && ["moderator", "admin", "co-fondator", "owner"].includes(user.role);
   const panel = user && ["co-fondator", "owner"].includes(user.role) ? "admin.html" : "admin-tichete.html";
   const moreCur = MORE.some(([h]) => isCur(h));
+  // (07.11.2026) venit din „Contul meu" (dashboard.html pune mrp_back_cont = secțiunea de unde ai plecat):
+  // apare butonul „Înapoi la cont" sus, până te întorci în cont
+  let back = null;
+  try { back = user ? sessionStorage.getItem("mrp_back_cont") : null; } catch { /* fără sessionStorage */ }
+  const backHref = back != null ? "dashboard.html" + (/^#[\w-]+$/.test(back) ? back : "") : "";
 
   const h = document.createElement("header");
   h.className = "site-header mrp-hdr";
@@ -53,6 +58,7 @@
         <div class="mrp-drop" hidden>${MORE.map(([href, t]) => `<a href="${href}"${isCur(href) ? ' class="on" aria-current="page"' : ""}>${t}</a>`).join("")}<a href="craciun.html" data-craciun-link hidden>🎄 Crăciun</a></div></div>
     </nav>
     <div class="mrp-right">
+      ${backHref ? `<a class="mrp-back" href="${backHref}" title="Înapoi la Contul meu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg><span>Înapoi la cont</span></a>` : ""}
       ${user ? `<div class="mrp-me"><button type="button" class="mrp-acc" aria-haspopup="true" aria-expanded="false"><span class="mrp-av">${esc(name.charAt(0).toUpperCase())}</span><b>${esc(name)}</b><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
         <div class="mrp-drop r" hidden><a href="dashboard.html">Contul meu</a><a href="dashboard.html#vehicule">Vehiculele mele</a><a href="tichete.html">Tichetele mele</a>${staff ? `<a href="${panel}">⚙ Panou admin</a>` : ""}<button type="button" data-out>Deconectare</button></div></div>`
         : `<a class="mrp-login" href="login.html">Autentificare</a>`}
@@ -90,6 +96,9 @@
 .mrp-drop a[hidden]{display:none}
 .mrp-drop button[data-out]{color:#ff8a8a;border-top:1px solid rgba(255,255,255,.08);border-radius:0 0 8px 8px;margin-top:4px}
 .mrp-right{display:flex;align-items:center;gap:10px;flex:none;margin-left:auto}
+.mrp-back{display:inline-flex;align-items:center;gap:6px;height:40px;padding:0 14px 0 10px;border-radius:12px;border:1px solid rgba(255,138,31,.55);background:linear-gradient(135deg,rgba(255,162,74,.18),rgba(255,122,20,.1));color:#ffb46b;font-weight:800;font-size:13px;text-decoration:none;white-space:nowrap;transition:background .15s ease}
+.mrp-back:hover{background:rgba(255,138,31,.24);color:#fff}
+.mrp-back svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
 .mrp-login{padding:10px 16px;border-radius:10px;border:1px solid rgba(255,138,31,.55);color:#fff;font-weight:800;font-size:13px;text-decoration:none;background:rgba(255,138,31,.1)}
 .mrp-login:hover{background:rgba(255,138,31,.2)}
 .mrp-acc{display:flex;align-items:center;gap:9px;padding:4px 12px 4px 4px;border-radius:999px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:#f3f4f6;font:inherit;font-size:13px;cursor:pointer;max-width:220px}
@@ -112,6 +121,7 @@
   .mrp-acc b,.mrp-acc svg{display:none}
   .mrp-acc{padding:3px}
 }
+@media(max-width:560px){.mrp-back{padding:0 10px}.mrp-back span{display:none}}
 @media(max-width:420px){.mrp-brand span{display:none}.mrp-login{padding:9px 12px}}`;
     document.head.appendChild(st);
   }
@@ -128,6 +138,8 @@
   const burger = h.querySelector(".mrp-burger");
   burger.addEventListener("click", () => { const o = h.classList.toggle("open"); burger.setAttribute("aria-expanded", String(o)); });
   h.querySelectorAll(".mrp-links a").forEach(a => a.addEventListener("click", () => h.classList.remove("open")));
+  const forget = () => { try { sessionStorage.removeItem("mrp_back_cont"); } catch { /* nimic */ } };
+  h.querySelector(".mrp-back")?.addEventListener("click", forget);
   h.querySelector("[data-out]")?.addEventListener("click", () => {
     try { localStorage.removeItem("mrp_auth"); } catch { /* fără stocare */ }
     try { fetch("/api/auth/sesiune-panou", { method: "DELETE", keepalive: true }).catch(() => {}); } catch { /* fără rețea */ }

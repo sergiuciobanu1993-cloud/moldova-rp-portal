@@ -71,7 +71,7 @@
   <a href="cod-penal.html"><svg viewBox="0 0 24 24"><path d="M12 3v18M7 21h10M5 7h14"/><path d="M5 7l-3 7a3.5 3.5 0 0 0 6 0zM19 7l-3 7a3.5 3.5 0 0 0 6 0z"/></svg>Codul Penal</a>
   <a href="calculator-sanctiuni.html"><svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 11h2M12 11h2M16 11h0M8 15h2M12 15h2M8 18h2M12 18h4"/></svg>Calculator sancțiuni</a>
   <a href="craciun.html" data-craciun-link hidden><svg viewBox="0 0 24 24"><path d="M12 2l3 5h-2l3 5h-2l4 6H6l4-6H8l3-5H9z"/><path d="M12 18v4"/></svg>Questurile de Crăciun</a>
-  <a href="https://mcustoms-streamer.duckdns.org:8443/" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="M16 10l6-3v10l-6-3"/></svg>M Customs <small>↗</small></a>
+  <a href="https://mcustoms-streamer.duckdns.org:8443/" target="_blank" rel="noopener" class="ch-stream-link" title="M Customs — instrumentul pentru streameri (se deschide într-o filă nouă)"><svg viewBox="0 0 24 24"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="M16 10l6-3v10l-6-3"/></svg><span>M Customs<em>pentru streameri</em></span><small>↗</small></a>
 </aside>
 <main class="ch-main">
 <!-- compatibilitate: scripturile vechi încă scriu aici -->
@@ -1303,6 +1303,20 @@ document.getElementById('streamer-copy-btn').addEventListener('click', async () 
     if (a && a.finished && !d.lead) document.getElementById('test-serifi-btn').textContent = 'Vezi rezultatul →';
     box.hidden = false;
   } catch { /* fără card */ }
+})();
+</script>
+<script>
+// (07.11.2026) Când pleci din „Contul meu" spre altă pagină a site-ului (Clasament, Premium, VIP Shop…),
+// ținem minte secțiunea; acolo, bara de sus arată „Înapoi la cont" (site-nav.js), care te aduce aici.
+(() => {
+  try { sessionStorage.removeItem('mrp_back_cont'); } catch { /* nimic */ }
+  document.addEventListener('click', e => {
+    const a = e.target.closest && e.target.closest('a[href]');
+    if (!a || a.target === '_blank' || e.defaultPrevented) return;
+    let u; try { u = new URL(a.getAttribute('href'), location.href); } catch { return; }
+    if (u.origin !== location.origin || /\/(dashboard|login)\.html$/.test(u.pathname)) return;
+    try { sessionStorage.setItem('mrp_back_cont', location.hash || ''); } catch { /* nimic */ }
+  }, true);
 })();
 </script>
 </body></html>

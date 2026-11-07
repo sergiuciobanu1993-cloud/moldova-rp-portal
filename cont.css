@@ -46,6 +46,7 @@ body.cont .menu-toggle{margin-left:0}
 .ch-side a:hover{background:var(--chip);color:#fff}
 .ch-side a.sel{background:linear-gradient(90deg,rgba(255,138,31,.2),rgba(255,138,31,.05));border-color:rgba(255,138,31,.4);color:#fff;box-shadow:inset 3px 0 0 var(--orange)}
 .ch-side a.sel svg{color:var(--orange2)}
+.ch-side a.ch-stream-link span{display:flex;flex-direction:column;line-height:1.2}.ch-side a.ch-stream-link em{font-style:normal;font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#c08bff;margin-top:2px}.ch-side a.ch-stream-link svg{color:#c08bff}
 body.cont main.ch-main{width:100%;max-width:1560px;margin:0 auto;padding:0;min-width:0}
 .ch-side::-webkit-scrollbar{width:0}
 

@@ -1838,12 +1838,17 @@ async function loadItemValues() {
     return new Map();
   }
 }
+// (07.11.2026) Serverul de joc poate opri vânzarea pe o monedă (răspunde „nu_se_poate" cu
+// motiv „moneda_oprita"). Ținem minte 30 de minute și nu mai arătăm butonul pe moneda aia,
+// ca jucătorul să nu primească o eroare după ce apasă.
+const sellCurrencyOff = new Map(); // "coins" | "money" -> până când (ms)
+function sellCurrencyAllowed(cur) { const until = sellCurrencyOff.get(cur); return !until || until < Date.now(); }
 function sellOfferFor(values, type, data) {
   const k = valueKey(type, data);
   const v = k && values.get(`${k[0]}|${k[1]}`);
   if (!v) return null;
-  const coins = v.coins ? Math.floor(v.coins * SELL_BACK_PCT / 100) : null;
-  const money = v.money ? Math.floor(v.money * SELL_BACK_PCT / 100) : null;
+  const coins = v.coins && sellCurrencyAllowed("coins") ? Math.floor(v.coins * SELL_BACK_PCT / 100) : null;
+  const money = v.money && sellCurrencyAllowed("money") ? Math.floor(v.money * SELL_BACK_PCT / 100) : null;
   return (coins || money) ? { coins, money, pct: SELL_BACK_PCT } : null;
 }
 function parseRewardData(raw) {
@@ -6102,7 +6107,10 @@ app.post("/api/vip-shop/vinde", auth, asyncRoute(async (req, res) => {
     // (04.10.2026) în jurnal: de ce a refuzat jocul, ca să nu mai ghicim
     console.warn(`VIP Shop: serverul de joc a refuzat vânzarea — HTTP ${result.status}, răspuns ${JSON.stringify(result.data || {}).slice(0, 300)} (deschiderea #${openingId}, „${opening.reward_label}”, ${amount} ${currency}).`);
     const sellLimit = gameDailyLimit(result);
+    const currencyOff = String(result.data?.motiv || "").toLowerCase() === "moneda_oprita";
+    if (currencyOff) sellCurrencyOff.set(currency, Date.now() + 30 * 60_000);
     const msg = result.status === 404 ? "Vânzarea înapoi nu e încă activă pe serverul de joc."
+      : currencyOff ? `Vânzarea pe ${currency === "coins" ? "coins" : "bani"} e oprită acum pe server. Recompensa rămâne a ta: o ridici din joc cu /recompense.`
       : sellLimit ? messages.limita_zilnica
       : (messages[result.error] || "Nu am putut vinde recompensa.");
     return res.status(400).json({ error: msg });

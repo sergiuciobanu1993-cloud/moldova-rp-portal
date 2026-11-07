@@ -5264,7 +5264,8 @@ function profileTables() {
       ALTER TABLE public_profiles ADD COLUMN IF NOT EXISTS bio TEXT;
       ALTER TABLE public_profiles ADD COLUMN IF NOT EXISTS banner TEXT;
       ALTER TABLE public_profiles ADD COLUMN IF NOT EXISTS fav_car TEXT;
-      ALTER TABLE public_profiles ADD COLUMN IF NOT EXISTS shown_badges TEXT[];`).catch(err => { profilesReady = null; throw err; });
+      ALTER TABLE public_profiles ADD COLUMN IF NOT EXISTS shown_badges TEXT[];
+      ALTER TABLE public_profiles ADD COLUMN IF NOT EXISTS bio_locked BOOLEAN NOT NULL DEFAULT FALSE;`).catch(err => { profilesReady = null; throw err; });
   }
   return profilesReady;
 }
@@ -5341,12 +5342,12 @@ app.get("/api/me/profil-public", auth, asyncRoute(async (req, res) => {
   res.set("Cache-Control", "no-store");
   await profileTables();
   const { rows } = await pool.query(
-    `SELECT u.game_identifier, pp.slug, pp.enabled, pp.bio, pp.banner, pp.fav_car, pp.shown_badges FROM users u LEFT JOIN public_profiles pp ON pp.user_id = u.id WHERE u.id = $1`, [req.user.sub]);
+    `SELECT u.game_identifier, pp.slug, pp.enabled, pp.bio, pp.banner, pp.fav_car, pp.shown_badges, pp.bio_locked FROM users u LEFT JOIN public_profiles pp ON pp.user_id = u.id WHERE u.id = $1`, [req.user.sub]);
   const r = rows[0] || {};
   const badges = await profileBadgeList(req.user.sub, r.game_identifier).catch(() => ({ list: [], premium: false }));
   res.json({
     linked: !!r.game_identifier, enabled: !!(r.slug && r.enabled), slug: r.slug || null,
-    bio: r.bio || "", banner: r.banner || "portocaliu", favCar: r.fav_car || null, shownBadges: r.shown_badges || [],
+    bio: r.bio || "", bioLocked: !!r.bio_locked, banner: r.banner || "portocaliu", favCar: r.fav_car || null, shownBadges: r.shown_badges || [],
     badges: badges.list, premium: badges.premium, banners: PROFILE_BANNERS, bioMax: PROFILE_BIO_MAX,
   });
 }));
@@ -5389,7 +5390,8 @@ app.put("/api/me/profil-setari", auth, asyncRoute(async (req, res) => {
   }
   const own = new Set(badgeInfo.list.map(b => b.id));
   const shown = [...new Set(Array.isArray(body.shownBadges) ? body.shownBadges.map(String) : [])].filter(id => own.has(id)).slice(0, 3);
-  const ex = await pool.query(`SELECT slug FROM public_profiles WHERE user_id = $1`, [req.user.sub]);
+  const ex = await pool.query(`SELECT slug, bio_locked FROM public_profiles WHERE user_id = $1`, [req.user.sub]);
+  if (bio && ex.rows[0]?.bio_locked) return res.status(403).json({ error: "Staff-ul ți-a blocat descrierea. Pentru deblocare, deschide un tichet." });
   let slug = ex.rows[0]?.slug;
   if (!slug) {
     slug = await profileFreeSlug(profileSlugBase(u.game_identifier_name || u.username), req.user.sub);
@@ -5403,13 +5405,37 @@ app.put("/api/me/profil-setari", auth, asyncRoute(async (req, res) => {
   await logAction(req.user.sub, "profile.settings", "public_profile", slug, { bio, banner, favCar, shown }, req.ip);
   res.json({ ok: true, bio, banner, favCar, shownBadges: shown });
 }));
+// (07.11.2026) Staff (moderator+): șterge descrierea nepotrivită de pe profilul unui jucător și,
+// la nevoie, i-o blochează (nu mai poate scrie alta până o deblochează staff-ul). Jucătorul primește notificare.
+app.post("/api/admin/profil/:slug/descriere", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
+  await profileTables();
+  const slug = String(req.params.slug || "").toLowerCase().slice(0, 40);
+  const action = ["sterge", "blocheaza", "deblocheaza"].includes(req.body?.action) ? req.body.action : null;
+  if (!action) return res.status(400).json({ error: "Acțiune necunoscută." });
+  const reason = String(req.body?.reason || "").trim().slice(0, 200);
+  const { rows } = await pool.query(`SELECT user_id, bio, bio_locked FROM public_profiles WHERE slug = $1`, [slug]);
+  const r = rows[0];
+  if (!r) return res.status(404).json({ error: "Profilul nu există." });
+  if (action === "deblocheaza") {
+    await pool.query(`UPDATE public_profiles SET bio_locked = FALSE, updated_at = NOW() WHERE user_id = $1`, [r.user_id]);
+  } else {
+    await pool.query(`UPDATE public_profiles SET bio = NULL, bio_locked = (bio_locked OR $2), updated_at = NOW() WHERE user_id = $1`, [r.user_id, action === "blocheaza"]);
+  }
+  profileCache.delete(slug);
+  await logAction(req.user.sub, `profile.bio.${action}`, "public_profile", slug, { oldBio: r.bio, reason: reason || null }, req.ip);
+  const msg = action === "deblocheaza"
+    ? "Staff-ul ți-a deblocat descrierea de pe profil. Poți scrie din nou una în Contul meu → Setări."
+    : `Staff-ul ți-a șters descrierea de pe profil${reason ? ` (motiv: ${reason})` : " pentru că nu respecta regulile"}.` + (action === "blocheaza" ? " Descrierea e blocată; pentru deblocare, deschide un tichet." : " Poți scrie alta în Contul meu → Setări.");
+  notifyUser(r.user_id, { type: "profil", title: action === "deblocheaza" ? "Descrierea e deblocată" : "Descrierea ta a fost ștearsă", message: msg, link: "/dashboard.html#setari" });
+  res.json({ ok: true, bioLocked: action === "deblocheaza" ? false : action === "blocheaza" || !!r.bio_locked });
+}));
 app.get("/api/profil/:slug", asyncRoute(async (req, res) => {
   await profileTables();
   const slug = String(req.params.slug || "").toLowerCase().slice(0, 40);
   const hit = profileCache.get(slug);
   if (hit && Date.now() - hit.at < 60_000) { res.set("Cache-Control", "public, max-age=60"); return res.json(hit.data); }
   const { rows } = await pool.query(
-    `SELECT pp.user_id, pp.bio, pp.banner, pp.fav_car, pp.shown_badges, u.created_at, u.game_identifier, u.game_identifier_name
+    `SELECT pp.user_id, pp.bio, pp.bio_locked, pp.banner, pp.fav_car, pp.shown_badges, u.created_at, u.game_identifier, u.game_identifier_name
        FROM public_profiles pp JOIN users u ON u.id = pp.user_id WHERE pp.slug = $1 AND pp.enabled`, [slug]);
   const r = rows[0];
   if (!r || !r.game_identifier) return res.status(404).json({ error: "Profilul nu există sau nu e public." });
@@ -5445,6 +5471,7 @@ app.get("/api/profil/:slug", asyncRoute(async (req, res) => {
     xmas: { year: XMAS.year, badges: xmasBadges },
     premium: !!(premium && premium.active),
     bio: r.bio || "",
+    bioLocked: !!r.bio_locked,
     banner: PROFILE_BANNERS.includes(r.banner) && (r.banner !== "auriu" || (premium && premium.active)) ? r.banner : "portocaliu",
     favCar: r.fav_car || null,
     shownBadges: r.shown_badges || [],

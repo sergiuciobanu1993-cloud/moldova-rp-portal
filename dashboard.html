@@ -1482,6 +1482,7 @@ document.getElementById('streamer-copy-btn').addEventListener('click', async () 
     if (!d || !Array.isArray(d.banners)) return;
     st = { banners: d.banners, bioMax: d.bioMax || 160, premium: !!d.premium, badges: d.badges || [], bio: d.bio || '', banner: d.banner || 'portocaliu', favCar: d.favCar || null, shown: (d.shownBadges || []).slice() };
     $('ps-bio').value = st.bio; $('ps-bio').maxLength = st.bioMax;
+    if (d.bioLocked) { $('ps-bio').disabled = true; $('ps-bio').placeholder = 'Staff-ul ți-a blocat descrierea. Pentru deblocare, deschide un tichet.'; }
     saved = pick();
     panel.hidden = false;
     applyHero({ bio: st.bio, banner: st.banner, favCar: st.favCar, shownBadges: st.shown });

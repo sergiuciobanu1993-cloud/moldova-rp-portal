@@ -51,9 +51,21 @@
   .pf-chip.sb{border-color:rgba(255,210,122,.4);background:rgba(255,210,122,.08);color:#ffe2a6}
   .pf-badge.feat{border-color:rgba(255,210,122,.45);background:rgba(255,210,122,.06)}
   .pf-car-l{position:absolute;left:24px;bottom:28px;z-index:1;display:flex;flex-direction:column;gap:2px;color:#fff;text-shadow:0 2px 6px rgba(0,0,0,.7)}
+  .pf-car-l[hidden]{display:none}
   .pf-car-l small{font-size:10px;font-weight:900;letter-spacing:.16em;color:#ffb46b}
   .pf-car-l b{font-size:16px}
   @media (max-width:760px){.pf-cover{height:150px}.pf-car-l{left:16px;bottom:22px}}
+  .pf-staff{padding:14px 16px;border-radius:14px;border:1px dashed rgba(255,138,31,.45);background:rgba(255,138,31,.05)}
+  .pf-staff[hidden],.pf-sbtn[hidden]{display:none}
+  .pf-staff-h{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:13px}
+  .pf-staff-h span{color:var(--muted);font-size:12px;font-weight:700}
+  .pf-staff-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+  .pf-staff-row input{flex:1 1 240px;min-width:0;padding:9px 12px;border-radius:10px;border:1px solid var(--line);background:#0c0d10;color:var(--text);font:inherit;font-size:13px}
+  .pf-sbtn{padding:9px 14px;border-radius:10px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);color:var(--text);font:700 13px Inter,system-ui,sans-serif;cursor:pointer}
+  .pf-sbtn:hover{border-color:var(--orange);color:var(--orange)}
+  .pf-sbtn.red{border-color:rgba(255,107,107,.45);color:#ff8a8a}
+  .pf-sbtn.armed{background:rgba(255,107,107,.16);border-color:#ff6b6b;color:#fff}
+  .pf-staff-msg{margin:8px 0 0;font-size:12.5px;color:var(--muted);min-height:1em}
   .pf-empty{color:var(--muted);margin:0}
   .pf-missing{max-width:640px;margin:0 auto;padding:40px 24px 120px;text-align:center}
   .pf-missing p{color:var(--muted)}
@@ -98,6 +110,16 @@
           <button type="button" class="btn btn-primary" id="pf-copy">Copiază linkul</button>
           <a class="btn btn-ghost" href="clasament.html">Vezi clasamentul</a>
         </div>
+      </section>
+      <section class="pf-staff" id="pf-staff" hidden aria-label="Unelte staff">
+        <div class="pf-staff-h"><b>🛡 Staff · descrierea profilului</b><span id="pf-staff-state"></span></div>
+        <div class="pf-staff-row">
+          <input id="pf-staff-reason" maxlength="200" placeholder="Motivul (opțional, îl vede jucătorul): ex. limbaj vulgar">
+          <button type="button" class="pf-sbtn" data-act="sterge">Șterge descrierea</button>
+          <button type="button" class="pf-sbtn red" data-act="blocheaza">Șterge și blochează</button>
+          <button type="button" class="pf-sbtn" data-act="deblocheaza" hidden>Deblochează</button>
+        </div>
+        <p class="pf-staff-msg" id="pf-staff-msg" role="status"></p>
       </section>
       <section class="pf-stats" id="pf-stats"></section>
       <section class="pf-box">
@@ -177,8 +199,43 @@
       b.sort(function (x, y) { var a = shown.indexOf(x[3]), c = shown.indexOf(y[3]); return (a < 0 ? 9 : a) - (c < 0 ? 9 : c); });
       if (shown.length) $('pf-meta').innerHTML += b.filter(function (x) { return shown.indexOf(x[3]) >= 0; }).map(function (x) { return '<span class="pf-chip sb">' + x[4] + ' ' + esc(x[1]) + '</span>'; }).join('');
       $('pf-badges').innerHTML = b.length ? b.map(function (x) { return '<div class="pf-badge' + (shown.indexOf(x[3]) >= 0 ? ' feat' : '') + '"><span class="ic" aria-hidden="true">' + x[0] + '</span><div><strong>' + esc(x[1]) + '</strong><small>' + esc(x[2]) + '</small></div></div>'; }).join('') : '<p class="pf-empty">Încă nicio insignă. Se câștigă în clasamentul săptămânii și la questurile de Crăciun.</p>';
+      staffTools(p);
       $('pf').setAttribute('aria-busy', 'false');
     }).catch(missing);
+    // (07.11.2026) unelte staff: ștergerea / blocarea descrierii (POST /api/admin/profil/:slug/descriere)
+    function staffTools(p) {
+      var auth = null; try { auth = JSON.parse(localStorage.getItem('mrp_auth') || 'null'); } catch (e) { /* fără sesiune */ }
+      var role = auth && auth.user && auth.user.role;
+      if (!auth || !auth.token || ['moderator', 'admin', 'co-fondator', 'owner'].indexOf(role) < 0) return;
+      var box = $('pf-staff'), st = { bio: !!p.bio, locked: !!p.bioLocked };
+      function paint() {
+        $('pf-staff-state').textContent = (st.bio ? 'are descriere' : 'fără descriere') + (st.locked ? ' · 🔒 blocată' : '');
+        box.querySelector('[data-act="sterge"]').hidden = !st.bio;
+        box.querySelector('[data-act="blocheaza"]').hidden = st.locked;
+        box.querySelector('[data-act="deblocheaza"]').hidden = !st.locked;
+      }
+      box.hidden = false; paint();
+      box.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-act]'); if (!btn) return;
+        var act = btn.getAttribute('data-act'), msg = $('pf-staff-msg');
+        // al doilea clic confirmă (fără ferestre de confirmare)
+        if (act !== 'deblocheaza' && !btn.classList.contains('armed')) {
+          box.querySelectorAll('.armed').forEach(function (b) { b.classList.remove('armed'); b.textContent = b.dataset.t; });
+          btn.dataset.t = btn.textContent; btn.classList.add('armed'); btn.textContent = 'Sigur? Apasă din nou';
+          return;
+        }
+        btn.disabled = true; msg.textContent = 'Se trimite…';
+        fetch('/api/admin/profil/' + encodeURIComponent(p.slug) + '/descriere', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + auth.token }, body: JSON.stringify({ action: act, reason: $('pf-staff-reason').value }) })
+          .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { if (!r.ok) throw new Error(d.error || 'Nu s-a putut.'); return d; }); })
+          .then(function (d) {
+            if (act !== 'deblocheaza') { st.bio = false; $('pf-bio').hidden = true; $('pf-bio').textContent = ''; }
+            st.locked = !!d.bioLocked;
+            msg.textContent = act === 'deblocheaza' ? 'Descrierea e deblocată. Jucătorul a primit notificare.' : 'Descrierea a fost ștearsă' + (st.locked ? ' și blocată' : '') + '. Jucătorul a primit notificare.';
+          })
+          .catch(function (err) { msg.textContent = err.message; })
+          .then(function () { btn.disabled = false; if (btn.dataset.t) btn.textContent = btn.dataset.t; btn.classList.remove('armed'); paint(); });
+      });
+    }
     $('pf-copy').addEventListener('click', function () {
       var btn = this, url = location.origin + '/profil.html?u=' + encodeURIComponent(slug);
       (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(function () { btn.textContent = 'Linkul e copiat ✓'; }, function () { prompt('Copiază linkul:', url); })

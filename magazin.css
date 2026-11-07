@@ -1,0 +1,85 @@
+/* (07.11.2026) VIP Shop și Premium în stilul „Contul meu" (cont.css): aceleași culori,
+   carduri și titluri; sus un banner cu soldul de coins și starea Premium.
+   Atinge doar paginile cu body.mg. Bannerele vin din profil-teme.css. */
+body.mg{--bg:#08090b;--panel:#111317;--panel2:#15181d;--chip:#181b20;--line:rgba(255,255,255,.075);--line2:rgba(255,255,255,.13);--text:#f3f4f6;--muted:#8d939b;--orange:#ff8a1f;--orange2:#ffa24a;--grad:linear-gradient(135deg,#ffa24a,#ff7a14);--green:#3ddc84;
+  background:radial-gradient(900px 420px at 18% -120px,rgba(255,138,31,.10),transparent 70%),radial-gradient(700px 360px at 100% 0,rgba(255,100,20,.06),transparent 70%),var(--bg);min-height:100vh}
+body.mg main{max-width:1240px;padding:26px clamp(14px,2.4vw,32px) 70px}
+
+/* antetul: banner + titlu + cifrele */
+.mg-hero{position:relative;border-radius:18px;overflow:hidden;border:1px solid var(--line);background:linear-gradient(180deg,var(--panel2),var(--panel));margin-bottom:16px}
+.mg-banner{position:relative;height:186px;overflow:hidden}
+.mg-banner::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,transparent 35%,rgba(17,19,23,.96));pointer-events:none}
+.mg-crates{position:absolute;right:3%;bottom:-18px;display:flex;align-items:flex-end}
+.mg-crates img{width:190px;height:128px;object-fit:cover;object-position:center 40%;border-radius:14px;border:1px solid rgba(255,255,255,.12);box-shadow:0 18px 40px rgba(0,0,0,.55)}
+.mg-crates img:nth-child(1){transform:rotate(-8deg) translate(26px,14px)}
+.mg-crates img:nth-child(2){position:relative;z-index:1;width:220px;height:146px}
+.mg-crates img:nth-child(3){transform:rotate(8deg) translate(-26px,14px)}
+.mg-row{position:relative;z-index:1;display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:20px;padding:0 26px 24px;margin-top:-58px}
+.mg-who{flex:1 1 340px;min-width:0}
+.mg-k{margin:0;color:var(--orange2);font-size:10.5px;font-weight:900;letter-spacing:.16em}
+.mg-who h1{margin:4px 0 4px;font-size:38px;letter-spacing:-.03em;line-height:1.05}
+.mg-who>small{display:block;color:#c4c8ce;font-size:13.5px;max-width:58ch;line-height:1.5}
+.mg-who code{padding:1px 6px;border-radius:6px;background:rgba(255,255,255,.08);color:#fff;font-size:12.5px}
+.mg-acc{margin:10px 0 0;color:var(--muted);font-size:12.5px}
+.mg-acc:empty{display:none}
+.mg-acc strong{color:var(--text)}
+.mg-acc a{color:var(--orange2);font-weight:800}
+.mg-metrics{display:flex;flex-wrap:wrap;gap:10px}
+.mg-m{display:flex;align-items:center;gap:12px;min-width:190px;padding:13px 16px;border-radius:14px;background:rgba(10,11,13,.72);border:1px solid var(--line2);color:var(--text);text-decoration:none;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+.mg-m[hidden]{display:none!important}
+a.mg-m:hover{border-color:rgba(255,138,31,.55)}
+.mg-m i{flex:none;width:40px;height:40px;border-radius:11px;display:grid;place-items:center;font-style:normal;font-size:20px;background:rgba(255,138,31,.12)}
+.mg-m small{display:block;color:var(--muted);font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
+.mg-m strong{display:block;margin-top:2px;font-size:16px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.mg-m.coins{border-color:rgba(255,200,80,.4);background:linear-gradient(140deg,rgba(255,190,60,.14),rgba(10,11,13,.75) 60%)}
+.mg-m.coins i{background:rgba(255,200,80,.16)}
+.mg-m.coins strong{font-size:22px;color:#ffd27a}
+.mg-m.prem i{background:rgba(255,210,122,.14)}
+
+/* „Cum cumpăr coins?" — închis implicit */
+.mg-how{margin:0 0 16px;border-radius:14px;border:1px solid var(--line);background:var(--panel)}
+.mg-how summary{cursor:pointer;list-style:none;padding:13px 18px;font-weight:800;font-size:13.5px;color:#d6d9dd;display:flex;align-items:center;gap:8px}
+.mg-how summary::-webkit-details-marker{display:none}
+.mg-how summary::before{content:'?';display:grid;place-items:center;width:20px;height:20px;border-radius:50%;background:rgba(255,138,31,.16);color:var(--orange2);font-size:12px;font-weight:900}
+.mg-how summary::after{content:'▾';margin-left:auto;color:var(--muted)}
+.mg-how[open] summary::after{content:'▴'}
+.mg-how p{margin:0;padding:0 18px 14px 46px;color:#c4c8ce;font-size:13px;line-height:1.6}
+
+/* panourile, ca în Contul meu */
+body.mg .panel{background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--line);border-radius:16px}
+body.mg main>.panel,body.mg main>section.panel{padding:22px 24px}
+body.mg .head{margin-bottom:16px;gap:12px;flex-wrap:wrap}
+body.mg .head h2{font-size:19px;letter-spacing:-.01em}
+body.mg .head>span.muted,body.mg .head>span:not(.pill){font-size:12px;color:var(--muted)}
+body.mg .case-grid{grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+body.mg .case-card{background:var(--panel2);border:1px solid var(--line);border-radius:16px}
+body.mg .case-card:hover,body.mg .case-card:focus-visible{border-color:rgba(255,138,31,.55);box-shadow:0 16px 40px -18px rgba(255,138,31,.35)}
+body.mg .crate-frame{height:150px;border-radius:12px}
+body.mg .wins-band{border-radius:16px;border-color:var(--line);background:linear-gradient(180deg,var(--panel2),var(--panel))}
+
+@media(max-width:760px){
+  .mg-banner{height:130px}
+  .mg-crates{right:-30px}
+  .mg-crates img{width:130px;height:88px}
+  .mg-crates img:nth-child(2){width:150px;height:100px}
+  .mg-row{padding:0 16px 18px;margin-top:-6px}
+  .mg-m.coins{flex-basis:100%}
+  .mg-m.coins strong{white-space:nowrap}
+  .mg-who h1{font-size:30px}
+  .mg-metrics{width:100%}
+  .mg-m{flex:1 1 100%;min-width:0}
+  .mg-m strong{white-space:normal}
+  body.mg main>.panel,body.mg main>section.panel{padding:18px 16px}
+}
+body.mg .btn-mrp{background:var(--grad);border:0;color:#1a0f02;font-weight:900;font-size:13.5px;padding:12px 14px;border-radius:11px;box-shadow:0 10px 24px -10px rgba(255,138,31,.6)}
+body.mg .btn-mrp:hover{background:linear-gradient(135deg,#ffb466,#ff8a1f);transform:translateY(-1px)}
+body.mg .btn-mrp .mrp-mark{background:#1a0f02;color:#ffa24a}
+body.mg .case-card h3{font-size:18px}
+
+/* Premium: același antet, cu banner auriu și steaua abonamentului */
+.pr-emblem{position:absolute;right:7%;top:14px;width:150px;height:150px;filter:drop-shadow(0 14px 30px rgba(242,194,48,.35))}
+.pr-k{color:#f2c230}
+body.mg .pr-state,body.mg main>section.pr-state{margin-top:0;border-radius:16px;padding:0}
+body.mg .plan,body.mg .perk{border-radius:14px;background:linear-gradient(180deg,var(--panel2),var(--panel))}
+body.mg .sec-head{margin-top:34px}
+@media(max-width:760px){.pr-emblem{width:96px;height:96px;right:5%;top:12px}}

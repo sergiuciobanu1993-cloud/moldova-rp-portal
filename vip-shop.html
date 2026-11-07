@@ -385,24 +385,35 @@ button.win-chip:focus-visible{outline:2px solid var(--orange);outline-offset:2px
 }
 </style>
 <link rel="stylesheet" href="vip-3d.css?v=20261003b">
+<link rel="stylesheet" href="profil-teme.css">
+<link rel="stylesheet" href="magazin.css">
   <link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/assets/app/apple-touch-icon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black"><meta name="apple-mobile-web-app-title" content="Moldova RP"><script>try{var wnT=+sessionStorage.getItem("mrp_wn_nav");if(wnT&&Date.now()-wnT<5000)document.documentElement.classList.add("wn-in")}catch(e){}</script><style>/* (31.10.2026) sosirea după cortina de iarnă (tema.js, wnNav): cortina se ridică */html.wn-in::after{content:"";position:fixed;left:0;right:0;top:0;height:calc(100vh + 140px);z-index:2147483000;pointer-events:none;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='-12 -12 24 24'%3E%3Cg fill='none' stroke='%23bfe6ff' stroke-width='1.6' stroke-linecap='round'%3E%3Cpath transform='rotate(0)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3Cpath transform='rotate(60)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3Cpath transform='rotate(120)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3Cpath transform='rotate(180)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3Cpath transform='rotate(240)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3Cpath transform='rotate(300)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3C/g%3E%3C/svg%3E") 50% calc(50vh - 27px)/54px 54px no-repeat,radial-gradient(circle at 30% 40%,#fff 0 1.6px,transparent 2.3px) 0 0/131px 113px,radial-gradient(circle at 70% 20%,rgba(255,255,255,.75) 0 1.1px,transparent 1.8px) 36px 28px/97px 71px,linear-gradient(180deg,#0b1830,#060a12 75%);-webkit-mask-image:linear-gradient(180deg,#000 calc(100% - 140px),transparent);mask-image:linear-gradient(180deg,#000 calc(100% - 140px),transparent);animation:wnIn 1s cubic-bezier(.65,0,.35,1) .2s forwards}@keyframes wnIn{to{transform:translateY(-100%);visibility:hidden}}@media (prefers-reduced-motion:reduce){html.wn-in::after{display:none}}</style><script src="/pwa.js" defer></script><meta name="theme-color" content="#090a0b">
 </head>
-<body>
+<body class="mg">
 <header><a class="brand" href="index.html"><img src="assets/logo-128.webp" alt="">MOLDOVA<span>RP</span></a><nav id="dash-nav"><a href="index.html">Acasă</a><a href="dashboard.html">Dashboard</a><a href="tichete.html">Tichete</a><a href="vip-shop.html" style="color:var(--orange)">VIP Shop</a><a href="premium.html" id="premium-nav-link" hidden>Premium</a></nav><button class="menu-toggle" id="dash-menu-toggle" type="button" aria-label="Deschide meniul" aria-expanded="false">☰</button><a class="logout" href="login.html" id="logout-link">Deconectare</a></header><script src="site-nav.js"></script>
 <main>
-<section class="welcome"><div><p>MAGAZIN COINS</p><h1>VIP Shop</h1><small>Cheltuiește coins-urile deja cumpărate pe o recompensă cu șansă — se ridică din joc.</small></div><div class="home-btns"><a class="home-btn" href="dashboard.html">👤 Contul meu</a><a class="home-btn" href="index.html">← Pagina principală</a></div></section>
-
-<p class="muted" style="margin:18px 0 24px">
-  Coins-urile se cumpără exact ca până acum: din joc, apasă <strong>„Cumpără coins"</strong> în meniul VIP, plătește pe Tebex,
-  apoi introdu ID-ul tranzacției acolo ca să-ți fie creditate. Pagina asta doar arată soldul și îți lasă să-l cheltui pe o recompensă —
-  nu schimbă nimic la cumpărarea coins-urilor în sine.
-</p>
-
-<a href="premium.html" id="premium-promo" class="panel" hidden style="display:flex;align-items:center;gap:16px;margin:0 0 20px;padding:16px 20px;border-color:rgba(255,138,31,.4)">
-  <span style="font-size:24px" aria-hidden="true">⭐</span>
-  <span style="flex:1;min-width:0"><strong style="display:block">Premium și pachete de start</strong><span class="muted" style="font-size:12.5px">Bonusuri în joc pe toată durata abonamentului, plus bonusuri noi pe măsură ce aduni zile.</span></span>
-  <span style="color:var(--orange);font-weight:800;white-space:nowrap">Vezi →</span>
-</a>
+<section class="mg-hero">
+  <div class="mg-banner bn-portocaliu" aria-hidden="true">
+    <div class="mg-crates"><img src="assets/vip-cases/rare.webp" alt=""><img src="assets/vip-cases/legendara.webp" alt=""><img src="assets/vip-cases/epic.webp" alt=""></div>
+  </div>
+  <div class="mg-row">
+    <div class="mg-who">
+      <p class="mg-k">MAGAZIN COINS</p>
+      <h1>VIP Shop</h1>
+      <small>Deschide cutii cu mașini, arme și bani. Ce câștigi ridici din joc, cu <code>/recompense</code>.</small>
+      <p class="mg-acc" id="account-line"></p>
+    </div>
+    <div class="mg-metrics">
+      <article class="mg-m coins"><i aria-hidden="true">🪙</i><div><small>Coins-urile tale</small><strong id="coins-balance">— coins</strong></div></article>
+      <a class="mg-m" href="#pending-panel" id="m-pending-card"><i aria-hidden="true">🎁</i><div><small>De ridicat din joc</small><strong id="m-pending">—</strong></div></a>
+      <a href="premium.html" id="premium-promo" class="mg-m prem" hidden><i aria-hidden="true">⭐</i><div><small>Premium</small><strong id="m-premium">Vezi abonamentul</strong></div></a>
+    </div>
+  </div>
+</section>
+<details class="mg-how">
+  <summary>Cum cumpăr coins?</summary>
+  <p>Din joc: în meniul VIP apeși <b>„Cumpără coins”</b>, plătești pe Tebex, apoi introduci ID-ul tranzacției acolo și coins-urile îți intră în cont. Aici doar le vezi și le cheltui pe cutii.</p>
+</details>
 <style>#premium-promo[hidden]{display:none!important}</style>
 
 <section class="wins-band" id="wins-band" aria-labelledby="wins-head" hidden>
@@ -411,8 +422,7 @@ button.win-chip:focus-visible{outline:2px solid var(--orange);outline-offset:2px
 </section>
 
 <section class="panel" id="cases-panel">
-  <div class="head"><h2>Recompense disponibile</h2><span id="coins-balance" class="pill info">— coins</span></div>
-  <p class="muted" id="account-line" style="margin:0 0 14px"></p>
+  <div class="head"><h2>Cutii</h2><span class="muted">Apasă pe o cutie ca să vezi tot ce poate ieși și șansele</span></div>
   <div class="open-bar" id="open-bar-main" hidden>
     <div class="qty" role="group" aria-label="Câte cutii deschizi dintr-o apăsare">
       <span class="qty-label">Cutii odată</span>
@@ -746,6 +756,7 @@ function renderAccountLine(data) {
 }
 
 function renderPending(pending) {
+  const mp = document.getElementById('m-pending'); if (mp) mp.textContent = pending && pending.length ? `${pending.length} ${pending.length === 1 ? 'premiu' : 'premii'}` : 'nimic acum';
   const panel = document.getElementById('pending-panel');
   const body = document.getElementById('pending-body');
   if (!pending || !pending.length) { panel.hidden = true; return; }
@@ -1037,7 +1048,7 @@ document.getElementById('preview-pool').addEventListener('keydown', e => {
 function renderCases(cases, coins, linked) {
   const panel = document.getElementById('cases-panel');
   panel.hidden = false;
-  document.getElementById('coins-balance').textContent = linked ? `🪙 ${fmtC(coins)} coins` : '🪙 — coins';
+  document.getElementById('coins-balance').textContent = linked ? `${fmtC(coins)} coins` : '— coins';
   currentCasesById = {};
   cases.forEach(c => { currentCasesById[c.id] = c; });
   const grid = document.getElementById('cases-grid');
@@ -2101,6 +2112,9 @@ async function loadAll() {
     if (!pr || !pr.visible) return;
     const pl = document.getElementById('premium-nav-link'); if (pl) pl.hidden = false;
     document.getElementById('premium-promo').hidden = false;
+    const st = pr.status, mpr = document.getElementById('m-premium');
+    if (mpr && st && st.active && st.until) mpr.textContent = 'activ până pe ' + new Date(st.until).toLocaleDateString('ro-RO');
+    else if (mpr) mpr.textContent = 'Activează →';
   }).catch(() => {});
   await loadAll();
 })();

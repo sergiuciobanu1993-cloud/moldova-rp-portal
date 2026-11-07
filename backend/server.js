@@ -5309,11 +5309,22 @@ async function profileVehicles(identifier) {
   const v = rows[0]?.data?.vehicles;
   return Array.isArray(v) ? v : [];
 }
+// numele din magazinul ESX („Baller Sport") → codul mașinii; aceeași listă ca pe site (vehicle-models.js)
+let vehicleLabelMap = null;
+function vehicleLabels() {
+  if (vehicleLabelMap) return vehicleLabelMap;
+  try {
+    const src = siteFs.readFileSync(path.join(SITE_ROOT, "vehicle-models.js"), "utf8");
+    const m = /window\.MRP_VEHICLE_LABELS\s*=\s*(\{[\s\S]*?\});/.exec(src);
+    vehicleLabelMap = m ? JSON.parse(m[1]) : {};
+  } catch { vehicleLabelMap = {}; }
+  return vehicleLabelMap;
+}
 function profileOwnsCar(vehicles, model) {
   const h = profileJoaat(model), signed = h | 0;
   return vehicles.some(v => {
     const n = String(v?.name || v?.model || "").trim().toLowerCase();
-    if (n === model) return true;
+    if (n === model || vehicleLabels()[n] === model) return true;
     const m = /^model #(-?\d+)$/.exec(n);
     return !!m && (Number(m[1]) === h || Number(m[1]) === signed);
   });

@@ -537,6 +537,9 @@ async function loadCarCatalog() {
 function carInfo(v) {
   const raw = String(v.name || '').trim();
   const m = /^model #(-?\d+)$/i.exec(raw);
+  // (07.11.2026) numele din magazinul ESX („Baller Sport", „Vespa") au prioritate: dau codul corect al pozei
+  const lab = !m && raw ? (window.MRP_VEHICLE_LABELS || {})[raw.toLowerCase()] : null;
+  if (lab) return { label: raw, model: lab, plate: v.plate || '' };
   const hit = m ? carCatalog?.get(Number(m[1])) : carCatalog?.get(raw.toLowerCase());
   // (06.11.2026) uneori jocul trimite direct codul de spawn („boss429"): căutăm poza după el
   const code = !hit && !m && /^[a-z0-9_]{2,24}$/i.test(raw) ? raw.toLowerCase() : null;

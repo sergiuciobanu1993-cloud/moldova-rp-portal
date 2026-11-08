@@ -5168,6 +5168,11 @@ function imageMime(buf) {
   if (buf.length > 8 && buf[0] === 0x89 && buf.toString("ascii", 1, 4) === "PNG") return "image/png";
   return null;
 }
+// (08.11.2026) la poza de profil și banner acceptăm și GIF animat (nu-l trecem prin canvas, ca să nu înghețe)
+function imageMimeAnim(buf) {
+  if (buf.length > 6 && buf.toString("ascii", 0, 4) === "GIF8") return "image/gif";
+  return imageMime(buf);
+}
 app.get("/api/concurs", asyncRoute(async (req, res) => {
   res.set("Cache-Control", "no-store");
   await contestTables();
@@ -5288,7 +5293,9 @@ function profileTables() {
       ALTER TABLE public_profiles ADD COLUMN IF NOT EXISTS banner TEXT;
       ALTER TABLE public_profiles ADD COLUMN IF NOT EXISTS fav_car TEXT;
       ALTER TABLE public_profiles ADD COLUMN IF NOT EXISTS shown_badges TEXT[];
-      ALTER TABLE public_profiles ADD COLUMN IF NOT EXISTS bio_locked BOOLEAN NOT NULL DEFAULT FALSE;`).catch(err => { profilesReady = null; throw err; });
+      ALTER TABLE public_profiles ADD COLUMN IF NOT EXISTS bio_locked BOOLEAN NOT NULL DEFAULT FALSE;
+      ALTER TABLE public_profiles ADD COLUMN IF NOT EXISTS banner_pos TEXT;
+      ALTER TABLE public_profiles ADD COLUMN IF NOT EXISTS banner_zoom INT;`).catch(err => { profilesReady = null; throw err; });
   }
   return profilesReady;
 }
@@ -5377,13 +5384,14 @@ app.get("/api/me/profil-public", auth, asyncRoute(async (req, res) => {
   res.set("Cache-Control", "no-store");
   await profileTables();
   const { rows } = await pool.query(
-    `SELECT u.game_identifier, pp.slug, pp.enabled, pp.bio, pp.banner, pp.fav_car, pp.shown_badges, pp.bio_locked FROM users u LEFT JOIN public_profiles pp ON pp.user_id = u.id WHERE u.id = $1`, [req.user.sub]);
+    `SELECT u.game_identifier, pp.slug, pp.enabled, pp.bio, pp.banner, pp.fav_car, pp.shown_badges, pp.bio_locked, pp.banner_pos, pp.banner_zoom FROM users u LEFT JOIN public_profiles pp ON pp.user_id = u.id WHERE u.id = $1`, [req.user.sub]);
   const r = rows[0] || {};
   const badges = await profileBadgeList(req.user.sub, r.game_identifier).catch(() => ({ list: [], premium: false }));
   res.json({
     linked: !!r.game_identifier, enabled: !!(r.slug && r.enabled), slug: r.slug || null,
     bio: r.bio || "", bioLocked: !!r.bio_locked, banner: r.banner || "portocaliu", favCar: r.fav_car || null, shownBadges: r.shown_badges || [],
     bannerImg: await bannerUrlFor(req.user.sub).catch(() => null),
+    bannerPos: r.banner_pos || null, bannerZoom: r.banner_zoom || null,
     badges: badges.list, premium: badges.premium, banners: PROFILE_BANNERS, bioMax: PROFILE_BIO_MAX,
   });
 }));
@@ -5427,20 +5435,28 @@ app.put("/api/me/profil-setari", auth, asyncRoute(async (req, res) => {
   }
   const own = new Set(badgeInfo.list.map(b => b.id));
   const shown = [...new Set(Array.isArray(body.shownBadges) ? body.shownBadges.map(String) : [])].filter(id => own.has(id)).slice(0, 3);
+  // (08.11.2026) încadrarea bannerului propriu: poziția (x% y%) și zoom-ul (100–300%), aplicate doar la „personal"
+  let bannerPos = null, bannerZoom = null;
+  if (banner === "personal") {
+    const pm = String(body.bannerPos || "").match(/^(\d{1,3})% (\d{1,3})%$/);
+    if (pm && +pm[1] <= 100 && +pm[2] <= 100) bannerPos = `${+pm[1]}% ${+pm[2]}%`;
+    const z = Math.round(Number(body.bannerZoom));
+    if (Number.isFinite(z)) bannerZoom = Math.min(300, Math.max(100, z));
+  }
   const ex = await pool.query(`SELECT slug, bio_locked FROM public_profiles WHERE user_id = $1`, [req.user.sub]);
   if (bio && ex.rows[0]?.bio_locked) return res.status(403).json({ error: "Staff-ul ți-a blocat descrierea. Pentru deblocare, deschide un tichet." });
   let slug = ex.rows[0]?.slug;
   if (!slug) {
     slug = await profileFreeSlug(profileSlugBase(u.game_identifier_name || u.username), req.user.sub);
-    await pool.query(`INSERT INTO public_profiles(user_id, slug, enabled, bio, banner, fav_car, shown_badges) VALUES ($1,$2,false,$3,$4,$5,$6)`,
-      [req.user.sub, slug, bio || null, banner, favCar, shown]);
+    await pool.query(`INSERT INTO public_profiles(user_id, slug, enabled, bio, banner, fav_car, shown_badges, banner_pos, banner_zoom) VALUES ($1,$2,false,$3,$4,$5,$6,$7,$8)`,
+      [req.user.sub, slug, bio || null, banner, favCar, shown, bannerPos, bannerZoom]);
   } else {
-    await pool.query(`UPDATE public_profiles SET bio = $2, banner = $3, fav_car = $4, shown_badges = $5, updated_at = NOW() WHERE user_id = $1`,
-      [req.user.sub, bio || null, banner, favCar, shown]);
+    await pool.query(`UPDATE public_profiles SET bio = $2, banner = $3, fav_car = $4, shown_badges = $5, banner_pos = $7, banner_zoom = $8, updated_at = NOW() WHERE user_id = $1`,
+      [req.user.sub, bio || null, banner, favCar, shown, null, bannerPos, bannerZoom]);
   }
   profileCache.delete(slug);
   await logAction(req.user.sub, "profile.settings", "public_profile", slug, { bio, banner, favCar, shown }, req.ip);
-  res.json({ ok: true, bio, banner, favCar, shownBadges: shown });
+  res.json({ ok: true, bio, banner, favCar, shownBadges: shown, bannerPos, bannerZoom });
 }));
 // (07.11.2026) Staff (moderator+): șterge descrierea nepotrivită de pe profilul unui jucător și,
 // la nevoie, i-o blochează (nu mai poate scrie alta până o deblochează staff-ul). Jucătorul primește notificare.
@@ -5500,7 +5516,7 @@ app.get("/api/profil/:slug", asyncRoute(async (req, res) => {
   const hit = profileCache.get(slug);
   if (hit && Date.now() - hit.at < 60_000) { res.set("Cache-Control", "public, max-age=60"); return res.json(hit.data); }
   const { rows } = await pool.query(
-    `SELECT pp.user_id, pp.bio, pp.bio_locked, pp.banner, pp.fav_car, pp.shown_badges, u.created_at, u.game_identifier, u.game_identifier_name, u.discord_id, u.discord_avatar
+    `SELECT pp.user_id, pp.bio, pp.bio_locked, pp.banner, pp.fav_car, pp.shown_badges, pp.banner_pos, pp.banner_zoom, u.created_at, u.game_identifier, u.game_identifier_name, u.discord_id, u.discord_avatar
        FROM public_profiles pp JOIN users u ON u.id = pp.user_id WHERE pp.slug = $1 AND pp.enabled`, [slug]);
   const r = rows[0];
   if (!r || !r.game_identifier) return res.status(404).json({ error: "Profilul nu există sau nu e public." });
@@ -5540,6 +5556,8 @@ app.get("/api/profil/:slug", asyncRoute(async (req, res) => {
     bioLocked: !!r.bio_locked,
     banner: PROFILE_BANNERS.includes(r.banner) && (r.banner !== "auriu" || (premium && premium.active)) && (r.banner !== "personal" || bannerImg) ? r.banner : "portocaliu",
     bannerImg: r.banner === "personal" ? bannerImg : null,
+    bannerPos: r.banner === "personal" ? (r.banner_pos || null) : null,
+    bannerZoom: r.banner === "personal" ? (r.banner_zoom || null) : null,
     favCar: r.fav_car || null,
     shownBadges: r.shown_badges || [],
     avatar: (await avatarUrlFor(r.user_id).catch(() => null))
@@ -8258,6 +8276,7 @@ function avatarTables() {
   return avatarsReady;
 }
 const AVATAR_MAX_BYTES = 300 * 1024;
+const AVATAR_GIF_MAX_BYTES = 3 * 1024 * 1024; // (08.11.2026) GIF animat: nu e micșorat, deci are limită mai mare
 async function avatarUrlFor(userId) {
   await avatarTables();
   const { rows } = await pool.query(`SELECT EXTRACT(EPOCH FROM updated_at)::bigint AS v FROM user_avatars WHERE user_id = $1`, [userId]);
@@ -8273,12 +8292,13 @@ app.get("/api/avatar/:id", asyncRoute(async (req, res) => {
 }));
 app.put("/api/me/avatar", auth, asyncRoute(async (req, res) => {
   await avatarTables();
-  const m = String(req.body?.image || "").match(/^data:image\/(jpeg|webp|png);base64,([A-Za-z0-9+/=]+)$/);
-  if (!m) return res.status(400).json({ error: "Alege o poză (JPG, PNG sau WebP)." });
+  const m = String(req.body?.image || "").match(/^data:image\/(jpeg|webp|png|gif);base64,([A-Za-z0-9+/=]+)$/);
+  if (!m) return res.status(400).json({ error: "Alege o poză (JPG, PNG, WebP sau GIF)." });
   const buf = Buffer.from(m[2], "base64");
-  const mime = imageMime(buf);
+  const mime = imageMimeAnim(buf);
   if (!mime) return res.status(400).json({ error: "Fișierul nu e o poză validă." });
-  if (buf.length > AVATAR_MAX_BYTES) return res.status(400).json({ error: "Poza e prea mare. Încearcă alta." });
+  const cap = mime === "image/gif" ? AVATAR_GIF_MAX_BYTES : AVATAR_MAX_BYTES;
+  if (buf.length > cap) return res.status(400).json({ error: mime === "image/gif" ? "GIF-ul e prea mare (maxim 3 MB). Încearcă unul mai mic." : "Poza e prea mare. Încearcă alta." });
   await pool.query(`INSERT INTO user_avatars(user_id, mime, image, bytes) VALUES ($1,$2,$3,$4)
     ON CONFLICT (user_id) DO UPDATE SET mime = EXCLUDED.mime, image = EXCLUDED.image, bytes = EXCLUDED.bytes, updated_at = NOW()`,
     [req.user.sub, mime, buf, buf.length]);
@@ -8305,6 +8325,7 @@ function bannerTables() {
   return bannersReady;
 }
 const BANNER_MAX_BYTES = 600 * 1024;
+const BANNER_GIF_MAX_BYTES = 5 * 1024 * 1024; // (08.11.2026) GIF animat de banner
 async function bannerUrlFor(userId) {
   await bannerTables();
   const { rows } = await pool.query(`SELECT EXTRACT(EPOCH FROM updated_at)::bigint AS v FROM user_banners WHERE user_id = $1`, [userId]);
@@ -8324,12 +8345,13 @@ async function clearProfileCacheFor(userId) {
 }
 app.put("/api/me/banner", auth, asyncRoute(async (req, res) => {
   await bannerTables();
-  const m = String(req.body?.image || "").match(/^data:image\/(jpeg|webp|png);base64,([A-Za-z0-9+/=]+)$/);
-  if (!m) return res.status(400).json({ error: "Alege o poză (JPG, PNG sau WebP)." });
+  const m = String(req.body?.image || "").match(/^data:image\/(jpeg|webp|png|gif);base64,([A-Za-z0-9+/=]+)$/);
+  if (!m) return res.status(400).json({ error: "Alege o poză (JPG, PNG, WebP sau GIF)." });
   const buf = Buffer.from(m[2], "base64");
-  const mime = imageMime(buf);
+  const mime = imageMimeAnim(buf);
   if (!mime) return res.status(400).json({ error: "Fișierul nu e o poză validă." });
-  if (buf.length > BANNER_MAX_BYTES) return res.status(400).json({ error: "Poza e prea mare. Încearcă alta." });
+  const cap = mime === "image/gif" ? BANNER_GIF_MAX_BYTES : BANNER_MAX_BYTES;
+  if (buf.length > cap) return res.status(400).json({ error: mime === "image/gif" ? "GIF-ul e prea mare (maxim 5 MB). Încearcă unul mai mic." : "Poza e prea mare. Încearcă alta." });
   await pool.query(`INSERT INTO user_banners(user_id, mime, image, bytes) VALUES ($1,$2,$3,$4)
     ON CONFLICT (user_id) DO UPDATE SET mime = EXCLUDED.mime, image = EXCLUDED.image, bytes = EXCLUDED.bytes, updated_at = NOW()`,
     [req.user.sub, mime, buf, buf.length]);

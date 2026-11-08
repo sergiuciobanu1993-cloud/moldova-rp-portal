@@ -40,6 +40,9 @@
 
 /* (08.11.2026) „Poza ta": bannerul încărcat de jucător; poza vine din --bn-img (pus din JS) */
 .bn-personal{background:linear-gradient(90deg,rgba(13,15,18,.05),rgba(13,15,18,.35)),var(--bn-img,linear-gradient(135deg,#1b1f26,#0f1115)) center/cover no-repeat,#10131a}
+/* (08.11.2026) poza proprie ca strat <img>: merge și GIF animat, și se poate muta/mări (object-position + scale) */
+.bn-photo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:var(--bn-pos,50% 50%);transform:scale(var(--bn-zoom,1));transform-origin:var(--bn-pos,50% 50%);z-index:0;pointer-events:none}
+.bn-opt .bn-photo{border-radius:inherit}
 .bn-opt.bn-personal.empty{display:flex;align-items:center;justify-content:center;flex-direction:column;gap:2px;border:2px dashed rgba(255,138,31,.45);background:rgba(255,138,31,.06);text-align:center}
 .bn-opt.bn-personal.empty span{display:block;font-size:20px;line-height:1}
 

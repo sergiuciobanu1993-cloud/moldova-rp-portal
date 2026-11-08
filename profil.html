@@ -171,8 +171,14 @@
       // bannerul, descrierea și mașina favorită
       var cover = $('pf-cover');
       cover.className = 'pf-cover bn-' + (p.banner === 'personal' && !p.bannerImg ? 'portocaliu' : (p.banner || 'portocaliu'));
-      // (08.11.2026) bannerul încărcat de jucător
-      if (p.banner === 'personal' && p.bannerImg) cover.style.setProperty('--bn-img', 'url("' + p.bannerImg.replace(/"/g, '') + '")');
+      // (08.11.2026) bannerul încărcat de jucător: strat <img> (merge și GIF), cu încadrarea aleasă (poziție + mărire)
+      if (p.banner === 'personal' && p.bannerImg) {
+        var ph = document.createElement('img'); ph.className = 'bn-photo'; ph.alt = '';
+        ph.style.setProperty('--bn-pos', (p.bannerPos && /^\d+% \d+%$/.test(p.bannerPos)) ? p.bannerPos : '50% 50%');
+        ph.style.setProperty('--bn-zoom', Math.min(3, Math.max(1, (p.bannerZoom || 100) / 100)));
+        ph.src = p.bannerImg;
+        cover.insertBefore(ph, cover.firstChild);
+      }
       if (p.bio) { $('pf-bio').textContent = p.bio; $('pf-bio').hidden = false; }
       if (p.favCar && /^[a-z0-9_]{2,24}$/.test(p.favCar)) {
         // (08.11.2026) doar mașinile cu poză pe site încearcă întâi poza locală; restul merg direct la CDN

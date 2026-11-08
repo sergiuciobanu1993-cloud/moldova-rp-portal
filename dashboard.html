@@ -23,6 +23,13 @@
 .ps-bn-up{display:flex;align-items:center;gap:10px 14px;flex-wrap:wrap;margin-top:10px}
 .ps-bn-up small{color:#8f949a;font-size:11.5px;flex:1 1 220px}
 .ps-bn-up small.err{color:#ff8a8a}.ps-bn-up small.ok{color:#3ddc84}
+.ps-bn-adj{display:flex;align-items:center;gap:10px 14px;flex-wrap:wrap;margin-top:8px}
+.ps-bn-adj[hidden]{display:none}
+.ps-bn-adj label{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:800;color:#c8ccd0}
+.ps-bn-adj input[type=range]{accent-color:#ff8a1f;width:150px}
+.ps-bn-adj small{color:#8f949a;font-size:11.5px}
+.ps-ban.bn-drag{cursor:grab;touch-action:none}
+.ps-ban.bn-drag:active{cursor:grabbing}
 body.cont .panel button.ps-link,.ps-link{background:none;border:0;padding:0;color:#ffa24a;font:800 12.5px Inter,system-ui,sans-serif;cursor:pointer;text-decoration:underline}
 .ps-link[hidden]{display:none}
 .ps-ava-act small{color:#8f949a;font-size:11.5px}
@@ -283,7 +290,7 @@ body.cont .panel button.ps-link,.ps-link{background:none;border:0;padding:0;colo
         <div class="ps-ava-act">
           <label class="ps-up"><input type="file" id="ps-ava-file" accept="image/png,image/jpeg,image/webp" hidden>Încarcă o poză</label>
           <button type="button" class="ps-link" id="ps-ava-del" hidden>Folosește poza de Discord</button>
-          <small id="ps-ava-msg">JPG, PNG sau WebP. O tăiem pătrat și o micșorăm automat.</small>
+          <small id="ps-ava-msg">JPG, PNG, WebP sau GIF animat. O încadrăm pătrat automat.</small>
         </div>
       </div>
       <h3>Banner</h3>
@@ -292,7 +299,11 @@ body.cont .panel button.ps-link,.ps-link{background:none;border:0;padding:0;colo
       <div class="ps-bn-up">
         <label class="ps-up" id="ps-bn-up"><input type="file" id="ps-bn-file" accept="image/png,image/jpeg,image/webp" hidden>Încarcă bannerul tău</label>
         <button type="button" class="ps-link" id="ps-bn-del" hidden>Șterge bannerul meu</button>
-        <small id="ps-bn-msg">O poză lată (de exemplu o captură din joc). O tăiem 3:1 și o micșorăm automat.</small>
+        <small id="ps-bn-msg">O poză lată sau un GIF (de exemplu o captură din joc). O încadrezi singur mai jos.</small>
+      </div>
+      <div class="ps-bn-adj" id="ps-bn-adj" hidden>
+        <label>Mărime <input type="range" id="ps-bn-zoom" min="100" max="300" value="100" step="1"></label>
+        <small>Trage de previzualizare (dreapta) ca să muți poza în cadru.</small>
       </div>
       <h3><label for="ps-bio">Descriere</label> <small id="ps-bio-n">0/160</small></h3>
       <textarea id="ps-bio" maxlength="160" rows="3" placeholder="Ex.: Mecanic la LS Customs. Caut echipă pentru curse, vinerea seara."></textarea>
@@ -1438,12 +1449,19 @@ document.getElementById('streamer-copy-btn').addEventListener('click', async () 
   const $ = id => document.getElementById(id);
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   let st = null, saved = null;
-  const pick = () => ({ bio: $('ps-bio').value.trim(), banner: st.banner, favCar: st.favCar, shownBadges: st.shown.slice() });
+  const posStr = () => st && st.bannerPos ? `${st.bannerPos.x}% ${st.bannerPos.y}%` : '50% 50%';
+  const pick = () => ({ bio: $('ps-bio').value.trim(), banner: st.banner, favCar: st.favCar, shownBadges: st.shown.slice(), bannerPos: st.banner === 'personal' ? posStr() : null, bannerZoom: st.banner === 'personal' ? (st.bannerZoom || 100) : null });
   function setBan(el, b) {
-    [...el.classList].filter(c => c.startsWith('bn-')).forEach(c => el.classList.remove(c));
+    [...el.classList].filter(c => c.startsWith('bn-') && c !== 'bn-drag').forEach(c => el.classList.remove(c));
     const own = b === 'personal' && st && st.bannerImg;
     el.classList.add('bn-' + (b === 'personal' && !own ? 'portocaliu' : (b || 'portocaliu')));
-    if (own) el.style.setProperty('--bn-img', `url("${st.bannerImg}")`); else el.style.removeProperty('--bn-img');
+    let ph = el.querySelector(':scope > .bn-photo');
+    if (own) {
+      if (!ph) { ph = document.createElement('img'); ph.className = 'bn-photo'; ph.alt = ''; el.insertBefore(ph, el.firstChild); }
+      if (ph.getAttribute('src') !== st.bannerImg) ph.src = st.bannerImg;
+      ph.style.setProperty('--bn-pos', posStr());
+      ph.style.setProperty('--bn-zoom', (st.bannerZoom || 100) / 100);
+    } else if (ph) ph.remove();
   }
   function carSrcs(model) { return typeof carPics === 'function' ? carPics(model) : []; }
   function loadPic(img, model) {
@@ -1489,6 +1507,9 @@ document.getElementById('streamer-copy-btn').addEventListener('click', async () 
       return `<label class="bn-opt bn-${b}${locked ? ' locked' : ''}" title="${locked ? 'Doar cu Premium' : esc(BN[b] || b)}"><input type="radio" name="ps-bn" value="${b}"${st.banner === b ? ' checked' : ''}${locked ? ' disabled' : ''}>${esc(BN[b] || b)}</label>`;
     }).join('');
     $('ps-bn-del').hidden = !st.bannerImg;
+    $('ps-bn-adj').hidden = !(st.bannerImg && st.banner === 'personal');
+    $('ps-ban').classList.toggle('bn-drag', !!(st.bannerImg && st.banner === 'personal'));
+    const z = $('ps-bn-zoom'); if (z && st.banner === 'personal') z.value = st.bannerZoom || 100;
   }
   function renderCars() {
     const seen = new Set();
@@ -1538,11 +1559,13 @@ document.getElementById('streamer-copy-btn').addEventListener('click', async () 
   $('ps-ava-file').addEventListener('change', async e => {
     const f = e.target.files && e.target.files[0]; e.target.value = '';
     if (!f) return;
-    if (!/^image\/(png|jpeg|webp)$/.test(f.type)) return avaMsg('Alege o poză JPG, PNG sau WebP.', 'err');
-    if (f.size > 15 * 1024 * 1024) return avaMsg('Poza e prea mare (maxim 15 MB).', 'err');
+    if (!/^image\/(png|jpeg|webp|gif)$/.test(f.type)) return avaMsg('Alege o poză JPG, PNG, WebP sau GIF.', 'err');
+    const isGif = f.type === 'image/gif';
+    if (isGif && f.size > 3 * 1024 * 1024) return avaMsg('GIF-ul e prea mare (maxim 3 MB).', 'err');
+    if (!isGif && f.size > 15 * 1024 * 1024) return avaMsg('Poza e prea mare (maxim 15 MB).', 'err');
     const up = document.querySelector('.ps-up'); up.classList.add('busy'); avaMsg('Se încarcă…');
     try {
-      const image = await shrink(f);
+      const image = isGif ? await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = () => rej(new Error('Nu am putut citi fișierul.')); fr.readAsDataURL(f); }) : await shrink(f);
       const r = await apiFetch('/api/me/avatar', { method: 'PUT', body: JSON.stringify({ image }) });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(d.error || 'Nu am putut salva poza.');
@@ -1562,19 +1585,19 @@ document.getElementById('streamer-copy-btn').addEventListener('click', async () 
 
   // ---- bannerul propriu: se taie 3:1 (din mijloc), se micșorează la 1200×400 și se trimite
   function bnMsg(t, cls) { const m = $('ps-bn-msg'); m.textContent = t; m.className = cls || ''; }
+  const readRaw = file => new Promise((resolve, reject) => { const fr = new FileReader(); fr.onload = () => resolve(fr.result); fr.onerror = () => reject(new Error('Nu am putut citi fișierul.')); fr.readAsDataURL(file); });
+  // poză obișnuită: o micșorăm păstrând toată imaginea (max 1600px latura mare), ca să se poată încadra apoi
   function shrinkBanner(file) {
     return new Promise((resolve, reject) => {
       const url = URL.createObjectURL(file), img = new Image();
       img.onload = () => {
-        const W = 1200, H = 400, iw = img.naturalWidth, ih = img.naturalHeight;
-        let sw = iw, sh = Math.round(iw / 3);
-        if (sh > ih) { sh = ih; sw = Math.round(ih * 3); }
-        const c = document.createElement('canvas'); c.width = W; c.height = H;
+        const max = 1600, sc = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+        const c = document.createElement('canvas'); c.width = Math.round(img.naturalWidth * sc); c.height = Math.round(img.naturalHeight * sc);
         const x = c.getContext('2d'); x.imageSmoothingQuality = 'high';
-        x.drawImage(img, (iw - sw) / 2, (ih - sh) / 2, sw, sh, 0, 0, W, H);
+        x.drawImage(img, 0, 0, c.width, c.height);
         URL.revokeObjectURL(url);
-        let data = c.toDataURL('image/webp', 0.82);
-        if (!/^data:image\/webp/.test(data)) data = c.toDataURL('image/jpeg', 0.82);
+        let data = c.toDataURL('image/webp', 0.85);
+        if (!/^data:image\/webp/.test(data)) data = c.toDataURL('image/jpeg', 0.85);
         resolve(data);
       };
       img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Fișierul nu e o poză validă.')); };
@@ -1584,26 +1607,49 @@ document.getElementById('streamer-copy-btn').addEventListener('click', async () 
   $('ps-bn-file').addEventListener('change', async e => {
     const f = e.target.files && e.target.files[0]; e.target.value = '';
     if (!f || !st) return;
-    if (!/^image\/(png|jpeg|webp)$/.test(f.type)) return bnMsg('Alege o poză JPG, PNG sau WebP.', 'err');
-    if (f.size > 20 * 1024 * 1024) return bnMsg('Poza e prea mare (maxim 20 MB).', 'err');
+    if (!/^image\/(png|jpeg|webp|gif)$/.test(f.type)) return bnMsg('Alege o poză JPG, PNG, WebP sau GIF.', 'err');
+    const isGif = f.type === 'image/gif';
+    if (isGif && f.size > 5 * 1024 * 1024) return bnMsg('GIF-ul e prea mare (maxim 5 MB).', 'err');
+    if (!isGif && f.size > 20 * 1024 * 1024) return bnMsg('Poza e prea mare (maxim 20 MB).', 'err');
     const up = $('ps-bn-up'); up.classList.add('busy'); bnMsg('Se încarcă…');
     try {
-      const image = await shrinkBanner(f);
+      const image = isGif ? await readRaw(f) : await shrinkBanner(f);
       const r = await apiFetch('/api/me/banner', { method: 'PUT', body: JSON.stringify({ image }) });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(d.error || 'Nu am putut salva bannerul.');
-      st.bannerImg = d.bannerImg; st.banner = 'personal';
+      st.bannerImg = d.bannerImg; st.banner = 'personal'; st.bannerPos = { x: 50, y: 50 }; st.bannerZoom = 100;
       renderBanners(); preview();
-      bnMsg('Bannerul e încărcat ✓ Apasă „Salvează” ca să apară pe profil.', 'ok');
+      bnMsg(isGif ? 'GIF-ul e încărcat ✓ Încadrează-l și apasă „Salvează”.' : 'Bannerul e încărcat ✓ Încadrează-l și apasă „Salvează”.', 'ok');
     } catch (err) { bnMsg(err.message, 'err'); }
     up.classList.remove('busy');
   });
+  // zoom + trage de previzualizare ca să încadrezi
+  $('ps-bn-zoom').addEventListener('input', e => { if (!st) return; st.bannerZoom = Math.min(300, Math.max(100, +e.target.value || 100)); preview(); });
+  (function () {
+    const ban = $('ps-ban'); let drag = null;
+    ban.addEventListener('pointerdown', e => {
+      if (!st || st.banner !== 'personal' || !st.bannerImg) return;
+      drag = { x: e.clientX, y: e.clientY, px: st.bannerPos ? st.bannerPos.x : 50, py: st.bannerPos ? st.bannerPos.y : 50, w: ban.clientWidth, h: ban.clientHeight };
+      ban.setPointerCapture(e.pointerId); e.preventDefault();
+    });
+    ban.addEventListener('pointermove', e => {
+      if (!drag) return;
+      const z = (st.bannerZoom || 100) / 100;
+      // trage imaginea → se mută object-position în sens invers, scalat cu zoom-ul
+      let nx = drag.px - (e.clientX - drag.x) / (drag.w * z) * 100;
+      let ny = drag.py - (e.clientY - drag.y) / (drag.h * z) * 100;
+      st.bannerPos = { x: Math.round(Math.min(100, Math.max(0, nx))), y: Math.round(Math.min(100, Math.max(0, ny))) };
+      preview();
+    });
+    const end = e => { if (drag) { drag = null; try { ban.releasePointerCapture(e.pointerId); } catch (x) {} } };
+    ban.addEventListener('pointerup', end); ban.addEventListener('pointercancel', end);
+  })();
   $('ps-bn-del').addEventListener('click', async () => {
     bnMsg('Se șterge…');
     try {
       const r = await apiFetch('/api/me/banner', { method: 'DELETE' });
       if (!r.ok) throw new Error('Nu am putut șterge bannerul.');
-      st.bannerImg = null;
+      st.bannerImg = null; st.bannerPos = { x: 50, y: 50 }; st.bannerZoom = 100;
       if (st.banner === 'personal') st.banner = 'portocaliu';
       if (saved && saved.banner === 'personal') { saved.banner = 'portocaliu'; applyHero(saved); }
       renderBanners(); preview(); bnMsg('Bannerul tău a fost șters.', 'ok');
@@ -1627,6 +1673,8 @@ document.getElementById('streamer-copy-btn').addEventListener('click', async () 
       const d = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(d.error || 'Nu am putut salva.');
       st.bio = d.bio; st.banner = d.banner; st.favCar = d.favCar; st.shown = d.shownBadges.slice();
+      if (d.bannerPos) { const m = /^(\d+)% (\d+)%$/.exec(d.bannerPos); if (m) st.bannerPos = { x: +m[1], y: +m[2] }; }
+      if (d.bannerZoom) st.bannerZoom = d.bannerZoom;
       $('ps-bio').value = d.bio;
       saved = pick();
       applyHero({ bio: d.bio, banner: d.banner, favCar: d.favCar, shownBadges: d.shownBadges });
@@ -1637,7 +1685,7 @@ document.getElementById('streamer-copy-btn').addEventListener('click', async () 
 
   apiFetch('/api/me/profil-public').then(r => r.ok ? r.json() : null).then(d => {
     if (!d || !Array.isArray(d.banners)) return;
-    st = { banners: d.banners, bioMax: d.bioMax || 160, premium: !!d.premium, badges: d.badges || [], bio: d.bio || '', banner: d.banner || 'portocaliu', favCar: d.favCar || null, shown: (d.shownBadges || []).slice(), bannerImg: d.bannerImg || null };
+    st = { banners: d.banners, bioMax: d.bioMax || 160, premium: !!d.premium, badges: d.badges || [], bio: d.bio || '', banner: d.banner || 'portocaliu', favCar: d.favCar || null, shown: (d.shownBadges || []).slice(), bannerImg: d.bannerImg || null, bannerPos: (function () { const m = /^(\d+)% (\d+)%$/.exec(d.bannerPos || ''); return m ? { x: +m[1], y: +m[2] } : { x: 50, y: 50 }; })(), bannerZoom: d.bannerZoom || 100 };
     $('ps-bio').value = st.bio; $('ps-bio').maxLength = st.bioMax;
     if (d.bioLocked) { $('ps-bio').disabled = true; $('ps-bio').placeholder = 'Staff-ul ți-a blocat descrierea. Pentru deblocare, deschide un tichet.'; }
     saved = pick();

@@ -23,10 +23,10 @@
 .ps-bn-up{display:flex;align-items:center;gap:10px 14px;flex-wrap:wrap;margin-top:10px}
 .ps-bn-up small{color:#8f949a;font-size:11.5px;flex:1 1 220px}
 .ps-bn-up small.err{color:#ff8a8a}.ps-bn-up small.ok{color:#3ddc84}
-.ps-bn-adj{display:flex;align-items:center;gap:10px 14px;flex-wrap:wrap;margin-top:8px}
+.ps-bn-adj{display:flex;flex-direction:column;gap:8px;margin-top:10px;padding:12px 14px;border-radius:12px;border:1px solid var(--line,#292c30);background:rgba(255,255,255,.03)}
 .ps-bn-adj[hidden]{display:none}
-.ps-bn-adj label{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:800;color:#c8ccd0}
-.ps-bn-adj input[type=range]{accent-color:#ff8a1f;width:150px}
+.ps-bn-adj label{display:grid;grid-template-columns:120px 1fr;align-items:center;gap:10px;font-size:12px;font-weight:800;color:#c8ccd0}
+.ps-bn-adj input[type=range]{accent-color:#ff8a1f;width:100%}
 .ps-bn-adj small{color:#8f949a;font-size:11.5px}
 .ps-ban.bn-drag{cursor:grab;touch-action:none}
 .ps-ban.bn-drag:active{cursor:grabbing}
@@ -288,7 +288,7 @@ body.cont .panel button.ps-link,.ps-link{background:none;border:0;padding:0;colo
       <div class="ps-ava-row">
         <div class="ps-ava" id="ps-ava" aria-hidden="true"></div>
         <div class="ps-ava-act">
-          <label class="ps-up"><input type="file" id="ps-ava-file" accept="image/png,image/jpeg,image/webp" hidden>Încarcă o poză</label>
+          <label class="ps-up"><input type="file" id="ps-ava-file" accept="image/png,image/jpeg,image/webp,image/gif" hidden>Încarcă o poză</label>
           <button type="button" class="ps-link" id="ps-ava-del" hidden>Folosește poza de Discord</button>
           <small id="ps-ava-msg">JPG, PNG, WebP sau GIF animat. O încadrăm pătrat automat.</small>
         </div>
@@ -297,13 +297,15 @@ body.cont .panel button.ps-link,.ps-link{background:none;border:0;padding:0;colo
       <div class="bn-pick" id="ps-banners" role="radiogroup" aria-label="Banner"></div>
       <!-- (08.11.2026) bannerul propriu: o poză a ta, tăiată 3:1 -->
       <div class="ps-bn-up">
-        <label class="ps-up" id="ps-bn-up"><input type="file" id="ps-bn-file" accept="image/png,image/jpeg,image/webp" hidden>Încarcă bannerul tău</label>
+        <label class="ps-up" id="ps-bn-up"><input type="file" id="ps-bn-file" accept="image/png,image/jpeg,image/webp,image/gif" hidden>Încarcă bannerul tău</label>
         <button type="button" class="ps-link" id="ps-bn-del" hidden>Șterge bannerul meu</button>
         <small id="ps-bn-msg">O poză lată sau un GIF (de exemplu o captură din joc). O încadrezi singur mai jos.</small>
       </div>
       <div class="ps-bn-adj" id="ps-bn-adj" hidden>
-        <label>Mărime <input type="range" id="ps-bn-zoom" min="100" max="300" value="100" step="1"></label>
-        <small>Trage de previzualizare (dreapta) ca să muți poza în cadru.</small>
+        <label>Mărire <input type="range" id="ps-bn-zoom" min="100" max="300" value="100" step="1"></label>
+        <label>Stânga – dreapta <input type="range" id="ps-bn-x" min="0" max="100" value="50" step="1"></label>
+        <label>Sus – jos <input type="range" id="ps-bn-y" min="0" max="100" value="50" step="1"></label>
+        <small>Mărește poza din primul cursor, apoi mut-o cu celelalte până se încadrează cum vrei. Modificările apar imediat pe bannerul de sus.</small>
       </div>
       <h3><label for="ps-bio">Descriere</label> <small id="ps-bio-n">0/160</small></h3>
       <textarea id="ps-bio" maxlength="160" rows="3" placeholder="Ex.: Mecanic la LS Customs. Caut echipă pentru curse, vinerea seara."></textarea>
@@ -1487,6 +1489,8 @@ document.getElementById('streamer-copy-btn').addEventListener('click', async () 
   function preview() {
     const d = pick();
     setBan($('ps-ban'), d.banner);
+    // (08.11.2026) bannerul mare de sus se încadrează live, ca să vezi exact cum iese
+    setBan($('ch-banner'), d.banner);
     loadPic($('ps-ban-car'), d.favCar);
     $('ps-name').textContent = ($('profile-name').textContent || '').trim() || 'Numele tău';
     $('ps-bio-prev').textContent = d.bio || 'Aici apare descrierea ta.';
@@ -1507,9 +1511,14 @@ document.getElementById('streamer-copy-btn').addEventListener('click', async () 
       return `<label class="bn-opt bn-${b}${locked ? ' locked' : ''}" title="${locked ? 'Doar cu Premium' : esc(BN[b] || b)}"><input type="radio" name="ps-bn" value="${b}"${st.banner === b ? ' checked' : ''}${locked ? ' disabled' : ''}>${esc(BN[b] || b)}</label>`;
     }).join('');
     $('ps-bn-del').hidden = !st.bannerImg;
-    $('ps-bn-adj').hidden = !(st.bannerImg && st.banner === 'personal');
-    $('ps-ban').classList.toggle('bn-drag', !!(st.bannerImg && st.banner === 'personal'));
-    const z = $('ps-bn-zoom'); if (z && st.banner === 'personal') z.value = st.bannerZoom || 100;
+    const canAdj = !!(st.bannerImg && st.banner === 'personal');
+    $('ps-bn-adj').hidden = !canAdj;
+    $('ps-ban').classList.toggle('bn-drag', canAdj);
+    if (canAdj) {
+      $('ps-bn-zoom').value = st.bannerZoom || 100;
+      $('ps-bn-x').value = st.bannerPos ? st.bannerPos.x : 50;
+      $('ps-bn-y').value = st.bannerPos ? st.bannerPos.y : 50;
+    }
   }
   function renderCars() {
     const seen = new Set();
@@ -1623,22 +1632,26 @@ document.getElementById('streamer-copy-btn').addEventListener('click', async () 
     } catch (err) { bnMsg(err.message, 'err'); }
     up.classList.remove('busy');
   });
-  // zoom + trage de previzualizare ca să încadrezi
+  // (08.11.2026) încadrarea din cursoare: mărire + stânga/dreapta + sus/jos
+  const ensurePos = () => { if (!st.bannerPos) st.bannerPos = { x: 50, y: 50 }; };
   $('ps-bn-zoom').addEventListener('input', e => { if (!st) return; st.bannerZoom = Math.min(300, Math.max(100, +e.target.value || 100)); preview(); });
+  $('ps-bn-x').addEventListener('input', e => { if (!st) return; ensurePos(); st.bannerPos.x = Math.min(100, Math.max(0, +e.target.value || 0)); preview(); });
+  $('ps-bn-y').addEventListener('input', e => { if (!st) return; ensurePos(); st.bannerPos.y = Math.min(100, Math.max(0, +e.target.value || 0)); preview(); });
+  // trage direct de previzualizare (în plus față de cursoare)
   (function () {
     const ban = $('ps-ban'); let drag = null;
     ban.addEventListener('pointerdown', e => {
       if (!st || st.banner !== 'personal' || !st.bannerImg) return;
-      drag = { x: e.clientX, y: e.clientY, px: st.bannerPos ? st.bannerPos.x : 50, py: st.bannerPos ? st.bannerPos.y : 50, w: ban.clientWidth, h: ban.clientHeight };
+      ensurePos();
+      drag = { x: e.clientX, y: e.clientY, px: st.bannerPos.x, py: st.bannerPos.y, w: ban.clientWidth, h: ban.clientHeight };
       ban.setPointerCapture(e.pointerId); e.preventDefault();
     });
     ban.addEventListener('pointermove', e => {
       if (!drag) return;
-      const z = (st.bannerZoom || 100) / 100;
-      // trage imaginea → se mută object-position în sens invers, scalat cu zoom-ul
-      let nx = drag.px - (e.clientX - drag.x) / (drag.w * z) * 100;
-      let ny = drag.py - (e.clientY - drag.y) / (drag.h * z) * 100;
+      let nx = drag.px - (e.clientX - drag.x) / drag.w * 140;
+      let ny = drag.py - (e.clientY - drag.y) / drag.h * 140;
       st.bannerPos = { x: Math.round(Math.min(100, Math.max(0, nx))), y: Math.round(Math.min(100, Math.max(0, ny))) };
+      $('ps-bn-x').value = st.bannerPos.x; $('ps-bn-y').value = st.bannerPos.y;
       preview();
     });
     const end = e => { if (drag) { drag = null; try { ban.releasePointerCapture(e.pointerId); } catch (x) {} } };

@@ -169,7 +169,6 @@
   @media (max-width:700px){.ny{margin-left:0;width:100%;justify-content:space-between;flex-wrap:wrap}.ny-u{min-width:42px}}
   /* (08.11.2026) pe telefon ceasul stă pe un singur rând și e mai mic, ca titlul site-ului să apară mai sus */
   @media (max-width:600px){
-    .highlights-marquee{padding-top:84px}
     .highlights-marquee-head{gap:10px}
     .highlights-marquee-head .eyebrow{display:none}
     .ny{padding:8px 10px;gap:8px;flex-wrap:nowrap}
@@ -639,6 +638,11 @@ i.sk{height:12px;margin:4px 0}
       if (offers) new MutationObserver(() => requestAnimationFrame(place)).observe(offers, { subtree: true, attributes: true, attributeFilter: ['hidden'] });
       let rz; window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { place(); if (floating) keepInside(); }, 150); });
       place();
+      // (08.11.2026) până vin datele (cardurile cu oferte) playerul din hero își schimbă locul și mărimea și
+      // „sare” pagina; îl ținem invizibil până se așază, apoi apare direct la locul lui
+      slot.style.visibility = 'hidden';
+      const reveal = () => setTimeout(() => { place(); slot.style.visibility = ''; }, 800);
+      if (document.readyState === 'complete') reveal(); else window.addEventListener('load', reveal, { once: true });
 
       // (01.11.2026, cerut de Sergiu) Playerul „scos”: o fereastră plutitoare pe care jucătorul o mută
       // ținând de bara de sus și îi schimbă lățimea din colțul din dreapta jos. Se strânge într-o bară

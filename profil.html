@@ -120,6 +120,7 @@
           <button type="button" class="pf-sbtn red" data-act="blocheaza">Șterge și blochează</button>
           <button type="button" class="pf-sbtn" data-act="deblocheaza" hidden>Deblochează</button>
           <button type="button" class="pf-sbtn red" data-act="poza">Șterge poza de profil</button>
+          <button type="button" class="pf-sbtn red" data-act="banner" hidden>Șterge bannerul încărcat</button>
         </div>
         <p class="pf-staff-msg" id="pf-staff-msg" role="status"></p>
       </section>
@@ -169,7 +170,9 @@
       if (p.avatar) { var av = new Image(); av.alt = ''; av.onload = function () { $('pf-av').textContent = ''; $('pf-av').appendChild(av); $('pf-av').classList.add('img'); }; av.src = p.avatar; }
       // bannerul, descrierea și mașina favorită
       var cover = $('pf-cover');
-      cover.className = 'pf-cover bn-' + (p.banner || 'portocaliu');
+      cover.className = 'pf-cover bn-' + (p.banner === 'personal' && !p.bannerImg ? 'portocaliu' : (p.banner || 'portocaliu'));
+      // (08.11.2026) bannerul încărcat de jucător
+      if (p.banner === 'personal' && p.bannerImg) cover.style.setProperty('--bn-img', 'url("' + p.bannerImg.replace(/"/g, '') + '")');
       if (p.bio) { $('pf-bio').textContent = p.bio; $('pf-bio').hidden = false; }
       if (p.favCar && /^[a-z0-9_]{2,24}$/.test(p.favCar)) {
         // (08.11.2026) doar mașinile cu poză pe site încearcă întâi poza locală; restul merg direct la CDN
@@ -212,12 +215,13 @@
       var auth = null; try { auth = JSON.parse(localStorage.getItem('mrp_auth') || 'null'); } catch (e) { /* fără sesiune */ }
       var role = auth && auth.user && auth.user.role;
       if (!auth || !auth.token || ['moderator', 'admin', 'co-fondator', 'owner'].indexOf(role) < 0) return;
-      var box = $('pf-staff'), st = { bio: !!p.bio, locked: !!p.bioLocked };
+      var box = $('pf-staff'), st = { bio: !!p.bio, locked: !!p.bioLocked, banner: !!p.bannerImg };
       function paint() {
         $('pf-staff-state').textContent = (st.bio ? 'are descriere' : 'fără descriere') + (st.locked ? ' · 🔒 blocată' : '');
         box.querySelector('[data-act="sterge"]').hidden = !st.bio;
         box.querySelector('[data-act="blocheaza"]').hidden = st.locked;
         box.querySelector('[data-act="deblocheaza"]').hidden = !st.locked;
+        box.querySelector('[data-act="banner"]').hidden = !st.banner;
       }
       box.hidden = false; paint();
       box.addEventListener('click', function (e) {
@@ -230,10 +234,11 @@
           return;
         }
         btn.disabled = true; msg.textContent = 'Se trimite…';
-        var path = act === 'poza' ? '/poza' : '/descriere';
+        var path = act === 'poza' ? '/poza' : act === 'banner' ? '/banner' : '/descriere';
         fetch('/api/admin/profil/' + encodeURIComponent(p.slug) + path, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + auth.token }, body: JSON.stringify({ action: act, reason: $('pf-staff-reason').value }) })
           .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { if (!r.ok) throw new Error(d.error || 'Nu s-a putut.'); return d; }); })
           .then(function (d) {
+            if (act === 'banner') { st.banner = false; $('pf-cover').className = 'pf-cover bn-portocaliu'; $('pf-cover').style.removeProperty('--bn-img'); msg.textContent = 'Bannerul a fost șters. Jucătorul a primit notificare.'; return; }
             if (act === 'poza') { $('pf-av').classList.remove('img'); $('pf-av').textContent = p.name.split(/\s+/).filter(Boolean).slice(0, 2).map(function (w) { return w[0]; }).join('').toUpperCase(); msg.textContent = 'Poza de profil a fost ștearsă. Jucătorul a primit notificare.'; return; }
             if (act !== 'deblocheaza') { st.bio = false; $('pf-bio').hidden = true; $('pf-bio').textContent = ''; }
             st.locked = !!d.bioLocked;

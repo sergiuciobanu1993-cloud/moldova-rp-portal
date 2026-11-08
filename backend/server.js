@@ -5308,7 +5308,8 @@ async function profileFreeSlug(base, userId) {
 // (07.11.2026) Setări profil: banner, descriere (bio), mașina favorită și 3 insigne alese.
 // Se văd în Contul meu și pe profilul public. Bannerele sunt teme fixe (profil-teme.css);
 // „auriu" e doar pentru Premium. Mașina favorită trebuie să fie în garajul personajului.
-const PROFILE_BANNERS = ["portocaliu", "noapte", "neon", "padure", "iarna", "moldova", "apus", "istorie", "auriu"];
+const PROFILE_BANNERS = ["portocaliu", "noapte", "neon", "padure", "iarna", "moldova", "apus", "istorie", "auriu", "personal"];
+// (08.11.2026) „personal" = poza de banner încărcată de jucător (user_banners); fără poză, nu se poate alege
 const PROFILE_BIO_MAX = 160;
 const PROFILE_BIO_BLOCK = /(https?:\/\/|www\.|discord\.gg|\.(com|ro|md|ru|net|gg)\b|\bpul[aeiă]|pizd|\bmuie\b|\bfut[uie]|\bcurv|coaie|\bsugi\b|blya|\bсука|хуй|пизд|бля)/i;
 function profileJoaat(str) {
@@ -5382,6 +5383,7 @@ app.get("/api/me/profil-public", auth, asyncRoute(async (req, res) => {
   res.json({
     linked: !!r.game_identifier, enabled: !!(r.slug && r.enabled), slug: r.slug || null,
     bio: r.bio || "", bioLocked: !!r.bio_locked, banner: r.banner || "portocaliu", favCar: r.fav_car || null, shownBadges: r.shown_badges || [],
+    bannerImg: await bannerUrlFor(req.user.sub).catch(() => null),
     badges: badges.list, premium: badges.premium, banners: PROFILE_BANNERS, bioMax: PROFILE_BIO_MAX,
   });
 }));
@@ -5417,6 +5419,7 @@ app.put("/api/me/profil-setari", auth, asyncRoute(async (req, res) => {
   const badgeInfo = await profileBadgeList(req.user.sub, u.game_identifier).catch(() => ({ list: [], premium: false }));
   const banner = PROFILE_BANNERS.includes(body.banner) ? body.banner : "portocaliu";
   if (banner === "auriu" && !badgeInfo.premium) return res.status(400).json({ error: "Bannerul auriu e doar pentru jucătorii cu Premium." });
+  if (banner === "personal" && !(await bannerUrlFor(req.user.sub).catch(() => null))) return res.status(400).json({ error: "Încarcă întâi o poză pentru banner." });
   let favCar = body.favCar ? String(body.favCar).toLowerCase().trim() : null;
   if (favCar) {
     if (!/^[a-z0-9_]{2,24}$/.test(favCar)) return res.status(400).json({ error: "Mașina aleasă nu e validă." });
@@ -5476,6 +5479,21 @@ app.post("/api/admin/profil/:slug/poza", auth, requireRole(...MOD_ROLES), asyncR
   notifyUser(rows[0].user_id, { type: "profil", title: "Poza ta de profil a fost ștearsă", message: `Staff-ul ți-a șters poza de profil${reason ? ` (motiv: ${reason})` : " pentru că nu respecta regulile"}. Poți pune alta în Contul meu → Setări.`, link: "/dashboard.html#setari" });
   res.json({ ok: true });
 }));
+// (08.11.2026) staff: șterge bannerul încărcat de jucător (profilul revine la bannerul portocaliu)
+app.post("/api/admin/profil/:slug/banner", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
+  await profileTables(); await bannerTables();
+  const slug = String(req.params.slug || "").toLowerCase().slice(0, 40);
+  const reason = String(req.body?.reason || "").trim().slice(0, 200);
+  const { rows } = await pool.query(`SELECT user_id FROM public_profiles WHERE slug = $1`, [slug]);
+  if (!rows[0]) return res.status(404).json({ error: "Profilul nu există." });
+  const del = await pool.query(`DELETE FROM user_banners WHERE user_id = $1`, [rows[0].user_id]);
+  if (!del.rowCount) return res.status(400).json({ error: "Jucătorul nu are un banner încărcat." });
+  await pool.query(`UPDATE public_profiles SET banner = 'portocaliu', updated_at = NOW() WHERE user_id = $1 AND banner = 'personal'`, [rows[0].user_id]);
+  profileCache.delete(slug);
+  await logAction(req.user.sub, "profile.banner.staff_delete", "public_profile", slug, { reason: reason || null }, req.ip);
+  notifyUser(rows[0].user_id, { type: "profil", title: "Bannerul tău a fost șters", message: `Staff-ul ți-a șters poza de banner${reason ? ` (motiv: ${reason})` : " pentru că nu respecta regulile"}. Poți pune alta în Contul meu → Setări.`, link: "/dashboard.html#setari" });
+  res.json({ ok: true });
+}));
 app.get("/api/profil/:slug", asyncRoute(async (req, res) => {
   await profileTables();
   const slug = String(req.params.slug || "").toLowerCase().slice(0, 40);
@@ -5501,6 +5519,7 @@ app.get("/api/profil/:slug", asyncRoute(async (req, res) => {
   const live = detail.online ? (detail.players || []).find(p => p.license === id) || null : null;
   const d = cached?.data || {};
   const job = live?.job ?? d.job ?? null;
+  const bannerImg = r.banner === "personal" ? await bannerUrlFor(r.user_id).catch(() => null) : null;
   const today = xmasToday();
   const xclock = { today, inSeason: today >= XMAS.start && today <= XMAS.end, test: false, active: today >= XMAS.start && today <= XMAS.end, ended: today > XMAS.end, adventDay: null };
   const xmasBadges = xrows.length ? xmasSummary(xrows, xclock).badges : [];
@@ -5519,7 +5538,8 @@ app.get("/api/profil/:slug", asyncRoute(async (req, res) => {
     premium: !!(premium && premium.active),
     bio: r.bio || "",
     bioLocked: !!r.bio_locked,
-    banner: PROFILE_BANNERS.includes(r.banner) && (r.banner !== "auriu" || (premium && premium.active)) ? r.banner : "portocaliu",
+    banner: PROFILE_BANNERS.includes(r.banner) && (r.banner !== "auriu" || (premium && premium.active)) && (r.banner !== "personal" || bannerImg) ? r.banner : "portocaliu",
+    bannerImg: r.banner === "personal" ? bannerImg : null,
     favCar: r.fav_car || null,
     shownBadges: r.shown_badges || [],
     avatar: (await avatarUrlFor(r.user_id).catch(() => null))
@@ -8272,6 +8292,58 @@ app.delete("/api/me/avatar", auth, asyncRoute(async (req, res) => {
   profileCache.clear();
   await logAction(req.user.sub, "profile.avatar.delete", "user", req.user.sub, {}, req.ip);
   res.json({ ok: true });
+}));
+// (08.11.2026) Bannerul încărcat de jucător (Contul meu → Setări → Banner → „Poza ta"). Se taie și se
+// micșorează în browser la 1200×400 (3:1), sub 600 KB, și se ține în baza de date, ca poza de profil.
+let bannersReady = null;
+function bannerTables() {
+  if (!bannersReady) {
+    bannersReady = pool.query(`CREATE TABLE IF NOT EXISTS user_banners (
+      user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, mime TEXT NOT NULL, image BYTEA NOT NULL,
+      bytes INT NOT NULL, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW());`).catch(err => { bannersReady = null; throw err; });
+  }
+  return bannersReady;
+}
+const BANNER_MAX_BYTES = 600 * 1024;
+async function bannerUrlFor(userId) {
+  await bannerTables();
+  const { rows } = await pool.query(`SELECT EXTRACT(EPOCH FROM updated_at)::bigint AS v FROM user_banners WHERE user_id = $1`, [userId]);
+  return rows[0] ? `/api/banner/${userId}?v=${rows[0].v}` : null;
+}
+app.get("/api/banner/:id", asyncRoute(async (req, res) => {
+  await bannerTables();
+  const id = String(req.params.id || "");
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return res.status(404).send("Nu există.");
+  const { rows } = await pool.query(`SELECT mime, image FROM user_banners WHERE user_id = $1`, [id]);
+  if (!rows[0]) return res.status(404).send("Nu există.");
+  res.set("Cache-Control", "public, max-age=604800, immutable").type(rows[0].mime).send(rows[0].image);
+}));
+async function clearProfileCacheFor(userId) {
+  const { rows } = await pool.query(`SELECT slug FROM public_profiles WHERE user_id = $1`, [userId]).catch(() => ({ rows: [] }));
+  if (rows[0]?.slug) profileCache.delete(rows[0].slug);
+}
+app.put("/api/me/banner", auth, asyncRoute(async (req, res) => {
+  await bannerTables();
+  const m = String(req.body?.image || "").match(/^data:image\/(jpeg|webp|png);base64,([A-Za-z0-9+/=]+)$/);
+  if (!m) return res.status(400).json({ error: "Alege o poză (JPG, PNG sau WebP)." });
+  const buf = Buffer.from(m[2], "base64");
+  const mime = imageMime(buf);
+  if (!mime) return res.status(400).json({ error: "Fișierul nu e o poză validă." });
+  if (buf.length > BANNER_MAX_BYTES) return res.status(400).json({ error: "Poza e prea mare. Încearcă alta." });
+  await pool.query(`INSERT INTO user_banners(user_id, mime, image, bytes) VALUES ($1,$2,$3,$4)
+    ON CONFLICT (user_id) DO UPDATE SET mime = EXCLUDED.mime, image = EXCLUDED.image, bytes = EXCLUDED.bytes, updated_at = NOW()`,
+    [req.user.sub, mime, buf, buf.length]);
+  await clearProfileCacheFor(req.user.sub);
+  await logAction(req.user.sub, "profile.banner", "user", req.user.sub, { bytes: buf.length }, req.ip);
+  res.json({ ok: true, bannerImg: await bannerUrlFor(req.user.sub) });
+}));
+app.delete("/api/me/banner", auth, asyncRoute(async (req, res) => {
+  await bannerTables(); await profileTables();
+  await pool.query(`DELETE FROM user_banners WHERE user_id = $1`, [req.user.sub]);
+  await pool.query(`UPDATE public_profiles SET banner = 'portocaliu', updated_at = NOW() WHERE user_id = $1 AND banner = 'personal'`, [req.user.sub]);
+  await clearProfileCacheFor(req.user.sub);
+  await logAction(req.user.sub, "profile.banner.delete", "user", req.user.sub, {}, req.ip);
+  res.json({ ok: true, banner: "portocaliu" });
 }));
 app.get("/api/me", auth, asyncRoute(async (req, res) => {
   const { rows } = await pool.query(

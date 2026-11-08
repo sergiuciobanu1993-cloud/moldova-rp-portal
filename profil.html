@@ -175,7 +175,8 @@
       if (p.banner === 'personal' && p.bannerImg) {
         var ph = document.createElement('img'); ph.className = 'bn-photo'; ph.alt = '';
         ph.style.setProperty('--bn-pos', (p.bannerPos && /^\d+% \d+%$/.test(p.bannerPos)) ? p.bannerPos : '50% 50%');
-        ph.style.setProperty('--bn-zoom', Math.min(3, Math.max(1, (p.bannerZoom || 100) / 100)));
+        ph.style.setProperty('--bn-zx', Math.min(3, Math.max(1, (p.bannerZoom || 100) / 100)));
+        ph.style.setProperty('--bn-zy', Math.min(3, Math.max(1, (p.bannerZoomY || 100) / 100)));
         ph.src = p.bannerImg;
         cover.insertBefore(ph, cover.firstChild);
       }

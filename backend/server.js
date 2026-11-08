@@ -5295,7 +5295,8 @@ function profileTables() {
       ALTER TABLE public_profiles ADD COLUMN IF NOT EXISTS shown_badges TEXT[];
       ALTER TABLE public_profiles ADD COLUMN IF NOT EXISTS bio_locked BOOLEAN NOT NULL DEFAULT FALSE;
       ALTER TABLE public_profiles ADD COLUMN IF NOT EXISTS banner_pos TEXT;
-      ALTER TABLE public_profiles ADD COLUMN IF NOT EXISTS banner_zoom INT;`).catch(err => { profilesReady = null; throw err; });
+      ALTER TABLE public_profiles ADD COLUMN IF NOT EXISTS banner_zoom INT;
+      ALTER TABLE public_profiles ADD COLUMN IF NOT EXISTS banner_zoom_y INT;`).catch(err => { profilesReady = null; throw err; });
   }
   return profilesReady;
 }
@@ -5384,14 +5385,14 @@ app.get("/api/me/profil-public", auth, asyncRoute(async (req, res) => {
   res.set("Cache-Control", "no-store");
   await profileTables();
   const { rows } = await pool.query(
-    `SELECT u.game_identifier, pp.slug, pp.enabled, pp.bio, pp.banner, pp.fav_car, pp.shown_badges, pp.bio_locked, pp.banner_pos, pp.banner_zoom FROM users u LEFT JOIN public_profiles pp ON pp.user_id = u.id WHERE u.id = $1`, [req.user.sub]);
+    `SELECT u.game_identifier, pp.slug, pp.enabled, pp.bio, pp.banner, pp.fav_car, pp.shown_badges, pp.bio_locked, pp.banner_pos, pp.banner_zoom, pp.banner_zoom_y FROM users u LEFT JOIN public_profiles pp ON pp.user_id = u.id WHERE u.id = $1`, [req.user.sub]);
   const r = rows[0] || {};
   const badges = await profileBadgeList(req.user.sub, r.game_identifier).catch(() => ({ list: [], premium: false }));
   res.json({
     linked: !!r.game_identifier, enabled: !!(r.slug && r.enabled), slug: r.slug || null,
     bio: r.bio || "", bioLocked: !!r.bio_locked, banner: r.banner || "portocaliu", favCar: r.fav_car || null, shownBadges: r.shown_badges || [],
     bannerImg: await bannerUrlFor(req.user.sub).catch(() => null),
-    bannerPos: r.banner_pos || null, bannerZoom: r.banner_zoom || null,
+    bannerPos: r.banner_pos || null, bannerZoom: r.banner_zoom || null, bannerZoomY: r.banner_zoom_y || null,
     badges: badges.list, premium: badges.premium, banners: PROFILE_BANNERS, bioMax: PROFILE_BIO_MAX,
   });
 }));
@@ -5436,27 +5437,29 @@ app.put("/api/me/profil-setari", auth, asyncRoute(async (req, res) => {
   const own = new Set(badgeInfo.list.map(b => b.id));
   const shown = [...new Set(Array.isArray(body.shownBadges) ? body.shownBadges.map(String) : [])].filter(id => own.has(id)).slice(0, 3);
   // (08.11.2026) încadrarea bannerului propriu: poziția (x% y%) și zoom-ul (100–300%), aplicate doar la „personal"
-  let bannerPos = null, bannerZoom = null;
+  let bannerPos = null, bannerZoom = null, bannerZoomY = null;
   if (banner === "personal") {
     const pm = String(body.bannerPos || "").match(/^(\d{1,3})% (\d{1,3})%$/);
     if (pm && +pm[1] <= 100 && +pm[2] <= 100) bannerPos = `${+pm[1]}% ${+pm[2]}%`;
     const z = Math.round(Number(body.bannerZoom));
     if (Number.isFinite(z)) bannerZoom = Math.min(300, Math.max(100, z));
+    const zy = Math.round(Number(body.bannerZoomY));
+    bannerZoomY = Number.isFinite(zy) ? Math.min(300, Math.max(100, zy)) : bannerZoom;
   }
   const ex = await pool.query(`SELECT slug, bio_locked FROM public_profiles WHERE user_id = $1`, [req.user.sub]);
   if (bio && ex.rows[0]?.bio_locked) return res.status(403).json({ error: "Staff-ul ți-a blocat descrierea. Pentru deblocare, deschide un tichet." });
   let slug = ex.rows[0]?.slug;
   if (!slug) {
     slug = await profileFreeSlug(profileSlugBase(u.game_identifier_name || u.username), req.user.sub);
-    await pool.query(`INSERT INTO public_profiles(user_id, slug, enabled, bio, banner, fav_car, shown_badges, banner_pos, banner_zoom) VALUES ($1,$2,false,$3,$4,$5,$6,$7,$8)`,
-      [req.user.sub, slug, bio || null, banner, favCar, shown, bannerPos, bannerZoom]);
+    await pool.query(`INSERT INTO public_profiles(user_id, slug, enabled, bio, banner, fav_car, shown_badges, banner_pos, banner_zoom, banner_zoom_y) VALUES ($1,$2,false,$3,$4,$5,$6,$7,$8,$9)`,
+      [req.user.sub, slug, bio || null, banner, favCar, shown, bannerPos, bannerZoom, bannerZoomY]);
   } else {
-    await pool.query(`UPDATE public_profiles SET bio = $2, banner = $3, fav_car = $4, shown_badges = $5, banner_pos = $7, banner_zoom = $8, updated_at = NOW() WHERE user_id = $1`,
-      [req.user.sub, bio || null, banner, favCar, shown, null, bannerPos, bannerZoom]);
+    await pool.query(`UPDATE public_profiles SET bio = $2, banner = $3, fav_car = $4, shown_badges = $5, banner_pos = $7, banner_zoom = $8, banner_zoom_y = $9, updated_at = NOW() WHERE user_id = $1`,
+      [req.user.sub, bio || null, banner, favCar, shown, null, bannerPos, bannerZoom, bannerZoomY]);
   }
   profileCache.delete(slug);
   await logAction(req.user.sub, "profile.settings", "public_profile", slug, { bio, banner, favCar, shown }, req.ip);
-  res.json({ ok: true, bio, banner, favCar, shownBadges: shown, bannerPos, bannerZoom });
+  res.json({ ok: true, bio, banner, favCar, shownBadges: shown, bannerPos, bannerZoom, bannerZoomY });
 }));
 // (07.11.2026) Staff (moderator+): șterge descrierea nepotrivită de pe profilul unui jucător și,
 // la nevoie, i-o blochează (nu mai poate scrie alta până o deblochează staff-ul). Jucătorul primește notificare.
@@ -5516,7 +5519,7 @@ app.get("/api/profil/:slug", asyncRoute(async (req, res) => {
   const hit = profileCache.get(slug);
   if (hit && Date.now() - hit.at < 60_000) { res.set("Cache-Control", "public, max-age=60"); return res.json(hit.data); }
   const { rows } = await pool.query(
-    `SELECT pp.user_id, pp.bio, pp.bio_locked, pp.banner, pp.fav_car, pp.shown_badges, pp.banner_pos, pp.banner_zoom, u.created_at, u.game_identifier, u.game_identifier_name, u.discord_id, u.discord_avatar
+    `SELECT pp.user_id, pp.bio, pp.bio_locked, pp.banner, pp.fav_car, pp.shown_badges, pp.banner_pos, pp.banner_zoom, pp.banner_zoom_y, u.created_at, u.game_identifier, u.game_identifier_name, u.discord_id, u.discord_avatar
        FROM public_profiles pp JOIN users u ON u.id = pp.user_id WHERE pp.slug = $1 AND pp.enabled`, [slug]);
   const r = rows[0];
   if (!r || !r.game_identifier) return res.status(404).json({ error: "Profilul nu există sau nu e public." });
@@ -5558,6 +5561,7 @@ app.get("/api/profil/:slug", asyncRoute(async (req, res) => {
     bannerImg: r.banner === "personal" ? bannerImg : null,
     bannerPos: r.banner === "personal" ? (r.banner_pos || null) : null,
     bannerZoom: r.banner === "personal" ? (r.banner_zoom || null) : null,
+    bannerZoomY: r.banner === "personal" ? (r.banner_zoom_y || null) : null,
     favCar: r.fav_car || null,
     shownBadges: r.shown_badges || [],
     avatar: (await avatarUrlFor(r.user_id).catch(() => null))

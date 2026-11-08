@@ -695,20 +695,33 @@ async function notifyStaffNewbieClaim({ who, staticId, minutes, label, model }) 
   }
 }
 
-async function reportedUserIdOf(ticket) {
-  if (ticket.category !== "reclamatie" || !ticket.reported_player_id) return null;
-  const { rows } = await pool.query(`SELECT user_id FROM players WHERE id = $1`, [ticket.reported_player_id]);
-  return rows[0]?.user_id || null;
+// (08.11.2026) o reclamație poate fi despre mai mulți jucători (reported_player_ids).
+// Întoarce TOATE conturile de site ale celor reclamați, ca să-i anunțăm pe toți.
+async function reportedUserIdsOf(ticket) {
+  if (!ticket || ticket.category !== "reclamatie") return [];
+  let ids = Array.isArray(ticket.reported_player_ids) ? ticket.reported_player_ids.filter(Boolean) : null;
+  if (!ids) {
+    if (ticket.id) {
+      const q = await pool.query(`SELECT reported_player_ids, reported_player_id FROM tickets WHERE id=$1`, [ticket.id]).catch(() => ({ rows: [] }));
+      const r = q.rows[0] || {};
+      ids = (Array.isArray(r.reported_player_ids) && r.reported_player_ids.length) ? r.reported_player_ids : (r.reported_player_id ? [r.reported_player_id] : []);
+    } else ids = ticket.reported_player_id ? [ticket.reported_player_id] : [];
+  }
+  if (!ids.length && ticket.reported_player_id) ids = [ticket.reported_player_id];
+  if (!ids.length) return [];
+  const { rows } = await pool.query(`SELECT DISTINCT user_id FROM players WHERE id = ANY($1::uuid[]) AND user_id IS NOT NULL`, [ids]);
+  return rows.map(r => r.user_id);
 }
 
 // (25.10.2026) Cine e cine într-un răspuns de tichet: staff, autorul
 // tichetului sau persoana reclamată (ca să se vadă clar pe site).
 const STAFF_ROLE_NAMES = ["moderator", "admin", "co-fondator", "owner"];
-function tagTicketReplies(replies, ticket, reportedUserId) {
+function tagTicketReplies(replies, ticket, reportedUserIds) {
+  const reported = new Set(Array.isArray(reportedUserIds) ? reportedUserIds : (reportedUserIds ? [reportedUserIds] : []));
   return replies.map(r => {
     const kind = STAFF_ROLE_NAMES.includes(r.author_role) ? "staff"
       : r.author_id && r.author_id === ticket.user_id ? "author"
-      : r.author_id && reportedUserId && r.author_id === reportedUserId ? "reported"
+      : r.author_id && reported.has(r.author_id) ? "reported"
       : "user";
     const { author_id, ...rest } = r;
     return { ...rest, author_kind: kind };
@@ -751,13 +764,13 @@ async function notifyTicketDecision(ticket, staffId) {
       link, external: true, dedupeKey: `status:${ticket.id}:${ticket.status}`,
     });
   }
-  const reportedUserId = await reportedUserIdOf(ticket);
-  if (reportedUserId && reportedUserId !== staffId && reportedUserId !== ticket.user_id) {
+  for (const reportedUserId of await reportedUserIdsOf(ticket)) {
+    if (reportedUserId === staffId || reportedUserId === ticket.user_id) continue;
     await notifyUser(reportedUserId, {
       type: "ticket_status",
       title: `Reclamația despre tine a fost ${ticket.status === "resolved" ? "rezolvată" : "închisă"}`,
       message: "Staff-ul a luat o decizie în reclamația depusă despre tine. Vezi detaliile pe site.",
-      link, external: true, dedupeKey: `status:${ticket.id}:${ticket.status}`,
+      link, external: true, dedupeKey: `status:${ticket.id}:${ticket.status}:${reportedUserId}`,
     });
   }
 }
@@ -775,13 +788,14 @@ async function notifyTicketReply(ticketId, ticket, replierId, { fromStaff, fromR
       link,
     });
   }
-  const reportedUserId = await reportedUserIdOf(ticket);
-  if (reportedUserId && reportedUserId !== replierId && !targets.has(reportedUserId)) {
-    targets.set(reportedUserId, {
-      title: "Răspuns nou la reclamația despre tine",
-      message: "A apărut un răspuns nou în reclamația depusă despre tine.",
-      link,
-    });
+  for (const reportedUserId of await reportedUserIdsOf(ticket)) {
+    if (reportedUserId !== replierId && !targets.has(reportedUserId)) {
+      targets.set(reportedUserId, {
+        title: "Răspuns nou la reclamația despre tine",
+        message: "A apărut un răspuns nou în reclamația depusă despre tine.",
+        link,
+      });
+    }
   }
   for (const [uid, n] of targets) {
     await notifyUser(uid, { type: "ticket_reply", ...n, external: true, dedupeKey: `reply:${ticketId}` });
@@ -8991,6 +9005,14 @@ app.get("/api/admin/players/search", auth, requireRole(...MOD_ROLES), asyncRoute
 // noastră de date. Încercăm totuși, best-effort, o potrivire exactă (ID
 // numeric sau nume exact) ca să legăm structurat tichetul de players — dacă
 // nu găsim nimic, tichetul se salvează oricum, cu textul scris de reclamant.
+// (08.11.2026) una sau mai multe persoane reclamate, din formular
+function reportedLabelsFrom(body) {
+  let arr = Array.isArray(body?.reported_player_labels) ? body.reported_player_labels : null;
+  if (!arr) arr = String(body?.reported_player_label || "").split(/\s*,\s*/);
+  const out = [];
+  for (const x of arr) { const t = String(x || "").trim().slice(0, 120); if (t && !out.includes(t)) out.push(t); }
+  return out.slice(0, 10);
+}
 async function resolveReportedPlayer(label) {
   // (01.10.2026) Rescris după un test în care notificarea „ai fost reclamat"
   // a ajuns la alt om: înainte, un număr scris de jucător (ex. ID-ul de pe
@@ -9057,9 +9079,9 @@ app.get("/api/tickets", auth, asyncRoute(async (req, res) => {
   const { rows } = await pool.query(
     `SELECT t.id,t.subject,t.category,t.status,t.evidence_url,t.created_at,t.updated_at,
             (t.user_id=$1) AS is_own, u.username submitted_by,
-            COALESCE(rp.user_id = $1, false) AS is_reported,
+            EXISTS (SELECT 1 FROM players p2 WHERE p2.id = ANY(COALESCE(t.reported_player_ids, CASE WHEN t.reported_player_id IS NULL THEN '{}'::uuid[] ELSE ARRAY[t.reported_player_id] END)) AND p2.user_id = $1) AS is_reported,
             rp.id reported_player_id, t.reported_player_label,
-            COALESCE(rp.display_name, t.reported_player_label) reported_display
+            COALESCE(NULLIF(t.reported_player_label, ''), rp.display_name) reported_display
      FROM tickets t
      JOIN users u ON u.id = t.user_id
      LEFT JOIN players rp ON rp.id = t.reported_player_id
@@ -9074,19 +9096,28 @@ app.post("/api/tickets", auth, asyncRoute(async (req, res) => {
   const v = validTicketFields(req.body);
   if (v.error) return res.status(400).json({ error: v.error });
 
+  await ticketExtras().catch(() => {});
   let reportedLabel = null;
   let reportedId = null;
+  let reportedIds = [];
   if (v.category === "reclamatie") {
-    reportedLabel = (req.body.reported_player_label || "").trim();
-    if (!reportedLabel)
+    // (08.11.2026) unul sau mai mulți jucători reclamați
+    const labels = reportedLabelsFrom(req.body);
+    if (!labels.length)
       return res.status(400).json({ error: "Scrie ID-ul sau numele jucătorului reclamat." });
-    reportedId = await resolveReportedPlayer(reportedLabel);
+    reportedLabel = labels.join(", ").slice(0, 400);
+    const seen = new Set();
+    for (const lb of labels) {
+      const id = await resolveReportedPlayer(lb);
+      if (id && !seen.has(id)) { seen.add(id); reportedIds.push(id); }
+    }
+    reportedId = reportedIds[0] || null;
   }
 
   const { rows } = await pool.query(
-    `INSERT INTO tickets(user_id, subject, category, description, evidence_url, reported_player_id, reported_player_label)
-     VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-    [req.user.sub, v.subject, v.category, v.description, v.link, reportedId, reportedLabel]
+    `INSERT INTO tickets(user_id, subject, category, description, evidence_url, reported_player_id, reported_player_label, reported_player_ids)
+     VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+    [req.user.sub, v.subject, v.category, v.description, v.link, reportedId, reportedLabel, reportedIds.length ? reportedIds : null]
   );
   await logAction(req.user.sub, "ticket.create", "ticket", rows[0].id, { subject: v.subject }, req.ip);
 
@@ -9099,22 +9130,20 @@ app.post("/api/tickets", auth, asyncRoute(async (req, res) => {
   // resolveReportedPlayer) — un text liber nepotrivit nu are cont de
   // notificat. (01.10.2026) Și când cineva se reclamă pe sine (ex. un test
   // făcut de staff) primește mesajul — altfel testul pare stricat.
-  if (!reportedId && v.category === "reclamatie")
+  if (!reportedIds.length && v.category === "reclamatie")
     console.log(`Reclamație #${rows[0].id}: „${String(reportedLabel).slice(0, 40)}” nu e legat de niciun cont de pe site — nu anunț pe nimeni.`);
-  if (reportedId) {
-    const { rows: rp } = await pool.query(`SELECT user_id FROM players WHERE id = $1`, [reportedId]);
-    const reportedUserId = rp[0]?.user_id;
-    console.log(`Reclamație #${rows[0].id}: jucător găsit${reportedUserId ? `, anunț contul #${reportedUserId}` : ", dar fără cont pe site"}.`);
-    if (reportedUserId) {
+  if (reportedIds.length) {
+    const reportedUserIds = await reportedUserIdsOf(rows[0]);
+    console.log(`Reclamație #${rows[0].id}: ${reportedIds.length} jucător(i) reclamați, ${reportedUserIds.length} cu cont pe site.`);
+    for (const reportedUserId of reportedUserIds) {
+      if (reportedUserId === req.user.sub) continue;
       await notifyUser(reportedUserId, {
         type: "ticket_reported",
         title: "Ai fost reclamat",
-        // (25.10.2026) persoana reclamată poate răspunde în tichet cu dovezile ei
         message: "A fost depusă o reclamație despre tine. Poți răspunde direct în tichet, cu explicația și dovezile tale. Un membru al staff-ului o va analiza în curând.",
         link: `tichet.html?id=${rows[0].id}`,
-        // (01.10.2026) și pe Discord / email — tot fără detalii despre reclamant
         external: true,
-        dedupeKey: `reported:${rows[0].id}`,
+        dedupeKey: `reported:${rows[0].id}:${reportedUserId}`,
       });
     }
   }
@@ -9129,7 +9158,7 @@ app.post("/api/tickets", auth, asyncRoute(async (req, res) => {
 app.get("/api/tickets/:id", auth, asyncRoute(async (req, res) => {
   const { rows } = await pool.query(
     `SELECT t.*, (t.user_id=$2) AS is_own, u.username submitted_by,
-            rp.id reported_player_id, COALESCE(rp.display_name, t.reported_player_label) reported_display
+            rp.id reported_player_id, COALESCE(NULLIF(t.reported_player_label, ''), rp.display_name) reported_display
      FROM tickets t
      JOIN users u ON u.id = t.user_id
      LEFT JOIN players rp ON rp.id = t.reported_player_id
@@ -9147,13 +9176,13 @@ app.get("/api/tickets/:id", auth, asyncRoute(async (req, res) => {
      WHERE tr.ticket_id = $1 ORDER BY tr.created_at ASC`,
     [req.params.id]
   );
-  const reportedUserId = await reportedUserIdOf(rows[0]);
-  const isReported = !!reportedUserId && reportedUserId === req.user.sub;
+  const reportedUserIds = await reportedUserIdsOf(rows[0]);
+  const isReported = reportedUserIds.includes(req.user.sub);
   const closed = ["resolved", "closed"].includes(rows[0].status);
   // nu trimitem user_id-urile brute spre browser
-  const { user_id, assigned_to, ...pub } = rows[0];
+  const { user_id, assigned_to, reported_player_ids, ...pub } = rows[0];
   res.json({ ...pub, is_reported: isReported, can_reply: !closed && (rows[0].is_own || isReported),
-    replies: tagTicketReplies(replies.rows, rows[0], reportedUserId) });
+    replies: tagTicketReplies(replies.rows, rows[0], reportedUserIds) });
 }));
 
 // Editare — doar autorul propriu (staff editează prin /api/admin/tickets/:id
@@ -9169,20 +9198,25 @@ app.put("/api/tickets/:id", auth, asyncRoute(async (req, res) => {
   const v = validTicketFields(req.body, existing.rows[0].category);
   if (v.error) return res.status(400).json({ error: v.error });
 
+  await ticketExtras().catch(() => {});
   let reportedLabel = null;
   let reportedId = null;
+  let reportedIds = [];
   if (v.category === "reclamatie") {
-    reportedLabel = (req.body.reported_player_label || "").trim();
-    if (!reportedLabel)
+    const labels = reportedLabelsFrom(req.body);
+    if (!labels.length)
       return res.status(400).json({ error: "Scrie ID-ul sau numele jucătorului reclamat." });
-    reportedId = await resolveReportedPlayer(reportedLabel);
+    reportedLabel = labels.join(", ").slice(0, 400);
+    const seen = new Set();
+    for (const lb of labels) { const id = await resolveReportedPlayer(lb); if (id && !seen.has(id)) { seen.add(id); reportedIds.push(id); } }
+    reportedId = reportedIds[0] || null;
   }
 
   const { rows } = await pool.query(
     `UPDATE tickets SET subject=$1, category=$2, description=$3, evidence_url=$4,
-       reported_player_id=$5, reported_player_label=$6, updated_at=NOW()
+       reported_player_id=$5, reported_player_label=$6, reported_player_ids=$8, updated_at=NOW()
      WHERE id=$7 RETURNING *`,
-    [v.subject, v.category, v.description, v.link, reportedId, reportedLabel, req.params.id]
+    [v.subject, v.category, v.description, v.link, reportedId, reportedLabel, req.params.id, reportedIds.length ? reportedIds : null]
   );
   await logAction(req.user.sub, "ticket.edit", "ticket", req.params.id, { subject: v.subject }, req.ip);
   res.json(rows[0]);
@@ -9209,14 +9243,14 @@ app.post("/api/tickets/:id/replies", auth, asyncRoute(async (req, res) => {
   const ev = replyEvidence(req.body);
   if (ev.error) return res.status(400).json({ error: ev.error });
   const ticket = await pool.query(
-    "SELECT id, user_id, status, subject, category, assigned_to, reported_player_id FROM tickets WHERE id=$1 LIMIT 1",
+    "SELECT id, user_id, status, subject, category, assigned_to, reported_player_id, reported_player_ids FROM tickets WHERE id=$1 LIMIT 1",
     [req.params.id]
   );
   const t = ticket.rows[0];
   if (!t) return res.status(404).json({ error: "Tichetul nu există." });
-  const reportedUserId = await reportedUserIdOf(t);
+  const reportedUserIds = await reportedUserIdsOf(t);
   const isAuthor = t.user_id === req.user.sub;
-  const isReported = !!reportedUserId && reportedUserId === req.user.sub;
+  const isReported = reportedUserIds.includes(req.user.sub);
   if (!isAuthor && !isReported)
     return res.status(403).json({ error: "Aici pot răspunde doar autorul tichetului, persoana reclamată și staff-ul." });
   if (["resolved", "closed"].includes(t.status))
@@ -10998,6 +11032,7 @@ let ticketExtrasReady = null;
 function ticketExtras() {
   if (!ticketExtrasReady) ticketExtrasReady = pool.query(`
     ALTER TABLE tickets ADD COLUMN IF NOT EXISTS priority VARCHAR(16) NOT NULL DEFAULT 'normal';
+    ALTER TABLE tickets ADD COLUMN IF NOT EXISTS reported_player_ids UUID[];
     CREATE TABLE IF NOT EXISTS ticket_notes (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       ticket_id UUID NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
@@ -11024,7 +11059,7 @@ app.get("/api/admin/tickets", auth, requireRole(...MOD_ROLES), asyncRoute(async 
   const status = req.query.status;
   const { rows } = await pool.query(
     `SELECT t.*, u.username submitted_by, a.username assigned_username,
-            COALESCE(rp.display_name, t.reported_player_label) reported_display,
+            COALESCE(NULLIF(t.reported_player_label, ''), rp.display_name) reported_display,
             rp.last_rp_name reported_rp_name, rp.last_static_id reported_static_id
      FROM tickets t
      JOIN users u ON u.id = t.user_id
@@ -11040,7 +11075,7 @@ app.get("/api/admin/tickets", auth, requireRole(...MOD_ROLES), asyncRoute(async 
 app.get("/api/admin/tickets/:id", auth, requireRole(...MOD_ROLES), asyncRoute(async (req, res) => {
   const { rows } = await pool.query(
     `SELECT t.*, u.username submitted_by, a.username assigned_username,
-            COALESCE(rp.display_name, t.reported_player_label) reported_display,
+            COALESCE(NULLIF(t.reported_player_label, ''), rp.display_name) reported_display,
             rp.last_rp_name reported_rp_name, rp.last_static_id reported_static_id
      FROM tickets t
      JOIN users u ON u.id = t.user_id
@@ -11059,7 +11094,7 @@ app.get("/api/admin/tickets/:id", auth, requireRole(...MOD_ROLES), asyncRoute(as
      WHERE tr.ticket_id = $1 ORDER BY tr.created_at ASC`,
     [req.params.id]
   );
-  const reportedUserId = await reportedUserIdOf(rows[0]);
+  const reportedUserIds = await reportedUserIdsOf(rows[0]);
   // (06.11.2026) notițele interne ale staff-ului
   let notes = [];
   try {
@@ -11068,7 +11103,7 @@ app.get("/api/admin/tickets/:id", auth, requireRole(...MOD_ROLES), asyncRoute(as
       `SELECT n.id, n.message, n.created_at, u.username author FROM ticket_notes n LEFT JOIN users u ON u.id = n.author_id
        WHERE n.ticket_id = $1 ORDER BY n.created_at ASC`, [req.params.id])).rows;
   } catch { /* fără notițe */ }
-  res.json({ ...rows[0], replies: tagTicketReplies(replies.rows, rows[0], reportedUserId), notes });
+  res.json({ ...rows[0], replies: tagTicketReplies(replies.rows, rows[0], reportedUserIds), notes });
 }));
 
 // Staff poate schimba status/asignare ȘI corecta conținutul (subiect/

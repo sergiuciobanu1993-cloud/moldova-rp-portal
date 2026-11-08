@@ -2,6 +2,11 @@
 <html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Tichet — Moldova RP</title><link rel="icon" href="assets/favicon.png"><link rel="stylesheet" href="dashboard.css"><link rel="stylesheet" href="suport.css"><link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/assets/app/apple-touch-icon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black"><meta name="apple-mobile-web-app-title" content="Moldova RP"><script>try{var wnT=+sessionStorage.getItem("mrp_wn_nav");if(wnT&&Date.now()-wnT<5000)document.documentElement.classList.add("wn-in")}catch(e){}</script><style>/* (31.10.2026) sosirea după cortina de iarnă (tema.js, wnNav): cortina se ridică */html.wn-in::after{content:"";position:fixed;left:0;right:0;top:0;height:calc(100vh + 140px);z-index:2147483000;pointer-events:none;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='-12 -12 24 24'%3E%3Cg fill='none' stroke='%23bfe6ff' stroke-width='1.6' stroke-linecap='round'%3E%3Cpath transform='rotate(0)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3Cpath transform='rotate(60)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3Cpath transform='rotate(120)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3Cpath transform='rotate(180)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3Cpath transform='rotate(240)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3Cpath transform='rotate(300)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3C/g%3E%3C/svg%3E") 50% calc(50vh - 27px)/54px 54px no-repeat,radial-gradient(circle at 30% 40%,#fff 0 1.6px,transparent 2.3px) 0 0/131px 113px,radial-gradient(circle at 70% 20%,rgba(255,255,255,.75) 0 1.1px,transparent 1.8px) 36px 28px/97px 71px,linear-gradient(180deg,#0b1830,#060a12 75%);-webkit-mask-image:linear-gradient(180deg,#000 calc(100% - 140px),transparent);mask-image:linear-gradient(180deg,#000 calc(100% - 140px),transparent);animation:wnIn 1s cubic-bezier(.65,0,.35,1) .2s forwards}@keyframes wnIn{to{transform:translateY(-100%);visibility:hidden}}@media (prefers-reduced-motion:reduce){html.wn-in::after{display:none}}</style><script src="/pwa.js" defer></script><meta name="theme-color" content="#090a0b">
 
 <style>
+.rep-chips{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 8px}
+.rep-chips:empty{display:none}
+.rep-chip{display:inline-flex;align-items:center;gap:8px;padding:6px 8px 6px 12px;border-radius:999px;background:rgba(255,138,31,.14);border:1px solid rgba(255,138,31,.4);color:#ffd9b0;font-size:13px;font-weight:700}
+.rep-chip button{display:grid;place-items:center;width:20px;height:20px;border:0;border-radius:50%;background:rgba(0,0,0,.25);color:#fff;font-size:12px;line-height:1;cursor:pointer}
+.rep-chip button:hover{background:rgba(255,80,80,.5)}
 .msg.reported{border-color:rgba(127,168,255,.45);background:rgba(127,168,255,.06)}
 .msg.reported b{color:#9dbcff}
 .msg .msg-ev{display:inline-block;margin-top:8px;color:var(--orange);font-weight:800;font-size:12.5px}
@@ -31,10 +36,11 @@
       </select>
     </div>
     <div class="field player-search-wrap" id="e-reported-wrap" hidden>
-      <label>ID / nume jucător reclamat</label>
-      <input id="e-reported-label" type="text" maxlength="120" placeholder="ex: #336, 91 sau numele RP din joc" autocomplete="off">
+      <label>ID / nume jucător(i) reclamat(ți)</label>
+      <div class="rep-chips" id="e-reported-chips"></div>
+      <input id="e-reported-label" type="text" maxlength="120" placeholder="ex: #336, 91 sau numele RP — apasă pe jucătorul găsit ca să-l adaugi" autocomplete="off">
       <div class="player-search-dropdown" id="e-reported-dropdown" hidden></div>
-      <small class="hint">Tichetul e public — orice utilizator îl poate citi, inclusiv jucătorul reclamat. Scrie ID-ul din joc (F10) sau numele exact — staff-ul identifică jucătorul din reclamație. Pe măsură ce scrii, îți arătăm mai jos jucătorii găsiți, ca să confirmi că e cel corect.</small>
+      <small class="hint">Poți adăuga mai mulți jucători: scrie ID-ul sau numele, apasă pe cel găsit, apoi caută-l pe următorul. Tichetul e public.</small>
     </div>
     <div class="field"><label>Descriere</label><textarea id="e-description" required></textarea></div>
     <div class="field"><label>Link dovadă (obligatoriu)</label><input id="e-evidence" type="url" required></div>
@@ -157,7 +163,7 @@ function render(t) {
 document.getElementById('e-category').addEventListener('change', (e) => {
   const isReclamatie = e.target.value === 'reclamatie';
   document.getElementById('e-reported-wrap').hidden = !isReclamatie;
-  if (!isReclamatie) document.getElementById('e-reported-label').value = '';
+  if (!isReclamatie) { document.getElementById('e-reported-label').value = ''; reportedChips = []; renderReportedChips(); }
 });
 
 // (24.09.2026) Vezi tichete.html pentru explicatia completa — aceeasi
@@ -193,7 +199,8 @@ function wireReportedPlayerSearch(inputId, dropdownId) {
         + (p.online ? ` · online${p.static_id && p.server_id != null ? `, ID server ${p.server_id}` : ''}` : '')
         + (p.rp_name && p.display_name && p.rp_name !== p.display_name ? ` · cont: ${p.display_name}` : '');
       btn.addEventListener('click', () => {
-        input.value = label;
+        addReportedChip(label);
+        input.value = '';
         closeDropdown();
         input.focus();
       });
@@ -218,9 +225,28 @@ function wireReportedPlayerSearch(inputId, dropdownId) {
   document.addEventListener('click', (e) => {
     if (!dropdown.hidden && !dropdown.contains(e.target) && e.target !== input) closeDropdown();
   });
-  input.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDropdown(); });
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { closeDropdown(); return; }
+    if (e.key === 'Enter') { e.preventDefault(); const v = input.value.trim(); if (v) { addReportedChip(v); input.value = ''; closeDropdown(); } }
+  });
 }
 wireReportedPlayerSearch('e-reported-label', 'e-reported-dropdown');
+
+// (08.11.2026) mai mulți jucători reclamați — chipsuri, ca la crearea tichetului
+let reportedChips = [];
+function renderReportedChips() {
+  document.getElementById('e-reported-chips').innerHTML = reportedChips.map((lb, i) =>
+    `<span class="rep-chip">${esc(lb)}<button type="button" data-rm="${i}" aria-label="Scoate ${esc(lb)}">✕</button></span>`).join('');
+}
+function addReportedChip(label) {
+  const lb = String(label || '').trim().slice(0, 120);
+  if (!lb || reportedChips.length >= 10 || reportedChips.some(x => x.toLowerCase() === lb.toLowerCase())) return;
+  reportedChips.push(lb); renderReportedChips();
+}
+document.getElementById('e-reported-chips').addEventListener('click', e => {
+  const b = e.target.closest('[data-rm]'); if (!b) return;
+  reportedChips.splice(+b.dataset.rm, 1); renderReportedChips();
+});
 
 function openEdit(t) {
   document.getElementById('e-subject').value = t.subject;
@@ -229,7 +255,9 @@ function openEdit(t) {
   document.getElementById('e-evidence').value = t.evidence_url || '';
   const isReclamatie = t.category === 'reclamatie';
   document.getElementById('e-reported-wrap').hidden = !isReclamatie;
-  document.getElementById('e-reported-label').value = t.reported_player_label || t.reported_display || '';
+  document.getElementById('e-reported-label').value = '';
+  reportedChips = String(t.reported_player_label || t.reported_display || '').split(/\s*,\s*/).map(x => x.trim()).filter(Boolean).slice(0, 10);
+  renderReportedChips();
   document.getElementById('edit-box').hidden = false;
   document.getElementById('edit-box').scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
@@ -243,9 +271,10 @@ document.getElementById('edit-form').addEventListener('submit', async (e) => {
   const msg = document.getElementById('edit-msg');
   msg.hidden = true;
   const category = document.getElementById('e-category').value;
-  const reportedLabel = document.getElementById('e-reported-label').value.trim();
-  if (category === 'reclamatie' && !reportedLabel) {
-    msg.textContent = 'Scrie ID-ul sau numele jucătorului reclamat.';
+  const typed = document.getElementById('e-reported-label').value.trim();
+  if (category === 'reclamatie' && typed) { addReportedChip(typed); document.getElementById('e-reported-label').value = ''; }
+  if (category === 'reclamatie' && !reportedChips.length) {
+    msg.textContent = 'Adaugă cel puțin un jucător reclamat.';
     msg.className = 'formmsg error';
     msg.hidden = false;
     return;
@@ -255,7 +284,8 @@ document.getElementById('edit-form').addEventListener('submit', async (e) => {
     category,
     description: document.getElementById('e-description').value.trim(),
     evidence_url: document.getElementById('e-evidence').value.trim(),
-    reported_player_label: reportedLabel
+    reported_player_label: reportedChips.join(', '),
+    reported_player_labels: reportedChips.slice()
   };
   try {
     const res = await apiFetch(`/api/tickets/${currentTicket.id}`, { method: 'PUT', body: JSON.stringify(body) });

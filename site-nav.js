@@ -22,6 +22,7 @@
   ];
   const MORE = [
     ["incepe.html", "Începe să joci"],
+    ["fps.html", "Mai multe FPS"],
     ["cod-penal.html", "Codul Penal"],
     ["legislatie-rutiera.html", "Legislația rutieră"],
     ["calculator-sanctiuni.html", "Calculator sancțiuni"],

@@ -55,6 +55,23 @@
 .rg-hit p{margin:8px 0 0;color:#c9cdd2;font-size:13.5px;line-height:1.6}
 .rg-hit mark{background:rgba(255,138,31,.25);color:#fff;border-radius:3px;padding:0 2px}
 .rg-hits-h{margin:0 0 12px;color:var(--muted);font-size:13px}
+/* (08.11.2026) răspuns rapid: regula + sancțiunea, direct din căutare */
+#rg-ans[hidden]{display:none}
+#rg-ans{margin:0 0 22px}
+.rg-ans-h{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin:0 0 10px}
+.rg-ans-h b{font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--orange)}
+.rg-ans-h span{color:var(--muted);font-size:13px}
+.rg-rule{display:grid;gap:8px;padding:16px 18px;margin:0 0 10px;border-radius:14px;border:1px solid rgba(255,138,31,.35);background:linear-gradient(150deg,rgba(255,138,31,.08),transparent 55%),rgba(14,15,18,.86);color:var(--text);text-decoration:none}
+.rg-rule:hover{border-color:rgba(255,138,31,.7)}
+.rg-rule:focus-visible{outline:2px solid var(--orange);outline-offset:3px}
+.rg-rule-src{font-size:12.5px;color:var(--muted)}
+.rg-rule-src b{color:#e7e9ec;font-weight:800}
+.rg-rule-t{margin:0;color:#d6d9dd;font-size:14.5px;line-height:1.6}
+.rg-rule-t b{color:#fff}
+.rg-rule-t mark{background:rgba(255,138,31,.25);color:#fff;border-radius:3px;padding:0 2px}
+.rg-rule-s{justify-self:start;display:inline-flex;gap:8px;align-items:baseline;padding:7px 12px;border-radius:10px;background:rgba(255,77,77,.1);border:1px solid rgba(255,107,107,.35);color:#ffd2d2;font-size:14px;font-weight:800;line-height:1.45}
+.rg-rule-s i{font-style:normal;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#ff9b9b;font-weight:900}
+.rg-ans-more{margin:6px 0 0;color:var(--muted);font-size:12.5px}
 .rg-sk{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
 .rg-sk i{height:76px;border-radius:14px;background:linear-gradient(90deg,rgba(255,255,255,.04),rgba(255,255,255,.09),rgba(255,255,255,.04));background-size:200% 100%;animation:rgSk 1.3s ease-in-out infinite}
 @keyframes rgSk{from{background-position:100% 0}to{background-position:-100% 0}}
@@ -88,14 +105,15 @@
       <a class="back-link" href="index.html">← Înapoi la pagina principală</a>
       <p class="eyebrow" style="margin-top:22px">CENTRUL DE INFORMAȚII</p>
       <h1>Regulamente</h1>
-      <p class="rg-lead">Toate regulile serverului, într-un singur loc. Caută după titlu sau după orice cuvânt din text.</p>
-      <label class="rg-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="rg-q" type="search" placeholder="Caută: poliție, capturi, jaf, safe zone, metagaming…" autocomplete="off" aria-label="Caută în regulamente"></label>
+      <p class="rg-lead">Toate regulile serverului, într-un singur loc. Caută după titlu sau după orice cuvânt din text. Pentru o sancțiune scrie fapta și cine o face, de exemplu „mită șerif”.</p>
+      <label class="rg-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="rg-q" type="search" placeholder="Caută: mită șerif, ostatic lider, capturi, metagaming…" autocomplete="off" aria-label="Caută în regulamente"></label>
     </div>
 
     <section class="section rg-wrap" style="padding-top:0">
-      <div id="rg-start" class="rg-start"></div>
+      <div id="rg-start" class="rg-start"></div><style>#rg-start:empty{min-height:150px}@media(max-width:820px){#rg-start:empty{min-height:430px}}</style>
+      <div id="rg-ans" hidden aria-live="polite"></div>
       <div id="rg-hits" hidden></div>
-      <div id="reg-groups">
+      <div id="reg-groups" style="min-height:100vh">
         <div class="rg-sk"><i></i><i></i><i></i><i></i><i></i><i></i></div>
       </div>
     </section>
@@ -182,9 +200,10 @@
 
     // căutare: după titlu imediat; de la 3 litere și în textul regulamentelor (îl încărcăm o singură dată)
     const q = document.getElementById('rg-q'), hits = document.getElementById('rg-hits'), start = document.getElementById('rg-start');
-    let texts = null, loading = null, timer = null;
+    let texts = null, raw = null, rules = null, loading = null, timer = null;
+    const ans = document.getElementById('rg-ans');
     const loadTexts = () => loading ||= Promise.all(items.map(r => fetch('/api/regulations/' + encodeURIComponent(r.slug)).then(x => x.ok ? x.json() : null).catch(() => null)))
-      .then(list => { texts = new Map(list.filter(Boolean).map(d => [d.slug, String(d.content || '').replace(/<[^>]+>/g, ' ').replace(/[#*>_`|]/g, ' ').replace(/\s+/g, ' ')])); });
+      .then(list => { list = list.filter(Boolean); raw = new Map(list.map(d => [d.slug, String(d.content || '')])); texts = new Map(list.map(d => [d.slug, String(d.content || '').replace(/<[^>]+>/g, ' ').replace(/[#*>_`|]/g, ' ').replace(/\s+/g, ' ')])); });
     function snippet(text, word) {
       const n = norm(text), i = n.indexOf(word);
       if (i < 0) return '';
@@ -193,15 +212,100 @@
       const re = new RegExp('(' + word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'i');
       return (a ? '…' : '') + part.replace(re, '<mark>$1</mark>') + (b < text.length ? '…' : '');
     }
+
+    // (08.11.2026) Răspuns rapid: împarte regulamentele în reguli (textul + „⚖️ sancțiunea”) și
+    // arată regulile care conțin toate cuvintele căutate, cu sancțiunea pusă în față.
+    // Ex.: „mită șerif”, „ostatic lider”, „polițist arme gangster”.
+    const STOP = new Set('a ai al ale am ar as au ca ce cei cel cand cat cate cu da daca de din doar e ea el este fara fi i ii in iar la le li lui ma mai nu o ori pe pentru poate pot prin sa sau se si sunt te tot un una unei unui vs care cum unde ce sanctiune sanctiunea sanctiuni sanctiunile pedeapsa primeste primesc dau se-da'.split(' '));
+    // cuvinte cu forme diferite în regulamente: căutăm oricare dintre ele
+    const SYN = [
+      [/^(serif|sherif|sheriff|serifi|serifii|serifului|bs|adjunct|adjunctul)$/, ['sherif', 'serif', 'bs ', 'biroul serif', 'adjunct']],
+      [/^(politist|politista|politisti|politie|politia|politiei|politai|lspd)$/, ['politi', 'ofiter']],
+      [/^(gangster|gangsteri|banda|bande|bandit|bandiți|bandit[ii]|mafie|crima|crime|criminal|criminali|ilegal|ilegali|ilegale)$/, ['band', 'ilegal', 'criminal', 'crim', 'familii', 'gang']],
+      [/^(mita|mituire|mituit|spaga|spagi)$/, ['mita', 'mitui']],
+      [/^(arma|arme|armele|armament|pistol|pistoale)$/, ['arme', 'armament', 'armei', 'arma ', 'arma,', 'arma.', 'arma;', 'arma)']],
+      [/^(ostatic|ostatici|ostaticul|rapire|rapiri|rapit|rapesc|rapi)$/, ['ostatic', 'rapi']],
+      [/^(lider|liderul|liderii|lideri|sef|seful|conducere|conducerea|grad|grade|gradele|mari)$/, ['lider', 'conducer', 'grade', 'adjunct', 'sef']],
+      [/^(stat|statului|structuri|structura)$/, ['stat', 'structur']],
+      [/^(jaf|jafuri|jefuire|jefuiesc|jefuit)$/, ['jaf', 'jefui']],
+      [/^(dm|omor|omoara|ucide|ucidere|kill)$/, ['dm', 'ucid', 'omor']],
+    ];
+    // regulamentele comune tuturor structurilor de stat se potrivesc și cu numele structurii
+    const ALIAS = { 'structuri-de-stat': 'politie sherif serif bs fib armata vama guvern stat', 'regulamentul-general-al-sheriffului': 'sherif serif bs biroul', 'regulament-oficial-politie': 'politie politist', 'regulament-oficial-advanced-rp': 'stat lider' };
+    const terms = v => v.split(/[^a-z0-9]+/).filter(w => w.length > 1 && !STOP.has(w)).map(w => {
+      for (const [re, alt] of SYN) if (re.test(w)) return alt;
+      return [w.length > 5 ? w.slice(0, w.length - 2) : w];
+    });
+    const isHead = l => /^\s*(#|━|---|═|[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]\s*CAPITOLUL|CAPITOLUL|Punctul\s+\d|[IVX]+\.\s+[A-ZĂÂÎȘȚ])/u.test(l);
+    const isNum = l => /^\s*\d+(\.\d+)*\.?\s+\S/.test(l);
+    const md = l => l.replace(/\*\*|__|`/g, '').replace(/^\s*[*•\-–]\s+/, '').trim();
+    function buildRules() {
+      rules = [];
+      for (const r of items) {
+        const lines = (raw.get(r.slug) || '').split(/\r?\n/);
+        let sec = '', top = '', sub = '', cur = null;
+        const close = () => { if (cur && cur.s && cur.t.length) rules.push(cur); cur = null; };
+        const open = (l, s) => { close(); cur = { r, sec, t: [md(l)], s: s || '' }; };
+        for (const line of lines) {
+          const l = line.trim();
+          if (!l) continue;
+          if (isHead(l)) {
+            close();
+            const t = md(l).replace(/[#*]/g, '').replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu, '').replace(/^[━═\-\s]+$/, '').trim();
+            if (t) { if (/^##/.test(l) || /^Punctul/.test(l)) sub = t; else { top = t; sub = ''; } }
+            sec = [top, sub].filter(Boolean).join(' · ');
+            continue;
+          }
+          const m = l.match(/⚖\uFE0F?/), k = m ? m.index : -1, after = m ? md(l.slice(k + m[0].length)) : '';
+          if (k === 0) { if (cur && !cur.s) cur.s = after; else if (cur) cur.s += ' ' + after; continue; }
+          if (k > 0) { open(l.slice(0, k).replace(/\s*[—–-]\s*$/, ''), after.replace(/[;.]$/, '')); continue; }
+          if (isNum(l)) { open(l); continue; }
+          if (cur && !cur.s && cur.t.length < 8) { cur.t.push(md(l)); continue; }
+          open(l);
+        }
+        close();
+      }
+      rules.forEach(u => { u.text = u.t.join(' '); u.n = norm(u.text); u.ctx = norm(short(u.r) + ' ' + u.sec + ' ' + (ALIAS[u.r.slug] || '')); u.s = u.s.replace(/^[\s:—–-]+/, '').replace(/[;.]\s*$/, ''); });
+    }
+    function quick(v) {
+      const T = terms(v);
+      if (!T.length) { ans.hidden = true; return 0; }
+      if (!rules) buildRules();
+      const has = (h, alts) => alts.some(a => h.includes(a));
+      const seen = new Set();
+      const scored = rules.map(u => {
+        let inText = 0, hit = 0;
+        for (const alts of T) { if (has(u.n, alts)) { inText++; hit++; } else if (has(u.ctx, alts)) hit++; }
+        // toate cuvintele (în regulă sau în numele regulamentului); la 3+ cuvinte e destul să lipsească unul
+        const all = hit === T.length, near = T.length >= 3 && hit === T.length - 1 && inText >= 2;
+        return { u, all, near, inText };
+      }).filter(x => (x.all && x.inText) || x.near)
+        .sort((a, b) => b.all - a.all || b.inText - a.inText || (a.u.r.slug === 'sanctiuni-oficiale') - (b.u.r.slug === 'sanctiuni-oficiale') || a.u.text.length - b.u.text.length)
+        .filter(x => { const key = x.u.n.replace(/[^a-z0-9]/g, '').slice(0, 50); if (seen.has(key)) return false; seen.add(key); return true; });
+      if (!scored.length) { ans.hidden = true; return 0; }
+      const flat = T.flat().filter(a => a.trim().length > 2);
+      const RX = { a: '[aăâ]', i: '[iî]', s: '[sșş]', t: '[tțţ]' };
+      const hl = t => { let h = esc(t); for (const a of flat) h = h.replace(new RegExp('(' + a.trim().split('').map(c => RX[c] || c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('') + ')', 'gi'), '<mark>$1</mark>'); return h; };
+      // „1.3 Conducerea” + textul de dedesubt: titlul scurt al regulii îl punem îngroșat
+      const cut = t => t.length > 420 ? t.slice(0, 418) + '…' : t;
+      const body = u => u.t.length > 1 && u.t[0].length < 60 && !/[.;:]$/.test(u.t[0]) ? `<b>${hl(u.t[0])}</b> — ${hl(cut(u.t.slice(1).join(' ')))}` : hl(cut(u.text));
+      const top = scored.slice(0, 5);
+      ans.innerHTML = `<div class="rg-ans-h"><b>⚖️ Răspuns rapid</b><span>${scored.length === 1 ? 'o regulă găsită' : scored.length + ' reguli găsite'}${scored.length > top.length ? ', le arăt pe cele mai potrivite' : ''}</span></div>`
+        + top.map(({ u }) => `<a class="rg-rule" href="${href(u.r)}"><span class="rg-rule-src"><b>${esc(short(u.r))}</b>${u.sec ? ' · ' + esc(u.sec.length > 90 ? u.sec.slice(0, 88) + '…' : u.sec) : ''}</span><p class="rg-rule-t">${body(u)}</p><span class="rg-rule-s"><i>Sancțiune</i>${esc(u.s)}</span></a>`).join('')
+        + `<p class="rg-ans-more">Sancțiunea exactă o stabilește staff-ul în limitele de mai sus. Textul complet e în regulament.</p>`;
+      ans.hidden = false;
+      return scored.length;
+    }
     async function search() {
       const v = norm(q.value.trim());
       const showAll = !v;
       start.hidden = !showAll;
       [...container.querySelectorAll('.rg-card')].forEach(a => { a.hidden = !showAll && !norm(a.textContent).includes(v); });
       [...container.querySelectorAll('.rg-g')].forEach(g => { g.hidden = !showAll && ![...g.querySelectorAll('.rg-card')].some(a => !a.hidden); });
-      if (v.length < 3) { hits.hidden = true; return; }
+      if (v.length < 3) { hits.hidden = true; ans.hidden = true; return; }
       hits.hidden = false;
       if (!texts) { hits.innerHTML = '<p class="rg-hits-h">Caut și în textul regulamentelor…</p>'; await loadTexts(); if (norm(q.value.trim()) !== v) return; }
+      const nq = quick(v);
       const found = items.map(r => {
         const t = texts.get(r.slug) || '';
         const count = norm(t).split(v).length - 1;
@@ -209,7 +313,7 @@
       }).filter(x => x.count).sort((a, b) => b.count - a.count).slice(0, 12);
       hits.innerHTML = found.length
         ? `<p class="rg-hits-h">„${esc(q.value.trim())}” apare în ${found.length} ${found.length === 1 ? 'regulament' : 'regulamente'}:</p>` + found.map(x => `<a class="rg-hit" href="${href(x.r)}"><b>${esc(short(x.r))}</b><small>${x.count} ${x.count === 1 ? 'potrivire' : 'potriviri'}</small><p>${x.sn}</p></a>`).join('')
-        : `<p class="rg-hits-h">Nu am găsit „${esc(q.value.trim())}” în textul regulamentelor.</p>`;
+        : nq ? '' : `<p class="rg-hits-h">Nu am găsit „${esc(q.value.trim())}” în textul regulamentelor.</p>`;
     }
     q.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(search, 220); });
     const pre = new URLSearchParams(location.search).get('q');

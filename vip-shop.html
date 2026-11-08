@@ -133,6 +133,7 @@
    cutii deschise de jucători (fără nume), cele mai noi în stânga. ---- */
 .wins-band{margin:0 0 22px;padding:12px 0 12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--panel);overflow:hidden}
 .wins-band[hidden]{display:none}
+#wins-track:empty{min-height:96px}
 .wins-head{display:flex;align-items:center;gap:8px;margin:0 0 10px;font-size:10px;font-weight:900;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
 .live-dot{flex:none;width:8px;height:8px;border-radius:50%;background:var(--green);animation:livePulse 2s ease-out infinite}
 @keyframes livePulse{0%{box-shadow:0 0 0 0 rgba(66,223,138,.55)}70%,100%{box-shadow:0 0 0 7px rgba(66,223,138,0)}}
@@ -416,14 +417,14 @@ button.win-chip:focus-visible{outline:2px solid var(--orange);outline-offset:2px
 </details>
 <style>#premium-promo[hidden]{display:none!important}</style>
 
-<section class="wins-band" id="wins-band" aria-labelledby="wins-head" hidden>
+<section class="wins-band" id="wins-band" aria-labelledby="wins-head">
   <p class="wins-head" id="wins-head"><span class="live-dot" aria-hidden="true"></span>Ultimele câștiguri</p>
   <div class="wins-track" id="wins-track"></div>
 </section>
 
 <section class="panel" id="cases-panel">
   <div class="head"><h2>Cutii</h2><span class="muted">Apasă pe o cutie ca să vezi tot ce poate ieși și șansele</span></div>
-  <div class="open-bar" id="open-bar-main" hidden>
+  <div class="open-bar" id="open-bar-main">
     <div class="qty" role="group" aria-label="Câte cutii deschizi dintr-o apăsare">
       <span class="qty-label">Cutii odată</span>
       <button type="button" data-qty="1" aria-pressed="true">1</button><button type="button" data-qty="2" aria-pressed="false">2</button><button type="button" data-qty="3" aria-pressed="false">3</button><button type="button" data-qty="4" aria-pressed="false">4</button><button type="button" data-qty="5" aria-pressed="false">5</button>

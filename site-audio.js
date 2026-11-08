@@ -346,7 +346,9 @@
     ".mrp-audio-list button.is-now .eq{display:flex}" +
     "@keyframes mrpEq{0%,100%{height:3px}50%{height:12px}}" +
     "@media (prefers-reduced-motion:reduce){.mrp-audio-list .eq i{animation:none;height:8px}}" +
-    "@media (max-width:520px){.mrp-audio-widget{right:12px;bottom:12px;padding:7px 10px 7px 7px;gap:6px}.mrp-audio-vol{width:52px}.mrp-audio-pick{max-width:118px}}";
+    // (08.11.2026) pe telefon: doar butonul și „♪ ▾", fără numele melodiei și fără volum (telefonul are butoanele lui),
+    // ca widgetul să nu mai acopere butoanele din pagină
+    "@media (max-width:520px){.mrp-audio-widget{right:10px;bottom:10px;padding:5px;gap:4px}.mrp-audio-vol{display:none}.mrp-audio-pick{max-width:none;min-height:34px;padding:0 9px;gap:4px}.mrp-audio-pick span{display:none}}";
   document.head.appendChild(style);
 
   var widget = document.createElement("div");

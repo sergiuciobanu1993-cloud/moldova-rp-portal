@@ -46,6 +46,9 @@
   .lb-org{color:var(--muted);font-size:12px}
   .lb-empty{color:var(--muted);padding:18px 4px}
   .lb-scroll{overflow-x:auto}
+  /* (07.11.2026) loc rezervat cât se încarcă, ca pagina să nu „sară” */
+  #lb-table[aria-busy="true"]{min-height:620px}
+  #lb-podium:empty{min-height:72px}
   .lb-rules{margin:0;padding-left:18px;color:var(--muted);line-height:1.8;font-size:13px}
   .lb-rules b{color:var(--text)}
   /* (07.11.2026) podium pentru primii 3 din săptămâna asta */
@@ -96,7 +99,7 @@
     </div>
 
     <div class="lb">
-      <section class="lb-box" id="lb-last" hidden aria-labelledby="lb-last-title">
+      <section class="lb-box" id="lb-last" aria-labelledby="lb-last-title">
         <div class="lb-head"><h2 id="lb-last-title">🏆 Câștigătorii săptămânii trecute</h2><small id="lb-last-week"></small></div>
         <div class="lb-podium" id="lb-podium"></div>
       </section>
@@ -109,7 +112,7 @@
             <button type="button" role="tab" aria-selected="false" data-tab="questuri" hidden>🎄 Questuri</button>
           </div>
         </div>
-        <div class="lb-scroll" id="lb-table" role="tabpanel"><p class="lb-empty">Se încarcă…</p></div>
+        <div class="lb-scroll" id="lb-table" role="tabpanel" aria-busy="true"><p class="lb-empty">Se încarcă…</p></div>
       </section>
 
       <section class="lb-box" aria-labelledby="lb-rules-title">
@@ -157,6 +160,7 @@
   let data = null, tab = 'jucatori';
   function table() {
     const box = document.getElementById('lb-table');
+    box.removeAttribute('aria-busy');
     let rows = tab === 'jucatori' ? data.players : tab === 'factiuni' ? data.factions : (data.quests || []);
     if (!rows.length) { box.innerHTML = '<p class="lb-empty">Încă nu s-a strâns nimic săptămâna asta. Intră pe server și fii primul! 🎮</p>'; return; }
     const cls = i => i < 3 ? ` class="top${i + 1}"` : '';
@@ -214,7 +218,7 @@
       if (!r.ok) throw new Error();
       data = await r.json();
       render();
-    } catch { document.getElementById('lb-table').innerHTML = '<p class="lb-empty">Clasamentul nu s-a putut încărca. Reîncearcă în câteva minute.</p>'; }
+    } catch { document.getElementById('lb-table').removeAttribute('aria-busy'); document.getElementById('lb-table').innerHTML = '<p class="lb-empty">Clasamentul nu s-a putut încărca. Reîncearcă în câteva minute.</p>'; }
   }
   load();
   setInterval(load, 3 * 60 * 1000);

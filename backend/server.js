@@ -184,7 +184,7 @@ app.get("/sitemap.xml", async (_req, res) => {
   try {
     if (!sitemapCache.xml || Date.now() - sitemapCache.at > 3600_000) {
       const base = (process.env.SITE_URL || "https://moldovarp.md").replace(/\/+$/, "");
-      const pages = ["", "incepe.html", "regulamente.html", "joburi.html", "legislatie-rutiera.html", "cod-penal.html", "ghid-factiuni.html", "clasament.html", "concurs.html", "vip-shop.html", "premium.html", "craciun.html", "aplicatie.html"];
+      const pages = ["", "incepe.html", "fps.html", "regulamente.html", "joburi.html", "legislatie-rutiera.html", "cod-penal.html", "ghid-factiuni.html", "clasament.html", "concurs.html", "vip-shop.html", "premium.html", "craciun.html", "aplicatie.html"];
       const { rows } = await pool.query(`SELECT slug, updated_at FROM regulations WHERE is_published ORDER BY slug`);
       const esc = x => String(x).replace(/&/g, "&amp;").replace(/</g, "&lt;");
       const urls = pages.map(p => `<url><loc>${base}/${p}</loc></url>`)

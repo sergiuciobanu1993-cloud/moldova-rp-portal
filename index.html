@@ -64,6 +64,8 @@
   .xm-open[hidden]{display:none}
   /* (01.11.2026) recompensele pe ore (6–30 noiembrie), în locul mașinii pentru jucătorii noi */
   .hr-card .hc-thumb{display:grid;place-items:center;width:84px;height:84px;font-size:46px;filter:drop-shadow(0 0 16px rgba(255,138,31,.45))}
+  .hero{align-items:flex-start} /* (07.11.2026) conținutul nu mai „sare” când apar cardurile de sub butoane */
+  #hr-me{min-height:44px}
   .hr-tiers{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:12px}
   .hr-tier{padding:9px 10px;border-radius:10px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.03);display:flex;flex-direction:column;gap:3px;min-width:0}
   .hr-tier b{font-size:15px;font-variant-numeric:tabular-nums}
@@ -360,13 +362,13 @@ i.sk{height:12px;margin:4px 0}
             <div class="hc-me" id="hc-me"></div>
           </div>
         </div>
-        <div class="hc-card hr-card" id="hr-card" aria-labelledby="hr-title" hidden>
+        <div class="hc-card hr-card" id="hr-card" aria-labelledby="hr-title">
           <div class="hc-thumb" aria-hidden="true">⏱️</div>
           <div class="hc-body">
             <span class="hc-eyebrow">NOIEMBRIE · PREMII PE ORE</span>
             <h2 id="hr-title">Joacă în noiembrie, <b>primești premii</b>.</h2>
             <p id="hr-text">Orele jucate între 6 și 30 noiembrie se adună pe contul tău, pe toate personajele. La fiecare prag ceri premiul de aici și îl ridici din joc cu /recompense.</p>
-            <div class="hr-tiers" id="hr-tiers"></div>
+            <div class="hr-tiers" id="hr-tiers"><div class="hr-tier"><b>25 ore</b><span>$75.000 în bancă</span></div><div class="hr-tier"><b>50 ore</b><span>$150.000 în bancă</span></div><div class="hr-tier"><b>100 ore</b><span>1.500 coins</span></div></div>
             <div class="hc-me" id="hr-me"></div>
           </div>
         </div>
@@ -800,8 +802,9 @@ async function hourRewardsCard() {
   const esc = x => String(x ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const hm = m => `${Math.floor(m / 60)}h ${String(Math.round(m % 60)).padStart(2, '0')}m`;
   let ev;
-  try { const r = await fetch('/api/ore-jucate'); if (!r.ok) return; ev = await r.json(); } catch { return; }
-  if (!ev.claimOpen && ev.started) return; // s-a încheiat și a trecut și săptămâna pentru cereri
+  // (07.11.2026) cardul e vizibil din HTML (ca pagina să nu „sară” când vin datele); îl ascundem doar dacă nu mai e cazul
+  try { const r = await fetch('/api/ore-jucate'); if (!r.ok) { card.hidden = true; return; } ev = await r.json(); } catch { card.hidden = true; return; }
+  if (!ev.claimOpen && ev.started) { card.hidden = true; return; } // s-a încheiat și a trecut și săptămâna pentru cereri
   const day = iso => new Date(iso).toLocaleDateString('ro-RO', { timeZone: 'Europe/Chisinau', day: 'numeric', month: 'long' });
   if (!ev.started) {
     // (01.11.2026) Sergiu: cardul se vede de acum, cu „În curând” și ceasul până la start
@@ -821,7 +824,7 @@ async function hourRewardsCard() {
   }
   else if (ev.ended) document.getElementById('hr-text').textContent = `Perioada s-a încheiat pe ${day(ev.end)}. Dacă ai ajuns la un prag, îți poți cere premiul până pe ${day(ev.claimUntil)}.`;
   const STATE = { locked: '', ready: 'Poți cere', pending: '✓ Cerut', given: '✓ La /recompense', rejected: 'Respins', closed: 'Închis' };
-  const tiersHtml = tiers => tiers.map(t => `<div class="hr-tier ${t.state || ''}"><b>${t.hours} ore</b><span>${esc(t.prize)}</span>${STATE[t.state] ? `<em>${STATE[t.state]}</em>` : ''}${t.state === 'ready' ? `<button type="button" class="hc-btn solid" data-hr-claim="${t.hours}">Cere premiul</button>` : ''}</div>`).join('');
+  const tiersHtml = tiers => (tiers || []).map(t => `<div class="hr-tier ${t.state || ''}"><b>${t.hours} ore</b><span>${esc(t.prize)}</span>${STATE[t.state] ? `<em>${STATE[t.state]}</em>` : ''}${t.state === 'ready' ? `<button type="button" class="hc-btn solid" data-hr-claim="${t.hours}">Cere premiul</button>` : ''}</div>`).join('');
   const box = document.getElementById('hr-tiers'), me = document.getElementById('hr-me');
   box.innerHTML = tiersHtml(ev.tiers);
   card.hidden = false;

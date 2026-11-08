@@ -62,9 +62,23 @@ async function apiFetch(path, options = {}) {
 // Bounces to login.html if there is no token at all. Cheap, local-only check —
 // pages should still confirm with /api/me since a stale/expired token has to
 // round-trip to the server to be caught.
+// (08.11.2026) pagina de unde ai fost trimis la autentificare: după login te întoarcem acolo
+// (de ex. tichete.html?cat=bug din ghidul FPS), nu în Contul meu
+const AFTER_LOGIN_KEY = "mrp_after_login";
+function rememberAfterLogin() {
+  try { sessionStorage.setItem(AFTER_LOGIN_KEY, location.pathname.replace(/^\/+/, "") + location.search + location.hash); } catch { /* fără sessionStorage */ }
+}
+function takeAfterLogin() {
+  let p = null;
+  try { p = sessionStorage.getItem(AFTER_LOGIN_KEY); sessionStorage.removeItem(AFTER_LOGIN_KEY); } catch { /* fără sessionStorage */ }
+  // doar pagini de pe site, ca „tichete.html?cat=bug” (nu adrese externe, nu login/register)
+  return p && /^[a-z0-9-]+\.html(?:[?#][^\s]*)?$/i.test(p) && !/^(login|register|auth-callback)\.html/i.test(p) ? p : null;
+}
+
 function requireAuth() {
   const auth = getAuth();
   if (!auth?.token) {
+    rememberAfterLogin();
     window.location.href = "login.html";
     return null;
   }

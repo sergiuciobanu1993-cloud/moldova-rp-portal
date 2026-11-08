@@ -10,6 +10,7 @@
 .field .rules-check input{width:18px;height:18px;margin:2px 0 0;flex:none;accent-color:var(--orange)}
 .rules-check a{color:var(--orange)}
 </style><link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/assets/app/apple-touch-icon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black"><meta name="apple-mobile-web-app-title" content="Moldova RP"><script>try{var wnT=+sessionStorage.getItem("mrp_wn_nav");if(wnT&&Date.now()-wnT<5000)document.documentElement.classList.add("wn-in")}catch(e){}</script><style>/* (31.10.2026) sosirea după cortina de iarnă (tema.js, wnNav): cortina se ridică */html.wn-in::after{content:"";position:fixed;left:0;right:0;top:0;height:calc(100vh + 140px);z-index:2147483000;pointer-events:none;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='-12 -12 24 24'%3E%3Cg fill='none' stroke='%23bfe6ff' stroke-width='1.6' stroke-linecap='round'%3E%3Cpath transform='rotate(0)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3Cpath transform='rotate(60)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3Cpath transform='rotate(120)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3Cpath transform='rotate(180)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3Cpath transform='rotate(240)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3Cpath transform='rotate(300)' d='M0 0V-10.5M-3.2-8.8L0-6l3.2-2.8'/%3E%3C/g%3E%3C/svg%3E") 50% calc(50vh - 27px)/54px 54px no-repeat,radial-gradient(circle at 30% 40%,#fff 0 1.6px,transparent 2.3px) 0 0/131px 113px,radial-gradient(circle at 70% 20%,rgba(255,255,255,.75) 0 1.1px,transparent 1.8px) 36px 28px/97px 71px,linear-gradient(180deg,#0b1830,#060a12 75%);-webkit-mask-image:linear-gradient(180deg,#000 calc(100% - 140px),transparent);mask-image:linear-gradient(180deg,#000 calc(100% - 140px),transparent);animation:wnIn 1s cubic-bezier(.65,0,.35,1) .2s forwards}@keyframes wnIn{to{transform:translateY(-100%);visibility:hidden}}@media (prefers-reduced-motion:reduce){html.wn-in::after{display:none}}</style><script src="/pwa.js" defer></script><meta name="theme-color" content="#090a0b">
+<style>/* (08.11.2026) ajutorul de la „Bug / problemă tehnică” */.tech-help{padding:14px 16px;border-radius:12px;border:1px solid rgba(255,138,31,.35);background:rgba(255,138,31,.07);font-size:14px;line-height:1.55}.tech-help p{margin:0}.tech-help p+p{margin-top:8px;color:var(--muted,#a3a8ae)}.tech-help a{color:var(--orange,#ff8a1f);font-weight:800}.tech-help[hidden]{display:none}</style>
 </head>
 <body class="sp">
 <header><a class="brand" href="index.html"><img src="assets/logo-128.webp" alt="">MOLDOVA<span>RP</span></a><nav><a href="index.html">Acasă</a><a href="dashboard.html">Dashboard</a><a href="index.html#regulamente">Regulamente</a></nav><a class="logout" href="login.html" id="logout-link">Deconectare</a></header><script src="site-nav.js"></script>
@@ -51,6 +52,11 @@
       <input id="f-reported-label" type="text" maxlength="120" placeholder="ex: #336, 91 sau numele RP din joc" autocomplete="off">
       <div class="player-search-dropdown" id="f-reported-dropdown" hidden></div>
       <small class="hint">Tichetul devine public — orice utilizator îl poate citi, inclusiv jucătorul reclamat. Scrie ID-ul din joc (F10) sau numele exact — staff-ul identifică jucătorul din reclamație. Pe măsură ce scrii, îți arătăm mai jos jucătorii găsiți, ca să confirmi că e cel corect.</small>
+    </div>
+    <!-- (08.11.2026) la „Bug / problemă tehnică”: întâi ghidul FPS, apoi ce ne trebuie ca să te ajutăm -->
+    <div class="field tech-help" id="f-tech" hidden>
+      <p><b>FPS mic, sacadări sau jocul se închide?</b> Încearcă întâi pașii din <a href="fps.html">ghidul Mai multe FPS</a>: rezolvă cele mai multe probleme în câteva minute.</p>
+      <p>Dacă tot nu merge, scrie mai jos ce se întâmplă, de când, ce procesor, placă video și memorie ai și ce ai încercat deja. Ca dovadă pune o poză cu eroarea sau din Task Manager → Performance.</p>
     </div>
     <div class="field"><label>Descriere</label><textarea id="f-description" required placeholder="Descrie situația cât mai detaliat: cine, ce, când, unde..."></textarea></div>
     <div class="field">
@@ -98,9 +104,18 @@ function hideForm() {
   document.getElementById('ticket-form').reset();
   document.getElementById('f-reported-wrap').hidden = true;
   document.getElementById('f-rules-wrap').hidden = true;
+  document.getElementById('f-tech').hidden = true;
 }
 
+const TECH_TEMPLATE = 'Ce se întâmplă:\nDe când / unde (în oraș, când intru pe server etc.):\nProcesor, placă video, memorie RAM:\nCe am încercat deja:';
 document.getElementById('f-category').addEventListener('change', (e) => {
+  const isTech = e.target.value === 'bug';
+  const desc = document.getElementById('f-description'), ev = document.getElementById('f-evidence');
+  document.getElementById('f-tech').hidden = !isTech;
+  if (isTech && !desc.value.trim()) desc.value = TECH_TEMPLATE;
+  if (!isTech && desc.value === TECH_TEMPLATE) desc.value = '';
+  document.getElementById('f-subject').placeholder = isTech ? 'ex: FPS mic în oraș / jocul se închide la intrare' : 'ex: Jucător folosește cheat-uri';
+  ev.placeholder = isTech ? 'https://... (poză cu eroarea sau din Task Manager)' : 'https://streamable.com/... sau link Discord/YouTube';
   const isReclamatie = e.target.value === 'reclamatie';
   document.getElementById('f-reported-wrap').hidden = !isReclamatie;
   document.getElementById('f-rules-wrap').hidden = !isReclamatie;
@@ -269,6 +284,10 @@ document.getElementById('ticket-form').addEventListener('submit', async (e) => {
 (async () => {
   if (!requireAuth()) return;
   loadTickets();
+  // (08.11.2026) tichete.html?cat=bug (din ghidul FPS) deschide direct formularul pe categoria potrivită
+  const cat = new URLSearchParams(location.search).get('cat');
+  const sel = document.getElementById('f-category');
+  if (cat && [...sel.options].some(o => o.value === cat)) { sel.value = cat; sel.dispatchEvent(new Event('change')); showForm(); }
 })();
 wireLogout('#logout-link');
 </script>

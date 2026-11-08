@@ -302,7 +302,7 @@
       const body = u => u.t.length > 1 && u.t[0].length < 60 && !/[.;:]$/.test(u.t[0]) ? `<b>${hl(u.t[0])}</b> — ${hl(cut(u.t.slice(1).join(' ')))}` : hl(cut(u.text));
       const top = scored.slice(0, 5);
       ans.innerHTML = `<div class="rg-ans-h"><b>⚖️ Răspuns rapid</b><span>${scored.length === 1 ? 'o regulă găsită' : scored.length + ' reguli găsite'}${scored.length > top.length ? ', le arăt pe cele mai potrivite' : ''}</span></div>`
-        + top.map(({ u }) => `<a class="rg-rule" href="${href(u.r)}"><span class="rg-rule-src"><b>${esc(short(u.r))}</b>${u.sec ? ' · ' + esc(u.sec.length > 90 ? u.sec.slice(0, 88) + '…' : u.sec) : ''}</span><p class="rg-rule-t">${body(u)}</p><span class="rg-rule-s"><i>Sancțiune</i>${esc(u.s)}</span></a>`).join('')
+        + top.map(({ u }) => `<a class="rg-rule" href="${href(u.r)}#q=${encodeURIComponent(u.t[0].slice(0, 70))}"><span class="rg-rule-src"><b>${esc(short(u.r))}</b>${u.sec ? ' · ' + esc(u.sec.length > 90 ? u.sec.slice(0, 88) + '…' : u.sec) : ''}</span><p class="rg-rule-t">${body(u)}</p><span class="rg-rule-s"><i>Sancțiune</i>${esc(u.s)}</span></a>`).join('')
         + `<p class="rg-ans-more">Sancțiunea exactă o stabilește staff-ul în limitele de mai sus. Textul complet e în regulament.</p>`;
       ans.hidden = false;
       return scored.length;

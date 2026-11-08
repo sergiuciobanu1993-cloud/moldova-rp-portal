@@ -437,6 +437,15 @@ i.sk{height:12px;margin:4px 0}
       <div class="xm-hero-slot" id="xm-hero-slot"></div>
       <div class="hero-sondaj-slot" id="hero-sondaj-slot"></div>
       <script>
+      // (08.11.2026) pe calculator, caseta „Server online” stă lipită de josul hero-ului și se mișca cât se
+      // încărcau cardurile și playerul (pagina „sărea”). O arătăm după ce s-a așezat totul, cu o apariție lină.
+      (function () {
+        var st = document.querySelector('#acasa .hero-status');
+        if (!st || !window.matchMedia('(min-width: 901px)').matches) return;
+        st.style.visibility = 'hidden'; st.style.opacity = '0';
+        var show = function () { setTimeout(function () { st.style.transition = 'opacity .35s ease'; st.style.visibility = ''; st.style.opacity = ''; }, 1000); };
+        if (document.readyState === 'complete') show(); else window.addEventListener('load', show, { once: true });
+      })();
       // (31.10.2026) sondajul: în dreapta sus a hero-ului pe ecranele late, sub butoane pe celelalte
       (function () {
         var box = document.getElementById('sondaj'), slot = document.getElementById('hero-sondaj-slot');
@@ -903,7 +912,9 @@ async function hourRewardsCard() {
   const setMask = src => { const sh = box.querySelector('.hc-shine'); sh.style.webkitMaskImage = sh.style.maskImage = `url("${src}")`; sh.style.visibility = 'visible'; };
   const hd = `assets/vip-cars-hd/${encodeURIComponent(cfg.model)}.webp`;
   document.querySelectorAll('.hc-img').forEach(img => {
-    const chain = img.dataset.hd ? [hd, local, cdn] : [local, cdn];
+    // (08.11.2026) fără poză pe site → direct din CDN (nu mai cerem întâi una care nu există)
+    const isLocal = ['2019chiron','boss429','c63hr','chironsupersport22','f812','gtr50','huracanpriorbeast','jesko','m3e46','r34h','rmodpagani','rs7bratwa','rx7'].includes(String(cfg.model).toLowerCase());
+    const chain = !isLocal ? [cdn] : img.dataset.hd ? [hd, local, cdn] : [local, cdn];
     let k = 0;
     const next = () => {
       if (k >= chain.length) { (img.closest('.hc-stage') || img.closest('.hc-thumb')).style.display = 'none'; return; }

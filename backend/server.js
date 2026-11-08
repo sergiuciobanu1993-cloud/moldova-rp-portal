@@ -1825,6 +1825,9 @@ function sortByOrder(list, ids, idOf) {
 }
 // Vânzare înapoi (29.09.2026) — valoarea mașinilor/armelor, setată de staff.
 const SELL_BACK_PCT = 50;
+// (08.11.2026, cerut de Sergiu) vânzarea înapoi e scoasă: nu se mai oferă la nicio recompensă și ruta
+// /api/vip-shop/vinde refuză. Valorile setate de staff rămân salvate; pentru a o reporni: true.
+const SELL_BACK_ENABLED = false;
 function valueKey(type, data) {
   if (type === "vehicle" && data?.model) return ["vehicle", String(data.model).toLowerCase().slice(0, 80)];
   if (type === "item" && data?.item) return ["item", String(data.item).slice(0, 80)];
@@ -1844,6 +1847,7 @@ async function loadItemValues() {
 const sellCurrencyOff = new Map(); // "coins" | "money" -> până când (ms)
 function sellCurrencyAllowed(cur) { const until = sellCurrencyOff.get(cur); return !until || until < Date.now(); }
 function sellOfferFor(values, type, data) {
+  if (!SELL_BACK_ENABLED) return null;
   const k = valueKey(type, data);
   const v = k && values.get(`${k[0]}|${k[1]}`);
   if (!v) return null;
@@ -6135,6 +6139,7 @@ function gameDailyLimit(result) {
 // jucătorului. Serverul de joc face efectiv vânzarea ("/cases/sell"): verifică
 // atomic că recompensa e a lui și încă neridicată, o marchează și dă plata.
 app.post("/api/vip-shop/vinde", auth, asyncRoute(async (req, res) => {
+  if (!SELL_BACK_ENABLED) return res.status(410).json({ error: "Vânzarea înapoi nu mai e disponibilă. Recompensa rămâne a ta: o ridici din joc cu /recompense." });
   const { rows } = await pool.query(`SELECT game_identifier FROM users WHERE id = $1`, [req.user.sub]);
   const identifier = rows[0]?.game_identifier;
   if (!identifier) return res.status(400).json({ error: "Leagă-ți mai întâi contul de personajul din joc." });
@@ -6464,7 +6469,7 @@ app.get("/api/admin/vip-shop/schimb-legal", auth, requireRole(...FOUNDER_ROLES),
   // starea rutelor din joc (vânzare / schimb) — verificată din nou dacă e mai veche de un minut
   if (!gameRoutesCheckedAt || Date.now() - new Date(gameRoutesCheckedAt) > 60_000)
     await probeGameRoutes().catch(() => {});
-  res.json({ settings, jobs, gameRoutes: { sell: gameRouteReady.sell, convert: gameRouteReady.convert, checkedAt: gameRoutesCheckedAt } });
+  res.json({ settings, jobs, gameRoutes: { sell: gameRouteReady.sell, sellOff: !SELL_BACK_ENABLED, convert: gameRouteReady.convert, checkedAt: gameRoutesCheckedAt } });
 }));
 
 app.put("/api/admin/vip-shop/schimb-legal", auth, requireRole(...FOUNDER_ROLES), asyncRoute(async (req, res) => {

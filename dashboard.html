@@ -546,7 +546,11 @@ function carInfo(v) {
   return { label: hit ? hit.label : (m || !raw ? 'Vehicul' : raw), model: hit ? hit.model : code, plate: v.plate || '' };
 }
 const CAR_CDN = 'https://r2.fivemanage.com/gi0w8W6O9hhBekF3oXfQ3/vehicule/';
-function carPics(model) { const k = encodeURIComponent(model); return [`assets/vip-cars-hd/${k}.webp`, `assets/vip-cars/${k}.webp`, `${CAR_CDN}${k}.webp`]; }
+// (08.11.2026) pozele pe care le avem pe site (assets/vip-cars și vip-cars-hd); restul vin direct din CDN,
+// fără să mai cerem întâi o poză care nu există (2 cereri ratate la fiecare mașină). Poză nouă pusă în
+// assets/vip-cars → adaug-o și aici.
+const LOCAL_CARS = new Set(['2019chiron','boss429','c63hr','chironsupersport22','f812','gtr50','huracanpriorbeast','jesko','m3e46','r34h','rmodpagani','rs7bratwa','rx7']);
+function carPics(model) { const k = encodeURIComponent(model); return LOCAL_CARS.has(String(model).toLowerCase()) ? [`assets/vip-cars-hd/${k}.webp`, `assets/vip-cars/${k}.webp`, `${CAR_CDN}${k}.webp`] : [`${CAR_CDN}${k}.webp`]; }
 // poza mașinii, cu următoarea sursă dacă una lipsește; la final, iconița de mașină
 window.chCarFallback = img => {
   const list = (img.dataset.srcs || '').split('|').filter(Boolean);

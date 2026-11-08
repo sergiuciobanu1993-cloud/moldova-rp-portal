@@ -225,7 +225,7 @@
       [/^(mita|mituire|mituit|spaga|spagi)$/, ['mita', 'mitui']],
       [/^(arma|arme|armele|armament|pistol|pistoale)$/, ['arme', 'armament', 'armei', 'arma ', 'arma,', 'arma.', 'arma;', 'arma)']],
       [/^(ostatic|ostatici|ostaticul|rapire|rapiri|rapit|rapesc|rapi)$/, ['ostatic', 'rapi']],
-      [/^(lider|liderul|liderii|lideri|sef|seful|conducere|conducerea|grad|grade|gradele|mari)$/, ['lider', 'conducer', 'grade', 'adjunct', 'sef']],
+      [/^(lider|liderul|liderii|lideri|sef|seful|conducere|conducerea|grad|grade|gradele|mari|rang|ranguri|rangul|rangurile)$/, ['lider', 'conducer', 'grade', 'adjunct', 'sef']],
       [/^(stat|statului|structuri|structura)$/, ['stat', 'structur']],
       [/^(jaf|jafuri|jefuire|jefuiesc|jefuit)$/, ['jaf', 'jefui']],
       [/^(dm|omor|omoara|ucide|ucidere|kill)$/, ['dm', 'ucid', 'omor']],
@@ -271,10 +271,11 @@
       rules.forEach(u => { u.text = u.t.join(' '); u.n = words(u.text); u.ctx = words(short(u.r) + ' ' + u.sec + ' ' + (ALIAS[u.r.slug] || '')); u.s = u.s.replace(/^[\s:—–-]+/, '').replace(/[;.]\s*$/, ''); });
     }
     function quick(v) {
-      const T = terms(v);
-      if (!T.length) { ans.hidden = true; return 0; }
       if (!rules) buildRules();
       const has = (h, alts) => alts.some(a => h.includes(' ' + a.replace(/[^a-z0-9 ]+/g, ' ')));
+      // cuvintele care nu apar în nicio regulă („luare”, „care” etc.) nu mai blochează căutarea
+      const T = terms(v).filter(alts => rules.some(u => has(u.n, alts) || has(u.ctx, alts)));
+      if (!T.length) { ans.hidden = true; return 0; }
       const seen = new Set();
       const scored = rules.map(u => {
         let inText = 0, hit = 0, lit = 0, head = 0;

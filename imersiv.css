@@ -15,11 +15,12 @@
   radial-gradient(ellipse 55% 45% at 68% 42%,rgba(255,150,70,.22),transparent 70%),
   radial-gradient(ellipse 70% 60% at 40% 60%,rgba(60,38,24,.85),transparent 75%),
   radial-gradient(ellipse 100% 80% at 50% 50%,rgba(22,15,11,.92) 35%,rgba(12,9,7,.96) 100%)}
-.hero-imx .hx-smoke::before,.hero-imx .hx-smoke::after{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 38% 30% at 50% 50%,rgba(255,170,100,.18),transparent 70%);animation:hx-drift 16s ease-in-out infinite alternate}
+.hero-imx .hx-smoke::before,.hero-imx .hx-smoke::after{content:'';position:absolute;inset:0;transform-origin:50% 0;background:radial-gradient(ellipse 38% 30% at 50% 50%,rgba(255,170,100,.18),transparent 70%);animation:hx-drift 16s ease-in-out infinite alternate}
 .hero-imx .hx-smoke::after{background:radial-gradient(ellipse 30% 26% at 50% 50%,rgba(120,80,50,.35),transparent 70%);animation-duration:22s;animation-direction:alternate-reverse}
-@keyframes hx-drift{from{transform:translate(-18%,-6%) scale(1)}to{transform:translate(16%,8%) scale(1.25)}}
+/* (08.11.2026) mișcarea fumului în vw/px și scalată de sus: cu % se „mișca” (pentru Chrome) de fiecare dată când se schimba înălțimea hero-ului la încărcare */
+@keyframes hx-drift{from{transform:translate(-15vw,-50px) scale(1)}to{transform:translate(13vw,68px) scale(1.25)}}
 
-.hero-imx .hx-grain{position:absolute;inset:-50%;pointer-events:none;opacity:.06;mix-blend-mode:overlay;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");animation:hx-grain 1.2s steps(4) infinite}
+.hero-imx .hx-grain{position:absolute;inset:-420px; /* (08.11.2026) în px, nu %: altfel se „mișca” la fiecare schimbare de înălțime a hero-ului */ pointer-events:none;opacity:.06;mix-blend-mode:overlay;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");animation:hx-grain 1.2s steps(4) infinite}
 @keyframes hx-grain{0%{transform:translate(0,0)}25%{transform:translate(-3%,2%)}50%{transform:translate(2%,-3%)}75%{transform:translate(-2%,-1%)}100%{transform:translate(0,0)}}
 
 @media (max-width:700px){.hero-imx{--hx-alpha:.5}}

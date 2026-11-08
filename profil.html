@@ -172,7 +172,9 @@
       cover.className = 'pf-cover bn-' + (p.banner || 'portocaliu');
       if (p.bio) { $('pf-bio').textContent = p.bio; $('pf-bio').hidden = false; }
       if (p.favCar && /^[a-z0-9_]{2,24}$/.test(p.favCar)) {
-        var k = encodeURIComponent(p.favCar), srcs = ['assets/vip-cars-hd/' + k + '.webp', 'assets/vip-cars/' + k + '.webp', 'https://r2.fivemanage.com/gi0w8W6O9hhBekF3oXfQ3/vehicule/' + k + '.webp'], si = 0, car = $('pf-car');
+        // (08.11.2026) doar mașinile cu poză pe site încearcă întâi poza locală; restul merg direct la CDN
+        var LOCAL = ['2019chiron','boss429','c63hr','chironsupersport22','f812','gtr50','huracanpriorbeast','jesko','m3e46','r34h','rmodpagani','rs7bratwa','rx7'];
+        var k = encodeURIComponent(p.favCar), cdnSrc = 'https://r2.fivemanage.com/gi0w8W6O9hhBekF3oXfQ3/vehicule/' + k + '.webp', srcs = LOCAL.indexOf(p.favCar) >= 0 ? ['assets/vip-cars-hd/' + k + '.webp', 'assets/vip-cars/' + k + '.webp', cdnSrc] : [cdnSrc], si = 0, car = $('pf-car');
         car.onerror = function () { si++; if (si < srcs.length) car.src = srcs[si]; else car.hidden = true; };
         car.onload = function () { car.hidden = false; $('pf-car-l').hidden = false; };
         car.src = srcs[0];

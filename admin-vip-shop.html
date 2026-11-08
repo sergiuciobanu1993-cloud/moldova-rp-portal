@@ -286,7 +286,7 @@
 
         <div class="field rf-sell"><label>Valoare în coins</label><input id="rf-value-coins" type="number" min="0" step="1" placeholder="ex: 6000"></div>
         <div class="field rf-sell"><label>Valoare în bani din joc ($)</label><input id="rf-value-money" type="number" min="0" step="1000" placeholder="ex: 2000000"></div>
-        <p class="rf-sell muted wide" style="margin:-4px 0 0;font-size:11px;grid-column:1/-1">Jucătorul care câștigă asta o poate vinde înapoi pentru <b>50%</b> din valoare, în coins sau în bani — alege el. Lasă gol ca să nu se poată vinde.</p>
+        <p class="rf-sell muted wide" style="margin:-4px 0 0;font-size:11px;grid-column:1/-1">Vânzarea înapoi e <b>scoasă</b> de pe site (08.11.2026): valoarea rămâne salvată, dar jucătorii nu mai pot vinde recompensa.</p>
         <div class="field rf-vehicle wide"><label>Model (spawn code exact)</label><input id="rf-model" placeholder="ex: 2019chiron" list="known-models"><p class="muted" style="margin:6px 0 0">Trebuie să fie exact numele modelului de pe server (litere mici) — altfel /recompense va eșua în joc la ridicare.</p></div>
       </div>
       <div class="rf-vehicle" id="rf-car-preview" hidden></div>
@@ -910,7 +910,7 @@ function lxRoutes(g) {
   if (!el || !g) return;
   const pill = (ok, yes, no) => ok === true ? `<span class="ok">✓ ${yes}</span>` : ok === false ? `<span class="no">✕ ${no}</span>` : `<span>… ${yes.split(' ')[0]}: serverul de joc nu răspunde</span>`;
   el.innerHTML = 'Pe serverul de joc: '
-    + pill(g.sell, 'Vânzarea înapoi e activă', 'Vânzarea înapoi lipsește — butonul e ascuns')
+    + (g.sellOff ? '<span class="no">✕ Vânzarea înapoi e scoasă de pe site</span>' : pill(g.sell, 'Vânzarea înapoi e activă', 'Vânzarea înapoi lipsește — butonul e ascuns'))
     + pill(g.convert, 'Schimbul banilor murdari e activ', 'Schimbul lipsește — butonul e ascuns');
 }
 async function loadLegalExchange() {

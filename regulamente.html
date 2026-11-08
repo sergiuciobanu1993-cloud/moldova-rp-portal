@@ -233,12 +233,15 @@
     // regulamentele comune tuturor structurilor de stat se potrivesc și cu numele structurii
     const ALIAS = { 'structuri-de-stat': 'politie sherif serif bs fib armata vama guvern stat', 'regulamentul-general-al-sheriffului': 'sherif serif bs biroul', 'regulament-oficial-politie': 'politie politist', 'regulament-oficial-advanced-rp': 'stat lider' };
     const terms = v => v.split(/[^a-z0-9]+/).filter(w => w.length > 1 && !STOP.has(w)).map(w => {
-      for (const [re, alt] of SYN) if (re.test(w)) return alt;
-      return [w.length > 5 ? w.slice(0, w.length - 2) : w];
+      const own = w.length > 5 ? w.slice(0, w.length - 2) : w;
+      for (const [re, alt] of SYN) if (re.test(w)) return [own, ...alt.filter(a => a !== own)];
+      return [own];
     });
     const isHead = l => /^\s*(#|━|---|═|[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]\s*CAPITOLUL|CAPITOLUL|Punctul\s+\d|[IVX]+\.\s+[A-ZĂÂÎȘȚ])/u.test(l);
     const isNum = l => /^\s*\d+(\.\d+)*\.?\s+\S/.test(l);
     const md = l => l.replace(/\*\*|__|`/g, '').replace(/^\s*[*•\-–]\s+/, '').trim();
+    // textul ca „ cuvânt cuvânt …”: căutăm doar la începutul cuvintelor („mita” nu mai prinde „limita”)
+    const words = t => ' ' + norm(t).replace(/[^a-z0-9]+/g, ' ') + ' ';
     function buildRules() {
       rules = [];
       for (const r of items) {
@@ -265,23 +268,31 @@
         }
         close();
       }
-      rules.forEach(u => { u.text = u.t.join(' '); u.n = norm(u.text); u.ctx = norm(short(u.r) + ' ' + u.sec + ' ' + (ALIAS[u.r.slug] || '')); u.s = u.s.replace(/^[\s:—–-]+/, '').replace(/[;.]\s*$/, ''); });
+      rules.forEach(u => { u.text = u.t.join(' '); u.n = words(u.text); u.ctx = words(short(u.r) + ' ' + u.sec + ' ' + (ALIAS[u.r.slug] || '')); u.s = u.s.replace(/^[\s:—–-]+/, '').replace(/[;.]\s*$/, ''); });
     }
     function quick(v) {
       const T = terms(v);
       if (!T.length) { ans.hidden = true; return 0; }
       if (!rules) buildRules();
-      const has = (h, alts) => alts.some(a => h.includes(a));
+      const has = (h, alts) => alts.some(a => h.includes(' ' + a.replace(/[^a-z0-9 ]+/g, ' ')));
       const seen = new Set();
       const scored = rules.map(u => {
-        let inText = 0, hit = 0;
-        for (const alts of T) { if (has(u.n, alts)) { inText++; hit++; } else if (has(u.ctx, alts)) hit++; }
+        let inText = 0, hit = 0, lit = 0, head = 0;
+        for (const alts of T) {
+          if (has(u.n, alts)) { inText++; hit++; if (has(u.n, alts.slice(0, 1))) lit++; if (has(u.n.slice(0, 45), alts)) head++; }
+          else if (has(u.ctx, alts)) hit++;
+        }
         // toate cuvintele (în regulă sau în numele regulamentului); la 3+ cuvinte e destul să lipsească unul
         const all = hit === T.length, near = T.length >= 3 && hit === T.length - 1 && inText >= 2;
-        return { u, all, near, inText };
+        return { u, all, near, inText, lit, head };
       }).filter(x => (x.all && x.inText) || x.near)
-        .sort((a, b) => b.all - a.all || b.inText - a.inText || (a.u.r.slug === 'sanctiuni-oficiale') - (b.u.r.slug === 'sanctiuni-oficiale') || a.u.text.length - b.u.text.length)
-        .filter(x => { const key = x.u.n.replace(/[^a-z0-9]/g, '').slice(0, 50); if (seen.has(key)) return false; seen.add(key); return true; });
+        .sort((a, b) => b.all - a.all || b.inText - a.inText || b.lit - a.lit || b.head - a.head || (a.u.r.slug === 'sanctiuni-oficiale') - (b.u.r.slug === 'sanctiuni-oficiale') || a.u.text.length - b.u.text.length)
+        .filter(x => {
+          // aceeași regulă repetată în „Sancțiuni oficiale” (același număr și aceeași sancțiune) o arătăm o singură dată
+          const nr = (x.u.text.match(/^\s*(\d+(?:\.\d+)+)/) || [])[1], key = x.u.n.replace(/^[\s\d]+/, '').replace(/[^a-z0-9]/g, '').slice(0, 50) + '|' + norm(x.u.s).replace(/[^a-z0-9]/g, ''), key2 = nr ? nr + '|' + norm(x.u.s) : '';
+          if (seen.has(key) || (key2 && seen.has(key2))) return false;
+          seen.add(key); if (key2) seen.add(key2); return true;
+        });
       if (!scored.length) { ans.hidden = true; return 0; }
       const flat = T.flat().filter(a => a.trim().length > 2);
       const RX = { a: '[aăâ]', i: '[iî]', s: '[sșş]', t: '[tțţ]' };
@@ -302,7 +313,9 @@
       start.hidden = !showAll;
       [...container.querySelectorAll('.rg-card')].forEach(a => { a.hidden = !showAll && !norm(a.textContent).includes(v); });
       [...container.querySelectorAll('.rg-g')].forEach(g => { g.hidden = !showAll && ![...g.querySelectorAll('.rg-card')].some(a => !a.hidden); });
-      if (v.length < 3) { hits.hidden = true; ans.hidden = true; return; }
+      // codurile scurte (DM, RK, MG, PG) primesc direct răspunsul rapid; căutarea în text pornește de la 3 litere
+      if (v.length < 2) { hits.hidden = true; ans.hidden = true; return; }
+      if (v.length < 3) { hits.hidden = true; if (!texts) await loadTexts(); if (norm(q.value.trim()) === v) quick(v); return; }
       hits.hidden = false;
       if (!texts) { hits.innerHTML = '<p class="rg-hits-h">Caut și în textul regulamentelor…</p>'; await loadTexts(); if (norm(q.value.trim()) !== v) return; }
       const nq = quick(v);

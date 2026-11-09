@@ -5468,8 +5468,8 @@ app.put("/api/me/profil-setari", auth, asyncRoute(async (req, res) => {
     await pool.query(`INSERT INTO public_profiles(user_id, slug, enabled, bio, banner, fav_car, shown_badges, banner_pos, banner_zoom, banner_zoom_y) VALUES ($1,$2,false,$3,$4,$5,$6,$7,$8,$9)`,
       [req.user.sub, slug, bio || null, banner, favCar, shown, bannerPos, bannerZoom, bannerZoomY]);
   } else {
-    await pool.query(`UPDATE public_profiles SET bio = $2, banner = $3, fav_car = $4, shown_badges = $5, banner_pos = $7, banner_zoom = $8, banner_zoom_y = $9, updated_at = NOW() WHERE user_id = $1`,
-      [req.user.sub, bio || null, banner, favCar, shown, null, bannerPos, bannerZoom, bannerZoomY]);
+    await pool.query(`UPDATE public_profiles SET bio = $2, banner = $3, fav_car = $4, shown_badges = $5, banner_pos = $6, banner_zoom = $7, banner_zoom_y = $8, updated_at = NOW() WHERE user_id = $1`,
+      [req.user.sub, bio || null, banner, favCar, shown, bannerPos, bannerZoom, bannerZoomY]);
   }
   profileCache.delete(slug);
   await logAction(req.user.sub, "profile.settings", "public_profile", slug, { bio, banner, favCar, shown }, req.ip);
@@ -9076,6 +9076,7 @@ async function resolveReportedPlayer(label) {
 }
 
 app.get("/api/tickets", auth, asyncRoute(async (req, res) => {
+  await ticketExtras().catch(() => {}); // (09.11.2026) ne asigurăm că există coloana reported_player_ids înainte de citire
   const { rows } = await pool.query(
     `SELECT t.id,t.subject,t.category,t.status,t.evidence_url,t.created_at,t.updated_at,
             (t.user_id=$1) AS is_own, u.username submitted_by,
@@ -9156,6 +9157,7 @@ app.post("/api/tickets", auth, asyncRoute(async (req, res) => {
 }));
 
 app.get("/api/tickets/:id", auth, asyncRoute(async (req, res) => {
+  await ticketExtras().catch(() => {});
   const { rows } = await pool.query(
     `SELECT t.*, (t.user_id=$2) AS is_own, u.username submitted_by,
             rp.id reported_player_id, COALESCE(NULLIF(t.reported_player_label, ''), rp.display_name) reported_display

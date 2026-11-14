@@ -5586,6 +5586,54 @@ app.get("/api/profil/:slug", asyncRoute(async (req, res) => {
   res.set("Cache-Control", "public, max-age=60");
   res.json(data);
 }));
+// ---------------------------------------------------------------------------
+// (14.11.2026, cerut de Sergiu) Customizarea de profil pentru panoul din joc (NUI).
+// Serverul de joc are deja datele de joc (bani, mașini, proprietăți, activitate);
+// de aici ia DOAR partea cosmetică — poză, banner, bio, mașina favorită, insigne
+// afișate, username, rol, „cont creat" — după identificatorul personajului
+// (char…/license…). Protejat cu GAME_PROFILE_KEY (setat în Railway, aceeași
+// valoare și pe serverul de joc). Fără cheie setată, ruta răspunde 503, deci e
+// inofensivă până o pornești. Se cheamă: GET /api/profil-din-joc/<identifier>
+// cu antetul `x-game-key: <cheie>` (sau ?key=<cheie>).
+// ---------------------------------------------------------------------------
+const GAME_PROFILE_KEY = process.env.GAME_PROFILE_KEY || "";
+app.get("/api/profil-din-joc/:identifier", asyncRoute(async (req, res) => {
+  if (!GAME_PROFILE_KEY) return res.status(503).json({ error: "Ruta e dezactivată: setează GAME_PROFILE_KEY în Railway." });
+  if ((req.get("x-game-key") || req.query.key || "") !== GAME_PROFILE_KEY) return res.status(401).json({ error: "unauthorized" });
+  await profileTables();
+  const identifier = String(req.params.identifier || "").slice(0, 120);
+  if (!/^[A-Za-z0-9:._-]{3,120}$/.test(identifier)) return res.status(400).json({ error: "identificator invalid" });
+  const { rows } = await pool.query(
+    `SELECT u.id AS user_id, u.username, u.created_at, r.name AS role,
+            pp.enabled, pp.bio, pp.bio_locked, pp.banner, pp.fav_car, pp.shown_badges,
+            pp.banner_pos, pp.banner_zoom, pp.banner_zoom_y
+       FROM users u
+       LEFT JOIN roles r ON r.id = u.role_id
+       LEFT JOIN public_profiles pp ON pp.user_id = u.id
+      WHERE u.game_identifier = $1 LIMIT 1`, [identifier]);
+  const row = rows[0];
+  if (!row) return res.status(404).json({ linked: false, error: "Niciun cont de site legat de acest personaj." });
+  const base = (process.env.SITE_URL || "https://moldovarp.md").replace(/\/+$/, "");
+  const abs = u => u ? (/^https?:/.test(u) ? u : base + u) : null;
+  const personal = row.banner === "personal";
+  res.set("Cache-Control", "no-store").json({
+    linked: true,
+    username: row.username || null,
+    role: row.role || null,
+    memberSince: row.created_at,
+    bio: row.bio || "",
+    bioLocked: !!row.bio_locked,
+    banner: row.banner || "portocaliu",
+    bannerImg: personal ? abs(await bannerUrlFor(row.user_id).catch(() => null)) : null,
+    bannerPos: personal ? (row.banner_pos || null) : null,
+    bannerZoom: personal ? (row.banner_zoom || null) : null,
+    bannerZoomY: personal ? (row.banner_zoom_y || null) : null,
+    avatar: abs(await avatarUrlFor(row.user_id).catch(() => null)),
+    favCar: row.fav_car || null,
+    shownBadges: row.shown_badges || [],
+    profilePublic: !!row.enabled,
+  });
+}));
 // (07.11.2026) Ce vehicule au jucătorii (doar numele modelului și la câți jucători apare),
 // ca să găsim mașinile fără poză pe site. Fără nume de jucători, numere sau alte date.
 app.get("/api/admin/vehicule-nume", auth, requireRole(...ADMIN_ROLES), asyncRoute(async (_req, res) => {

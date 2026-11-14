@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Profil jucător — Moldova RP (NUI)</title>
+<!--
+  ============================================================================
+  PROFIL JUCĂTOR — front-end NUI pentru FiveM (Moldova RP)
+  ============================================================================
+  Arată ca profilul de pe site. Colegul pune fișierul ăsta în resursă (ca
+  html/ui.html în fxmanifest) și îi trimite datele din server.
+
+  CUM SE DESCHIDE / ÎNCHIDE (din Lua):
+    SendNUIMessage({ action = "open",  profile = <tabela de mai jos> })
+    SendNUIMessage({ action = "close" })
+    SetNuiFocus(true, true)   -- la deschidere; false, false la închidere
+
+  BUTONUL DE ÎNCHIDERE / ESC trimite înapoi la resursă:
+    RegisterNUICallback("close", function(_, cb) SetNuiFocus(false,false); cb("ok") end)
+
+  DATELE AȘTEPTATE (profile) — datele de JOC le pui din server; partea
+  „custom" (avatar, banner, bio, favCar, badges) o iei de pe site prin
+  GET /api/profil-din-joc/:identifier și o pui aici la fel:
+  {
+    name: "Ravshan Askerovici",           // nume RP (joc)
+    username: "santtaklaus",              // @username (site)
+    role: "Fondator",                     // rol (site) — sau null
+    premium: true,                        // badge Premium (joc)
+    online: false,
+    staticId: "336",                      // ID static (joc)
+    charId: "char0:106f2e6aff...",        // ID cont (joc)
+    job: "Civil · Șomer",                 // job (joc)
+    hours: 968,                           // ore jucate (joc)
+    createdAt: "27.08.2026",              // cont creat (site)
+    lastSeen: "12.11.2026 · 19:48",       // ultima conectare (joc)
+    cash: 30000, bank: 23640, black: 0,   // bani (joc)
+    premiumActive: true,                  // cardul Premium (joc)
+    avatar: "https://moldovarp.md/...",   // poza (site) — url sau null
+    banner: "https://moldovarp.md/...",   // banner (site) — url sau null (fallback: degrade)
+    bio: "text...",                       // (site)
+    favCar: "BMW M3 E46",                 // (site)
+    badges: ["🏆 Top săptămână", "🎄 Crăciun 2026"], // (site)
+    vehicles: [ { label:"BMW M3 E46", plate:"MRP 123", spawn:"m3e46" }, ... ], // (joc)
+    properties: [ { label:"Villa 1", kind:"Casă", addr:"Vinewood" }, ... ],   // (joc)
+    faction: { name:"Civil", rank:"Șomer" },                                   // (joc)
+    punishments: [ { kind:"Warn", reason:"...", by:"Staff", date:"..." }, ... ], // (joc/staff)
+    activity: [ { type:"Item obținut", detail:"WEAPON_TACTICALRIFLE", time:"19:34" }, ... ] // (joc)
+  }
+  Orice câmp lipsă e tratat elegant (se ascunde / „—").
+  ============================================================================
+-->
+<style>
+  :root{
+    --bg:#0c0f14; --panel:#141922; --panel2:#0f141c; --card:#161c26;
+    --border:#242c39; --border2:#2d3747;
+    --text:#e8eef6; --muted:#8c97a7; --muted2:#657083;
+    --accent:#ff7a1a; --accent-soft:#ff7a1a22;
+    --online:#3fb950; --offline:#8c97a7; --gold:#e8b53a; --gold-soft:#e8b53a22;
+    --red:#e5534b; --radius:16px;
+    font-family:"Segoe UI",Inter,system-ui,-apple-system,Roboto,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:
+      radial-gradient(1200px 500px at 50% -10%, #16202e 0%, transparent 60%),
+      var(--bg);
+    color:var(--text); display:flex; align-items:center; justify-content:center;
+    min-height:100vh; padding:24px;
+  }
+  /* starry dots */
+  body::before{
+    content:""; position:fixed; inset:0; pointer-events:none; opacity:.5;
+    background-image:
+      radial-gradient(1.5px 1.5px at 20% 30%, #ffffff55, transparent),
+      radial-gradient(1.5px 1.5px at 70% 20%, #ffffff44, transparent),
+      radial-gradient(1.5px 1.5px at 40% 70%, #ffffff33, transparent),
+      radial-gradient(1.5px 1.5px at 85% 60%, #ffffff44, transparent),
+      radial-gradient(1.5px 1.5px at 60% 85%, #ffffff33, transparent),
+      radial-gradient(1.5px 1.5px at 15% 80%, #ffffff33, transparent);
+  }
+  .wrap{width:min(1180px,100%); position:relative; z-index:1}
+
+  /* ---------- HEADER ---------- */
+  .head{
+    position:relative; border-radius:var(--radius); overflow:hidden;
+    border:1px solid var(--border); background:var(--panel);
+  }
+  .banner{
+    height:190px; background-size:cover; background-position:center;
+    background-color:#20303f;
+    background-image:linear-gradient(120deg,#2a3a4d,#101722 70%);
+    position:relative;
+  }
+  .banner::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(10,13,18,.15),rgba(12,15,20,.92))}
+  .brand{position:absolute;top:18px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:10px;font-weight:800;letter-spacing:.5px;color:#fff;z-index:2;text-shadow:0 2px 10px #000a}
+  .brand .mr{display:inline-grid;place-items:center;width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,var(--accent),#ff9d4d);color:#1a1200;font-weight:900}
+  .brand .rp{color:var(--accent)}
+  .btn-settings{position:absolute;top:16px;right:16px;z-index:3;background:#0d1219cc;border:1px solid var(--border2);color:var(--text);padding:8px 14px;border-radius:10px;font-size:13px;cursor:pointer;backdrop-filter:blur(4px)}
+  .btn-settings:hover{border-color:var(--accent)}
+  .btn-close{position:absolute;top:16px;right:16px;z-index:4;display:none;width:34px;height:34px;border-radius:9px;border:1px solid var(--border2);background:#0d1219cc;color:#fff;font-size:18px;cursor:pointer}
+  .btn-close:hover{border-color:var(--red);color:var(--red)}
+
+  .head-body{position:relative;margin-top:-64px;padding:0 26px 22px;display:flex;gap:22px;align-items:flex-end;flex-wrap:wrap;z-index:2}
+  .avatar-wrap{position:relative;flex:0 0 auto}
+  .avatar{width:118px;height:118px;border-radius:50%;object-fit:cover;border:3px solid var(--accent);background:#0d1219;box-shadow:0 8px 30px #000a}
+  .dot{position:absolute;right:8px;bottom:10px;width:16px;height:16px;border-radius:50%;background:var(--offline);border:3px solid var(--panel)}
+  .dot.on{background:var(--online)}
+
+  .idblock{flex:1 1 320px;min-width:260px;padding-bottom:4px}
+  .nameline{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .nameline h1{margin:0;font-size:26px;line-height:1.1}
+  .pill{font-size:11px;font-weight:700;padding:4px 9px;border-radius:999px;letter-spacing:.3px;text-transform:uppercase}
+  .pill.prem{background:var(--gold-soft);color:var(--gold);border:1px solid #e8b53a55}
+  .uname{color:var(--muted);font-size:14px;margin-top:3px}
+  .sub{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:10px}
+  .pill.role{background:var(--accent-soft);color:var(--accent);border:1px solid #ff7a1a55}
+  .status{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:13px}
+  .status .d{width:8px;height:8px;border-radius:50%;background:var(--offline)}
+  .status.on .d{background:var(--online)}
+  .ids{display:flex;gap:18px;flex-wrap:wrap;margin-top:12px;font-size:13px;color:var(--muted)}
+  .ids b{color:var(--text)}
+  .copy{cursor:pointer;border:1px solid var(--border2);background:#0d1219;border-radius:7px;padding:2px 7px;color:var(--muted);font-size:12px}
+  .copy:hover{border-color:var(--accent);color:var(--accent)}
+
+  .meta{display:flex;gap:26px;flex-wrap:wrap;padding-bottom:6px}
+  .meta .m{min-width:92px}
+  .meta .k{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted2)}
+  .meta .v{font-size:15px;font-weight:700;margin-top:3px}
+
+  /* ---------- STAT CARDS ---------- */
+  .cards{display:grid;grid-template-columns:repeat(6,1fr);gap:14px;margin:16px 0}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:10px}
+  .card .ic{width:40px;height:40px;border-radius:11px;display:grid;place-items:center;font-size:18px;background:#0e141d;border:1px solid var(--border)}
+  .card .lbl{font-size:12px;color:var(--muted)}
+  .card .val{font-size:20px;font-weight:800;letter-spacing:.2px}
+  .c-cash .ic{color:#e8b53a} .c-bank .ic{color:#5aa9ff} .c-black .ic{color:#e5534b}
+  .c-veh .ic{color:#43c6b8} .c-prop .ic{color:#c98bff} .c-prem{background:linear-gradient(160deg,#1b1630,#141922);border-color:#3a2d57}
+  .c-prem .ic{color:#c98bff} .c-prem .val{color:#d7b8ff}
+
+  /* ---------- TABS ---------- */
+  .tabs{display:flex;gap:6px;background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:8px;overflow-x:auto}
+  .tab{flex:1;white-space:nowrap;text-align:center;padding:12px 14px;border-radius:9px;color:var(--muted);font-weight:600;font-size:14px;cursor:pointer;border:1px solid transparent}
+  .tab:hover{color:var(--text)}
+  .tab.active{background:linear-gradient(135deg,var(--accent),#ff9442);color:#1a1200;box-shadow:0 6px 18px #ff7a1a33}
+
+  /* ---------- PANELS ---------- */
+  .panel{margin-top:16px;background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:22px;min-height:220px}
+  .panel-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+  .panel-head h2{margin:0;font-size:17px}
+  .panel-head .hint{color:var(--muted2);font-size:12px}
+  .hidden{display:none}
+
+  .rows{display:flex;flex-direction:column}
+  .row{display:grid;grid-template-columns:200px 1fr auto;gap:16px;align-items:center;padding:13px 6px;border-top:1px solid var(--border)}
+  .row:first-child{border-top:0}
+  .row .t{font-weight:600}
+  .row .d{color:var(--muted)}
+  .row .time{color:var(--muted2);font-size:13px;font-variant-numeric:tabular-nums;white-space:nowrap}
+
+  .grid2{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px}
+  .tile{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px}
+  .tile .tt{font-weight:700}
+  .tile .ts{color:var(--muted);font-size:13px;margin-top:4px}
+
+  .badges{display:flex;gap:8px;flex-wrap:wrap}
+  .badge{background:#0e141d;border:1px solid var(--border2);border-radius:999px;padding:6px 12px;font-size:13px}
+  .bio{color:var(--muted);line-height:1.6;white-space:pre-wrap}
+  .empty{color:var(--muted2);text-align:center;padding:28px 0}
+
+  @media (max-width:900px){
+    .cards{grid-template-columns:repeat(3,1fr)}
+    .meta{width:100%}
+    .row{grid-template-columns:140px 1fr auto}
+  }
+  @media (max-width:560px){
+    .cards{grid-template-columns:repeat(2,1fr)}
+    .row{grid-template-columns:1fr auto;gap:6px}
+    .row .time{grid-column:2;text-align:right}
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <!-- HEADER -->
+    <div class="head">
+      <div class="banner" id="banner"></div>
+      <div class="brand"><span class="mr">M</span>MOLDOVA<span class="rp">RP</span></div>
+      <button class="btn-settings" id="btnSettings">✎ Setări profil</button>
+      <button class="btn-close" id="btnClose" title="Închide">✕</button>
+
+      <div class="head-body">
+        <div class="avatar-wrap">
+          <img class="avatar" id="avatar" alt="" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='118' height='118'><rect width='100%25' height='100%25' fill='%230d1219'/><text x='50%25' y='54%25' font-size='46' text-anchor='middle' fill='%23394150' font-family='sans-serif'>👤</text></svg>">
+          <span class="dot" id="dot"></span>
+        </div>
+        <div class="idblock">
+          <div class="nameline">
+            <h1 id="name">Jucător</h1>
+            <span class="pill prem hidden" id="premBadge">★ Premium</span>
+          </div>
+          <div class="uname" id="uname">@—</div>
+          <div class="sub">
+            <span class="pill role hidden" id="roleBadge">—</span>
+            <span class="status" id="status"><span class="d"></span><span id="statusTxt">Offline</span></span>
+          </div>
+          <div class="ids">
+            <span>ID static <b id="staticId">—</b></span>
+            <span>ID cont <b id="charId">—</b> <span class="copy" id="copyId">⧉ copiază</span></span>
+          </div>
+        </div>
+        <div class="meta">
+          <div class="m"><div class="k">Job</div><div class="v" id="job">—</div></div>
+          <div class="m"><div class="k">Ore jucate</div><div class="v" id="hours">—</div></div>
+          <div class="m"><div class="k">Cont creat</div><div class="v" id="createdAt">—</div></div>
+          <div class="m"><div class="k">Ultima conectare</div><div class="v" id="lastSeen">—</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STAT CARDS -->
+    <div class="cards">
+      <div class="card c-cash"><div class="ic">💳</div><div class="lbl">Cash</div><div class="val" id="cash">$0</div></div>
+      <div class="card c-bank"><div class="ic">🏦</div><div class="lbl">Bancă</div><div class="val" id="bank">$0</div></div>
+      <div class="card c-black"><div class="ic">💵</div><div class="lbl">Bani murdari</div><div class="val" id="black">$0</div></div>
+      <div class="card c-veh"><div class="ic">🚗</div><div class="lbl">Vehicule</div><div class="val" id="vehCount">0</div></div>
+      <div class="card c-prop"><div class="ic">🏠</div><div class="lbl">Proprietăți</div><div class="val" id="propCount">0</div></div>
+      <div class="card c-prem"><div class="ic">💎</div><div class="lbl">Premium</div><div class="val" id="premState">Inactiv</div></div>
+    </div>
+
+    <!-- TABS -->
+    <div class="tabs" id="tabs">
+      <div class="tab" data-tab="prezentare">Prezentare</div>
+      <div class="tab" data-tab="vehicule">Vehiculele mele</div>
+      <div class="tab" data-tab="proprietati">Proprietățile mele</div>
+      <div class="tab" data-tab="factiune">Facțiune &amp; rank</div>
+      <div class="tab" data-tab="sanctiuni">Sancțiuni</div>
+      <div class="tab active" data-tab="activitate">Activitate</div>
+    </div>
+
+    <!-- PANELS -->
+    <div class="panel" data-panel="prezentare" hidden>
+      <div class="panel-head"><h2>Prezentare</h2></div>
+      <div id="bioBox" class="bio empty">Fără descriere.</div>
+      <div style="margin-top:18px" id="favWrap" class="hidden">
+        <div class="k" style="color:var(--muted2);font-size:11px;text-transform:uppercase;letter-spacing:.5px">Mașina favorită</div>
+        <div class="v" id="favCar" style="font-weight:700;margin-top:4px"></div>
+      </div>
+      <div style="margin-top:18px" id="badgeWrap" class="hidden">
+        <div class="k" style="color:var(--muted2);font-size:11px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Insigne</div>
+        <div class="badges" id="badges"></div>
+      </div>
+    </div>
+
+    <div class="panel" data-panel="vehicule" hidden>
+      <div class="panel-head"><h2>Vehiculele mele</h2><span class="hint" id="vehHint"></span></div>
+      <div class="grid2" id="vehicles"></div>
+    </div>
+
+    <div class="panel" data-panel="proprietati" hidden>
+      <div class="panel-head"><h2>Proprietățile mele</h2></div>
+      <div class="grid2" id="properties"></div>
+    </div>
+
+    <div class="panel" data-panel="factiune" hidden>
+      <div class="panel-head"><h2>Facțiune &amp; rank</h2></div>
+      <div id="factionBox"></div>
+    </div>
+
+    <div class="panel" data-panel="sanctiuni" hidden>
+      <div class="panel-head"><h2>Sancțiuni</h2></div>
+      <div class="rows" id="punishments"></div>
+    </div>
+
+    <div class="panel" data-panel="activitate">
+      <div class="panel-head"><h2>Activitatea mea în joc</h2><span class="hint">ultimele acțiuni de pe server</span></div>
+      <div class="rows" id="activity"></div>
+    </div>
+  </div>
+
+<script>
+(function(){
+  "use strict";
+  const $ = id => document.getElementById(id);
+  const money = n => "$" + Number(n||0).toLocaleString("ro-RO");
+  const esc = s => String(s==null?"":s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+
+  // ---- TABS ----
+  const tabs = $("tabs");
+  tabs.addEventListener("click", e=>{
+    const t = e.target.closest(".tab"); if(!t) return;
+    [...tabs.children].forEach(x=>x.classList.toggle("active", x===t));
+    document.querySelectorAll(".panel").forEach(p=>p.hidden = p.dataset.panel !== t.dataset.tab);
+  });
+
+  // ---- RENDER ----
+  function render(p){
+    p = p || {};
+    if(p.banner) $("banner").style.backgroundImage = `linear-gradient(180deg,rgba(10,13,18,.15),rgba(12,15,20,.92)), url("${p.banner}")`;
+    if(p.avatar) $("avatar").src = p.avatar;
+    $("dot").classList.toggle("on", !!p.online);
+    $("name").textContent = p.name || "Jucător";
+    $("uname").textContent = "@" + (p.username || "—");
+    toggle($("premBadge"), !!p.premium);
+    const rb = $("roleBadge"); rb.textContent = p.role || ""; toggle(rb, !!p.role);
+    const st = $("status"); st.classList.toggle("on", !!p.online); $("statusTxt").textContent = p.online ? "Online" : "Offline";
+    $("staticId").textContent = p.staticId ? ("#"+p.staticId) : "—";
+    $("charId").textContent = p.charId || "—";
+    $("job").textContent = p.job || "—";
+    $("hours").textContent = p.hours!=null ? (p.hours + "h") : "—";
+    $("createdAt").textContent = p.createdAt || "—";
+    $("lastSeen").textContent = p.lastSeen || "—";
+    $("cash").textContent = money(p.cash);
+    $("bank").textContent = money(p.bank);
+    $("black").textContent = money(p.black);
+    $("vehCount").textContent = (p.vehicles||[]).length || p.vehCount || 0;
+    $("propCount").textContent = (p.properties||[]).length || p.propCount || 0;
+    $("premState").textContent = p.premiumActive ? "Activ" : "Inactiv";
+
+    // Prezentare
+    const bio = $("bioBox");
+    if(p.bio){ bio.textContent = p.bio; bio.classList.remove("empty"); } else { bio.textContent="Fără descriere."; bio.classList.add("empty"); }
+    if(p.favCar){ $("favCar").textContent = p.favCar; toggle($("favWrap"), true); } else toggle($("favWrap"), false);
+    if((p.badges||[]).length){ $("badges").innerHTML = p.badges.map(b=>`<span class="badge">${esc(b)}</span>`).join(""); toggle($("badgeWrap"), true); } else toggle($("badgeWrap"), false);
+
+    // Vehicule
+    const veh = p.vehicles||[];
+    $("vehHint").textContent = veh.length ? (veh.length + " vehicule") : "";
+    $("vehicles").innerHTML = veh.length ? veh.map(v=>`<div class="tile"><div class="tt">${esc(v.label||v.spawn||"Vehicul")}</div><div class="ts">${esc(v.plate||"")}${v.spawn?` · <code>${esc(v.spawn)}</code>`:""}</div></div>`).join("") : emptyRow("Niciun vehicul.");
+
+    // Proprietati
+    const pr = p.properties||[];
+    $("properties").innerHTML = pr.length ? pr.map(x=>`<div class="tile"><div class="tt">${esc(x.label||"Proprietate")}</div><div class="ts">${esc(x.kind||"")}${x.addr?` · ${esc(x.addr)}`:""}</div></div>`).join("") : emptyRow("Nicio proprietate.");
+
+    // Factiune
+    const f = p.faction;
+    $("factionBox").innerHTML = f ? `<div class="tile" style="max-width:360px"><div class="tt">${esc(f.name||"—")}</div><div class="ts">Rank: ${esc(f.rank||"—")}</div></div>` : `<div class="empty">Fără facțiune.</div>`;
+
+    // Sanctiuni
+    const pu = p.punishments||[];
+    $("punishments").innerHTML = pu.length ? pu.map(x=>`<div class="row"><div class="t">${esc(x.kind||"Sancțiune")}</div><div class="d">${esc(x.reason||"")}${x.by?` · de ${esc(x.by)}`:""}</div><div class="time">${esc(x.date||"")}</div></div>`).join("") : emptyRow("Nicio sancțiune. 👍");
+
+    // Activitate
+    const ac = p.activity||[];
+    $("activity").innerHTML = ac.length ? ac.map(x=>`<div class="row"><div class="t">${esc(x.type||"")}</div><div class="d">${esc(x.detail||"")}</div><div class="time">${esc(x.time||"")}</div></div>`).join("") : emptyRow("Nicio activitate recentă.");
+  }
+  function toggle(el,on){ el.classList.toggle("hidden", !on); }
+  function emptyRow(t){ return `<div class="empty">${esc(t)}</div>`; }
+
+  // ---- COPY ID ----
+  $("copyId").addEventListener("click", ()=>{
+    const v = $("charId").textContent; if(!v||v==="—") return;
+    navigator.clipboard?.writeText(v).then(()=>{ const e=$("copyId"); e.textContent="✓ copiat"; setTimeout(()=>e.textContent="⧉ copiază",1200); }).catch(()=>{});
+  });
+
+  // ---- FiveM NUI bridge ----
+  function resource(){ try{ return (typeof GetParentResourceName==="function") ? GetParentResourceName() : "profil"; }catch(_){ return "profil"; } }
+  function post(cb, body){ try{ fetch(`https://${resource()}/${cb}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body||{})}); }catch(_){ } }
+
+  const inGame = (typeof GetParentResourceName==="function");
+  function openUI(){ document.body.style.display="flex"; $("btnClose").style.display = inGame?"grid":"none"; $("btnSettings").style.display = inGame?"none":""; }
+  function closeUI(){ if(inGame){ document.body.style.display="none"; post("close"); } }
+
+  $("btnClose").addEventListener("click", closeUI);
+  $("btnSettings").addEventListener("click", ()=>post("settings"));
+  window.addEventListener("keydown", e=>{ if(e.key==="Escape") closeUI(); });
+
+  // mesaje de la resursă (Lua: SendNUIMessage)
+  window.addEventListener("message", e=>{
+    const d = e.data||{};
+    if(d.action==="open"){ render(d.profile||{}); openUI(); }
+    else if(d.action==="setData"){ render(d.profile||{}); }
+    else if(d.action==="close"){ document.body.style.display="none"; }
+  });
+
+  // expus și manual, pentru test: window.MRP_setProfile({...})
+  window.MRP_setProfile = render;
+
+  // ---- DEMO (doar în browser, ca să vezi cum arată; în joc NU rulează) ----
+  if(!inGame){
+    render({
+      name:"Ravshan Askerovici", username:"santtaklaus", role:"Fondator", premium:true, online:false,
+      staticId:"336", charId:"char0:106f2e6aff2c139bdddc1b3dacad05f840647a3d",
+      job:"Civil · Șomer", hours:968, createdAt:"27.08.2026", lastSeen:"12.11.2026 · 19:48",
+      cash:30000, bank:23640, black:0, premiumActive:true,
+      bio:"Fondator Moldova RP.", favCar:"BMW M3 E46", badges:["🏆 Top săptămână","🎄 Crăciun 2026"],
+      vehicles:[{label:"BMW M3 E46",plate:"MRP 336",spawn:"m3e46"},{label:"Dodge Charger F&F8",plate:"XMAS 01",spawn:"chargerf8"}],
+      properties:[{label:"Villa 1",kind:"Casă",addr:"Vinewood"},{label:"Magazin 24/7",kind:"Afacere",addr:"Paleto"}],
+      faction:{name:"Civil",rank:"Șomer"},
+      punishments:[],
+      activity:[
+        {type:"Deconectare",detail:"Exiting",time:"12.11.2026 · 19:48"},
+        {type:"Item obținut",detail:"ammo-rifle",time:"12.11.2026 · 19:36"},
+        {type:"Item obținut",detail:"at_suppressor_heavy",time:"12.11.2026 · 19:34"},
+        {type:"Item obținut",detail:"WEAPON_TACTICALRIFLE",time:"12.11.2026 · 19:34"},
+        {type:"Moarte",detail:"",time:"12.11.2026 · 19:25"},
+        {type:"Mesaj în chat",detail:"[OOC] in ADMIN SA SUPRAVEGHEZE",time:"12.11.2026 · 19:21"},
+        {type:"depozit",detail:"ammo-shotgun",time:"12.11.2026 · 19:08"},
+        {type:"depozit",detail:"WEAPON_ASSAULTRIFLE",time:"12.11.2026 · 19:08"}
+      ]
+    });
+  } else {
+    document.body.style.display="none"; // în joc pornește ascuns, se arată la "open"
+  }
+})();
+</script>
+</body>
+</html>
